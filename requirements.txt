@@ -1,0 +1,19 @@
+# UI Core
+PyQt6>=6.5.0
+PyCore
+
+# Plotting & Visualization
+pyqtgraph>=0.13.3
+matplotlib>=3.8.0
+
+# Data Processing
+numpy>=1.26.0
+scipy>=1.11.0
+pandas>=2.1.0
+
+# Utils & Serialization
+pydantic>=2.4.0
+PyYAML>=6.0.1
+
+# Packaging
+pyinstaller>=6.2.0
