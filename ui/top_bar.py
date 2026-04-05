@@ -24,27 +24,13 @@ from PyQt6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPainter, QPixmap
 from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtWidgets import QHBoxLayout, QPushButton, QWidget
 
-
-# ── Design tokens ────────────────────────────────────────────────────────────
-
-TOPBAR_H         = 48          # total topbar height (px)
-TAB_TOP_PAD      = 8           # gap above tabs — topbar shows dark bg here
-ACTIVE_TAB_H     = TOPBAR_H - TAB_TOP_PAD   # = 40 — fills flush to bottom
-INACTIVE_TAB_H   = 32          # shorter: sits "behind" the page edge
-
-ICON_SZ          = QSize(18, 18)
-ANIM_MS          = 200
-
-# Colors
-C_PAGE_BG        = "#ffffff"   # MUST match page/container background
-C_TOPBAR_BG      = "#1a1d23"
-C_BORDER         = "#e5e7eb"   # topbar bottom border AND active tab side borders
-C_INACTIVE_BG    = "#252830"
-C_INACTIVE_BDR   = "#373c47"
-C_INACTIVE_TEXT  = "#8b919d"
-C_ACTIVE_TEXT    = "#111827"
-C_ICON_INACTIVE  = QColor("#8b919d")
-C_ICON_ACTIVE    = QColor("#111827")
+# Import centralized design tokens
+from .design_tokens import (
+    TOPBAR_H, TAB_TOP_PAD, ACTIVE_TAB_H, INACTIVE_TAB_H,
+    ICON_SZ, ANIM_MS,
+    C_PAGE_BG, C_TOPBAR_BG, C_BORDER, C_INACTIVE_BG, C_INACTIVE_BDR,
+    C_INACTIVE_TEXT, C_ACTIVE_TEXT, C_ICON_INACTIVE, C_ICON_ACTIVE
+)
 
 
 # ── Menu definition ──────────────────────────────────────────────────────────
@@ -85,14 +71,11 @@ class TechButton(QPushButton):
         self._w_expanded  = self._measure_expanded_width()
 
         # ── icon / fallback emoji ────────────────────────────────────────
-        _FALLBACK = {
-            "Home": "⌂", "Record": "●", "Statistics": "≋",
-            "Wand": "✦",  "Setting": "⚙",
-        }
+        from .design_tokens import TAB_FALLBACKS
         if os.path.exists(entry.icon):
             self.setIcon(self._tint_svg(entry.icon, C_ICON_INACTIVE))
         else:
-            self.setText(_FALLBACK.get(entry.label, "●"))
+            self.setText(TAB_FALLBACKS.get(entry.label, "●"))
         self.setIconSize(ICON_SZ)
 
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -249,18 +232,7 @@ class Topbar(QWidget):
         """)
 
         # Activate first tab without animation
-        self.buttons[0].blockSignals(True)
-        self.buttons[0]._is_active = True
-        self.buttons[0].setChecked(True)
-        self.buttons[0].setFixedHeight(ACTIVE_TAB_H)
-        self.buttons[0].setFixedWidth(self.buttons[0]._w_expanded)
-        self.buttons[0].setText(f"  {self.buttons[0].entry.label}")
-        if os.path.exists(self.buttons[0].entry.icon):
-            self.buttons[0].setIcon(
-                TechButton._tint_svg(self.buttons[0].entry.icon, C_ICON_ACTIVE)
-            )
-        self.buttons[0]._apply_style(True)
-        self.buttons[0].blockSignals(False)
+        self._set_active(0)
 
     # ── private ──────────────────────────────────────────────────────────────
 

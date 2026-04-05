@@ -1,43 +1,47 @@
 """PageWand — Hardware configuration, flashing, and terminal view."""
 from __future__ import annotations
+
+import logging
 from dataclasses import dataclass
+
+import numpy as np
+import pyqtgraph as pg
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
-    QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QLayout, 
-    QListWidget, QListWidgetItem, QProgressBar, QPushButton, QTextEdit, 
-    QVBoxLayout, QWidget
+    QCheckBox,
+    QComboBox,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLayout,
+    QListWidget,
+    QListWidgetItem,
+    QProgressBar,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
-import pyqtgraph as pg
-import numpy as np
 
-class Colors:
-    ACCENT       = "#ff3366"      # Standardized pink accent
-    ACCENT_DARK  = "#e62e5c"
-    ACCENT_TEXT  = "#ffffff"
-    BG_DARK      = "#111827"
-    BG_LIGHT     = "#f3f4f6"
-    BG_WHITE     = "#ffffff"
-    BORDER       = "#e5e7eb"
-    BORDER_MID   = "#d1d5db"
-    TEXT_BODY    = "#1f2937"
-    TEXT_MUTED   = "#6b7280"
-    HOVER_BG     = "#fce7ec"
-    SUCCESS      = "#10b981"
-    DANGER       = "#ef4444"
-    TERM_FG      = "#10b981"
-    TERM_BG      = "#0d1117"
-    RARITY_NONE  = "#9ca3af"
-    RARITY_COM   = "#10b981"
-    RARITY_UNC   = "#3b82f6"
-    RARITY_RARE  = "#8b5cf6"
-    RARITY_EPIC  = "#f59e0b"
+from .common_design_tokens import (
+    ACCENT, ACCENT_DARK, ACCENT_TEXT,
+    BG_LIGHT, BG_WHITE,
+    BORDER, BORDER_MID,
+    DANGER,
+    HOVER_BG,
+    PROGRESS_H, BTN_H, TERM_MIN_H,
+    RARITY_NONE, RARITY_COM, RARITY_UNC, RARITY_RARE, RARITY_EPIC,
+    SUCCESS,
+    TERM_BG, TERM_FG,
+    TEXT_BODY, TEXT_MUTED,
+)
 
-class Sizes:
-    TERM_MIN_H   = 160         
-    TERM_MAX_H   = 800         
-    BTN_H        = 40
-    PROGRESS_H   = 12
+log = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Domain model
+# ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class RarityTier:
@@ -45,35 +49,40 @@ class RarityTier:
     label:     str
     color:     str
 
+
 RARITY_TIERS: tuple[RarityTier, ...] = (
-    RarityTier(0,   "UNLEARNED", Colors.RARITY_NONE),
-    RarityTier(10,  "COMMON",    Colors.RARITY_COM),
-    RarityTier(20,  "UNCOMMON",  Colors.RARITY_UNC),
-    RarityTier(50,  "RARE",      Colors.RARITY_RARE),
-    RarityTier(100, "EPIC",      Colors.RARITY_EPIC),
+    RarityTier(0,   "UNLEARNED", RARITY_NONE),
+    RarityTier(10,  "COMMON",    RARITY_COM),
+    RarityTier(20,  "UNCOMMON",  RARITY_UNC),
+    RarityTier(50,  "RARE",      RARITY_RARE),
+    RarityTier(100, "EPIC",      RARITY_EPIC),
 )
 
-STYLE_MAIN_CONTAINER = f"""
+# ---------------------------------------------------------------------------
+# Style constants (module-private)
+# ---------------------------------------------------------------------------
+
+_STYLE_MAIN_CONTAINER = f"""
     #MainBox {{
-        background-color: {Colors.BG_LIGHT};
-        border: 1px solid {Colors.BORDER};
+        background-color: {BG_LIGHT};
+        border: 1px solid {BORDER};
         border-top: none;
         border-bottom-left-radius: 14px;
         border-bottom-right-radius: 14px;
     }}
 """
-STYLE_CARD = f"""
+_STYLE_CARD = f"""
     #CardFrame {{
-        background-color: {Colors.BG_WHITE};
-        border: 1px solid {Colors.BORDER};
+        background-color: {BG_WHITE};
+        border: 1px solid {BORDER};
         border-radius: 12px;
     }}
 """
-STYLE_BTN_OUTLINE = f"""
+_STYLE_BTN_OUTLINE = f"""
     QPushButton {{
-        background-color: {Colors.BG_WHITE};
-        color: {Colors.TEXT_BODY};
-        border: 1px solid {Colors.BORDER_MID};
+        background-color: {BG_WHITE};
+        color: {TEXT_BODY};
+        border: 1px solid {BORDER_MID};
         border-radius: 8px;
         font-size: 11px;
         font-weight: 800;
@@ -81,15 +90,16 @@ STYLE_BTN_OUTLINE = f"""
         letter-spacing: 1px;
     }}
     QPushButton:hover {{
-        background-color: {Colors.HOVER_BG};
-        border-color: {Colors.ACCENT};
-        color: {Colors.ACCENT};
+        background-color: {HOVER_BG};
+        border-color: {ACCENT};
+        color: {ACCENT};
     }}
+    QPushButton:disabled {{ opacity: 0.5; }}
 """
-STYLE_BTN_PRIMARY = f"""
+_STYLE_BTN_PRIMARY = f"""
     QPushButton {{
-        background-color: {Colors.ACCENT};
-        color: {Colors.ACCENT_TEXT};
+        background-color: {ACCENT};
+        color: {ACCENT_TEXT};
         border: none;
         border-radius: 8px;
         font-size: 11px;
@@ -97,93 +107,90 @@ STYLE_BTN_PRIMARY = f"""
         padding: 6px 12px;
         letter-spacing: 1px;
     }}
-    QPushButton:hover {{ background-color: {Colors.ACCENT_DARK}; }}
-    QPushButton:disabled {{ background-color: {Colors.BORDER_MID}; color: {Colors.TEXT_MUTED}; }}
+    QPushButton:hover {{ background-color: {ACCENT_DARK}; }}
+    QPushButton:disabled {{ background-color: {BORDER_MID}; color: {TEXT_MUTED}; }}
 """
-STYLE_BTN_SMALL = f"""
+_STYLE_BTN_SMALL = f"""
     QPushButton {{
-        background-color: {Colors.BG_WHITE};
-        color: {Colors.TEXT_MUTED};
-        border: 1px solid {Colors.BORDER_MID};
+        background-color: {BG_WHITE};
+        color: {TEXT_MUTED};
+        border: 1px solid {BORDER_MID};
         border-radius: 5px;
         font-size: 9px;
         font-weight: bold;
         padding: 2px 8px;
     }}
     QPushButton:hover {{
-        background-color: {Colors.HOVER_BG};
-        border-color: {Colors.ACCENT};
-        color: {Colors.ACCENT};
+        background-color: {HOVER_BG};
+        border-color: {ACCENT};
+        color: {ACCENT};
     }}
 """
-STYLE_TERMINAL = f"""
+_STYLE_TERMINAL = f"""
     QTextEdit {{
-        background-color: {Colors.TERM_BG};
-        color: {Colors.TERM_FG};
+        background-color: {TERM_BG};
+        color: {TERM_FG};
         border: none;
         border-radius: 8px;
         padding: 10px;
     }}
 """
-STYLE_COMBO = f"""
+_STYLE_COMBO = f"""
     QComboBox {{
-        background-color: {Colors.BG_WHITE};
-        border: 1px solid {Colors.BORDER_MID};
+        background-color: {BG_WHITE};
+        border: 1px solid {BORDER_MID};
         border-radius: 8px;
         padding: 6px 10px;
-        color: {Colors.TEXT_BODY};
+        color: {TEXT_BODY};
         font-weight: bold;
         font-size: 11px;
     }}
     QComboBox::drop-down {{ border: none; }}
 """
-STYLE_PROGRESS = f"""
+_STYLE_PROGRESS = f"""
     QProgressBar {{
-        border: 1px solid {Colors.BORDER_MID};
+        border: 1px solid {BORDER_MID};
         border-radius: 4px;
         text-align: center;
-        color: {Colors.TEXT_BODY};
+        color: {TEXT_BODY};
         font-weight: bold;
         font-size: 10px;
-        background-color: {Colors.BG_WHITE};
+        background-color: {BG_WHITE};
     }}
-    QProgressBar::chunk {{ background-color: {Colors.SUCCESS}; border-radius: 3px; }}
+    QProgressBar::chunk {{ background-color: {SUCCESS}; border-radius: 3px; }}
 """
-STYLE_LIST = f"""
+_STYLE_LIST = f"""
     QListWidget {{
-        background-color: {Colors.BG_WHITE};
-        border: 1px solid {Colors.BORDER};
+        background-color: {BG_WHITE};
+        border: 1px solid {BORDER};
         border-radius: 12px;
         outline: 0;
     }}
     QListWidget::item {{
-        border-bottom: 1px solid {Colors.BORDER};
-        min-height: 44px; 
+        border-bottom: 1px solid {BORDER};
+        min-height: 44px;
     }}
-    QListWidget::item:hover {{ background-color: {Colors.HOVER_BG}; }}
+    QListWidget::item:hover {{ background-color: {HOVER_BG}; }}
 """
-STYLE_CHECKBOX = f"""
+_STYLE_CHECKBOX = f"""
     QCheckBox {{
-        color: {Colors.TEXT_BODY};
+        color: {TEXT_BODY};
         font-weight: bold;
         font-size: 13px;
     }}
-    QCheckBox::indicator {{
-        width: 16px;
-        height: 16px;
-    }}
+    QCheckBox::indicator {{ width: 16px; height: 16px; }}
     QCheckBox::indicator:checked {{
-        background-color: {Colors.ACCENT};
-        border: 1px solid {Colors.ACCENT};
+        background-color: {ACCENT};
+        border: 1px solid {ACCENT};
         border-radius: 4px;
     }}
     QCheckBox::indicator:unchecked {{
-        background-color: {Colors.BG_WHITE};
-        border: 1px solid {Colors.BORDER_MID};
+        background-color: {BG_WHITE};
+        border: 1px solid {BORDER_MID};
         border-radius: 4px;
     }}
 """
-STYLE_RARITY_BADGE = """
+_STYLE_RARITY_BADGE = """
     QLabel {{
         background-color: {color};
         color: #ffffff;
@@ -196,46 +203,67 @@ STYLE_RARITY_BADGE = """
     }}
 """
 
-def clear_layout(layout: QLayout | None) -> None:
-    if layout is None: return
+_STATUS_STYLE = "color: {color}; font-weight: 800; font-size: 11px;"
+
+# ---------------------------------------------------------------------------
+# Utilities
+# ---------------------------------------------------------------------------
+
+def _clear_layout(layout: QLayout | None) -> None:
+    """Recursively remove and schedule deletion for all items in *layout*."""
+    if layout is None:
+        return
     while layout.count():
         item = layout.takeAt(0)
-        if item is None: continue
-        widget = item.widget()
-        if widget is not None:
+        if item is None:
+            continue
+        if (widget := item.widget()) is not None:
             widget.deleteLater()
-        else:
-            child = item.layout()
-            if child is not None:
-                clear_layout(child)
-                child.deleteLater()
+        elif (child := item.layout()) is not None:
+            _clear_layout(child)
+            child.deleteLater()
+
+
+# ---------------------------------------------------------------------------
+# Widget
+# ---------------------------------------------------------------------------
 
 class PageWand(QWidget):
-    # Serial Signals
+    # Serial signals
     sig_serial_scan       = pyqtSignal()
     sig_serial_connect    = pyqtSignal(str)
     sig_serial_disconnect = pyqtSignal()
-    
-    # Bluetooth Signals
+
+    # Bluetooth signals
     sig_bt_scan           = pyqtSignal()
     sig_bt_connect        = pyqtSignal(str)
     sig_bt_disconnect     = pyqtSignal()
-    
-    # Tool Signals
+
+    # Tool signals
     sig_flash_compile     = pyqtSignal(list)
     sig_flash_upload      = pyqtSignal()
     sig_term_clear        = pyqtSignal()
 
     def __init__(self, data_store) -> None:
         super().__init__()
-        self._available_checkboxes: dict[str, tuple[QCheckBox, int]] = {}
+
+        # Connection state flags — source of truth, not button text.
+        self._serial_connected = False
+        self._bt_connected     = False
+
+        # Maps spell name → checkbox widget only (count is consumed at build time).
+        self._spell_checkboxes: dict[str, QCheckBox] = {}
 
         self._build_ui()
         self._connect_internal_signals()
 
-        # Initial display from DataStore (read-only snapshot at startup)
+        # Populate from DataStore snapshot at startup.
         self.load_spell_payload_list(data_store.spell_counts)
         self.update_esp_stats(data_store.esp32_stats)
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
     def append_terminal_text(self, text: str) -> None:
         self.terminal_output.append(text)
@@ -248,102 +276,140 @@ class PageWand(QWidget):
         if status_text:
             self.lbl_flash_status.setText(f"● {status_text}")
 
-    # --- SERIAL UI UPDATERS ---
+    # ── Serial UI updaters ────────────────────────────────────────────
+
     def set_serial_status(self, connected: bool, port_name: str = "") -> None:
-        if connected:
-            self.lbl_serial_status.setText(f"● CONNECTED: {port_name}")
-            self.lbl_serial_status.setStyleSheet(f"color: {Colors.SUCCESS}; font-weight: 800; font-size: 11px;")
-            self.btn_serial_connect.setText("DISCONNECT")
-            self.btn_serial_scan.setEnabled(False)
-        else:
-            self.lbl_serial_status.setText("● DISCONNECTED")
-            self.lbl_serial_status.setStyleSheet(f"color: {Colors.DANGER}; font-weight: 800; font-size: 11px;")
-            self.btn_serial_connect.setText("CONNECT")
-            self.btn_serial_scan.setEnabled(True)
+        self._serial_connected = connected
+        self._set_connection_ui(
+            status_label=self.lbl_serial_status,
+            connect_btn=self.btn_serial_connect,
+            scan_btn=self.btn_serial_scan,
+            connected=connected,
+            device_label=port_name,
+        )
 
     def update_serial_port_list(self, ports: list[str]) -> None:
         self.combo_serial_ports.clear()
         self.combo_serial_ports.addItems(ports)
 
-    # --- BLUETOOTH UI UPDATERS ---
+    # ── Bluetooth UI updaters ─────────────────────────────────────────
+
     def set_bluetooth_status(self, connected: bool, device_name: str = "") -> None:
-        if connected:
-            self.lbl_bt_status.setText(f"● CONNECTED: {device_name}")
-            self.lbl_bt_status.setStyleSheet(f"color: {Colors.SUCCESS}; font-weight: 800; font-size: 11px;")
-            self.btn_bt_connect.setText("DISCONNECT")
-            self.btn_bt_scan.setEnabled(False)
-        else:
-            self.lbl_bt_status.setText("● DISCONNECTED")
-            self.lbl_bt_status.setStyleSheet(f"color: {Colors.DANGER}; font-weight: 800; font-size: 11px;")
-            self.btn_bt_connect.setText("CONNECT")
-            self.btn_bt_scan.setEnabled(True)
+        self._bt_connected = connected
+        self._set_connection_ui(
+            status_label=self.lbl_bt_status,
+            connect_btn=self.btn_bt_connect,
+            scan_btn=self.btn_bt_scan,
+            connected=connected,
+            device_label=device_name,
+        )
 
     def update_bt_device_list(self, devices: list[str]) -> None:
         self.combo_bt_devices.clear()
         self.combo_bt_devices.addItems(devices)
 
+    # ── Hardware stats ────────────────────────────────────────────────
+
     def update_esp_stats(self, stats: dict[str, str]) -> None:
-        clear_layout(self.layout_stats)
+        _clear_layout(self.layout_stats)
         if not stats:
-            lbl = QLabel("Awaiting connection...")
-            lbl.setStyleSheet(f"color: {Colors.TEXT_MUTED}; font-size: 11px; font-style: italic;")
+            lbl = QLabel("Awaiting connection…")
+            lbl.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px; font-style: italic;")
             self.layout_stats.addWidget(lbl)
             return
-
         for key, val in stats.items():
             lbl = QLabel(f"■  {key}: {val}")
-            lbl.setStyleSheet(f"color: {Colors.TEXT_BODY}; font-size: 11px; font-weight: 600;")
+            lbl.setStyleSheet(f"color: {TEXT_BODY}; font-size: 11px; font-weight: 600;")
             self.layout_stats.addWidget(lbl)
 
-    def load_spell_payload_list(self, spell_counts: dict[str, int]) -> None:
-        """Update both checkboxes and the statistics bar chart."""
-        self.list_firmware.clear()
-        self._available_checkboxes.clear()
+    # ── Spell list ────────────────────────────────────────────────────
 
-        # 1. Plot the bar graph
+    def load_spell_payload_list(self, spell_counts: dict[str, int]) -> None:
+        """Refresh both the bar chart and the payload checkbox list."""
+        self._update_spell_chart(spell_counts)
+        self._update_spell_list(spell_counts)
+
+    # ------------------------------------------------------------------
+    # Private helpers — shared logic
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _set_connection_ui(
+        status_label: QLabel,
+        connect_btn: QPushButton,
+        scan_btn: QPushButton,
+        connected: bool,
+        device_label: str,
+    ) -> None:
+        """Update status label, connect button text, and scan button state."""
+        if connected:
+            status_label.setText(f"● CONNECTED: {device_label}")
+            status_label.setStyleSheet(_STATUS_STYLE.format(color=SUCCESS))
+            connect_btn.setText("DISCONNECT")
+            scan_btn.setEnabled(False)
+        else:
+            status_label.setText("● DISCONNECTED")
+            status_label.setStyleSheet(_STATUS_STYLE.format(color=DANGER))
+            connect_btn.setText("CONNECT")
+            scan_btn.setEnabled(True)
+
+    def _update_spell_chart(self, spell_counts: dict[str, int]) -> None:
+        self.stats_plot.clear()
+
+        ax_bottom = self.stats_plot.getAxis("bottom")
+        ax_left   = self.stats_plot.getAxis("left")
+        ax_left.setPen(TEXT_MUTED)
+        ax_bottom.setPen(TEXT_MUTED)
+
         spells = list(spell_counts.keys())
         counts = list(spell_counts.values())
-        
-        self.stats_plot.clear()
-        
-        ax_bottom = self.stats_plot.getAxis('bottom')
-        ax_left = self.stats_plot.getAxis('left')
-        ax_left.setPen(Colors.TEXT_MUTED)
-        ax_bottom.setPen(Colors.TEXT_MUTED)
 
-        if not spells:
-            bg = pg.BarGraphItem(x=[0], height=[0], width=0.6, brush=pg.mkBrush(Colors.BORDER_MID))
-            self.stats_plot.addItem(bg)
+        if spells:
+            bar = pg.BarGraphItem(
+                x=np.arange(len(spells)),
+                height=counts,
+                width=0.6,
+                brush=pg.mkBrush(ACCENT),
+            )
+            self.stats_plot.addItem(bar)
+            ax_bottom.setTicks([list(enumerate(spells))])
+        else:
+            bar = pg.BarGraphItem(x=[0], height=[0], width=0.6, brush=pg.mkBrush(BORDER_MID))
+            self.stats_plot.addItem(bar)
             self.stats_plot.setYRange(0, 10)
             ax_bottom.setTicks([[(0, "No data yet")]])
-        else:
-            bg = pg.BarGraphItem(x=np.arange(len(spells)), height=counts, width=0.6, brush=pg.mkBrush(Colors.ACCENT))
-            self.stats_plot.addItem(bg)
-            ax_bottom.setTicks([list(enumerate(spells))])
 
-        # 2. Update Payload Spells list
+    def _update_spell_list(self, spell_counts: dict[str, int]) -> None:
+        self.list_firmware.clear()
+        self._spell_checkboxes.clear()
+
         for name, count in spell_counts.items():
-            item = QListWidgetItem(self.list_firmware)
+            item   = QListWidgetItem(self.list_firmware)
             widget = QWidget()
             widget.setStyleSheet("background: transparent;")
-            layout = QHBoxLayout(widget)
-            layout.setContentsMargins(12, 4, 12, 4)
+            row    = QHBoxLayout(widget)
+            row.setContentsMargins(12, 4, 12, 4)
 
             chk = QCheckBox(name)
-            chk.setStyleSheet(STYLE_CHECKBOX)
-            self._available_checkboxes[name] = (chk, count)
+            chk.setStyleSheet(_STYLE_CHECKBOX)
+            self._spell_checkboxes[name] = chk
 
             rarity = self._resolve_rarity(count)
-            badge = self._make_rarity_badge(rarity.label, rarity.color)
+            badge  = self._make_rarity_badge(rarity.label, rarity.color)
 
-            layout.addWidget(chk)
-            layout.addStretch()
-            layout.addWidget(badge)
+            row.addWidget(chk)
+            row.addStretch()
+            row.addWidget(badge)
 
             item.setSizeHint(widget.sizeHint())
             self.list_firmware.setItemWidget(item, widget)
 
-    # ── UI Construction ──────────────────────────────────────────
+    def _get_checked_spells(self) -> list[str]:
+        return [name for name, chk in self._spell_checkboxes.items() if chk.isChecked()]
+
+    # ------------------------------------------------------------------
+    # UI construction
+    # ------------------------------------------------------------------
 
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
@@ -352,19 +418,18 @@ class PageWand(QWidget):
 
         self.main_container = QFrame()
         self.main_container.setObjectName("MainBox")
-        self.main_container.setStyleSheet(STYLE_MAIN_CONTAINER)
+        self.main_container.setStyleSheet(_STYLE_MAIN_CONTAINER)
 
         inner = QVBoxLayout(self.main_container)
         inner.setContentsMargins(20, 20, 20, 20)
         inner.setSpacing(16)
 
-        # 2-Column Core Layout
         content = QHBoxLayout()
         content.setSpacing(16)
-        content.addWidget(self._build_left_column(), stretch=12) # Slightly wider left
+        content.addWidget(self._build_left_column(),  stretch=12)
         content.addWidget(self._build_right_column(), stretch=10)
-        
         inner.addLayout(content, stretch=1)
+
         outer.addWidget(self.main_container)
 
     def _build_left_column(self) -> QWidget:
@@ -373,25 +438,23 @@ class PageWand(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(16)
 
-        # Tools Row (Flash + Connections)
         tools_row = QHBoxLayout()
         tools_row.setSpacing(12)
 
-        # Flash Card
+        # Flash sub-column
         flash_w = QWidget()
         flash_l = QVBoxLayout(flash_w)
-        flash_l.setContentsMargins(0,0,0,0)
+        flash_l.setContentsMargins(0, 0, 0, 0)
         flash_l.setSpacing(8)
         flash_l.addWidget(self._make_section_label("FIRMWARE FLASHER"))
         flash_l.addWidget(self._build_flash_card())
         tools_row.addWidget(flash_w, stretch=1)
 
-        # Connections Column (Serial + BT)
+        # Connections sub-column
         conn_w = QWidget()
         conn_l = QVBoxLayout(conn_w)
-        conn_l.setContentsMargins(0,0,0,0)
+        conn_l.setContentsMargins(0, 0, 0, 0)
         conn_l.setSpacing(8)
-        
         conn_l.addWidget(self._make_section_label("CONNECTION"))
         conn_l.addWidget(self._build_serial_card())
         conn_l.addWidget(self._build_bt_card())
@@ -400,28 +463,28 @@ class PageWand(QWidget):
 
         layout.addLayout(tools_row)
 
-        # UART Terminal
-        term_label_row = QHBoxLayout()
-        term_label_row.addWidget(self._make_section_label("UART TERMINAL"))
-        term_label_row.addStretch()
+        # Terminal header row
+        term_row = QHBoxLayout()
+        term_row.addWidget(self._make_section_label("UART TERMINAL"))
+        term_row.addStretch()
         self.btn_term_clear = QPushButton("CLEAR")
-        self.btn_term_clear.setStyleSheet(STYLE_BTN_SMALL)
+        self.btn_term_clear.setStyleSheet(_STYLE_BTN_SMALL)
         self.btn_term_clear.setCursor(Qt.CursorShape.PointingHandCursor)
-        term_label_row.addWidget(self.btn_term_clear)
-        layout.addLayout(term_label_row)
+        term_row.addWidget(self.btn_term_clear)
+        layout.addLayout(term_row)
 
-        term = QTextEdit()
-        term.setReadOnly(True)
-        term.setStyleSheet(STYLE_TERMINAL)
-        term.setMinimumHeight(Sizes.TERM_MIN_H)
-        
+        self.terminal_output = QTextEdit()
+        self.terminal_output.setReadOnly(True)
+        self.terminal_output.setStyleSheet(_STYLE_TERMINAL)
+        self.terminal_output.setMinimumHeight(TERM_MIN_H)
         font = QFont("Consolas", 10)
         font.setStyleHint(QFont.StyleHint.Monospace)
-        term.setFont(font)
-        term.setPlainText(">> WAND TERMINAL INITIALIZED...\n>> WAITING FOR DATA...")
-        self.terminal_output = term
-        
-        layout.addWidget(term, stretch=1)
+        self.terminal_output.setFont(font)
+        self.terminal_output.setPlainText(
+            ">> WAND TERMINAL INITIALIZED…\n>> WAITING FOR DATA…"
+        )
+        layout.addWidget(self.terminal_output, stretch=1)
+
         return widget
 
     def _build_right_column(self) -> QWidget:
@@ -430,37 +493,34 @@ class PageWand(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(16)
 
-        # Dataset Statistics (Graph + ESP Stats)
         layout.addWidget(self._make_section_label("DATASET STATISTICS"))
         layout.addWidget(self._build_stats_graph_card(), stretch=1)
 
-        # Available Spells Checkboxes
         layout.addWidget(self._make_section_label("FIRMWARE PAYLOAD"))
         self.list_firmware = QListWidget()
-        self.list_firmware.setStyleSheet(STYLE_LIST)
-        self.list_firmware.setSelectionMode(QListWidget.SelectionMode.NoSelection) 
+        self.list_firmware.setStyleSheet(_STYLE_LIST)
+        self.list_firmware.setSelectionMode(QListWidget.SelectionMode.NoSelection)
         layout.addWidget(self.list_firmware, stretch=1)
 
         return widget
 
     def _build_flash_card(self) -> QFrame:
-        card = self._make_card_frame()
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        card, layout = self._make_card()
 
         btn_row = QHBoxLayout()
-        self.btn_compile = self._make_btn("COMPILE", STYLE_BTN_OUTLINE)
-        self.btn_flash   = self._make_btn("FLASH ESP32", STYLE_BTN_PRIMARY)
+        self.btn_compile = self._make_btn("COMPILE",     _STYLE_BTN_OUTLINE)
+        self.btn_flash   = self._make_btn("FLASH ESP32", _STYLE_BTN_PRIMARY)
         btn_row.addWidget(self.btn_compile)
         btn_row.addWidget(self.btn_flash)
         layout.addLayout(btn_row)
 
         self.lbl_flash_status = QLabel("● Ready to compile")
-        self.lbl_flash_status.setStyleSheet(f"color: {Colors.TEXT_MUTED}; font-size: 11px; font-weight: 800;")
+        self.lbl_flash_status.setStyleSheet(
+            f"color: {TEXT_MUTED}; font-size: 11px; font-weight: 800;"
+        )
         self.progress_bar = QProgressBar()
-        self.progress_bar.setStyleSheet(STYLE_PROGRESS)
-        self.progress_bar.setFixedHeight(Sizes.PROGRESS_H)
+        self.progress_bar.setStyleSheet(_STYLE_PROGRESS)
+        self.progress_bar.setFixedHeight(PROGRESS_H)
         self.progress_bar.setValue(0)
 
         layout.addWidget(self.lbl_flash_status)
@@ -468,98 +528,138 @@ class PageWand(QWidget):
         return card
 
     def _build_serial_card(self) -> QFrame:
-        card = self._make_card_frame()
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(8)
+        card, layout = self._make_card(margins=(12, 12, 12, 12), spacing=8)
 
         status_row = QHBoxLayout()
+        lbl_name = QLabel("SERIAL:")
+        lbl_name.setStyleSheet(f"color: {TEXT_BODY}; font-weight: bold; font-size: 11px;")
         self.lbl_serial_status = QLabel("● DISCONNECTED")
-        self.lbl_serial_status.setStyleSheet(f"color: {Colors.DANGER}; font-weight: 800; font-size: 11px;")
-        status_row.addWidget(QLabel("SERIAL:", styleSheet=f"color: {Colors.TEXT_BODY}; font-weight: bold; font-size: 11px;"))
+        self.lbl_serial_status.setStyleSheet(_STATUS_STYLE.format(color=DANGER))
+        status_row.addWidget(lbl_name)
         status_row.addStretch()
         status_row.addWidget(self.lbl_serial_status)
         layout.addLayout(status_row)
 
         self.combo_serial_ports = QComboBox()
-        self.combo_serial_ports.setStyleSheet(STYLE_COMBO)
+        self.combo_serial_ports.setStyleSheet(_STYLE_COMBO)
         layout.addWidget(self.combo_serial_ports)
 
         btn_row = QHBoxLayout()
-        self.btn_serial_scan    = self._make_btn("SCAN",    STYLE_BTN_OUTLINE)
-        self.btn_serial_connect = self._make_btn("CONNECT", STYLE_BTN_PRIMARY)
+        self.btn_serial_scan    = self._make_btn("SCAN",    _STYLE_BTN_OUTLINE)
+        self.btn_serial_connect = self._make_btn("CONNECT", _STYLE_BTN_PRIMARY)
         btn_row.addWidget(self.btn_serial_scan)
         btn_row.addWidget(self.btn_serial_connect)
         layout.addLayout(btn_row)
         return card
 
     def _build_bt_card(self) -> QFrame:
-        card = self._make_card_frame()
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(8)
+        card, layout = self._make_card(margins=(12, 12, 12, 12), spacing=8)
 
         status_row = QHBoxLayout()
+        lbl_name = QLabel("BLUETOOTH:")
+        lbl_name.setStyleSheet(f"color: {TEXT_BODY}; font-weight: bold; font-size: 11px;")
         self.lbl_bt_status = QLabel("● DISCONNECTED")
-        self.lbl_bt_status.setStyleSheet(f"color: {Colors.DANGER}; font-weight: 800; font-size: 11px;")
-        status_row.addWidget(QLabel("BLUETOOTH:", styleSheet=f"color: {Colors.TEXT_BODY}; font-weight: bold; font-size: 11px;"))
+        self.lbl_bt_status.setStyleSheet(_STATUS_STYLE.format(color=DANGER))
+        status_row.addWidget(lbl_name)
         status_row.addStretch()
         status_row.addWidget(self.lbl_bt_status)
         layout.addLayout(status_row)
 
         self.combo_bt_devices = QComboBox()
-        self.combo_bt_devices.setStyleSheet(STYLE_COMBO)
+        self.combo_bt_devices.setStyleSheet(_STYLE_COMBO)
         layout.addWidget(self.combo_bt_devices)
 
         btn_row = QHBoxLayout()
-        self.btn_bt_scan    = self._make_btn("SCAN",    STYLE_BTN_OUTLINE)
-        self.btn_bt_connect = self._make_btn("CONNECT", STYLE_BTN_PRIMARY)
+        self.btn_bt_scan    = self._make_btn("SCAN",    _STYLE_BTN_OUTLINE)
+        self.btn_bt_connect = self._make_btn("CONNECT", _STYLE_BTN_PRIMARY)
         btn_row.addWidget(self.btn_bt_scan)
         btn_row.addWidget(self.btn_bt_connect)
         layout.addLayout(btn_row)
         return card
 
     def _build_stats_graph_card(self) -> QFrame:
-        card = self._make_card_frame()
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(12)
+        card, layout = self._make_card()
 
-        # Top row: Hardware ESP Status (Optional info text)
         self.layout_stats = QHBoxLayout()
         layout.addLayout(self.layout_stats)
 
-        # Graph Plot Widget
         self.stats_plot = pg.PlotWidget()
-        self.stats_plot.setBackground(Colors.BG_WHITE)
+        self.stats_plot.setBackground(BG_WHITE)
         self.stats_plot.setMouseEnabled(x=False, y=False)
         self.stats_plot.hideButtons()
         self.stats_plot.showGrid(x=False, y=True, alpha=0.3)
-        
-        # Clean axes
-        ax_bottom = self.stats_plot.getAxis('bottom')
-        ax_bottom.setPen(Colors.TEXT_MUTED)
-        ax_bottom.setTextPen(Colors.TEXT_BODY)
+
+        ax_bottom = self.stats_plot.getAxis("bottom")
+        ax_bottom.setPen(TEXT_MUTED)
+        ax_bottom.setTextPen(TEXT_BODY)
         ax_bottom.setStyle(tickTextOffset=8)
-        
-        ax_left = self.stats_plot.getAxis('left')
-        ax_left.setPen(Colors.TEXT_MUTED)
-        ax_left.setTextPen(Colors.TEXT_BODY)
-        
+        self.stats_plot.getAxis("left").setPen(TEXT_MUTED)
+        self.stats_plot.getAxis("left").setTextPen(TEXT_BODY)
+
         layout.addWidget(self.stats_plot, stretch=1)
         return card
 
+    # ------------------------------------------------------------------
+    # Signal wiring
+    # ------------------------------------------------------------------
+
+    def _connect_internal_signals(self) -> None:
+        self.btn_term_clear.clicked.connect(self._on_term_clear_clicked)
+
+        self.btn_serial_scan.clicked.connect(self.sig_serial_scan.emit)
+        self.btn_serial_connect.clicked.connect(self._on_serial_connect_clicked)
+
+        self.btn_bt_scan.clicked.connect(self.sig_bt_scan.emit)
+        self.btn_bt_connect.clicked.connect(self._on_bt_connect_clicked)
+
+        self.btn_compile.clicked.connect(self._on_compile_clicked)
+        self.btn_flash.clicked.connect(self.sig_flash_upload.emit)
+
+    # ------------------------------------------------------------------
+    # Slot implementations
+    # ------------------------------------------------------------------
+
+    def _on_term_clear_clicked(self) -> None:
+        self.terminal_output.clear()
+        self.sig_term_clear.emit()
+
+    def _on_serial_connect_clicked(self) -> None:
+        if self._serial_connected:
+            self.sig_serial_disconnect.emit()
+        else:
+            self.sig_serial_connect.emit(self.combo_serial_ports.currentText())
+
+    def _on_bt_connect_clicked(self) -> None:
+        if self._bt_connected:
+            self.sig_bt_disconnect.emit()
+        else:
+            self.sig_bt_connect.emit(self.combo_bt_devices.currentText())
+
+    def _on_compile_clicked(self) -> None:
+        self.sig_flash_compile.emit(self._get_checked_spells())
+
+    # ------------------------------------------------------------------
+    # Factory helpers
+    # ------------------------------------------------------------------
+
     @staticmethod
-    def _make_card_frame() -> QFrame:
+    def _make_card(
+        margins: tuple[int, int, int, int] = (16, 16, 16, 16),
+        spacing: int = 12,
+    ) -> tuple[QFrame, QVBoxLayout]:
+        """Return a styled card frame together with its configured layout."""
         frame = QFrame()
         frame.setObjectName("CardFrame")
-        frame.setStyleSheet(STYLE_CARD)
-        return frame
+        frame.setStyleSheet(_STYLE_CARD)
+        layout = QVBoxLayout(frame)
+        layout.setContentsMargins(*margins)
+        layout.setSpacing(spacing)
+        return frame, layout
 
     @staticmethod
     def _make_btn(label: str, style: str) -> QPushButton:
         btn = QPushButton(label)
-        btn.setFixedHeight(Sizes.BTN_H)
+        btn.setFixedHeight(BTN_H)
         btn.setStyleSheet(style)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         return btn
@@ -567,54 +667,23 @@ class PageWand(QWidget):
     @staticmethod
     def _make_section_label(text: str) -> QLabel:
         lbl = QLabel(text)
-        lbl.setStyleSheet(f"color: {Colors.TEXT_BODY}; font-weight: 900; font-size: 13px; letter-spacing: 1px;")
+        lbl.setStyleSheet(
+            f"color: {TEXT_BODY}; font-weight: 900; font-size: 13px; letter-spacing: 1px;"
+        )
         return lbl
 
     @staticmethod
     def _make_rarity_badge(label: str, color: str) -> QLabel:
         lbl = QLabel(label)
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl.setStyleSheet(STYLE_RARITY_BADGE.format(color=color))
+        lbl.setStyleSheet(_STYLE_RARITY_BADGE.format(color=color))
         return lbl
 
     @staticmethod
     def _resolve_rarity(count: int) -> RarityTier:
-        result = RARITY_TIERS[0]
-        for tier in RARITY_TIERS:
-            if count >= tier.min_count:
-                result = tier
-        return result
-
-    def _connect_internal_signals(self) -> None:
-        self.btn_term_clear.clicked.connect(self.terminal_output.clear)
-        self.btn_term_clear.clicked.connect(lambda checked: self.sig_term_clear.emit())
-        
-        # Connect Serial buttons
-        self.btn_serial_scan.clicked.connect(lambda checked: self.sig_serial_scan.emit())
-        self.btn_serial_connect.clicked.connect(self._on_serial_connect_clicked)
-        
-        # Connect BT buttons
-        self.btn_bt_scan.clicked.connect(lambda checked: self.sig_bt_scan.emit())
-        self.btn_bt_connect.clicked.connect(self._on_bt_connect_clicked)
-        
-        # Connect Flash buttons
-        self.btn_compile.clicked.connect(self._on_compile_clicked)
-        self.btn_flash.clicked.connect(lambda checked: self.sig_flash_upload.emit())
-
-    def _on_serial_connect_clicked(self) -> None:
-        if self.btn_serial_connect.text() == "CONNECT":
-            self.sig_serial_connect.emit(self.combo_serial_ports.currentText())
-        else:
-            self.sig_serial_disconnect.emit()
-
-    def _on_bt_connect_clicked(self) -> None:
-        if self.btn_bt_connect.text() == "CONNECT":
-            self.sig_bt_connect.emit(self.combo_bt_devices.currentText())
-        else:
-            self.sig_bt_disconnect.emit()
-
-    def _on_compile_clicked(self) -> None:
-        self.sig_flash_compile.emit(self._get_checked_spells())
-
-    def _get_checked_spells(self) -> list[str]:
-        return [name for name, (chk, _) in self._available_checkboxes.items() if chk.isChecked()]
+        """Return the highest tier whose min_count does not exceed *count*."""
+        return max(
+            (tier for tier in RARITY_TIERS if count >= tier.min_count),
+            key=lambda t: t.min_count,
+            default=RARITY_TIERS[0],
+        )

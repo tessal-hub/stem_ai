@@ -20,6 +20,7 @@ def main():
     handler = Handler(ui_page_wand=window.page_wand, 
                       ui_page_record=window.page_record,
                       ui_page_home=window.page_home,
+                      ui_page_setting=window.page_setting,
                       data_store=data_store)
     
     # 5. Hiển thị cửa sổ

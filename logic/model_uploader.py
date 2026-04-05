@@ -3,7 +3,7 @@ logic/model_uploader.py — Binary TFLite Upload Worker for ESP32-S3.
 
 Architecture:
     - Runs in a background QThread to prevent UI blocking.
-    - Optimized for 921600 baud.
+    - Optimized for 115200 baud.
     - Protocol:
         1. Sends 'CMD:UPLOAD_MODEL:<filesize>\n'.
         2. Waits for 'ACK:READY\n' (within 5s).
@@ -49,7 +49,7 @@ class ModelUploader(QThread):
                 return
 
             # Open port with 5s timeout for handshakes
-            self._serial = serial.Serial(self.port, 921600, timeout=5)
+            self._serial = serial.Serial(self.port, 115200, timeout=5)
             self._is_running = True
             
             file_size = os.path.getsize(self.file_path)

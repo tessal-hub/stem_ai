@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from .common_design_tokens import *
 
 
 class ClickableFrame(QFrame):
@@ -32,29 +33,6 @@ class ClickableFrame(QFrame):
         super().mouseReleaseEvent(event)
 
 
-class Colors:
-    ACCENT       = "#00ff88"
-    ACCENT_TEXT  = "#0a0a0a"
-    BG_DARK      = "#111827"
-    BG_LIGHT     = "#f3f4f6"
-    BG_WHITE     = "#ffffff"
-    BORDER       = "#e5e7eb"
-    BORDER_MID   = "#d1d5db"
-    TEXT_BODY    = "#1f2937"
-    TEXT_MUTED   = "#6b7280"
-    HOVER_BG     = "#e5e7eb"
-    RARITY_NONE  = "#9ca3af"
-    RARITY_COM   = "#10b981"
-    RARITY_UNC   = "#3b82f6"
-    RARITY_RARE  = "#8b5cf6"
-    RARITY_EPIC  = "#f59e0b"
-
-
-class Sizes:
-    GRAPH_MIN_H  = 400
-    RIGHT_MAX_W  = 340
-
-
 @dataclass(frozen=True)
 class RarityTier:
     min_count: int
@@ -63,18 +41,18 @@ class RarityTier:
 
 
 RARITY_TIERS: tuple[RarityTier, ...] = (
-    RarityTier(0,   "UNLEARNED", Colors.RARITY_NONE),
-    RarityTier(10,  "COMMON",    Colors.RARITY_COM),
-    RarityTier(20,  "UNCOMMON",  Colors.RARITY_UNC),
-    RarityTier(50,  "RARE",      Colors.RARITY_RARE),
-    RarityTier(100, "EPIC",      Colors.RARITY_EPIC),
+    RarityTier(0,   "UNLEARNED", RARITY_NONE),
+    RarityTier(10,  "COMMON",    RARITY_COM),
+    RarityTier(20,  "UNCOMMON",  RARITY_UNC),
+    RarityTier(50,  "RARE",      RARITY_RARE),
+    RarityTier(100, "EPIC",      RARITY_EPIC),
 )
 
 
 STYLE_MAIN_CONTAINER = f"""
     #MainBox {{
-        background-color: {Colors.BG_WHITE};
-        border: 1px solid {Colors.BORDER};
+        background-color: {BG_WHITE};
+        border: 1px solid {BORDER};
         border-top: none;
         border-bottom-left-radius: 12px;
         border-bottom-right-radius: 12px;
@@ -84,18 +62,18 @@ STYLE_MAIN_CONTAINER = f"""
 """
 STYLE_CARD = f"""
     #CardFrame, ClickableFrame {{
-        background-color: {Colors.BG_LIGHT};
+        background-color: {BG_LIGHT};
         border: none;
         border-radius: 8px;
     }}
     ClickableFrame:hover {{
-        background-color: {Colors.HOVER_BG};
+        background-color: {HOVER_BG};
     }}
 """
 STYLE_SCROLL_AREA = f"""
     QScrollArea {{ border: none; background-color: transparent; }}
-    QScrollBar:vertical {{ border: none; background: {Colors.BG_LIGHT}; width: 8px; border-radius: 4px; }}
-    QScrollBar::handle:vertical {{ background: {Colors.BORDER_MID}; border-radius: 4px; }}
+    QScrollBar:vertical {{ border: none; background: {BG_LIGHT}; width: 8px; border-radius: 4px; }}
+    QScrollBar::handle:vertical {{ background: {BORDER_MID}; border-radius: 4px; }}
 """
 STYLE_RARITY_BADGE = """
     QLabel {{
@@ -110,26 +88,26 @@ STYLE_RARITY_BADGE = """
 """
 STYLE_BTN_BACK = f"""
     QPushButton {{
-        background-color: {Colors.BG_WHITE};
-        color: {Colors.TEXT_BODY};
-        border: 1px solid {Colors.BORDER_MID};
+        background-color: {BG_WHITE};
+        color: {TEXT_BODY};
+        border: 1px solid {BORDER_MID};
         border-radius: 6px;
         font-size: 12px;
         font-weight: bold;
         padding: 6px 12px;
     }}
-    QPushButton:hover {{ background-color: {Colors.HOVER_BG}; }}
+    QPushButton:hover {{ background-color: {HOVER_BG}; }}
 """
 STYLE_LIST = f"""
     QListWidget {{
-        background-color: {Colors.BG_LIGHT};
+        background-color: {BG_LIGHT};
         border: none;
         border-radius: 8px;
         outline: 0;
     }}
-    QListWidget::item {{ padding: 12px; border-bottom: 1px solid {Colors.BORDER}; color: {Colors.TEXT_BODY}; font-weight: 500; }}
-    QListWidget::item:selected {{ background-color: {Colors.TEXT_BODY}; color: {Colors.BG_WHITE}; border-radius: 6px; }}
-    QListWidget::item:hover:!selected {{ background-color: {Colors.HOVER_BG}; border-radius: 6px; }}
+    QListWidget::item {{ padding: 12px; border-bottom: 1px solid {BORDER}; color: {TEXT_BODY}; font-weight: 500; }}
+    QListWidget::item:selected {{ background-color: {TEXT_BODY}; color: {BG_WHITE}; border-radius: 6px; }}
+    QListWidget::item:hover:!selected {{ background-color: {HOVER_BG}; border-radius: 6px; }}
 """
 
 
@@ -229,7 +207,7 @@ class PageStatistics(QWidget):
 
     def _build_right_column(self) -> QWidget:
         widget = QWidget()
-        widget.setMaximumWidth(Sizes.RIGHT_MAX_W)
+        widget.setMaximumWidth(RIGHT_MAX_W)
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
@@ -267,7 +245,7 @@ class PageStatistics(QWidget):
         self.btn_back_spells.setFixedHeight(32)
         self.btn_back_spells.setStyleSheet(STYLE_BTN_BACK)
         self.lbl_current_spell = QLabel("SAMPLES: …")
-        self.lbl_current_spell.setStyleSheet(f"color: {Colors.ACCENT}; font-weight: bold; font-size: 11px;")
+        self.lbl_current_spell.setStyleSheet(f"color: {WAND_ACCENT}; font-weight: bold; font-size: 11px;")
         top_row.addWidget(self.btn_back_spells)
         top_row.addWidget(self.lbl_current_spell)
         top_row.addStretch()
@@ -303,7 +281,7 @@ class PageStatistics(QWidget):
     @staticmethod
     def _make_section_label(text: str, accent: bool = True) -> QLabel:
         lbl = QLabel(text)
-        color = Colors.ACCENT if accent else Colors.TEXT_BODY
+        color = WAND_ACCENT if accent else TEXT_BODY
         lbl.setStyleSheet(f"color: {color}; font-weight: 900; font-size: 12px; letter-spacing: 1px;")
         return lbl
 
@@ -311,20 +289,20 @@ class PageStatistics(QWidget):
     def _make_graph_placeholder() -> QLabel:
         lbl = QLabel("DATA GRAPH")
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl.setStyleSheet(f"background-color: {Colors.BG_DARK}; color: {Colors.TEXT_MUTED}; border-radius: 6px;")
-        lbl.setMinimumHeight(Sizes.GRAPH_MIN_H)
+        lbl.setStyleSheet(f"background-color: {BG_DARK}; color: {TEXT_MUTED}; border-radius: 6px;")
+        lbl.setMinimumHeight(GRAPH_MIN_H)
         return lbl
 
     @staticmethod
     def _make_card_name_label(name: str) -> QLabel:
         lbl = QLabel(name)
-        lbl.setStyleSheet(f"color: {Colors.TEXT_BODY}; font-weight: bold; font-size: 12px;")
+        lbl.setStyleSheet(f"color: {TEXT_BODY}; font-weight: bold; font-size: 12px;")
         return lbl
 
     @staticmethod
     def _make_card_count_label(count: int) -> QLabel:
         lbl = QLabel(f"Samples: {count}")
-        lbl.setStyleSheet(f"color: {Colors.TEXT_MUTED}; font-size: 10px; font-weight: bold;")
+        lbl.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 10px; font-weight: bold;")
         return lbl
 
     @staticmethod

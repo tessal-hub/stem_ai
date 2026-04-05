@@ -1,6 +1,6 @@
 # UI Core
 PyQt6>=6.5.0
-PyCore
+PyOpenGL>=3.1.0
 
 # Plotting & Visualization
 pyqtgraph>=0.13.3

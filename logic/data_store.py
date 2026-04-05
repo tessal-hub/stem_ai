@@ -35,7 +35,7 @@ class DataStore(QObject):
             "CPU": "0%",
             "RAM": "0%",
             "Port": "None",
-            "Baudrate": "921600",
+            "Baudrate": "115200",
         }
 
         # 2. ESP32 Hardware Stats (Required by PageWand)
@@ -134,4 +134,30 @@ class DataStore(QObject):
             return True
         except Exception as e:
             print(f"[DataStore] Save error: {e}")
+            return False
+
+    def delete_spell(self, spell_name: str) -> bool:
+        """Delete a spell and all its associated CSV files."""
+        if not spell_name.strip():
+            return False
+
+        spell_path = os.path.join(self.dataset_dir, spell_name.strip().upper())
+        if not os.path.exists(spell_path):
+            return False
+
+        try:
+            # Remove all files in the spell directory
+            for filename in os.listdir(spell_path):
+                file_path = os.path.join(spell_path, filename)
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+            
+            # Remove the directory itself
+            os.rmdir(spell_path)
+            
+            # Refresh the database
+            self.refresh_database()
+            return True
+        except Exception as e:
+            print(f"[DataStore] Delete spell error: {e}")
             return False

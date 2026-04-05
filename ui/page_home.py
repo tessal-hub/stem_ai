@@ -6,29 +6,14 @@ from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget, QScrollArea)
 from ui.wand_3d_widget import Wand3DWidget
-
-class Colors:
-    ACCENT      = "#ff3366"      # Pink vibrant accent
-    ACCENT_TEXT = "#ffffff"
-    BG_DARK     = "#111827"
-    BG_LIGHT    = "#f3f4f6"      # Slightly darker light gray for contrast
-    BG_WHITE    = "#ffffff"
-    BORDER      = "#e5e7eb"
-    BORDER_MID  = "#d1d5db"
-    TEXT_BODY   = "#1f2937"
-    TEXT_MUTED  = "#6b7280"
-    HOVER_BG    = "#fce7ec"      # Light pink hover
-
-class Sizes:
-    ICON          = QSize(18, 18)
-    STATUS_H      = 32
-    MODE_BOX_H    = 44
-    MODULE_BAR_H  = 48
-    MGR_BOX_H     = 100
-    SPELL_BTN_H   = 44
-    MODULE_BTN_H  = 32
-    SIM_MIN_H     = 340
-    RIGHT_MAX_W   = 300
+from ui.common_design_tokens import (
+    # Colors
+    ACCENT, ACCENT_TEXT, BG_DARK, BG_LIGHT, BG_WHITE, BORDER, BORDER_MID,
+    TEXT_BODY, TEXT_MUTED, HOVER_BG,
+    # Sizes
+    ICON, STATUS_H, MODE_BOX_H, MODULE_BAR_H, MGR_BOX_H,
+    SPELL_BTN_H, MODULE_BTN_H, SIM_MIN_H, RIGHT_MAX_W
+)
 
 @dataclass
 class ModuleEntry:
@@ -45,8 +30,8 @@ MODULES: list[ModuleEntry] = [
 
 STYLE_MAIN_CONTAINER = f"""
     #MainBox {{
-        background-color: {Colors.BG_LIGHT};
-        border: 1px solid {Colors.BORDER};
+        background-color: {BG_LIGHT};
+        border: 1px solid {BORDER};
         border-top: none;
         border-bottom-left-radius: 14px;
         border-bottom-right-radius: 14px;
@@ -55,16 +40,16 @@ STYLE_MAIN_CONTAINER = f"""
 
 STYLE_WAND_CONTAINER = f"""
     #WandBox {{
-        background-color: {Colors.BG_WHITE};
-        border: 1px solid {Colors.BORDER};
+        background-color: {BG_WHITE};
+        border: 1px solid {BORDER};
         border-radius: 12px;
     }}
 """
 
 STYLE_CARD = f"""
     #CardFrame {{
-        background-color: {Colors.BG_WHITE};
-        border: 1px solid {Colors.BORDER};
+        background-color: {BG_WHITE};
+        border: 1px solid {BORDER};
         border-radius: 12px;
     }}
 """
@@ -78,8 +63,8 @@ STYLE_CARD_NO_BORDER = f"""
 
 STYLE_SPELL_BTN = f"""
     QPushButton {{
-        background-color: {Colors.BG_LIGHT};
-        color: {Colors.TEXT_BODY};
+        background-color: {BG_LIGHT};
+        color: {TEXT_BODY};
         border: 1px solid transparent;
         border-radius: 8px;
         font-size: 13px;
@@ -88,26 +73,26 @@ STYLE_SPELL_BTN = f"""
         padding-left: 14px;
     }}
     QPushButton:hover {{
-        background-color: {Colors.HOVER_BG};
-        color: {Colors.ACCENT};
-        border-color: {Colors.ACCENT};
+        background-color: {HOVER_BG};
+        color: {ACCENT};
+        border-color: {ACCENT};
     }}
 """
 
 STYLE_MODULE_BTN = f"""
     QPushButton {{
-        background-color: {Colors.BG_WHITE};
-        color: {Colors.TEXT_BODY};
-        border: 1px solid {Colors.BORDER_MID};
+        background-color: {BG_WHITE};
+        color: {TEXT_BODY};
+        border: 1px solid {BORDER_MID};
         border-radius: 8px;
         font-size: 11px;
         font-weight: 800;
         padding: 6px 14px;
     }}
     QPushButton:hover {{
-        color: {Colors.ACCENT};
-        background-color: {Colors.HOVER_BG};
-        border-color: {Colors.ACCENT};
+        color: {ACCENT};
+        background-color: {HOVER_BG};
+        border-color: {ACCENT};
     }}
 """
 
@@ -128,10 +113,10 @@ class PageHome(QWidget):
     def set_connection_status(self, connected: bool) -> None:
         if connected:
             self.status_bar.setText("▶ WAND CONNECTED - READY")
-            self.status_bar.setStyleSheet(self._status_style(Colors.ACCENT, Colors.ACCENT_TEXT))
+            self.status_bar.setStyleSheet(self._status_style(ACCENT, ACCENT_TEXT))
         else:
             self.status_bar.setText("● WAND DISCONNECTED - WAITING FOR DEVICE")
-            self.status_bar.setStyleSheet(self._status_style("#ef4444", Colors.ACCENT_TEXT))
+            self.status_bar.setStyleSheet(self._status_style("#ef4444", ACCENT_TEXT))
 
     def set_mode(self, mode: str) -> None:
         self.mode_label.setText(f"MODE:  {mode.upper()}")
@@ -167,8 +152,8 @@ class PageHome(QWidget):
 
     def _build_status_bar(self) -> QLabel:
         self.status_bar = QLabel("▶ WAND CONNECTED - READY")
-        self.status_bar.setStyleSheet(self._status_style(Colors.ACCENT, Colors.ACCENT_TEXT))
-        self.status_bar.setFixedHeight(Sizes.STATUS_H)
+        self.status_bar.setStyleSheet(self._status_style(ACCENT, ACCENT_TEXT))
+        self.status_bar.setFixedHeight(STATUS_H)
         self.status_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
         return self.status_bar
 
@@ -207,15 +192,15 @@ class PageHome(QWidget):
         # Header Strip
         header_layout = QHBoxLayout()
         header = QLabel("3D WAND ORIENTATION")
-        header.setStyleSheet(f"color: {Colors.TEXT_BODY}; font-size: 14px; font-weight: 800; letter-spacing: 1px;")
+        header.setStyleSheet(f"color: {TEXT_BODY}; font-size: 14px; font-weight: 800; letter-spacing: 1px;")
         header_layout.addWidget(header)
         header_layout.addStretch()
         layout.addLayout(header_layout)
 
         # Real 3D wand viewer
         self.sim_view = QFrame()
-        self.sim_view.setStyleSheet(f"background-color: {Colors.BG_WHITE}; border: 1px solid {Colors.BORDER_MID}; border-radius: 8px;")
-        self.sim_view.setMinimumHeight(Sizes.SIM_MIN_H)
+        self.sim_view.setStyleSheet(f"background-color: {BG_WHITE}; border: 1px solid {BORDER_MID}; border-radius: 8px;")
+        self.sim_view.setMinimumHeight(SIM_MIN_H)
 
         sim_inner = QVBoxLayout(self.sim_view)
         sim_inner.setContentsMargins(1, 1, 1, 1) # Subtle border wrapper
@@ -227,14 +212,14 @@ class PageHome(QWidget):
 
     def _build_module_bar(self) -> QWidget:
         bar = QWidget()
-        bar.setFixedHeight(Sizes.MODULE_BAR_H)
+        bar.setFixedHeight(MODULE_BAR_H)
         bar.setStyleSheet(STYLE_MODULE_BAR)
         layout = QHBoxLayout(bar)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
         
         mod_lbl = QLabel("ATTACHMENTS:")
-        mod_lbl.setStyleSheet(f"color: {Colors.TEXT_MUTED}; font-weight: 900; font-size: 11px; padding-right: 8px;")
+        mod_lbl.setStyleSheet(f"color: {TEXT_MUTED}; font-weight: 900; font-size: 11px; padding-right: 8px;")
         layout.addWidget(mod_lbl)
         
         for mod in MODULES:
@@ -244,7 +229,7 @@ class PageHome(QWidget):
 
     def _build_right_column(self) -> QWidget:
         widget = QWidget()
-        widget.setMaximumWidth(Sizes.RIGHT_MAX_W)
+        widget.setMaximumWidth(RIGHT_MAX_W)
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(16)
@@ -255,11 +240,11 @@ class PageHome(QWidget):
 
     def _build_mode_box(self) -> QFrame:
         box = self._make_section_frame()
-        box.setFixedHeight(Sizes.MODE_BOX_H)
+        box.setFixedHeight(MODE_BOX_H)
         layout = QHBoxLayout(box)
         layout.setContentsMargins(16, 0, 16, 0)
         self.mode_label = QLabel("MODE:  REC/PLAY")
-        self.mode_label.setStyleSheet(f"color: {Colors.ACCENT}; font-size: 12px; font-weight: 900; letter-spacing: 1px;")
+        self.mode_label.setStyleSheet(f"color: {ACCENT}; font-size: 12px; font-weight: 900; letter-spacing: 1px;")
         layout.addWidget(self.mode_label)
         layout.addStretch()
         return box
@@ -271,7 +256,7 @@ class PageHome(QWidget):
         layout.setSpacing(10)
         
         title = QLabel("SPELLBOOK")
-        title.setStyleSheet(f"color: {Colors.TEXT_BODY}; font-size: 12px; font-weight: 900; letter-spacing: 1px;")
+        title.setStyleSheet(f"color: {TEXT_BODY}; font-size: 12px; font-weight: 900; letter-spacing: 1px;")
         layout.addWidget(title)
         
         # Scroll area for spells if they exceed height
@@ -285,15 +270,23 @@ class PageHome(QWidget):
         spell_layout.setContentsMargins(0, 0, 0, 0)
         spell_layout.setSpacing(8)
 
-        # Sourced from DataStore
+        # Sourced from DataStore - with limit to prevent UI hang
         spells = self.data_store.get_spell_list()
+        max_display = 50  # Limit to prevent rendering huge lists
+        
         if not spells:
             no_spell = QLabel("No spells recorded yet.")
-            no_spell.setStyleSheet(f"color: {Colors.TEXT_MUTED}; font-size: 12px; font-style: italic;")
+            no_spell.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px; font-style: italic;")
             spell_layout.addWidget(no_spell)
         else:
-            for spell in spells:
+            for i, spell in enumerate(spells[:max_display]):
                 spell_layout.addWidget(self._make_spell_button(f"✨ {spell}"))
+            
+            # Show count if list is truncated
+            if len(spells) > max_display:
+                overflow_lbl = QLabel(f"... and {len(spells) - max_display} more")
+                overflow_lbl.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 10px; font-style: italic; padding: 4px 0;")
+                spell_layout.addWidget(overflow_lbl)
         
         spell_layout.addStretch()
         scroll.setWidget(scroll_content)
@@ -303,13 +296,13 @@ class PageHome(QWidget):
 
     def _build_manager_box(self) -> QFrame:
         box = self._make_section_frame()
-        box.setFixedHeight(Sizes.MGR_BOX_H)
+        box.setFixedHeight(MGR_BOX_H)
         layout = QVBoxLayout(box)
         layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(6)
 
         title = QLabel("SYSTEM MANAGER")
-        title.setStyleSheet(f"color: {Colors.TEXT_BODY}; font-size: 11px; font-weight: 900; letter-spacing: 1px;")
+        title.setStyleSheet(f"color: {TEXT_BODY}; font-size: 11px; font-weight: 900; letter-spacing: 1px;")
         layout.addWidget(title)
 
         # Sourced from DataStore
@@ -337,7 +330,7 @@ class PageHome(QWidget):
     @staticmethod
     def _make_spell_button(label: str) -> QPushButton:
         btn = QPushButton(label)
-        btn.setFixedHeight(Sizes.SPELL_BTN_H)
+        btn.setFixedHeight(SPELL_BTN_H)
         btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         btn.setStyleSheet(STYLE_SPELL_BTN)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -347,15 +340,15 @@ class PageHome(QWidget):
     def _make_module_button(mod: ModuleEntry) -> QPushButton:
         btn = QPushButton(mod.label)
         btn.setStyleSheet(STYLE_MODULE_BTN)
-        btn.setFixedHeight(Sizes.MODULE_BTN_H)
+        btn.setFixedHeight(MODULE_BTN_H)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         if os.path.exists(mod.icon):
             btn.setIcon(QIcon(mod.icon))
-            btn.setIconSize(Sizes.ICON)
+            btn.setIconSize(ICON)
         return btn
 
     @staticmethod
     def _make_stat_label(text: str) -> QLabel:
         lbl = QLabel(text)
-        lbl.setStyleSheet(f"color: {Colors.TEXT_MUTED}; font-size: 11px; font-weight: 600;")
+        lbl.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px; font-weight: 600;")
         return lbl
