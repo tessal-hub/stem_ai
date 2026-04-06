@@ -25,6 +25,9 @@ class ModelUploader(QThread):
     progress_updated = pyqtSignal(int)
     status_msg       = pyqtSignal(str)
     finished         = pyqtSignal(bool)
+    sig_progress     = pyqtSignal(int)         # standardized progress channel
+    sig_error        = pyqtSignal(str)         # standardized error channel
+    sig_finished     = pyqtSignal(bool, str)   # standardized completion channel
 
     def __init__(self, port: str = "") -> None:
         super().__init__()
@@ -32,20 +35,29 @@ class ModelUploader(QThread):
         self.file_path = "model.tflite"
         self._serial: serial.Serial | None = None
         self._is_running = False
+        self._cancel_requested = False
 
     def upload_file(self, port: str, file_path: str) -> None:
         """Configure parameters and start the background thread."""
         self.port = port
         self.file_path = file_path
+        self._cancel_requested = False
         if not self.isRunning():
             self.start()
+
+    def stop(self) -> None:
+        """Request upload cancellation. The run loop checks this flag cooperatively."""
+        self._cancel_requested = True
 
     def run(self) -> None:
         """Core upload loop with CHUNK-ACK flow control."""
         try:
             if not os.path.exists(self.file_path):
-                self.status_msg.emit(f"Error: File not found: {self.file_path}")
+                message = f"Error: File not found: {self.file_path}"
+                self.status_msg.emit(message)
+                self.sig_error.emit(message)
                 self.finished.emit(False)
+                self.sig_finished.emit(False, message)
                 return
 
             # Open port with 5s timeout for handshakes
@@ -63,8 +75,11 @@ class ModelUploader(QThread):
             # 2. Wait for ACK:READY
             ack = self._serial.readline().decode('utf-8', errors='ignore').strip()
             if ack != "ACK:READY":
-                self.status_msg.emit(f"Error: No ACK:READY received. Got: {ack}")
+                message = f"Error: No ACK:READY received. Got: {ack}"
+                self.status_msg.emit(message)
+                self.sig_error.emit(message)
                 self.finished.emit(False)
+                self.sig_finished.emit(False, message)
                 return
 
             self.status_msg.emit("ACK:READY received. Sending chunks...")
@@ -75,6 +90,14 @@ class ModelUploader(QThread):
             
             with open(self.file_path, 'rb') as f:
                 while bytes_sent < file_size:
+                    if self._cancel_requested:
+                        message = "Upload cancelled"
+                        self.status_msg.emit(message)
+                        self.sig_error.emit(message)
+                        self.finished.emit(False)
+                        self.sig_finished.emit(False, message)
+                        return
+
                     chunk = f.read(chunk_size)
                     if not chunk:
                         break
@@ -88,29 +111,43 @@ class ModelUploader(QThread):
                     self._serial.timeout = 2.0
                     chunk_ack = self._serial.readline().decode('utf-8', errors='ignore').strip()
                     if chunk_ack != "ACK:CHUNK_RECEIVED":
-                        self.status_msg.emit(f"Error: Packet sync failed. Expected ACK:CHUNK_RECEIVED, got: {chunk_ack}")
+                        message = f"Error: Packet sync failed. Expected ACK:CHUNK_RECEIVED, got: {chunk_ack}"
+                        self.status_msg.emit(message)
+                        self.sig_error.emit(message)
                         self.finished.emit(False)
+                        self.sig_finished.emit(False, message)
                         return
 
                     bytes_sent += len(chunk)
-                    self.progress_updated.emit(int((bytes_sent / file_size) * 100))
+                    progress = int((bytes_sent / file_size) * 100)
+                    self.progress_updated.emit(progress)
+                    self.sig_progress.emit(progress)
 
             # 5. Wait for ACK:UPLOAD_COMPLETE
             self._serial.timeout = 5.0
             final_ack = self._serial.readline().decode('utf-8', errors='ignore').strip()
             if final_ack != "ACK:UPLOAD_COMPLETE":
-                self.status_msg.emit("Error: All chunks sent but final confirmation failed.")
+                message = "Error: All chunks sent but final confirmation failed."
+                self.status_msg.emit(message)
+                self.sig_error.emit(message)
                 self.finished.emit(False)
+                self.sig_finished.emit(False, message)
                 return
 
-            self.status_msg.emit("Flasher: Upload Success! Rebooting ESP32.")
+            success_message = "Flasher: Upload Success! Rebooting ESP32."
+            self.status_msg.emit(success_message)
             self.finished.emit(True)
+            self.sig_finished.emit(True, "Upload successful")
 
         except Exception as e:
-            self.status_msg.emit(f"Fatal Error: {e}")
+            message = f"Fatal Error: {e}"
+            self.status_msg.emit(message)
+            self.sig_error.emit(message)
             self.finished.emit(False)
+            self.sig_finished.emit(False, message)
         finally:
             if self._serial and self._serial.is_open:
                 self._serial.close()
             self._serial = None
             self._is_running = False
+            self._cancel_requested = False

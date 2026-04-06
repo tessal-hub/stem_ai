@@ -9,62 +9,40 @@ Architecture compliance (SKILL.md §2A):
     - MUST NOT import anything from /logic.
 """
 from __future__ import annotations
+import logging
 import pyqtgraph as pg
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QTime
 from PyQt6.QtWidgets import (
     QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel,
     QListWidget, QMessageBox, QPushButton, QLineEdit, QStackedWidget, QVBoxLayout, QWidget,
 )
-from .common_design_tokens import *
+from ui.tokens import (
+    # Colors, Sizes
+    BG_WHITE, BG_LIGHT, BG_DARK, BORDER, BORDER_MID, TEXT_BODY, TEXT_MUTED, ACCENT, ACCENT_TEXT, 
+    HOVER_BG, SUCCESS, DANGER, WARNING, BTN_H, RIGHT_MAX_W, CROP_REGION,
+    PLOT_AX_COLOR, PLOT_AY_COLOR, PLOT_AZ_COLOR,
+    PLOT_GX_COLOR, PLOT_GY_COLOR, PLOT_GZ_COLOR, PLOT_HANDLE_HOVER_COLOR,
+    # Styles (page-specific)
+    STYLE_RECORD_MAIN_CONTAINER,
+    STYLE_RECORD_GRAPH_CARD,
+    STYLE_BTN_BASE,
+    STYLE_BTN_START,
+    STYLE_BTN_STOP,
+    STYLE_BTN_SNIP,
+    STYLE_BTN_BACK,
+    STYLE_RECORD_LIST,
+    STYLE_RECORD_COMBO,
+)
+from ui.component_factory import (
+    make_card_frame,
+    make_button,
+    make_section_label,
+    make_checkbox,
+    make_hint,
+)
+from ui.confirm_dialog import confirm_destructive
 
-
-STYLE_MAIN_CONTAINER = (
-    f"#MainBox {{ background-color: {BG_WHITE}; "
-    f"border: 1px solid {BORDER}; border-top: none; "
-    f"border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; }}"
-)
-STYLE_CARD = (
-    f"#CardFrame {{ background-color: {BG_LIGHT}; "
-    f"border: none; border-radius: 8px; }}"
-)
-STYLE_BTN_BASE = (
-    f"QPushButton {{ background-color: {BG_WHITE}; "
-    f"border: 1px solid {BORDER_MID}; border-radius: 8px; "
-    f"font-size: 13px; font-weight: bold; padding: 8px 12px; "
-    f"min-width: 70px; }} "
-    f"QPushButton:hover {{ background-color: {HOVER_BG}; "
-    f"border-color: {ACCENT}; }}"
-)
-STYLE_BTN_START = STYLE_BTN_BASE + f" QPushButton {{ color: {SUCCESS}; }}"
-STYLE_BTN_STOP  = STYLE_BTN_BASE + f" QPushButton {{ color: {DANGER};  }}"
-STYLE_BTN_SNIP  = (
-    STYLE_BTN_BASE +
-    f" QPushButton {{ color: {ACCENT}; background-color: {HOVER_BG}; "
-    f"border-color: {ACCENT}; }}"
-)
-STYLE_BTN_BACK  = STYLE_BTN_BASE + f" QPushButton {{ color: {TEXT_BODY}; }}"
-STYLE_LIST = (
-    f"QListWidget {{ background-color: {BG_LIGHT}; border: none; "
-    f"border-radius: 8px; outline: 0; }} "
-    f"QListWidget::item {{ padding: 12px; border-bottom: 1px solid {BORDER}; "
-    f"color: {TEXT_BODY}; font-weight: 500; }} "
-    f"QListWidget::item:selected {{ background-color: {ACCENT}; "
-    f"color: {ACCENT_TEXT}; border-radius: 6px; }} "
-    f"QListWidget::item:hover:!selected {{ background-color: {HOVER_BG}; "
-    f"border-radius: 6px; }}"
-)
-STYLE_CHECKBOX = (
-    f"QCheckBox {{ color: {TEXT_BODY}; font-weight: bold; font-size: 11px; }} "
-    f"QCheckBox::indicator:checked {{ background-color: {ACCENT}; "
-    f"border: 1px solid {ACCENT}; border-radius: 3px; }}"
-)
-STYLE_COMBO = (
-    f"QComboBox {{ background-color: {BG_WHITE}; "
-    f"border: 1px solid {BORDER_MID}; border-radius: 6px; "
-    f"padding: 6px 10px; color: {TEXT_BODY}; "
-    f"font-weight: bold; font-size: 12px; min-height: 28px; }} "
-    f"QComboBox::drop-down {{ border: none; }}"
-)
+log = logging.getLogger(__name__)
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -91,6 +69,7 @@ class PageRecord(QWidget):
 
     def __init__(self, data_store) -> None:
         super().__init__()
+        self.store = data_store
         # Initial spell list (read-only snapshot at startup)
         self._initial_spell_list = data_store.get_spell_list()
 
@@ -102,14 +81,12 @@ class PageRecord(QWidget):
         self.recording_timer.timeout.connect(self._update_recording_duration)
         self.recording_start_time = QTime()
 
-        # Latest buffer snapshot received from DataStore via Handler signal
-        self._plot_buffer: list[list[float]] = []
-
         self._build_ui()
         self._setup_plots()
         self._connect_internal_signals()
+        self._configure_accessibility()
         
-        print("[PageRecord] Initialized - is_live=True, QTimer started for plot rendering")
+        log.debug("[PageRecord] Initialized - is_live=True, QTimer started for plot rendering")
 
         # Populate spell combo and list
         self.load_spell_list(self._initial_spell_list)
@@ -133,9 +110,12 @@ class PageRecord(QWidget):
     def update_plot_data(self, buffer_snapshot: list) -> None:
         """Receive latest sensor buffer snapshot from DataStore signal."""
         if self.is_live:
-            self._plot_buffer = buffer_snapshot
             if len(buffer_snapshot) > 0:
-                print(f"[PageRecord.update_plot_data] Received {len(buffer_snapshot)} samples, latest: {buffer_snapshot[-1]}")
+                log.debug(
+                    "[PageRecord.update_plot_data] Received %d samples, latest: %s",
+                    len(buffer_snapshot),
+                    buffer_snapshot[-1],
+                )
 
     def set_wand_ready(self, is_ready: bool) -> None:
         if is_ready:
@@ -205,7 +185,7 @@ class PageRecord(QWidget):
     # ── Plot Setup & Rendering ──────────────────────────────────────────
 
     def _setup_plots(self) -> None:
-        print("[PageRecord._setup_plots] Starting plot setup...")
+        log.debug("[PageRecord._setup_plots] Starting plot setup...")
         for plot in [self.graph1, self.graph2]:
             plot.setBackground(BG_DARK)
             plot.showGrid(x=True, y=True, alpha=0.1)
@@ -215,16 +195,24 @@ class PageRecord(QWidget):
             plot.setMouseEnabled(x=False, y=True)
 
         # Graph 1: Acceleration Axes (aX, aY, aZ)
-        self.curve_ax = self.graph1.plot(pen=pg.mkPen("#ff5555", width=2), name="aX")   # Red
-        self.curve_ay = self.graph1.plot(pen=pg.mkPen("#55ff55", width=2), name="aY")   # Green
-        self.curve_az = self.graph1.plot(pen=pg.mkPen("#5555ff", width=2), name="aZ")   # Blue
+        self.curve_ax = self.graph1.plot(pen=pg.mkPen(PLOT_AX_COLOR, width=2), name="aX")
+        self.curve_ay = self.graph1.plot(pen=pg.mkPen(PLOT_AY_COLOR, width=2), name="aY")
+        self.curve_az = self.graph1.plot(pen=pg.mkPen(PLOT_AZ_COLOR, width=2), name="aZ")
 
         # Graph 2: Gyroscope Axes (gX, gY, gZ)
-        self.curve_gx = self.graph2.plot(pen=pg.mkPen("#ff00ff", width=2), name="gX")   # Magenta
-        self.curve_gy = self.graph2.plot(pen=pg.mkPen("#00ffff", width=2), name="gY")   # Cyan
-        self.curve_gz = self.graph2.plot(pen=pg.mkPen("#ffff00", width=2), name="gZ")   # Yellow
+        self.curve_gx = self.graph2.plot(pen=pg.mkPen(PLOT_GX_COLOR, width=2), name="gX")
+        self.curve_gy = self.graph2.plot(pen=pg.mkPen(PLOT_GY_COLOR, width=2), name="gY")
+        self.curve_gz = self.graph2.plot(pen=pg.mkPen(PLOT_GZ_COLOR, width=2), name="gZ")
 
-        print(f"[PageRecord._setup_plots] Created 6 curves: ax={self.curve_ax}, ay={self.curve_ay}, az={self.curve_az}, gx={self.curve_gx}, gy={self.curve_gy}, gz={self.curve_gz}")
+        log.debug(
+            "[PageRecord._setup_plots] Created 6 curves: ax=%s, ay=%s, az=%s, gx=%s, gy=%s, gz=%s",
+            self.curve_ax,
+            self.curve_ay,
+            self.curve_az,
+            self.curve_gx,
+            self.curve_gy,
+            self.curve_gz,
+        )
 
         # Add legend to both graphs
         self.graph1.addLegend()
@@ -245,11 +233,11 @@ class PageRecord(QWidget):
         # Make handles bigger and more visible
         for handle in self.crop_region.lines:
             handle.setPen(pg.mkPen(ACCENT, width=3))
-            handle.setHoverPen(pg.mkPen("#ffffff", width=4))
+            handle.setHoverPen(pg.mkPen(PLOT_HANDLE_HOVER_COLOR, width=4))
         self.crop_region.hide()
         self.crop_region.sigRegionChanged.connect(self._on_crop_region_changed)
         self.graph1.addItem(self.crop_region)
-        print("[PageRecord._setup_plots] Plot setup complete!")
+        log.debug("[PageRecord._setup_plots] Plot setup complete!")
 
     def _on_crop_region_changed(self) -> None:
         """Update the sample count display when crop region changes."""
@@ -265,7 +253,8 @@ class PageRecord(QWidget):
 
     def _render_plots(self) -> None:
         """Timer callback (~60 FPS). Pure display — no data processing."""
-        if not self._plot_buffer or len(self._plot_buffer) == 0:
+        plot_buffer = self.store.get_live_buffer_snapshot()
+        if not plot_buffer or len(plot_buffer) == 0:
             return  # Guard against empty buffer
 
         if not self.is_live:
@@ -274,12 +263,12 @@ class PageRecord(QWidget):
         try:
             # Extract all 6 columns for plotting (view-only, no mutation)
             # Buffer format: [ax, ay, az, gx, gy, gz]
-            ax_data = [row[0] for row in self._plot_buffer]
-            ay_data = [row[1] for row in self._plot_buffer]
-            az_data = [row[2] for row in self._plot_buffer]
-            gx_data = [row[3] for row in self._plot_buffer]
-            gy_data = [row[4] for row in self._plot_buffer]
-            gz_data = [row[5] for row in self._plot_buffer]
+            ax_data = [row[0] for row in plot_buffer]
+            ay_data = [row[1] for row in plot_buffer]
+            az_data = [row[2] for row in plot_buffer]
+            gx_data = [row[3] for row in plot_buffer]
+            gy_data = [row[4] for row in plot_buffer]
+            gz_data = [row[5] for row in plot_buffer]
 
             # Update accel curves (graph1)
             if self.graph1.isVisible() and len(ax_data) > 0:
@@ -293,10 +282,10 @@ class PageRecord(QWidget):
                 self.curve_gy.setData(gy_data)
                 self.curve_gz.setData(gz_data)
             
-            if len(self._plot_buffer) % 50 == 0:  # Print every 50 samples (~1 second)
-                print(f"[PageRecord._render_plots] Rendering {len(self._plot_buffer)} samples")
+            if len(plot_buffer) % 50 == 0:  # Print every 50 samples (~1 second)
+                log.debug("[PageRecord._render_plots] Rendering %d samples", len(plot_buffer))
         except Exception as e:
-            print(f"[ERROR] _render_plots failed: {type(e).__name__}: {e}")
+            log.warning("_render_plots failed: %s: %s", type(e).__name__, e)
 
 
 
@@ -336,7 +325,7 @@ class PageRecord(QWidget):
         self.crop_region.show()
         
         # Auto-select a reasonable crop region (last 2 seconds of data, or full if shorter)
-        buf_len = len(self._plot_buffer)
+        buf_len = len(self.store.get_live_buffer_snapshot())
         if buf_len > 0:
             # Aim for last 2 seconds (assuming 50Hz = 100 samples/second)
             crop_start = max(0, buf_len - 200)
@@ -397,7 +386,7 @@ class PageRecord(QWidget):
         min_x = _to_float(region[0])
         max_x = _to_float(region[1])
 
-        buf = self._plot_buffer
+        buf = self.store.get_live_buffer_snapshot()
         min_idx = max(0, int(min_x))
         max_idx = min(len(buf), int(max_x))
 
@@ -447,46 +436,43 @@ class PageRecord(QWidget):
         spell_name = current_item.text()
         
         # First confirmation dialog
-        reply1 = QMessageBox.question(
-            self, 
-            "Delete Spell - Step 1", 
-            f"Are you sure you want to delete the spell '{spell_name}'?\n\n"
-            "This will permanently remove all training samples for this spell.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
-        
-        if reply1 != QMessageBox.StandardButton.Yes:
+        if not confirm_destructive(
+            self,
+            title="Delete Spell - Step 1",
+            message=(
+                f"Delete the spell '{spell_name}' and its training samples?\n\n"
+                "This removes the item from the visible library and prepares the final check."
+            ),
+            confirm_text="Continue",
+            cancel_text="Keep Spell",
+        ):
             return
-            
-        # Second confirmation dialog
-        reply2 = QMessageBox.warning(
-            self, 
-            "Delete Spell - Step 2", 
-            f"FINAL CONFIRMATION:\n\n"
-            f"You are about to delete '{spell_name}' and ALL its training data.\n\n"
-            "This action CANNOT be undone!\n\n"
-            "Click YES to confirm deletion:",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
-        
-        if reply2 == QMessageBox.StandardButton.Yes:
+
+        if confirm_destructive(
+            self,
+            title="Delete Spell - Step 2",
+            message=(
+                f"Final check: delete '{spell_name}' and all training data?\n\n"
+                "This action cannot be recovered."
+            ),
+            confirm_text="Delete Spell",
+            cancel_text="Cancel",
+        ):
             self.sig_spell_deleted.emit(spell_name)
 
     # ── UI Construction ─────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(12, 0, 12, 12)
+        outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
         self.main_container = QFrame()
         self.main_container.setObjectName("MainBox")
-        self.main_container.setStyleSheet(STYLE_MAIN_CONTAINER)
+        self.main_container.setStyleSheet(STYLE_RECORD_MAIN_CONTAINER)
 
         inner = QVBoxLayout(self.main_container)
-        inner.setContentsMargins(16, 16, 16, 16)
+        inner.setContentsMargins(12, 12, 12, 12)
         inner.setSpacing(12)
 
         content = QHBoxLayout()
@@ -508,7 +494,7 @@ class PageRecord(QWidget):
         self.lbl_wand_status.setStyleSheet(
             f"color: {WARNING}; font-weight: bold; font-size: 12px;"
         )
-        lbl_timeline = self._make_section_label("TIMELINE:")
+        lbl_timeline = make_section_label("TIMELINE:", accent_color=ACCENT)
         lbl_timeline.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
@@ -519,11 +505,9 @@ class PageRecord(QWidget):
         # Graph card
         graph_card = QFrame()
         graph_card.setObjectName("CardFrame")
-        graph_card.setStyleSheet(
-            f"#CardFrame {{ background-color: {BG_DARK}; border-radius: 8px; }}"
-        )
+        graph_card.setStyleSheet(STYLE_RECORD_GRAPH_CARD)
         graph_layout = QVBoxLayout(graph_card)
-        graph_layout.setContentsMargins(6, 6, 6, 6)
+        graph_layout.setContentsMargins(4, 4, 4, 4)
         graph_layout.setSpacing(8)
         self.graph1 = pg.PlotWidget()
         self.graph2 = pg.PlotWidget()
@@ -533,13 +517,13 @@ class PageRecord(QWidget):
 
         # Checkboxes row
         bottom_row = QHBoxLayout()
-        self.chk_graph1 = self._make_checkbox("SHOW ACCEL (aX, aY, aZ)", checked=True)
-        self.chk_graph2 = self._make_checkbox("SHOW GYRO (gX, gY, gZ)", checked=True)
+        self.chk_graph1 = make_checkbox("SHOW ACCEL (aX, aY, aZ)", checked=True)
+        self.chk_graph2 = make_checkbox("SHOW GYRO (gX, gY, gZ)", checked=True)
         
         # Add zoom controls
-        self.btn_zoom_in = self._make_btn("🔍+", STYLE_BTN_BASE, 32)
-        self.btn_zoom_out = self._make_btn("🔍-", STYLE_BTN_BASE, 32)
-        self.btn_zoom_fit = self._make_btn("🔍□", STYLE_BTN_BASE, 32)
+        self.btn_zoom_in = make_button("🔍+", STYLE_BTN_BASE, 32)
+        self.btn_zoom_out = make_button("🔍-", STYLE_BTN_BASE, 32)
+        self.btn_zoom_fit = make_button("🔍□", STYLE_BTN_BASE, 32)
         self.btn_zoom_in.setToolTip("Zoom in on plots")
         self.btn_zoom_out.setToolTip("Zoom out on plots")
         self.btn_zoom_fit.setToolTip("Fit plots to data")
@@ -561,16 +545,18 @@ class PageRecord(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
 
-        layout.addWidget(self._make_section_label("TOOLBAR"))
+        layout.addWidget(make_section_label("TOOLBAR", accent_color=ACCENT))
 
         # Action Name / Record Counter
         lbl_action = QLabel("ACTION NAME:")
         lbl_action.setStyleSheet(
             f"color: {ACCENT}; font-weight: 900; font-size: 11px; letter-spacing: 1px;"
         )
+        lbl_action.setWordWrap(True)
         self.edit_action_name = QLineEdit()
-        self.edit_action_name.setStyleSheet(STYLE_COMBO)
+        self.edit_action_name.setStyleSheet(STYLE_RECORD_COMBO)
         self.edit_action_name.setPlaceholderText("Type a spell/action name...")
+        self.edit_action_name.setMaximumWidth(240)
 
         self.lbl_record_count = QLabel("Recorded: 0")
         self.lbl_record_count.setStyleSheet(
@@ -589,9 +575,9 @@ class PageRecord(QWidget):
         layout.addWidget(self.lbl_record_duration)
 
         # ── Controls card ──────────────────────────────────────────
-        controls_card = self._make_card_frame()
+        controls_card = make_card_frame()
         ctrl_layout = QVBoxLayout(controls_card)
-        ctrl_layout.setContentsMargins(12, 12, 12, 12)
+        ctrl_layout.setContentsMargins(10, 10, 10, 10)
         ctrl_layout.setSpacing(10)
 
         # Spell name selector (editable combo)
@@ -600,19 +586,21 @@ class PageRecord(QWidget):
             f"color: {ACCENT}; font-weight: 900; font-size: 11px; "
             f"letter-spacing: 1px;"
         )
+        lbl_spell.setWordWrap(True)
         self.combo_spell = QComboBox()
         self.combo_spell.setEditable(True)
-        self.combo_spell.setStyleSheet(STYLE_COMBO)
+        self.combo_spell.setStyleSheet(STYLE_RECORD_COMBO)
         self.combo_spell.setPlaceholderText("Type or select spell name...")
+        self.combo_spell.setMaximumWidth(240)
         ctrl_layout.addWidget(lbl_spell)
         ctrl_layout.addWidget(self.combo_spell)
 
         # Buttons: START | STOP | SNIP
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
-        self.btn_start = self._make_btn("▶ START", STYLE_BTN_START, BTN_H)
-        self.btn_stop  = self._make_btn("■ STOP",  STYLE_BTN_STOP,  BTN_H)
-        self.btn_snip  = self._make_btn("✂ SNIP",  STYLE_BTN_SNIP,  BTN_H)
+        self.btn_start = make_button("▶ START", STYLE_BTN_START, BTN_H)
+        self.btn_stop  = make_button("■ STOP",  STYLE_BTN_STOP,  BTN_H)
+        self.btn_snip  = make_button("✌ SNIP",  STYLE_BTN_SNIP,  BTN_H)
         self.btn_stop.setEnabled(False)
         self.btn_snip.setEnabled(False)
         
@@ -627,9 +615,7 @@ class PageRecord(QWidget):
         ctrl_layout.addLayout(btn_row)
 
         # Hint
-        lbl_hint = QLabel("START → plot live (Ctrl+S)  |  STOP → freeze & drag (Ctrl+T)  |  SNIP → save (Ctrl+X)")
-        lbl_hint.setWordWrap(True)
-        lbl_hint.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 10px;")
+        lbl_hint = make_hint("START -> plot live (Ctrl+S)  |  STOP -> freeze & drag (Ctrl+T)  |  SNIP -> save (Ctrl+X)")
         ctrl_layout.addWidget(lbl_hint)
 
         layout.addWidget(controls_card)
@@ -647,15 +633,15 @@ class PageRecord(QWidget):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
-        layout.addWidget(self._make_section_label("SPELL LIBRARY", accent=False))
+        layout.addWidget(make_section_label("SPELL LIBRARY", accent_color=TEXT_BODY))
         
         # Spell list
         self.spell_list = QListWidget()
-        self.spell_list.setStyleSheet(STYLE_LIST)
+        self.spell_list.setStyleSheet(STYLE_RECORD_LIST)
         layout.addWidget(self.spell_list)
         
         # Delete button at bottom
-        self.btn_delete_spell = self._make_btn("DELETE SPELL", STYLE_BTN_BASE + f" QPushButton {{ color: {DANGER}; }}", 36)
+        self.btn_delete_spell = make_button("DELETE SPELL", STYLE_BTN_BASE + f" QPushButton {{ color: {DANGER}; }}", 36)
         self.btn_delete_spell.setToolTip("Delete selected spell")
         layout.addWidget(self.btn_delete_spell)
         return page
@@ -666,16 +652,17 @@ class PageRecord(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
         top_row = QHBoxLayout()
-        self.btn_back_spells = self._make_btn("◀ BACK", STYLE_BTN_BACK, 36)
+        self.btn_back_spells = make_button("◀ BACK", STYLE_BTN_BACK, 36)
         self.lbl_current_spell = QLabel("SAMPLES: …")
         self.lbl_current_spell.setStyleSheet(
             f"color: {ACCENT}; font-weight: bold; font-size: 11px;"
         )
+        self.lbl_current_spell.setWordWrap(True)
         top_row.addWidget(self.btn_back_spells)
         top_row.addWidget(self.lbl_current_spell)
         layout.addLayout(top_row)
         self.sample_list = QListWidget()
-        self.sample_list.setStyleSheet(STYLE_LIST)
+        self.sample_list.setStyleSheet(STYLE_RECORD_LIST)
         layout.addWidget(self.sample_list)
         return page
 
@@ -710,34 +697,34 @@ class PageRecord(QWidget):
         self._plot_timer.timeout.connect(self._render_plots)
         self._plot_timer.start(16)  # ~60 FPS
 
+    def _configure_accessibility(self) -> None:
+        """Set keyboard traversal and accessibility names for core controls."""
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
+        self.edit_action_name.setAccessibleName("Record action name")
+        self.combo_spell.setAccessibleName("Spell label selector")
+        self.btn_start.setAccessibleName("Start recording")
+        self.btn_stop.setAccessibleName("Stop recording")
+        self.btn_snip.setAccessibleName("Snip selected range")
+        self.btn_zoom_in.setAccessibleName("Zoom in timeline")
+        self.btn_zoom_out.setAccessibleName("Zoom out timeline")
+        self.btn_zoom_fit.setAccessibleName("Fit timeline to data")
+        self.spell_list.setAccessibleName("Spell list")
+        self.btn_delete_spell.setAccessibleName("Delete spell")
+        self.btn_back_spells.setAccessibleName("Back to spell list")
+        self.sample_list.setAccessibleName("Sample list")
+
+        self.setTabOrder(self.edit_action_name, self.combo_spell)
+        self.setTabOrder(self.combo_spell, self.btn_start)
+        self.setTabOrder(self.btn_start, self.btn_stop)
+        self.setTabOrder(self.btn_stop, self.btn_snip)
+        self.setTabOrder(self.btn_snip, self.btn_zoom_in)
+        self.setTabOrder(self.btn_zoom_in, self.btn_zoom_out)
+        self.setTabOrder(self.btn_zoom_out, self.btn_zoom_fit)
+        self.setTabOrder(self.btn_zoom_fit, self.spell_list)
+        self.setTabOrder(self.spell_list, self.btn_delete_spell)
+        self.setTabOrder(self.btn_delete_spell, self.btn_back_spells)
+        self.setTabOrder(self.btn_back_spells, self.sample_list)
+
     # ── Static helpers ──────────────────────────────────────────────────
 
-    @staticmethod
-    def _make_card_frame() -> QFrame:
-        frame = QFrame()
-        frame.setObjectName("CardFrame")
-        frame.setStyleSheet(STYLE_CARD)
-        return frame
-
-    @staticmethod
-    def _make_btn(label: str, style: str, height: int) -> QPushButton:
-        btn = QPushButton(label)
-        btn.setFixedHeight(height)
-        btn.setStyleSheet(style)
-        return btn
-
-    @staticmethod
-    def _make_section_label(text: str, accent: bool = True) -> QLabel:
-        lbl = QLabel(text)
-        color = ACCENT if accent else TEXT_BODY
-        lbl.setStyleSheet(
-            f"color: {color}; font-weight: 900; font-size: 12px; letter-spacing: 1px;"
-        )
-        return lbl
-
-    @staticmethod
-    def _make_checkbox(label: str, *, checked: bool = False) -> QCheckBox:
-        chk = QCheckBox(label)
-        chk.setChecked(checked)
-        chk.setStyleSheet(STYLE_CHECKBOX)
-        return chk

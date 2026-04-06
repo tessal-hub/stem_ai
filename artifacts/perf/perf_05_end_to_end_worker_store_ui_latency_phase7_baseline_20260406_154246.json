@@ -1,0 +1,30 @@
+{
+  "test_name": "PERF-05 End-to-End Worker->Store->UI Latency",
+  "phase_gate": "phase7_baseline",
+  "timestamp_utc": "2026-04-06T15:42:46.038694+00:00",
+  "machine_info": {
+    "os": "Windows-11-10.0.26200-SP0",
+    "cpu_model": "Intel64 Family 6 Model 142 Stepping 12, GenuineIntel",
+    "core_count": 8,
+    "python_version": "3.14.3",
+    "qt_version": "6.10.0"
+  },
+  "sample_count_total": 135,
+  "sample_count_after_warmup": 126,
+  "warmup_seconds": 0.2,
+  "sampling_window_seconds": 2.5341862999976,
+  "data_rate_hz": 49.72010147798499,
+  "metric_unit": "ms",
+  "percentile_method": "linear",
+  "p50": 0.07984999956534011,
+  "p95": 0.8250499995483551,
+  "p99": 1.139600001351937,
+  "pass_gate_percentile": "p95",
+  "pass_threshold": 20.0,
+  "comparator": "<=",
+  "verdict": "pass",
+  "aux_metrics": {
+    "target_rate_hz": 50,
+    "received_samples": 135
+  }
+}

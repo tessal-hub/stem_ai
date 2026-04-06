@@ -6,13 +6,28 @@ from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget, QScrollArea)
 from ui.wand_3d_widget import Wand3DWidget
-from ui.common_design_tokens import (
+from ui.tokens import (
     # Colors
     ACCENT, ACCENT_TEXT, BG_DARK, BG_LIGHT, BG_WHITE, BORDER, BORDER_MID,
+    DANGER,
     TEXT_BODY, TEXT_MUTED, HOVER_BG,
     # Sizes
     ICON, STATUS_H, MODE_BOX_H, MODULE_BAR_H, MGR_BOX_H,
-    SPELL_BTN_H, MODULE_BTN_H, SIM_MIN_H, RIGHT_MAX_W
+    SPELL_BTN_H, MODULE_BTN_H, SIM_MIN_H, RIGHT_MAX_W,
+    # Styles
+    STYLE_HOME_MAIN_CONTAINER as STYLE_MAIN_CONTAINER,
+    STYLE_WAND_CONTAINER,
+    STYLE_CARD,
+    STYLE_CARD_NO_BORDER,
+    STYLE_SPELL_BTN,
+    STYLE_MODULE_BTN,
+    STYLE_MODULE_BAR,
+    STYLE_TRANSPARENT_WIDGET,
+)
+from ui.component_factory import (
+    make_section_frame,
+    make_borderless_frame,
+    make_stat_label,
 )
 
 @dataclass
@@ -28,87 +43,14 @@ MODULES: list[ModuleEntry] = [
     ModuleEntry("assets/icon/keyboard.svg", "KEY"),
 ]
 
-STYLE_MAIN_CONTAINER = f"""
-    #MainBox {{
-        background-color: {BG_LIGHT};
-        border: 1px solid {BORDER};
-        border-top: none;
-        border-bottom-left-radius: 14px;
-        border-bottom-right-radius: 14px;
-    }}
-"""
-
-STYLE_WAND_CONTAINER = f"""
-    #WandBox {{
-        background-color: {BG_WHITE};
-        border: 1px solid {BORDER};
-        border-radius: 12px;
-    }}
-"""
-
-STYLE_CARD = f"""
-    #CardFrame {{
-        background-color: {BG_WHITE};
-        border: 1px solid {BORDER};
-        border-radius: 12px;
-    }}
-"""
-
-STYLE_CARD_NO_BORDER = f"""
-    #CardFrame {{
-        background-color: transparent;
-        border: none;
-    }}
-"""
-
-STYLE_SPELL_BTN = f"""
-    QPushButton {{
-        background-color: {BG_LIGHT};
-        color: {TEXT_BODY};
-        border: 1px solid transparent;
-        border-radius: 8px;
-        font-size: 13px;
-        font-weight: bold;
-        text-align: left;
-        padding-left: 14px;
-    }}
-    QPushButton:hover {{
-        background-color: {HOVER_BG};
-        color: {ACCENT};
-        border-color: {ACCENT};
-    }}
-"""
-
-STYLE_MODULE_BTN = f"""
-    QPushButton {{
-        background-color: {BG_WHITE};
-        color: {TEXT_BODY};
-        border: 1px solid {BORDER_MID};
-        border-radius: 8px;
-        font-size: 11px;
-        font-weight: 800;
-        padding: 6px 14px;
-    }}
-    QPushButton:hover {{
-        color: {ACCENT};
-        background-color: {HOVER_BG};
-        border-color: {ACCENT};
-    }}
-"""
-
-STYLE_MODULE_BAR = f"""
-    QWidget {{
-        background-color: transparent;
-        border: none; 
-    }}
-"""
-
 class PageHome(QWidget):
     def __init__(self, data_store) -> None:
         super().__init__()
         self.data_store = data_store
         self._stat_labels: dict[str, QLabel] = {}
         self._build_ui()
+        self._configure_accessibility()
+        self.set_connection_status(False)
 
     def set_connection_status(self, connected: bool) -> None:
         if connected:
@@ -116,7 +58,7 @@ class PageHome(QWidget):
             self.status_bar.setStyleSheet(self._status_style(ACCENT, ACCENT_TEXT))
         else:
             self.status_bar.setText("● WAND DISCONNECTED - WAITING FOR DEVICE")
-            self.status_bar.setStyleSheet(self._status_style("#ef4444", ACCENT_TEXT))
+            self.status_bar.setStyleSheet(self._status_style(DANGER, ACCENT_TEXT))
 
     def set_mode(self, mode: str) -> None:
         self.mode_label.setText(f"MODE:  {mode.upper()}")
@@ -129,7 +71,7 @@ class PageHome(QWidget):
 
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(12, 0, 12, 12)
+        outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
         self.main_container = QFrame()
@@ -137,13 +79,13 @@ class PageHome(QWidget):
         self.main_container.setStyleSheet(STYLE_MAIN_CONTAINER)
 
         inner = QVBoxLayout(self.main_container)
-        inner.setContentsMargins(20, 20, 20, 20)
-        inner.setSpacing(16)
+        inner.setContentsMargins(12, 12, 12, 12)
+        inner.setSpacing(12)
 
         inner.addWidget(self._build_status_bar())
 
         content = QHBoxLayout()
-        content.setSpacing(16)
+        content.setSpacing(12)
         content.addWidget(self._build_left_column(), stretch=5)
         content.addWidget(self._build_right_column(), stretch=2)
 
@@ -151,8 +93,8 @@ class PageHome(QWidget):
         outer.addWidget(self.main_container)
 
     def _build_status_bar(self) -> QLabel:
-        self.status_bar = QLabel("▶ WAND CONNECTED - READY")
-        self.status_bar.setStyleSheet(self._status_style(ACCENT, ACCENT_TEXT))
+        self.status_bar = QLabel("● WAND DISCONNECTED - WAITING FOR DEVICE")
+        self.status_bar.setStyleSheet(self._status_style(DANGER, ACCENT_TEXT))
         self.status_bar.setFixedHeight(STATUS_H)
         self.status_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
         return self.status_bar
@@ -175,7 +117,7 @@ class PageHome(QWidget):
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
+        layout.setSpacing(12)
         layout.addWidget(self._build_simulation_box(), stretch=1)
         layout.addWidget(self._build_module_bar())
         return widget
@@ -186,7 +128,7 @@ class PageHome(QWidget):
         box.setStyleSheet(STYLE_WAND_CONTAINER)
         
         layout = QVBoxLayout(box)
-        layout.setContentsMargins(16, 16, 16, 16) 
+        layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
 
         # Header Strip
@@ -203,7 +145,7 @@ class PageHome(QWidget):
         self.sim_view.setMinimumHeight(SIM_MIN_H)
 
         sim_inner = QVBoxLayout(self.sim_view)
-        sim_inner.setContentsMargins(1, 1, 1, 1) # Subtle border wrapper
+        sim_inner.setContentsMargins(1, 1, 1, 1)
         self.wand_3d = Wand3DWidget()
         sim_inner.addWidget(self.wand_3d, stretch=1)
 
@@ -232,25 +174,25 @@ class PageHome(QWidget):
         widget.setMaximumWidth(RIGHT_MAX_W)
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
+        layout.setSpacing(12)
         layout.addWidget(self._build_mode_box())
         layout.addWidget(self._build_spellbook(), stretch=2)
         layout.addWidget(self._build_manager_box())
         return widget
 
     def _build_mode_box(self) -> QFrame:
-        box = self._make_section_frame()
+        box = make_section_frame()
         box.setFixedHeight(MODE_BOX_H)
         layout = QHBoxLayout(box)
         layout.setContentsMargins(16, 0, 16, 0)
-        self.mode_label = QLabel("MODE:  REC/PLAY")
+        self.mode_label = QLabel("MODE:  IDLE")
         self.mode_label.setStyleSheet(f"color: {ACCENT}; font-size: 12px; font-weight: 900; letter-spacing: 1px;")
         layout.addWidget(self.mode_label)
         layout.addStretch()
         return box
 
     def _build_spellbook(self) -> QFrame:
-        box = self._make_section_frame()
+        box = make_section_frame()
         layout = QVBoxLayout(box)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(10)
@@ -265,7 +207,7 @@ class PageHome(QWidget):
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         
         scroll_content = QWidget()
-        scroll_content.setStyleSheet("background: transparent;")
+        scroll_content.setStyleSheet(STYLE_TRANSPARENT_WIDGET)
         spell_layout = QVBoxLayout(scroll_content)
         spell_layout.setContentsMargins(0, 0, 0, 0)
         spell_layout.setSpacing(8)
@@ -295,10 +237,10 @@ class PageHome(QWidget):
         return box
 
     def _build_manager_box(self) -> QFrame:
-        box = self._make_section_frame()
+        box = make_section_frame()
         box.setFixedHeight(MGR_BOX_H)
         layout = QVBoxLayout(box)
-        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(6)
 
         title = QLabel("SYSTEM MANAGER")
@@ -307,25 +249,11 @@ class PageHome(QWidget):
 
         # Sourced from DataStore
         for key, value in self.data_store.system_stats.items():
-            lbl = self._make_stat_label(f"■  {key}: {value}")
+            lbl = make_stat_label(f"■  {key}: {value}")
             self._stat_labels[key.strip()] = lbl
             layout.addWidget(lbl)
 
         return box
-
-    @staticmethod
-    def _make_section_frame() -> QFrame:
-        frame = QFrame()
-        frame.setObjectName("CardFrame")
-        frame.setStyleSheet(STYLE_CARD)
-        return frame
-        
-    @staticmethod
-    def _make_borderless_frame() -> QFrame:
-        frame = QFrame()
-        frame.setObjectName("CardFrame")
-        frame.setStyleSheet(STYLE_CARD_NO_BORDER)
-        return frame
 
     @staticmethod
     def _make_spell_button(label: str) -> QPushButton:
@@ -334,6 +262,7 @@ class PageHome(QWidget):
         btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         btn.setStyleSheet(STYLE_SPELL_BTN)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setAccessibleName(f"Spell button {label}")
         return btn
 
     @staticmethod
@@ -342,13 +271,15 @@ class PageHome(QWidget):
         btn.setStyleSheet(STYLE_MODULE_BTN)
         btn.setFixedHeight(MODULE_BTN_H)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setAccessibleName(f"Attachment toggle {mod.label}")
         if os.path.exists(mod.icon):
             btn.setIcon(QIcon(mod.icon))
             btn.setIconSize(ICON)
         return btn
 
-    @staticmethod
-    def _make_stat_label(text: str) -> QLabel:
-        lbl = QLabel(text)
-        lbl.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px; font-weight: 600;")
-        return lbl
+    def _configure_accessibility(self) -> None:
+        """Provide stable names for screen readers and keyboard focus."""
+        self.status_bar.setAccessibleName("Home status banner")
+        self.mode_label.setAccessibleName("Current wand mode")
+        self.wand_3d.setAccessibleName("3D wand orientation viewer")
+

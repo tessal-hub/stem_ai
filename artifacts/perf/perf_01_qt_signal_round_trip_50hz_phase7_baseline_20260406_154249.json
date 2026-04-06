@@ -1,0 +1,30 @@
+{
+  "test_name": "PERF-01 Qt Signal Round-Trip 50Hz",
+  "phase_gate": "phase7_baseline",
+  "timestamp_utc": "2026-04-06T15:42:49.074465+00:00",
+  "machine_info": {
+    "os": "Windows-11-10.0.26200-SP0",
+    "cpu_model": "Intel64 Family 6 Model 142 Stepping 12, GenuineIntel",
+    "core_count": 8,
+    "python_version": "3.14.3",
+    "qt_version": "6.10.0"
+  },
+  "sample_count_total": 134,
+  "sample_count_after_warmup": 125,
+  "warmup_seconds": 0.2,
+  "sampling_window_seconds": 2.500631599999906,
+  "data_rate_hz": 49.9873711905443,
+  "metric_unit": "ms",
+  "percentile_method": "linear",
+  "p50": 0.04639999860955868,
+  "p95": 0.7402000002912246,
+  "p99": 0.9432319994084538,
+  "pass_gate_percentile": "p95",
+  "pass_threshold": 10.0,
+  "comparator": "<=",
+  "verdict": "pass",
+  "aux_metrics": {
+    "target_rate_hz": 50,
+    "received_samples": 134
+  }
+}

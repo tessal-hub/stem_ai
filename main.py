@@ -24,7 +24,7 @@ def main():
                       data_store=data_store)
     
     # 5. Hiển thị cửa sổ
-    window.show()
+    window.showFullScreen()
     
     # 6. Chạy vòng lặp sự kiện (Event Loop)
     # sys.exit đảm bảo app đóng sạch sẽ luồng nền (SerialWorker) khi bạn tắt cửa sổ

@@ -12,15 +12,11 @@ from __future__ import annotations
 
 import logging
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QCloseEvent, QIcon
-from PyQt6.QtWidgets import (
-    QMainWindow,
-    QStackedWidget,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtWidgets import QMainWindow, QStackedWidget, QWidget
 
-from ui.top_bar          import Topbar, C_PAGE_BG
+from ui.mac_shell        import MacShell
 from ui.page_home        import PageHome
 from ui.page_record      import PageRecord
 from ui.page_statistics  import PageStatistics
@@ -29,16 +25,6 @@ from ui.page_setting     import PageSetting
 from logic.udp_worker    import UdpWorker
 
 log = logging.getLogger(__name__)
-
-# Shared page stylesheet — all pages inherit this base.
-_PAGE_STYLE = f"""
-    QWidget {{
-        background-color: {C_PAGE_BG};
-        border-bottom-left-radius: 12px;
-        border-bottom-right-radius: 12px;
-    }}
-    QLabel {{ color: #333333; }}
-"""
 
 # Keys used to extract normalised sensor data from a UDP payload.
 _SENSOR_KEYS = ("accel_x", "accel_y", "accel_z", "gyro_x", "gyro_y", "gyro_z")
@@ -53,17 +39,11 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(QIcon("assets/icon/wand.svg"))
         self.resize(1024, 800)
         self.setMinimumSize(1000, 700)
-        self.setStyleSheet("QMainWindow { background-color: #1a1a1a; }")
+        self.setStyleSheet("QMainWindow { background-color: transparent; }")
 
-        # ── Central widget ───────────────────────────────────────────────
-        root = QWidget()
-        self.setCentralWidget(root)
-        root_layout = QVBoxLayout(root)
-        root_layout.setContentsMargins(0, 0, 0, 0)
-        root_layout.setSpacing(0)
-
-        # ── Topbar ───────────────────────────────────────────────────────
-        self.topbar = Topbar(self.data_store)
+        # ── Central shell ───────────────────────────────────────────────
+        self.shell = MacShell("STEM Spell Book")
+        self.setCentralWidget(self.shell)
 
         # ── Pages — stored as named attrs for type-safe access ───────────
         self.page_home       = PageHome(self.data_store)
@@ -82,24 +62,24 @@ class MainWindow(QMainWindow):
 
         # ── Page stack ───────────────────────────────────────────────────
         self.stack = QStackedWidget()
-        self.stack.setStyleSheet(
-            "QStackedWidget { border: none; background: transparent; }"
-        )
+        self.stack.setStyleSheet("QStackedWidget { border: none; background: transparent; }")
         for page in self._pages:
-            page.setStyleSheet(_PAGE_STYLE)
             self.stack.addWidget(page)
+        self.shell.content_layout.addWidget(self.stack, stretch=1)
+        self.shell.nav_requested.connect(self._set_page)
 
-        # ── Assemble ─────────────────────────────────────────────────────
-        root_layout.addWidget(self.topbar)
-        root_layout.addWidget(self.stack, stretch=1)
-
-        self.topbar.nav_requested.connect(self.stack.setCurrentIndex)
+        self._set_page(0)
+        self.page_setting.sig_settings_saved.connect(self._on_settings_saved)
 
         # ── UDP Worker (secondary data source) ───────────────────────────
         self.udp_worker = UdpWorker(port=5555)
         self.udp_worker.sig_data_received.connect(self._on_udp_data)
-        self.udp_worker.sig_status_change.connect(self.page_home.set_connection_status)
+        self.udp_worker.sig_status_change.connect(self._on_udp_status_change)
         self.udp_worker.start()
+
+        self.data_store.sig_connection_state_updated.connect(self.page_home.set_connection_status)
+        connected, _ = self.data_store.get_connection_state()
+        self.page_home.set_connection_status(connected)
 
     # ------------------------------------------------------------------
     # Slots
@@ -109,8 +89,17 @@ class MainWindow(QMainWindow):
         """Route incoming UDP JSON to DataStore. No processing here."""
         # Sensor payload → DataStore
         if _SENSOR_KEYS[0] in data:
-            values = [float(data.get(k, 0)) for k in _SENSOR_KEYS]
-            self.data_store.add_sensor_data(values)
+            values = [float(data.get(k, 0.0)) for k in _SENSOR_KEYS]
+            self.data_store.update_sensor_data(
+                {
+                    "ax": values[0],
+                    "ay": values[1],
+                    "az": values[2],
+                    "gx": values[3],
+                    "gy": values[4],
+                    "gz": values[5],
+                }
+            )
 
         # Raw text → Wand terminal
         self.page_wand.append_terminal_text(f">> UDP: {data}")
@@ -124,6 +113,15 @@ class MainWindow(QMainWindow):
         if esp_update:
             self.data_store.update_esp_stats(esp_update)
 
+    def _on_udp_status_change(self, active: bool) -> None:
+        """Keep UDP telemetry separate from wand connection state."""
+        if active:
+            self.page_wand.append_terminal_text(">> UDP telemetry received.")
+
+    def _on_settings_saved(self, config: dict) -> None:
+        """Persist settings through DataStore-owned settings store."""
+        self.data_store.save_settings(config)
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -133,3 +131,7 @@ class MainWindow(QMainWindow):
         if self.udp_worker.isRunning():
             self.udp_worker.stop()
         event.accept()
+
+    def _set_page(self, index: int) -> None:
+        self.stack.setCurrentIndex(index)
+        self.shell.set_active_index(index)

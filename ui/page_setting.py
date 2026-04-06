@@ -14,13 +14,13 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSpinBox,
-    QTextEdit,
     QProgressBar,
     QVBoxLayout,
     QWidget,
 )
 
-from .common_design_tokens import (
+from ui.tokens import (
+    # Colors
     ACCENT_TEXT,
     BG_LIGHT,
     BG_WHITE,
@@ -36,149 +36,19 @@ from .common_design_tokens import (
     SUCCESS,
     TEXT_BODY,
     TEXT_MUTED,
+    # Styles
+    STYLE_SETTING_MAIN_CONTAINER,
+    STYLE_SETTING_CARD,
+    STYLE_SETTING_BTN_OUTLINE,
+    STYLE_SETTING_BTN_PRIMARY,
+    STYLE_SETTING_BTN_DANGER,
+    STYLE_SETTING_INPUT,
+    STYLE_SETTING_CHECKBOX,
+    STYLE_SETTING_PROGRESS,
+    STYLE_CONSOLE,
 )
-
-# ---------------------------------------------------------------------------
-# Style constants
-# ---------------------------------------------------------------------------
-
-_STYLE_MAIN_CONTAINER = f"""
-    #MainBox {{
-        background-color: {BG_WHITE};
-        border: 1px solid {BORDER};
-        border-top: none;
-        border-bottom-left-radius: 12px;
-        border-bottom-right-radius: 12px;
-    }}
-"""
-
-_STYLE_CARD = f"""
-    #CardFrame {{
-        background-color: {BG_LIGHT};
-        border: none;
-        border-radius: 8px;
-    }}
-"""
-
-_STYLE_BTN_OUTLINE = f"""
-    QPushButton {{
-        background-color: {BG_WHITE};
-        color: {TEXT_BODY};
-        border: 1px solid {BORDER_MID};
-        border-radius: 6px;
-        font-size: 11px;
-        font-weight: bold;
-        padding: 6px 16px;
-    }}
-    QPushButton:hover {{
-        background-color: {SETTINGS_HOVER_BG};
-        border-color: {SETTINGS_ACCENT};
-        color: {SETTINGS_ACCENT};
-    }}
-    QPushButton:disabled {{
-        opacity: 0.5;
-    }}
-"""
-
-_STYLE_BTN_PRIMARY = f"""
-    QPushButton {{
-        background-color: {SETTINGS_ACCENT};
-        color: {ACCENT_TEXT};
-        border: none;
-        border-radius: 6px;
-        font-size: 11px;
-        font-weight: bold;
-        padding: 6px 16px;
-    }}
-    QPushButton:hover {{ background-color: {SETTINGS_ACCENT_DARK}; }}
-    QPushButton:disabled {{ opacity: 0.5; }}
-"""
-
-_STYLE_BTN_DANGER = f"""
-    QPushButton {{
-        background-color: {BG_WHITE};
-        color: {DANGER};
-        border: 1px solid {DANGER};
-        border-radius: 6px;
-        font-size: 11px;
-        font-weight: bold;
-        padding: 6px 16px;
-    }}
-    QPushButton:hover {{ background-color: {DANGER}; color: {BG_WHITE}; }}
-    QPushButton:disabled {{ opacity: 0.5; }}
-"""
-
-_STYLE_INPUT = f"""
-    QComboBox, QLineEdit, QSpinBox {{
-        background-color: {BG_WHITE};
-        border: 1px solid {BORDER_MID};
-        border-radius: 6px;
-        padding: 4px 8px;
-        color: {TEXT_BODY};
-        font-weight: bold;
-        font-size: 11px;
-    }}
-    QComboBox::drop-down {{ border: none; width: 20px; }}
-    QComboBox QAbstractItemView {{
-        background-color: {BG_WHITE};
-        border: 1px solid {BORDER};
-        selection-background-color: {SETTINGS_HOVER_BG};
-        color: {TEXT_BODY};
-    }}
-    QSpinBox::up-button, QSpinBox::down-button {{ border: none; width: 16px; }}
-"""
-
-_STYLE_CHECKBOX = f"""
-    QCheckBox {{ color: {TEXT_BODY}; font-weight: bold; font-size: 11px; }}
-    QCheckBox::indicator:checked {{
-        background-color: {SETTINGS_ACCENT};
-        border: 1px solid {SETTINGS_ACCENT};
-        border-radius: 3px;
-    }}
-    QCheckBox::indicator:unchecked {{
-        border: 1px solid {BORDER_MID};
-        border-radius: 3px;
-        background-color: {BG_WHITE};
-    }}
-"""
-
-_STYLE_PROGRESS = f"""
-    QProgressBar {{
-        border: 1px solid {BORDER};
-        border-radius: 4px;
-        text-align: center;
-        background-color: {BG_WHITE};
-    }}
-    QProgressBar::chunk {{
-        background-color: {SUCCESS};
-        border-radius: 3px;
-    }}
-"""
-
-_STYLE_CONSOLE = """
-    QTextEdit {
-        background-color: #0d0d0d;
-        color: #00ff88;
-        border: 1px solid #2a2a2a;
-        border-radius: 4px;
-        font-family: 'Courier New', monospace;
-        font-size: 10px;
-        padding: 8px;
-    }
-"""
-
-# Fields that map directly to widget setters; order matches the UI top-to-bottom.
-_SETTING_KEYS: tuple[str, ...] = (
-    "sample_rate",
-    "accel_scale",
-    "gyro_scale",
-    "window_size",
-    "window_overlap",
-    "ml_pipeline",
-    "project_name",
-    "auto_save",
-)
-
+from ui.confirm_dialog import confirm_destructive
+from ui.terminal_widget import TerminalWidget
 
 # ---------------------------------------------------------------------------
 # Widget
@@ -197,9 +67,10 @@ class PageSetting(QWidget):
         self.data_store = data_store
         self._build_ui()
         self._connect_internal_signals()
+        self._configure_accessibility()
 
         # Snapshot the store's current settings and populate the form.
-        self._last_saved: dict[str, Any] = dict(self.data_store.settings)
+        self._last_saved: dict[str, Any] = self.data_store.get_settings_snapshot()
         self.load_settings(self._last_saved)
 
     # ------------------------------------------------------------------
@@ -240,10 +111,7 @@ class PageSetting(QWidget):
         """Append *message* to the console log and auto-scroll to the bottom."""
         if self.console_log is None:
             return
-        self.console_log.append(message.rstrip())
-        sb = self.console_log.verticalScrollBar()
-        if sb is not None:
-            sb.setValue(sb.maximum())
+        self.console_log.append_line(message, strip_right=True)
 
     def update_flash_progress(self, value: int) -> None:
         """Set the progress bar to *value* (clamped to 0–100)."""
@@ -260,19 +128,19 @@ class PageSetting(QWidget):
 
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(12, 0, 12, 12)
+        outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
         self.main_container = QFrame()
         self.main_container.setObjectName("MainBox")
-        self.main_container.setStyleSheet(_STYLE_MAIN_CONTAINER)
+        self.main_container.setStyleSheet(STYLE_SETTING_MAIN_CONTAINER)
 
         inner = QVBoxLayout(self.main_container)
-        inner.setContentsMargins(24, 24, 24, 24)
-        inner.setSpacing(24)
+        inner.setContentsMargins(12, 12, 12, 12)
+        inner.setSpacing(12)
 
         cols = QHBoxLayout()
-        cols.setSpacing(24)
+        cols.setSpacing(12)
         cols.addWidget(self._build_hardware_column(), stretch=1)
         cols.addWidget(self._build_software_column(), stretch=1)
         inner.addLayout(cols, stretch=1)
@@ -285,7 +153,7 @@ class PageSetting(QWidget):
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
+        layout.setSpacing(12)
 
         # ── Sensor card ─────────────────────────────────────────────────
         layout.addWidget(self._make_section_label("IMU SENSOR CONFIGURATION"))
@@ -321,7 +189,7 @@ class PageSetting(QWidget):
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
+        layout.setSpacing(12)
 
         # ── ML pipeline card ────────────────────────────────────────────
         layout.addWidget(self._make_section_label("MACHINE LEARNING PIPELINE"))
@@ -343,12 +211,12 @@ class PageSetting(QWidget):
         sys_card, sys_layout = self._make_card()
 
         self.txt_project_name = QLineEdit()
-        self.txt_project_name.setStyleSheet(_STYLE_INPUT)
+        self.txt_project_name.setStyleSheet(STYLE_SETTING_INPUT)
         self.txt_project_name.setFixedHeight(SETTINGS_INPUT_H)
         self.txt_project_name.setPlaceholderText("Enter project name…")
 
         self.chk_auto_save = QCheckBox("Auto-save recording samples")
-        self.chk_auto_save.setStyleSheet(_STYLE_CHECKBOX)
+        self.chk_auto_save.setStyleSheet(STYLE_SETTING_CHECKBOX)
 
         sys_layout.addLayout(self._make_form_row("Project Name:", self.txt_project_name))
         sys_layout.addWidget(self.chk_auto_save)
@@ -359,7 +227,7 @@ class PageSetting(QWidget):
         danger_card, danger_layout = self._make_card()
 
         self.btn_clear_db = QPushButton("ERASE ALL COLLECTED DATA")
-        self.btn_clear_db.setStyleSheet(_STYLE_BTN_DANGER)
+        self.btn_clear_db.setStyleSheet(STYLE_SETTING_BTN_DANGER)
         self.btn_clear_db.setFixedHeight(SETTINGS_BTN_H)
         self.btn_clear_db.setCursor(Qt.CursorShape.PointingHandCursor)
 
@@ -400,7 +268,7 @@ class PageSetting(QWidget):
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
-        self.progress_bar.setStyleSheet(_STYLE_PROGRESS)
+        self.progress_bar.setStyleSheet(STYLE_SETTING_PROGRESS)
         self.progress_bar.setFixedHeight(24)
         fw_layout.addWidget(self.progress_bar)
 
@@ -408,10 +276,9 @@ class PageSetting(QWidget):
         fw_layout.addWidget(
             self._make_section_label("Console Output", color=TEXT_MUTED)
         )
-        self.console_log = QTextEdit()
-        self.console_log.setReadOnly(True)
+        self.console_log = TerminalWidget(max_lines=1000, read_only=True)
         self.console_log.setFixedHeight(180)
-        self.console_log.setStyleSheet(_STYLE_CONSOLE)
+        self.console_log.setStyleSheet(STYLE_CONSOLE)
         fw_layout.addWidget(self.console_log)
 
         layout.addWidget(firmware_card)
@@ -425,12 +292,12 @@ class PageSetting(QWidget):
         row.addStretch()
 
         self.btn_revert = QPushButton("REVERT CHANGES")
-        self.btn_revert.setStyleSheet(_STYLE_BTN_OUTLINE)
+        self.btn_revert.setStyleSheet(STYLE_SETTING_BTN_OUTLINE)
         self.btn_revert.setFixedHeight(SETTINGS_BTN_H)
         self.btn_revert.setCursor(Qt.CursorShape.PointingHandCursor)
 
         self.btn_save = QPushButton("SAVE SETTINGS")
-        self.btn_save.setStyleSheet(_STYLE_BTN_PRIMARY)
+        self.btn_save.setStyleSheet(STYLE_SETTING_BTN_PRIMARY)
         self.btn_save.setFixedHeight(SETTINGS_BTN_H)
         self.btn_save.setCursor(Qt.CursorShape.PointingHandCursor)
 
@@ -448,6 +315,35 @@ class PageSetting(QWidget):
         self.btn_clear_db.clicked.connect(self._on_clear_db_clicked)
         self.btn_flash_collect.clicked.connect(self._on_flash_collect_clicked)
         self.btn_flash_ai.clicked.connect(self._on_flash_ai_clicked)
+
+    def _configure_accessibility(self) -> None:
+        """Configure accessible names and deterministic keyboard traversal."""
+        self.combo_sample_rate.setAccessibleName("Sample rate")
+        self.combo_accel_scale.setAccessibleName("Accelerometer full scale")
+        self.combo_gyro_scale.setAccessibleName("Gyroscope full scale")
+        self.spin_window_size.setAccessibleName("Window size")
+        self.spin_window_overlap.setAccessibleName("Window overlap")
+        self.combo_ml_pipeline.setAccessibleName("Machine learning pipeline")
+        self.txt_project_name.setAccessibleName("Project name")
+        self.chk_auto_save.setAccessibleName("Auto save recording samples")
+        self.btn_revert.setAccessibleName("Revert settings")
+        self.btn_save.setAccessibleName("Save settings")
+        self.btn_flash_collect.setAccessibleName("Install data firmware")
+        self.btn_flash_ai.setAccessibleName("Install AI firmware")
+        self.btn_clear_db.setAccessibleName("Erase all collected data")
+
+        self.setTabOrder(self.combo_sample_rate, self.combo_accel_scale)
+        self.setTabOrder(self.combo_accel_scale, self.combo_gyro_scale)
+        self.setTabOrder(self.combo_gyro_scale, self.spin_window_size)
+        self.setTabOrder(self.spin_window_size, self.spin_window_overlap)
+        self.setTabOrder(self.spin_window_overlap, self.combo_ml_pipeline)
+        self.setTabOrder(self.combo_ml_pipeline, self.txt_project_name)
+        self.setTabOrder(self.txt_project_name, self.chk_auto_save)
+        self.setTabOrder(self.chk_auto_save, self.btn_revert)
+        self.setTabOrder(self.btn_revert, self.btn_save)
+        self.setTabOrder(self.btn_save, self.btn_flash_collect)
+        self.setTabOrder(self.btn_flash_collect, self.btn_flash_ai)
+        self.setTabOrder(self.btn_flash_ai, self.btn_clear_db)
 
     # ------------------------------------------------------------------
     # Slot implementations
@@ -478,16 +374,15 @@ class PageSetting(QWidget):
         self.load_settings(self._last_saved)
 
     def _on_clear_db_clicked(self) -> None:
-        reply = QMessageBox.warning(
+        if confirm_destructive(
             self,
-            "Erase All Data",
-            (
-                "Are you sure you want to permanently delete ALL collected spell samples?\n\n"
-                "This action cannot be undone."
+            title="Erase All Data",
+            message=(
+                "This will permanently delete every collected spell sample.\n\n"
+                "Use this only when you are certain the dataset can be rebuilt."
             ),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
-        )
-        if reply == QMessageBox.StandardButton.Yes:
+            confirm_text="Erase Data",
+        ):
             self.sig_clear_database.emit()
 
     def _on_flash_collect_clicked(self) -> None:
@@ -514,7 +409,7 @@ class PageSetting(QWidget):
         """Return a styled card frame together with its ready-to-use layout."""
         frame = QFrame()
         frame.setObjectName("CardFrame")
-        frame.setStyleSheet(_STYLE_CARD)
+        frame.setStyleSheet(STYLE_SETTING_CARD)
         layout = QVBoxLayout(frame)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
@@ -526,13 +421,14 @@ class PageSetting(QWidget):
         lbl.setStyleSheet(
             f"color: {color}; font-weight: 900; font-size: 12px; letter-spacing: 1px;"
         )
+        lbl.setWordWrap(True)
         return lbl
 
     @staticmethod
     def _make_combo(items: list[str]) -> QComboBox:
         combo = QComboBox()
         combo.addItems(items)
-        combo.setStyleSheet(_STYLE_INPUT)
+        combo.setStyleSheet(STYLE_SETTING_INPUT)
         combo.setFixedHeight(SETTINGS_INPUT_H)
         combo.setCursor(Qt.CursorShape.PointingHandCursor)
         return combo
@@ -545,14 +441,14 @@ class PageSetting(QWidget):
         spin.setRange(min_val, max_val)
         spin.setSingleStep(step)
         spin.setSuffix(suffix)
-        spin.setStyleSheet(_STYLE_INPUT)
+        spin.setStyleSheet(STYLE_SETTING_INPUT)
         spin.setFixedHeight(SETTINGS_INPUT_H)
         return spin
 
     @staticmethod
     def _make_primary_button(label: str) -> QPushButton:
         btn = QPushButton(label)
-        btn.setStyleSheet(_STYLE_BTN_PRIMARY)
+        btn.setStyleSheet(STYLE_SETTING_BTN_PRIMARY)
         btn.setFixedHeight(SETTINGS_BTN_H)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         return btn
@@ -561,8 +457,9 @@ class PageSetting(QWidget):
     def _make_form_row(label_text: str, widget: QWidget) -> QHBoxLayout:
         row = QHBoxLayout()
         lbl = QLabel(label_text)
-        lbl.setStyleSheet(f"color: {TEXT_BODY}; font-weight: bold; font-size: 11px;")
+        lbl.setStyleSheet(f"color: {TEXT_BODY}; font-weight: 600; font-size: 11px;")
         lbl.setMinimumWidth(LABEL_W)
+        lbl.setMaximumWidth(LABEL_W)
         row.addWidget(lbl)
         row.addWidget(widget, stretch=1)
         return row

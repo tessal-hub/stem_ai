@@ -17,3 +17,7 @@ PyYAML>=6.0.1
 
 # Packaging
 pyinstaller>=6.2.0
+
+# Testing
+pytest>=8.2.0
+pytest-json-report>=1.5.0

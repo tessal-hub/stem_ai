@@ -4,27 +4,30 @@ logic/serial_worker.py — Background thread for high-speed ESP32 serial communi
 Architecture:
     - Runs in a separate QThread to avoid UI freezing.
     - Handles 115200 baud rate.
-    - Normalises sensor data (Accel / 16 384, Gyro / 131).
+    - Uses shared frame validators and one canonical normalization path.
     - Detects:
-        1. PREDICT:<Action>:<Conf> → real-time inference result.
-        2. aX,aY,aZ,gX,gY,gZ     → 6-axis training/streaming data.
+        1. PREDICT:<Action>:<Conf> -> real-time inference result.
+        2. aX,aY,aZ,gX,gY,gZ     -> 6-axis training/streaming data.
 """
 
 from __future__ import annotations
 
 import logging
+import queue
 
 import serial
 import serial.tools.list_ports
 from PyQt6.QtCore import QThread, pyqtSignal
 
-log = logging.getLogger(__name__)
+from .frame_protocol import (
+    DEFAULT_SCALE_PROFILE,
+    FrameValidationError,
+    SensorScaleProfile,
+    parse_prediction_frame,
+    parse_sensor_csv_frame,
+)
 
-# ---------------------------------------------------------------------------
-# MPU-6050 normalisation divisors
-# ---------------------------------------------------------------------------
-_ACCEL_SCALE = 16_384.0   # +-2 g   full-scale -> 1 g    = 16 384 LSB
-_GYRO_SCALE  =    131.0   # +-250 dps full-scale -> 1 dps = 131 LSB
+log = logging.getLogger(__name__)
 
 _BAUD = 115_200
 
@@ -38,12 +41,16 @@ class SerialWorker(QThread):
     sig_prediction_received = pyqtSignal(str, float)   # (label, confidence)
     sig_connection_status   = pyqtSignal(bool, str)    # (is_connected, message)
     sig_raw_line_received   = pyqtSignal(str)          # every decoded line -> terminal
+    sig_error               = pyqtSignal(str)          # standardized worker error channel
+    sig_finished            = pyqtSignal(bool, str)    # standardized worker completion channel
 
     def __init__(self, port: str = "") -> None:
         super().__init__()
         self.port     = port
         self._serial: serial.Serial | None = None
         self._running = False
+        self._outbound_commands: queue.Queue[str] = queue.Queue()
+        self._scale_profile = DEFAULT_SCALE_PROFILE
 
     # ------------------------------------------------------------------
     # Public API
@@ -55,16 +62,19 @@ class SerialWorker(QThread):
         Returns True on success, False if the port is closed or the write fails.
         Only emits a status signal on genuine failure, not on success.
         """
-        if self._serial is None or not self._serial.is_open:
+        if not self._running:
             return False
         try:
             if not cmd.endswith("\n"):
                 cmd += "\n"
-            self._serial.write(cmd.encode("utf-8"))
+            self._outbound_commands.put_nowait(cmd)
             return True
-        except Exception:
+        except queue.Full:
+            self.sig_error.emit("Send queue full; command dropped")
+            return False
+        except Exception as e:
             log.exception("SerialWorker.send_command failed")
-            self.sig_connection_status.emit(False, "Send failed — port may have disconnected.")
+            self.sig_error.emit(f"Serial command queue failed: {type(e).__name__}: {e}")
             return False
 
     def stop(self) -> None:
@@ -74,9 +84,10 @@ class SerialWorker(QThread):
         serial port stalls mid-read.
         """
         self._running = False
-        if not self.wait(3_000):
-            log.warning("SerialWorker did not stop within timeout; terminating.")
-            self.terminate()
+
+    def set_scale_profile(self, profile: SensorScaleProfile) -> None:
+        """Update accel/gyro normalization divisors used for CSV frames."""
+        self._scale_profile = profile
 
     # ------------------------------------------------------------------
     # QThread entry point
@@ -84,6 +95,8 @@ class SerialWorker(QThread):
 
     def run(self) -> None:
         """Open the port and read frames until stop() is called."""
+        success = False
+        message = "Disconnected"
         try:
             self._serial  = serial.Serial(self.port, _BAUD, timeout=1.0)
             self._running = True
@@ -91,11 +104,20 @@ class SerialWorker(QThread):
                 True, f"Connected to {self.port} at {_BAUD} baud"
             )
             self._read_loop()
+            success = True
+            message = "Serial worker stopped"
         except serial.SerialException:
             log.exception("SerialWorker: could not open port %s", self.port)
-            self.sig_connection_status.emit(False, f"Cannot open {self.port}")
+            message = f"Cannot open {self.port}"
+            self.sig_error.emit(message)
+            self.sig_connection_status.emit(False, message)
+        except Exception as e:
+            log.exception("SerialWorker: run failed")
+            message = f"Serial worker exception: {type(e).__name__}: {e}"
+            self.sig_error.emit(message)
         finally:
             self._cleanup()
+            self.sig_finished.emit(success, message)
 
     # ------------------------------------------------------------------
     # Private
@@ -106,6 +128,8 @@ class SerialWorker(QThread):
         assert self._serial is not None
 
         while self._running:
+            self._drain_outbound_commands()
+
             if not self._serial.in_waiting:
                 self.msleep(10)     # yield CPU; _running checked ~100x/s
                 continue
@@ -127,43 +151,21 @@ class SerialWorker(QThread):
                 self._handle_sensor_csv(line)
 
     def _handle_prediction(self, line: str) -> None:
-        """Parse PREDICT:<label>:<confidence> frames.
-
-        maxsplit=2 ensures labels that contain colons (e.g. 'SPELL:ACCIO')
-        are captured in full rather than being silently truncated.
-        """
-        parts = line.split(":", maxsplit=2)
-        if len(parts) < 3:
-            log.debug("Malformed PREDICT frame: %r", line)
-            return
-        label = parts[1]
+        """Parse one prediction frame using the shared protocol validator."""
         try:
-            conf = float(parts[2])
-        except ValueError:
-            log.debug("Non-numeric confidence in PREDICT frame: %r", line)
+            label, conf = parse_prediction_frame(line)
+        except FrameValidationError:
+            log.debug("Malformed PREDICT frame: %r", line)
             return
         self.sig_prediction_received.emit(label, conf)
 
     def _handle_sensor_csv(self, line: str) -> None:
-        """Parse aX,aY,aZ,gX,gY,gZ CSV frames and emit normalised float list."""
-        parts = line.split(",")
-        if len(parts) != 6:
-            log.debug("Unexpected CSV field count (%d): %r", len(parts), line)
-            return
+        """Parse one sensor CSV frame with shared validation + normalization."""
         try:
-            raw = [float(p) for p in parts]
-        except ValueError:
-            log.debug("Non-numeric CSV field in: %r", line)
+            norm = parse_sensor_csv_frame(line, self._scale_profile)
+        except FrameValidationError:
+            log.debug("Malformed sensor CSV frame: %r", line)
             return
-
-        norm: list[float] = [
-            raw[0] / _ACCEL_SCALE,
-            raw[1] / _ACCEL_SCALE,
-            raw[2] / _ACCEL_SCALE,
-            raw[3] / _GYRO_SCALE,
-            raw[4] / _GYRO_SCALE,
-            raw[5] / _GYRO_SCALE,
-        ]
         self.sig_data_received.emit(norm)
 
     def _cleanup(self) -> None:
@@ -176,6 +178,26 @@ class SerialWorker(QThread):
         self._serial  = None
         self._running = False
         self.sig_connection_status.emit(False, "Disconnected")
+
+    def _drain_outbound_commands(self) -> None:
+        """Write queued outbound commands from within the worker thread."""
+        if self._serial is None or not self._serial.is_open:
+            return
+
+        while True:
+            try:
+                cmd = self._outbound_commands.get_nowait()
+            except queue.Empty:
+                return
+
+            try:
+                self._serial.write(cmd.encode("utf-8"))
+            except Exception as e:
+                message = f"Send failed — port may have disconnected: {type(e).__name__}: {e}"
+                self.sig_error.emit(message)
+                self.sig_connection_status.emit(False, message)
+                self._running = False
+                return
 
     # ------------------------------------------------------------------
     # Static helpers

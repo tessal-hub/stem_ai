@@ -9,16 +9,19 @@ Architecture (MVC Controller):
     - All threads and signals are non-blocking
 
 Data Flow:
-    1. SerialWorker.sig_data_received(list) → Handler._on_data_received 
+    1. SerialWorker.sig_data_received(list) -> Handler._on_data_received
        → Wand3DWidget.update_orientation (3D animation)
     
-    2. SerialWorker.sig_data_received(list) → Handler._on_raw_data_received 
+    2. SerialWorker.sig_data_received(list) -> Handler._on_raw_data_received
        → rolling buffer → PageRecord.update_plot_data (graph plotting)
 """
 
-import os
+from pathlib import Path
+from threading import Lock
+
 from PyQt6.QtCore import QObject, Qt
 from .data_store import DataStore
+from .frame_protocol import build_scale_profile
 from .serial_worker import SerialWorker
 from .model_uploader import ModelUploader
 from .recorder import DataRecorder
@@ -27,6 +30,24 @@ from .flash_worker import FlashWorker
 
 class Handler(QObject):
     """Central controller: wires Workers → UI pages via signals."""
+
+    _MODE_IDLE = "IDLE"
+    _MODE_INFER = "INFER"
+    _MODE_RECORD = "RECORD"
+    _MODE_UPDATE = "UPDATE"
+
+    _ALLOWED_TRANSITIONS: dict[str, set[str]] = {
+        "IDLE": {"IDLE", "INFER", "RECORD", "UPDATE"},
+        "INFER": {"IDLE", "INFER", "RECORD", "UPDATE"},
+        "RECORD": {"IDLE", "INFER", "RECORD"},
+        "UPDATE": {"IDLE", "INFER", "UPDATE"},
+    }
+
+    _DEVICE_MODE_BY_RUNTIME: dict[str, str] = {
+        "IDLE": "IDLE",
+        "INFER": "IDLE",
+        "RECORD": "RECORD",
+    }
 
     def __init__(self, ui_page_wand, ui_page_record, ui_page_home, data_store: DataStore, ui_page_setting=None) -> None:
         super().__init__()
@@ -44,15 +65,109 @@ class Handler(QObject):
 
         # ── State Management ────────────────────────────────────────────
         self.current_selected_spell: str = ""
-        self.is_recording: bool = False
-        
-        # Rolling buffer for PageRecord plot (500 samples ≈ 10sec @ 50Hz)
-        self._buffer: list[list[float]] = []
-        self._MAX_BUFFER_SIZE = 500
+        self._port_owner: str | None = None
+        self._mode_lock = Lock()
+        self._mode = self.store.get_current_mode().strip().upper()
+        if self._mode not in self._ALLOWED_TRANSITIONS:
+            self._mode = self._MODE_IDLE
+            self.store.set_current_mode(self._mode)
+        self._project_root = Path(__file__).resolve().parents[1]
 
         # ── Initialize connections ──────────────────────────────────────
         self._connect_signals()
         self.on_serial_scan()
+        self.ui_home.set_mode(self._mode)
+
+    def _can_use_port(self, requester: str) -> bool:
+        """Return True when the requester can safely take the serial port."""
+        if self._port_owner is None or self._port_owner == requester:
+            return True
+        self.ui_wand.append_terminal_text(
+            f"[ERROR] Port is busy with {self._port_owner}."
+        )
+        return False
+
+    def _set_port_owner(self, owner: str | None) -> None:
+        """Track which subsystem currently owns the serial port."""
+        self._port_owner = owner
+
+    def _connect_queued(self, signal, slot) -> None:
+        """Connect one signal-slot pair with Qt queued connection semantics."""
+        signal.connect(slot, type=Qt.ConnectionType.QueuedConnection)
+
+    def _connect_many_queued(self, bindings: list[tuple]) -> None:
+        """Connect multiple signal-slot pairs using queued semantics."""
+        for signal, slot in bindings:
+            self._connect_queued(signal, slot)
+
+    def _configure_serial_scale_profile(self) -> None:
+        """Apply accel/gyro normalization profile from persisted settings."""
+        settings = self.store.get_settings_snapshot()
+        self.serial_worker.set_scale_profile(build_scale_profile(settings))
+
+    def _send_mode_command_for_state(self, runtime_mode: str) -> None:
+        """Map runtime mode to device command and send if serial is active."""
+        device_mode = self._DEVICE_MODE_BY_RUNTIME.get(runtime_mode)
+        if not device_mode or not self.serial_worker.isRunning():
+            return
+        if not self.serial_worker.send_command(f"CMD:MODE={device_mode}"):
+            self.ui_wand.append_terminal_text(
+                f"[WARN] Could not send mode command: {device_mode}."
+            )
+
+    def _transition_mode(
+        self,
+        target_mode: str,
+        *,
+        reason: str,
+        push_to_device: bool = False,
+    ) -> bool:
+        """Validate and apply one explicit runtime mode transition."""
+        next_mode = str(target_mode).strip().upper() or self._MODE_IDLE
+
+        with self._mode_lock:
+            current_mode = self._mode
+            allowed = self._ALLOWED_TRANSITIONS.get(current_mode, {self._MODE_IDLE})
+            if next_mode not in allowed:
+                self.ui_wand.append_terminal_text(
+                    f"[ERROR] Mode transition blocked: {current_mode} -> {next_mode} ({reason})."
+                )
+                return False
+            if current_mode == next_mode:
+                return True
+            self._mode = next_mode
+
+        self.store.set_current_mode(next_mode)
+        self.ui_home.set_mode(next_mode)
+        self.ui_wand.append_terminal_text(
+            f">> MODE {current_mode} -> {next_mode} ({reason})"
+        )
+
+        if push_to_device:
+            self._send_mode_command_for_state(next_mode)
+
+        return True
+
+    def _resolve_project_path(self, raw_path: str) -> Path:
+        """Resolve an absolute file path from a project-relative setting value."""
+        candidate = Path(raw_path.strip())
+        if not candidate.is_absolute():
+            candidate = self._project_root / candidate
+        return candidate.resolve()
+
+    @staticmethod
+    def _validate_required_file(file_path: Path, *, label: str) -> tuple[bool, str]:
+        """Validate that a required file exists, is regular, and non-empty."""
+        try:
+            if not file_path.exists():
+                return False, f"{label} file not found: {file_path}"
+            if not file_path.is_file():
+                return False, f"{label} path is not a file: {file_path}"
+            if file_path.stat().st_size <= 0:
+                return False, f"{label} file is empty: {file_path}"
+        except OSError as exc:
+            return False, f"{label} file check failed: {exc}"
+        return True, ""
 
     # ── Signal Wiring (MVC Controller Pattern) ──────────────────────────
 
@@ -96,42 +211,63 @@ class Handler(QObject):
         self.store.sig_prediction_updated.connect(self._on_prediction_received)
 
         # --- Model Uploader → UI/Handler ---
-        self.uploader.progress_updated.connect(self.ui_wand.update_flash_progress)
-        self.uploader.status_msg.connect(self.ui_wand.append_terminal_text)
-        self.uploader.finished.connect(self._on_upload_finished)
+        # CRITICAL: Use QueuedConnection for cross-thread signal safety
+        self._connect_many_queued(
+            [
+                (self.uploader.sig_progress, self.ui_wand.update_flash_progress),
+                (self.uploader.status_msg, self.ui_wand.append_terminal_text),
+                (self.uploader.sig_error, self.ui_wand.append_terminal_text),
+                (self.uploader.sig_finished, self._on_upload_finished),
+            ]
+        )
 
         # --- Flash Worker → UI/Handler ---
         if self.ui_setting:
-            self.flash_worker.log_msg.connect(self.ui_setting.append_console_text)
-            self.flash_worker.progress.connect(self.ui_setting.update_flash_progress)
-            self.flash_worker.finished.connect(self._on_firmware_flash_finished)
+            self._connect_many_queued(
+                [
+                    (self.flash_worker.log_msg, self.ui_setting.append_console_text),
+                    (self.flash_worker.sig_progress, self.ui_setting.update_flash_progress),
+                    (self.flash_worker.sig_error, self.ui_setting.append_console_text),
+                    (self.flash_worker.sig_finished, self._on_firmware_flash_finished),
+                ]
+            )
 
         # --- Data Recorder → UI ---
-        self.recorder.sig_record_count.connect(self.ui_record.update_record_count)
-        self.recorder.sig_status_text.connect(self.ui_wand.append_terminal_text)
-        self.recorder.sig_recording_state.connect(self.ui_record.set_recording_state)
+        self._connect_many_queued(
+            [
+                (self.recorder.sig_record_count, self.ui_record.update_record_count),
+                (self.recorder.sig_status_text, self.ui_wand.append_terminal_text),
+                (self.recorder.sig_error, self.ui_wand.append_terminal_text),
+                (self.recorder.sig_finished, self._on_recording_finished),
+                (self.recorder.sig_recording_state, self.ui_record.set_recording_state),
+                (self.recorder.sig_recording_state, self._on_recorder_state_changed),
+            ]
+        )
 
     def _connect_signals_serial_worker(self) -> None:
         """
         Wire SerialWorker signals with QueuedConnection.
         Called during init and after reconnect to rebuild connections.
         
-        CRITICAL FIX: Use type=2 (QueuedConnection) to marshal slot calls
+        CRITICAL FIX: Use QueuedConnection to marshal slot calls
         from SerialWorker's QThread back to the main Qt event loop.
         This is essential for thread-safe UI updates (pyqtgraph, OpenGL).
         """
         # KEY: sig_data_received → 3D wand and recording buffer
-        self.serial_worker.sig_data_received.connect(self._on_data_received)
-        self.serial_worker.sig_data_received.connect(self._on_raw_data_received)
+        # CRITICAL: QueuedConnection ensures slots run in main thread
+        self._connect_queued(self.serial_worker.sig_data_received, self._on_data_received)
+        self._connect_queued(self.serial_worker.sig_data_received, self._on_sensor_frame_received)
+        self._connect_queued(self.serial_worker.sig_data_received, self._on_raw_data_received)
 
         # Also: same normalized list is used for CSV recording
-        self.serial_worker.sig_data_received.connect(self.recorder.add_row)
+        self._connect_queued(self.serial_worker.sig_data_received, self.recorder.add_row)
 
         # AI predictions
-        self.serial_worker.sig_prediction_received.connect(self._on_prediction_received)
+        self._connect_queued(self.serial_worker.sig_prediction_received, self.store.update_prediction)
 
         # Connection status
-        self.serial_worker.sig_connection_status.connect(self._on_connection_status_changed)
+        self._connect_queued(self.serial_worker.sig_connection_status, self._on_connection_status_changed)
+        self._connect_queued(self.serial_worker.sig_error, self.ui_wand.append_terminal_text)
 
     # ── Serial Connection Actions ───────────────────────────────────────
 
@@ -147,13 +283,18 @@ class Handler(QObject):
             self.ui_wand.append_terminal_text("[ERROR] Select a port first.")
             return
 
+        if not self._can_use_port("serial"):
+            return
+
         # SAFETY: Prevent double-start (can't restart a finished QThread)
         if self.serial_worker.isRunning():
             self.ui_wand.append_terminal_text("[ERROR] Serial already connected. Disconnect first.")
             return
 
         self.ui_wand.append_terminal_text(f">> Connecting to {port} @ 115200 baud...")
+        self._configure_serial_scale_profile()
         self.serial_worker.port = port
+        self._set_port_owner("serial")
         self.serial_worker.start()
 
     def on_serial_disconnect(self) -> None:
@@ -167,6 +308,11 @@ class Handler(QObject):
         # (Can't call start() on a finished QThread - must create new instance)
         self.serial_worker = SerialWorker()
         self._connect_signals_serial_worker()  # Rewire signals to new instance
+        if self._port_owner == "serial":
+            self._set_port_owner(None)
+
+        if self._mode != self._MODE_UPDATE:
+            self._transition_mode(self._MODE_IDLE, reason="manual disconnect")
         
         self.ui_wand.append_terminal_text(">> Ready to reconnect")
 
@@ -194,6 +340,27 @@ class Handler(QObject):
         except Exception as e:
             self.ui_wand.append_terminal_text(f"[ERROR] 3D wand update failed: {e}")
 
+    def _on_sensor_frame_received(self, norm_values: list[float]) -> None:
+        """Mirror normalized sensor samples into DataStore sensor buffers."""
+        try:
+            if not isinstance(norm_values, (list, tuple)) or len(norm_values) != 6:
+                return
+
+            ax, ay, az, gx, gy, gz = [float(v) for v in norm_values]
+            self.store.update_sensor_data(
+                {
+                    "ax": ax,
+                    "ay": ay,
+                    "az": az,
+                    "gx": gx,
+                    "gy": gy,
+                    "gz": gz,
+                }
+            )
+        except Exception:
+            # Ignore malformed frames; SerialWorker already validates protocol.
+            return
+
     def _on_sensor_data_updated(self, sensor_buffers: dict) -> None:
         """Receive updated sensor buffer data from DataStore."""
         # Currently not used in UI, but available for future sensor value display
@@ -201,7 +368,7 @@ class Handler(QObject):
 
     def _on_raw_data_received(self, norm_values: list[float]) -> None:
         """
-        Accumulate sensor samples into rolling buffer for PageRecord.
+        Route sensor samples into DataStore rolling live buffer for PageRecord.
         
         Called on every serial data frame (50 Hz).
         Maintains FIFO buffer of last 500 samples (~10 seconds).
@@ -219,18 +386,8 @@ class Handler(QObject):
             if not isinstance(norm_values, (list, tuple)) or len(norm_values) != 6:
                 return
             
-            # Append sample to buffer
-            self._buffer.append(list(norm_values))
-            
-            # Maintain maximum buffer size (FIFO)
-            if len(self._buffer) > self._MAX_BUFFER_SIZE:
-                self._buffer = self._buffer[-self._MAX_BUFFER_SIZE:]
-            
-            # Send shallow copy to PageRecord (avoid race conditions)
-            self.ui_record.update_plot_data(list(self._buffer))
-            
-            if len(self._buffer) % 50 == 0:  # Debug every 50 samples
-                print(f"[Handler._on_raw_data_received] Buffer size: {len(self._buffer)}, sample: {norm_values}")
+            snapshot = self.store.add_live_sample(list(norm_values))
+            self.ui_record.update_plot_data(snapshot)
             
         except Exception as e:
             self.ui_wand.append_terminal_text(f"[ERROR] Buffer update failed: {e}")
@@ -246,16 +403,29 @@ class Handler(QObject):
         self.ui_record.set_wand_ready(connected)
         self.store.set_connection_status(connected, self.serial_worker.port if connected else "None")
         self.ui_wand.append_terminal_text(f">> {message}")
+
+        if connected:
+            self._configure_serial_scale_profile()
+            if self._mode != self._MODE_UPDATE:
+                self._transition_mode(
+                    self._MODE_INFER,
+                    reason="serial connected",
+                    push_to_device=True,
+                )
+            return
         
         # Clear buffer on disconnect
-        if not connected:
-            self._buffer.clear()
+        self.store.clear_live_buffer()
+        if self._port_owner == "serial":
+            self._set_port_owner(None)
+        if self._mode != self._MODE_UPDATE:
+            self._transition_mode(self._MODE_IDLE, reason="serial disconnected")
 
     # ── Recording Actions ──────────────────────────────────────────────
 
     def on_record_start(self, label_name: str) -> None:
         """Start recording with the given spell/action label."""
-        if self.is_recording:
+        if self.store.get_recording_state():
             self.ui_wand.append_terminal_text(">> Already recording")
             return
 
@@ -263,35 +433,55 @@ class Handler(QObject):
             self.ui_wand.append_terminal_text(">> Record label is required")
             return
 
-        # Notify ESP32 to enter RECORD mode
-        self.serial_worker.send_command("CMD:MODE=RECORD")
+        connected, _ = self.store.get_connection_state()
+        if not connected:
+            self.ui_wand.append_terminal_text("[ERROR] Serial connection is required before recording.")
+            return
+
+        if self._mode == self._MODE_UPDATE:
+            self.ui_wand.append_terminal_text("[ERROR] Cannot start recording while update mode is active.")
+            return
+
+        if not self._transition_mode(
+            self._MODE_RECORD,
+            reason="record start",
+            push_to_device=True,
+        ):
+            return
 
         # Start CSV recorder
         success = self.recorder.start_recording(label_name)
         if success:
-            self.is_recording = True
             # Clear buffer when starting new recording
-            self._buffer.clear()
+            self.store.clear_live_buffer()
             self.ui_record.is_live = True
             self.ui_wand.append_terminal_text(f">> RECORDING: {label_name}")
         else:
             self.ui_wand.append_terminal_text(">> RECORD FAILED")
+            self._transition_mode(
+                self._MODE_INFER,
+                reason="record start failed",
+                push_to_device=True,
+            )
 
     def on_record_stop(self) -> None:
         """Stop recording and finalize CSV file."""
-        if not self.is_recording:
+        if not self.store.get_recording_state():
             self.ui_wand.append_terminal_text(">> Not currently recording")
             return
-
-        # Notify ESP32 to enter IDLE mode
-        self.serial_worker.send_command("CMD:MODE=IDLE")
         
         # Stop recorder
         self.recorder.stop_recording()
-        self.is_recording = False
         
         # Freeze buffer for crop/snip operations
         self.ui_record.is_live = False
+
+        next_mode = self._MODE_INFER if self.serial_worker.isRunning() else self._MODE_IDLE
+        self._transition_mode(
+            next_mode,
+            reason="record stop",
+            push_to_device=True,
+        )
         
         self.ui_wand.append_terminal_text(">> RECORD STOPPED - Ready to snip")
 
@@ -345,15 +535,42 @@ class Handler(QObject):
                 self.ui_setting.set_flash_buttons_enabled(True)
             return
 
+        if not self._can_use_port("flash") and self._port_owner != "serial":
+            if self.ui_setting:
+                self.ui_setting.set_flash_buttons_enabled(True)
+            return
+
+        if self.flash_worker.isRunning():
+            self._flash_log_to_console("[ERROR] Flash is already running.")
+            if self.ui_setting:
+                self.ui_setting.set_flash_buttons_enabled(True)
+            return
+
+        if self.store.get_recording_state():
+            self._flash_log_to_console("[ERROR] Stop recording before starting firmware flash.")
+            if self.ui_setting:
+                self.ui_setting.set_flash_buttons_enabled(True)
+            return
+
         # Map bin_type to firmware file path
         bin_map = {
-            "data": "assets/firmware/collect.bin",
-            "inference": "assets/firmware/inference.bin",
+            "data": self._project_root / "assets" / "firmware" / "collect.bin",
+            "inference": self._project_root / "assets" / "firmware" / "inference.bin",
         }
 
         bin_path = bin_map.get(bin_type)
         if not bin_path:
             self._flash_log_to_console(f"[ERROR] Unknown firmware type: {bin_type}")
+            if self.ui_setting:
+                self.ui_setting.set_flash_buttons_enabled(True)
+            return
+
+        valid_file, validation_message = self._validate_required_file(
+            bin_path,
+            label=f"{bin_type} firmware",
+        )
+        if not valid_file:
+            self._flash_log_to_console(f"[ERROR] {validation_message}")
             if self.ui_setting:
                 self.ui_setting.set_flash_buttons_enabled(True)
             return
@@ -364,77 +581,31 @@ class Handler(QObject):
             self._flash_log_to_console(">> Stopping serial connection to release COM port...")
             self.serial_worker.stop()
             self.serial_worker.wait()  # Wait for serial thread to fully exit
+            if self._port_owner == "serial":
+                self._set_port_owner(None)
             self._flash_log_to_console(">> COM port released, ready to flash\n")
+
+        if not self._transition_mode(
+            self._MODE_UPDATE,
+            reason=f"{bin_type} firmware flash",
+        ):
+            if self.ui_setting:
+                self.ui_setting.set_flash_buttons_enabled(True)
+            return
 
         self._flash_log_to_console(f"\n{'='*60}")
         self._flash_log_to_console(f"[INFO] Begin flashing {bin_type.upper()} firmware to {port}")
         self._flash_log_to_console(f"{'='*60}\n")
 
         # Start the flash worker
-        self.flash_worker.flash_firmware(port, bin_path)
+        self._set_port_owner("flash")
+        self.store.save_settings({"firmware_mode": bin_type})
+        self.flash_worker.flash_firmware(port, str(bin_path))
 
     def _flash_log_to_console(self, message: str) -> None:
         """Route flash logging to the UI console."""
         if self.ui_setting:
             self.ui_setting.append_console_text(message)
-
-    def flash_esp32(self, mode: str) -> None:
-        """
-        Flash firmware to ESP32-S3 (alternative public API).
-
-        Args:
-            mode: 'DATA' for collect.bin or 'AI' for inference.bin
-        """
-        # Validate mode
-        mode_upper = mode.upper() if mode else ""
-        if mode_upper not in ("DATA", "AI"):
-            self._flash_log_to_console(f"[ERROR] Invalid mode: {mode}. Use 'DATA' or 'AI'.")
-            if self.ui_setting:
-                self.ui_setting.set_flash_buttons_enabled(True)
-            return
-
-        # Get selected port
-        port = self.ui_wand.combo_serial_ports.currentText() if self.ui_wand else None
-        if not port:
-            self._flash_log_to_console("[ERROR] No serial port selected. Please select a port first.")
-            if self.ui_setting:
-                self.ui_setting.set_flash_buttons_enabled(True)
-            return
-
-        # Map mode to firmware file
-        firmware_map: dict[str, str] = {
-            "DATA": "assets/firmware/collect.bin",
-            "AI": "assets/firmware/inference.bin",
-        }
-        bin_path: str = firmware_map.get(mode_upper, "")
-
-        if not bin_path:
-            self._flash_log_to_console("[ERROR] Invalid firmware mode mapping.")
-            if self.ui_setting:
-                self.ui_setting.set_flash_buttons_enabled(True)
-            return
-
-        # Use absolute path for validation
-        abs_bin_path = os.path.abspath(bin_path)
-        
-        # Check file exists
-        if not os.path.exists(abs_bin_path):
-            self._flash_log_to_console(f"[ERROR] Firmware file not found: {abs_bin_path}")
-            if self.ui_setting:
-                self.ui_setting.set_flash_buttons_enabled(True)
-            return
-
-        # Stop serial worker to free the port
-        if self.serial_worker.isRunning():
-            self.serial_worker.stop()
-            self._flash_log_to_console("[INFO] Stopped serial connection to free COM port.\n")
-
-        self._flash_log_to_console(f"\n{'='*60}")
-        self._flash_log_to_console(f"[FLASH] Starting {mode.upper()} firmware flash to {port}")
-        self._flash_log_to_console(f"{'='*60}\n")
-
-        # Start the flash worker with absolute path
-        self.flash_worker.flash_firmware(port, abs_bin_path)
 
     def on_flash_upload(self) -> None:
         """Stop serial stream and start binary model upload."""
@@ -443,26 +614,82 @@ class Handler(QObject):
             self.ui_wand.append_terminal_text("[ERROR] Serial port required for upload.")
             return
 
+        if not self._can_use_port("upload") and self._port_owner != "serial":
+            return
+
+        if self.uploader.isRunning():
+            self.ui_wand.append_terminal_text("[ERROR] Upload is already running.")
+            return
+
+        if self.store.get_recording_state():
+            self.ui_wand.append_terminal_text("[ERROR] Stop recording before model upload.")
+            return
+
+        settings_snapshot = self.store.get_settings_snapshot()
+        configured_model_path = str(settings_snapshot.get("model_path", "model.tflite")).strip()
+        if not configured_model_path:
+            configured_model_path = "model.tflite"
+        model_path = self._resolve_project_path(configured_model_path)
+
+        valid_model, model_validation_message = self._validate_required_file(
+            model_path,
+            label="Model",
+        )
+        if not valid_model:
+            self.ui_wand.append_terminal_text(f"[ERROR] {model_validation_message}")
+            self.ui_wand.update_flash_progress(0)
+            return
+
         # Stop serial if running
         if self.serial_worker.isRunning():
             self.serial_worker.stop()
+            self.serial_worker.wait()
+            if self._port_owner == "serial":
+                self._set_port_owner(None)
             self.ui_wand.append_terminal_text(">> Temporarily pausing live data for upload...")
 
-        model_path = "model.tflite"
-        self.ui_wand.append_terminal_text(f">> Initiating model upload for {model_path}...")
-        self.uploader.upload_file(port, model_path)
+        if not self._transition_mode(
+            self._MODE_UPDATE,
+            reason="model upload",
+        ):
+            return
 
-    def _on_upload_finished(self, success: bool) -> None:
+        self.ui_wand.append_terminal_text(f">> Initiating model upload for {model_path}...")
+        self._set_port_owner("upload")
+        self.uploader.upload_file(port, str(model_path))
+
+    def _on_upload_finished(self, success: bool, message: str) -> None:
         """Callback when model upload completes."""
+        if self._port_owner == "upload":
+            self._set_port_owner(None)
+        self._transition_mode(self._MODE_IDLE, reason="model upload finished")
         if success:
             self.ui_wand.append_terminal_text(">> Model upload COMPLETE!")
             self.ui_wand.update_flash_progress(100)
         else:
-            self.ui_wand.append_terminal_text(">> Model upload FAILED. Check connection.")
+            self.ui_wand.append_terminal_text(f">> Model upload FAILED. {message}")
             self.ui_wand.update_flash_progress(0)
+
+    def _on_recorder_state_changed(self, recording: bool) -> None:
+        """Keep DataStore recording flag synchronized with recorder worker state."""
+        self.store.set_recording_state(recording)
+
+    def _on_recording_finished(self, success: bool, message: str) -> None:
+        """Log recorder lifecycle completion messages."""
+        if not success:
+            self.ui_wand.append_terminal_text(f">> RECORD FAILED: {message}")
+            target_mode = self._MODE_INFER if self.serial_worker.isRunning() else self._MODE_IDLE
+            self._transition_mode(
+                target_mode,
+                reason="recording failed",
+                push_to_device=True,
+            )
 
     def _on_firmware_flash_finished(self, success: bool, message: str) -> None:
         """Callback when firmware flash completes."""
+        if self._port_owner == "flash":
+            self._set_port_owner(None)
+        self._transition_mode(self._MODE_IDLE, reason="firmware flash finished")
         if success:
             self._flash_log_to_console(f"\n[SUCCESS] {message}")
             self._flash_log_to_console(f"{'='*60}\n")
@@ -485,56 +712,4 @@ class Handler(QObject):
         if self.current_selected_spell:
             samples = self.store.get_samples_for_spell(self.current_selected_spell)
             self.ui_record.load_samples_for_spell(self.current_selected_spell, samples)
-        # --- UI Wand → Handler ---
-        self.ui_wand.sig_serial_scan.connect(self.on_serial_scan)
-        self.ui_wand.sig_serial_connect.connect(self.on_serial_connect)
-        self.ui_wand.sig_serial_disconnect.connect(self.on_serial_disconnect)
-        self.ui_wand.sig_flash_upload.connect(self.on_flash_upload)
-
-        # --- UI Setting → Handler (if available) ---
-        if self.ui_setting:
-            self.ui_setting.sig_flash_data_firmware.connect(
-                lambda: self.handle_firmware_flash("data")
-            )
-            self.ui_setting.sig_flash_inference_firmware.connect(
-                lambda: self.handle_firmware_flash("inference")
-            )
-
-        # --- UI Record → Handler ---
-        self.ui_record.sig_data_cropped.connect(self.on_data_cropped)
-        self.ui_record.sig_spell_selected.connect(self.on_spell_selected)
-        self.ui_record.sig_start_record.connect(self.on_record_start)
-        self.ui_record.sig_stop_record.connect(self.on_record_stop)
-
-        # --- Serial Worker → Handler/DataStore ---
-        # Single stream of normalized sensor samples as a list
-        self.serial_worker.sig_data_received.connect(self.store.update_sensor_data)
-        self.serial_worker.sig_data_received.connect(self.recorder.add_row)
-        self.serial_worker.sig_data_received.connect(self._on_raw_data_received)
-        # AI Inference stream
-        self.serial_worker.sig_prediction_received.connect(self.store.update_prediction)
-        # Status/Connection
-        self.serial_worker.sig_connection_status.connect(self._on_connection_status_changed)
-
-        # --- DataStore → UI (Reactive Updates) ---
-        self.store.sig_sensor_data_updated.connect(self._on_sensor_data_updated)
-        self.store.sig_db_updated.connect(self._on_db_updated)
-        self.store.sig_stats_updated.connect(self.ui_wand.update_esp_stats)
-        self.store.sig_prediction_updated.connect(self._on_prediction_received)
-
-        # --- Model Uploader → UI/Handler ---
-        self.uploader.progress_updated.connect(self.ui_wand.update_flash_progress)
-        self.uploader.status_msg.connect(self.ui_wand.append_terminal_text)
-        self.uploader.finished.connect(self._on_upload_finished)
-
-        # --- Flash Worker → UI/Handler ---
-        if self.ui_setting:
-            self.flash_worker.log_msg.connect(self.ui_setting.append_console_text)
-            self.flash_worker.progress.connect(self.ui_setting.update_flash_progress)
-            self.flash_worker.finished.connect(self._on_firmware_flash_finished)
-
-        # --- Data Recorder → UI ---
-        self.recorder.sig_record_count.connect(self.ui_record.update_record_count)
-        self.recorder.sig_status_text.connect(self.ui_wand.append_terminal_text)
-        self.recorder.sig_recording_state.connect(self.ui_record.set_recording_state)
 

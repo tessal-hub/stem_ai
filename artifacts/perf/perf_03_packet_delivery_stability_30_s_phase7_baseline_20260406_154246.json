@@ -1,0 +1,31 @@
+{
+  "test_name": "PERF-03 Packet Delivery Stability 30 s",
+  "phase_gate": "phase7_baseline",
+  "timestamp_utc": "2026-04-06T15:42:46.154118+00:00",
+  "machine_info": {
+    "os": "Windows-11-10.0.26200-SP0",
+    "cpu_model": "Intel64 Family 6 Model 142 Stepping 12, GenuineIntel",
+    "core_count": 8,
+    "python_version": "3.14.3",
+    "qt_version": "6.10.0"
+  },
+  "sample_count_total": 10,
+  "sample_count_after_warmup": 10,
+  "warmup_seconds": 0.1,
+  "sampling_window_seconds": 0.010610999999698834,
+  "data_rate_hz": 942.4182452439755,
+  "metric_unit": "ms",
+  "percentile_method": "linear",
+  "p50": 0.0,
+  "p95": 0.0,
+  "p99": 0.0,
+  "pass_gate_percentile": "p95",
+  "pass_threshold": 0.5,
+  "comparator": "<=",
+  "verdict": "pass",
+  "aux_metrics": {
+    "total_expected": 500,
+    "total_dropped": 0,
+    "contiguous_loss_burst": 0
+  }
+}

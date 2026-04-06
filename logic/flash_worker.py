@@ -29,6 +29,9 @@ class FlashWorker(QThread):
     progress = pyqtSignal(int)          # 0-100 progress percent
     log_msg = pyqtSignal(str)           # Real-time console output
     finished = pyqtSignal(bool, str)    # (success, message)
+    sig_progress = pyqtSignal(int)      # standardized progress channel
+    sig_error = pyqtSignal(str)         # standardized error channel
+    sig_finished = pyqtSignal(bool, str)  # standardized completion channel
 
     def __init__(self) -> None:
         super().__init__()
@@ -55,11 +58,15 @@ class FlashWorker(QThread):
             if not self._port:
                 self.log_msg.emit("[ERROR] No serial port specified")
                 self.finished.emit(False, "No serial port specified")
+                self.sig_error.emit("No serial port specified")
+                self.sig_finished.emit(False, "No serial port specified")
                 return
 
             if not self._bin_path:
                 self.log_msg.emit("[ERROR] No binary file path specified")
                 self.finished.emit(False, "No binary file path specified")
+                self.sig_error.emit("No binary file path specified")
+                self.sig_finished.emit(False, "No binary file path specified")
                 return
 
             # ── Step 2: Resolve file path (absolute) ──────────────────
@@ -67,12 +74,16 @@ class FlashWorker(QThread):
             if not bin_file.exists():
                 self.log_msg.emit(f"[ERROR] Binary file not found: {bin_file}")
                 self.finished.emit(False, f"Binary file not found: {bin_file}")
+                self.sig_error.emit(f"Binary file not found: {bin_file}")
+                self.sig_finished.emit(False, f"Binary file not found: {bin_file}")
                 return
 
             file_size = bin_file.stat().st_size
             if file_size == 0:
                 self.log_msg.emit(f"[ERROR] Binary file is empty: {bin_file}")
                 self.finished.emit(False, f"Binary file is empty: {bin_file}")
+                self.sig_error.emit(f"Binary file is empty: {bin_file}")
+                self.sig_finished.emit(False, f"Binary file is empty: {bin_file}")
                 return
 
             self.log_msg.emit(f"[INFO] Binary file: {bin_file}")
@@ -82,6 +93,8 @@ class FlashWorker(QThread):
             if not self._check_esptool_available():
                 self.log_msg.emit("[ERROR] esptool not installed. Run: pip install esptool")
                 self.finished.emit(False, "esptool not installed")
+                self.sig_error.emit("esptool not installed")
+                self.sig_finished.emit(False, "esptool not installed")
                 return
 
             # ── Step 4: Build esptool command ────────────────────────
@@ -108,6 +121,7 @@ class FlashWorker(QThread):
             self.log_msg.emit(f"[INFO] Using Python: {sys.executable}")
             self.log_msg.emit("=" * 70)
             self.progress.emit(0)
+            self.sig_progress.emit(0)
 
             # ── Step 5: Execute flash command ────────────────────────
             self._process = subprocess.Popen(
@@ -128,26 +142,36 @@ class FlashWorker(QThread):
 
                 if return_code == 0 and success:
                     self.progress.emit(100)
+                    self.sig_progress.emit(100)
                     self.log_msg.emit("=" * 70)
                     self.log_msg.emit("[SUCCESS] Firmware flash completed!")
                     self.finished.emit(True, "Flash successful")
+                    self.sig_finished.emit(True, "Flash successful")
                 else:
                     self.log_msg.emit("=" * 70)
                     self.log_msg.emit(f"[FAILED] Firmware flash failed (exit code: {return_code})")
                     self.finished.emit(False, "Flash failed")
+                    self.sig_error.emit(f"Flash failed (exit code: {return_code})")
+                    self.sig_finished.emit(False, "Flash failed")
             else:
                 self.log_msg.emit("[ERROR] Failed to start esptool process")
                 self.finished.emit(False, "Process failed")
+                self.sig_error.emit("Failed to start esptool process")
+                self.sig_finished.emit(False, "Process failed")
 
         except subprocess.TimeoutExpired:
             self.log_msg.emit("[ERROR] Flash operation timed out (5 minutes)")
             self.finished.emit(False, "Timeout")
+            self.sig_error.emit("Flash operation timed out")
+            self.sig_finished.emit(False, "Timeout")
             if self._process:
                 self._process.kill()
 
         except Exception as e:
             self.log_msg.emit(f"[ERROR] Flash exception: {type(e).__name__}: {e}")
             self.finished.emit(False, f"Exception: {e}")
+            self.sig_error.emit(f"Flash exception: {type(e).__name__}: {e}")
+            self.sig_finished.emit(False, f"Exception: {e}")
 
         finally:
             self._cleanup()
@@ -192,6 +216,7 @@ class FlashWorker(QThread):
                         percent = int(match.group(1))
                         if 0 <= percent <= 100:
                             self.progress.emit(percent)
+                            self.sig_progress.emit(percent)
                     except ValueError:
                         pass
 

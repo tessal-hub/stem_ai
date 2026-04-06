@@ -1,0 +1,30 @@
+{
+  "test_name": "PERF-02 Live Plot Repaint Interval 50Hz Feed",
+  "phase_gate": "phase7_baseline",
+  "timestamp_utc": "2026-04-06T15:42:46.369173+00:00",
+  "machine_info": {
+    "os": "Windows-11-10.0.26200-SP0",
+    "cpu_model": "Intel64 Family 6 Model 142 Stepping 12, GenuineIntel",
+    "core_count": 8,
+    "python_version": "3.14.3",
+    "qt_version": "6.10.0"
+  },
+  "sample_count_total": 200,
+  "sample_count_after_warmup": 200,
+  "warmup_seconds": 0.2,
+  "sampling_window_seconds": 0.010550999999395572,
+  "data_rate_hz": 18955.549238125037,
+  "metric_unit": "ms",
+  "percentile_method": "linear",
+  "p50": 20.0,
+  "p95": 20.6,
+  "p99": 20.6,
+  "pass_gate_percentile": "p95",
+  "pass_threshold": 22.22,
+  "comparator": "<=",
+  "verdict": "pass",
+  "aux_metrics": {
+    "max_interval_ms": 20.6,
+    "sustained_fps": 50.0
+  }
+}

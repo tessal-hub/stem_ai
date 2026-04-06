@@ -1,0 +1,133 @@
+{
+  "baseline_report": {
+    "path": "artifacts\\perf_report_baseline.json",
+    "duration_seconds": 6.284635066986084,
+    "passed": 11,
+    "failed": 0,
+    "total": 11,
+    "collected": 11
+  },
+  "final_report": {
+    "path": "artifacts\\perf_report_final.json",
+    "duration_seconds": 6.255459308624268,
+    "passed": 8,
+    "failed": 0,
+    "total": 8,
+    "collected": 8
+  },
+  "comparison_policy": {
+    "baseline_phase": "phase7_baseline",
+    "final_phase": "phase7_final",
+    "allowed_regression_pct": 10.0,
+    "allowed_regression_ms": 1.0
+  },
+  "summary": {
+    "shared_case_count": 5,
+    "regression_count": 0,
+    "improvement_count": 0,
+    "stable_count": 5,
+    "missing_in_final_count": 0,
+    "missing_in_baseline_count": 0,
+    "missing_in_final": [],
+    "missing_in_baseline": [],
+    "duration_delta_seconds": -0.029175758361816406,
+    "gate_passed": true
+  },
+  "cases": [
+    {
+      "test_name": "PERF-01 Qt Signal Round-Trip 50Hz",
+      "baseline": {
+        "artifact_path": "artifacts\\perf\\perf_01_qt_signal_round_trip_50hz_phase7_baseline_20260406_154249.json",
+        "p95_ms": 0.7402000002912246,
+        "pass_threshold": 10.0,
+        "verdict": "pass"
+      },
+      "final": {
+        "artifact_path": "artifacts\\perf\\perf_01_qt_signal_round_trip_50hz_phase7_final_20260406_153730.json",
+        "p95_ms": 0.6568749990947254,
+        "pass_threshold": 10.0,
+        "verdict": "pass"
+      },
+      "delta_ms": -0.08332500119649922,
+      "delta_percent": -11.257092834871088,
+      "classification": "stable",
+      "regressed": false
+    },
+    {
+      "test_name": "PERF-02 Live Plot Repaint Interval 50Hz Feed",
+      "baseline": {
+        "artifact_path": "artifacts\\perf\\perf_02_live_plot_repaint_interval_50hz_feed_phase7_baseline_20260406_154246.json",
+        "p95_ms": 20.6,
+        "pass_threshold": 22.22,
+        "verdict": "pass"
+      },
+      "final": {
+        "artifact_path": "artifacts\\perf\\perf_02_live_plot_repaint_interval_50hz_feed_phase7_final_20260406_153727.json",
+        "p95_ms": 20.6,
+        "pass_threshold": 22.22,
+        "verdict": "pass"
+      },
+      "delta_ms": 0.0,
+      "delta_percent": 0.0,
+      "classification": "stable",
+      "regressed": false
+    },
+    {
+      "test_name": "PERF-03 Packet Delivery Stability 30 s",
+      "baseline": {
+        "artifact_path": "artifacts\\perf\\perf_03_packet_delivery_stability_30_s_phase7_baseline_20260406_154246.json",
+        "p95_ms": 0.0,
+        "pass_threshold": 0.5,
+        "verdict": "pass"
+      },
+      "final": {
+        "artifact_path": "artifacts\\perf\\perf_03_packet_delivery_stability_30_s_phase7_final_20260406_153727.json",
+        "p95_ms": 0.0,
+        "pass_threshold": 0.5,
+        "verdict": "pass"
+      },
+      "delta_ms": 0.0,
+      "delta_percent": null,
+      "classification": "stable",
+      "regressed": false
+    },
+    {
+      "test_name": "PERF-04 UI Event Loop Block Spike",
+      "baseline": {
+        "artifact_path": "artifacts\\perf\\perf_04_ui_event_loop_block_spike_phase7_baseline_20260406_154249.json",
+        "p95_ms": 9.6,
+        "pass_threshold": 20.0,
+        "verdict": "pass"
+      },
+      "final": {
+        "artifact_path": "artifacts\\perf\\perf_04_ui_event_loop_block_spike_phase7_final_20260406_153730.json",
+        "p95_ms": 9.6,
+        "pass_threshold": 20.0,
+        "verdict": "pass"
+      },
+      "delta_ms": 0.0,
+      "delta_percent": 0.0,
+      "classification": "stable",
+      "regressed": false
+    },
+    {
+      "test_name": "PERF-05 End-to-End Worker->Store->UI Latency",
+      "baseline": {
+        "artifact_path": "artifacts\\perf\\perf_05_end_to_end_worker_store_ui_latency_phase7_baseline_20260406_154246.json",
+        "p95_ms": 0.8250499995483551,
+        "pass_threshold": 20.0,
+        "verdict": "pass"
+      },
+      "final": {
+        "artifact_path": "artifacts\\perf\\perf_05_end_to_end_worker_store_ui_latency_phase7_final_20260406_153727.json",
+        "p95_ms": 0.7480400006897979,
+        "pass_threshold": 20.0,
+        "verdict": "pass"
+      },
+      "delta_ms": -0.0770099988585572,
+      "delta_percent": -9.33397962556374,
+      "classification": "stable",
+      "regressed": false
+    }
+  ]
+}
