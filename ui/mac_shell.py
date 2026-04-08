@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PyQt6.QtSvg import QSvgRenderer
-from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QStyle, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QToolButton, QVBoxLayout, QWidget
 
 from ui.tokens import (
     APP_FONT_STACK,
@@ -20,6 +20,16 @@ from ui.tokens import (
     MAC_SIDEBAR_BG,
     MAC_TOOLBAR_BG,
     MAC_TEXT_PRIMARY,
+    PRIMARY_COLOR,
+    SURFACE_PRIMARY,
+    SURFACE_SECONDARY,
+    TEXT_SECONDARY,
+    BORDER_COLOR,
+    BORDER_LIGHT,
+    SHELL_BRAND_ICON,
+    SHELL_BRAND_H,
+    SHELL_NAV_H,
+    SHELL_SIDEBAR_W,
     TEXT_MUTED,
 )
 
@@ -44,7 +54,7 @@ class MacShell(QWidget):
 
     def __init__(self, title: str = "Reboot") -> None:
         super().__init__()
-        self._buttons: list[QPushButton] = []
+        self._buttons: list[QToolButton] = []
         self._build_ui(title)
 
     def set_active_index(self, index: int) -> None:
@@ -62,7 +72,7 @@ class MacShell(QWidget):
 
         chrome = QWidget()
         chrome.setStyleSheet(
-            f"background-color: {MAC_BG}; border: 1px solid {MAC_BORDER};"
+            f"background-color: {SURFACE_PRIMARY}; border: 1px solid {BORDER_COLOR};"
         )
         chrome_layout = QVBoxLayout(chrome)
         chrome_layout.setContentsMargins(0, 0, 0, 0)
@@ -71,7 +81,7 @@ class MacShell(QWidget):
         toolbar = QWidget()
         toolbar.setFixedHeight(44)
         toolbar.setStyleSheet(
-            f"background-color: {MAC_TOOLBAR_BG}; border-bottom: 1px solid {MAC_BORDER};"
+            f"background-color: {SURFACE_PRIMARY}; border-bottom: 1px solid {BORDER_LIGHT};"
         )
         toolbar_layout = QHBoxLayout(toolbar)
         toolbar_layout.setContentsMargins(16, 6, 16, 6)
@@ -79,11 +89,11 @@ class MacShell(QWidget):
 
         self.title_label = QLabel(title)
         self.title_label.setStyleSheet(
-            f"color: {MAC_TEXT_PRIMARY}; font-size: 13px; font-weight: 700;"
+            f"color: {TEXT_SECONDARY}; font-size: 13px; font-weight: 700;"
         )
         self.subtitle_label = QLabel("Desktop control surface")
         self.subtitle_label.setStyleSheet(
-            f"color: {TEXT_MUTED}; font-size: 11px; font-weight: 500;"
+            f"color: {TEXT_SECONDARY}; font-size: 11px; font-weight: 500;"
         )
 
         title_block = QWidget()
@@ -102,17 +112,54 @@ class MacShell(QWidget):
         body_layout.setSpacing(0)
 
         self.sidebar = QWidget()
-        self.sidebar.setFixedWidth(188)
+        self.sidebar.setFixedWidth(SHELL_SIDEBAR_W)
         self.sidebar.setStyleSheet(
-            f"background-color: {MAC_SIDEBAR_BG}; border-right: 1px solid {MAC_BORDER};"
+            f"background-color: {SURFACE_SECONDARY}; border-right: 1px solid {BORDER_LIGHT};"
         )
         sidebar_layout = QVBoxLayout(self.sidebar)
-        sidebar_layout.setContentsMargins(12, 10, 12, 10)
-        sidebar_layout.setSpacing(6)
+        sidebar_layout.setContentsMargins(10, 12, 10, 12)
+        sidebar_layout.setSpacing(8)
 
-        sidebar_title = QLabel("Navigation")
+        brand = QWidget()
+        brand.setFixedHeight(SHELL_BRAND_H)
+        brand_layout = QVBoxLayout(brand)
+        brand_layout.setContentsMargins(0, 0, 0, 0)
+        brand_layout.setSpacing(2)
+
+        brand_icon_row = QWidget()
+        icon_layout = QHBoxLayout(brand_icon_row)
+        icon_layout.setContentsMargins(0, 0, 0, 0)
+        icon_layout.setSpacing(0)
+        icon_layout.addStretch()
+
+        brand_icon = QLabel("◉")
+        brand_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        brand_icon.setFixedSize(SHELL_BRAND_ICON)
+        brand_icon.setStyleSheet(
+            f"background-color: {PRIMARY_COLOR}; color: white; border-radius: 17px; font-size: 18px; font-weight: 900;"
+        )
+        icon_layout.addWidget(brand_icon)
+        icon_layout.addStretch()
+
+        brand_title = QLabel("STEM")
+        brand_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        brand_title.setStyleSheet(
+            f"color: {MAC_TEXT_PRIMARY}; font-size: 11px; font-weight: 900; letter-spacing: 1px;"
+        )
+        brand_subtitle = QLabel("Spell Book")
+        brand_subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        brand_subtitle.setStyleSheet(
+            f"color: {TEXT_MUTED}; font-size: 9px; font-weight: 700; letter-spacing: 0.6px;"
+        )
+
+        brand_layout.addWidget(brand_icon_row)
+        brand_layout.addWidget(brand_title)
+        brand_layout.addWidget(brand_subtitle)
+        sidebar_layout.addWidget(brand)
+
+        sidebar_title = QLabel("NAV")
         sidebar_title.setStyleSheet(
-            f"color: {TEXT_MUTED}; font-size: 11px; font-weight: 700; letter-spacing: 0.8px;"
+            f"color: {TEXT_MUTED}; font-size: 10px; font-weight: 800; letter-spacing: 1.6px;"
         )
         sidebar_layout.addWidget(sidebar_title)
 
@@ -124,7 +171,7 @@ class MacShell(QWidget):
         sidebar_layout.addStretch()
 
         self.content_host = QWidget()
-        self.content_host.setStyleSheet(f"background-color: {BG_LIGHT};")
+        self.content_host.setStyleSheet(f"background-color: {SURFACE_SECONDARY};")
         self.content_layout = QVBoxLayout(self.content_host)
         self.content_layout.setContentsMargins(0, 0, 0, 0)
         self.content_layout.setSpacing(0)
@@ -141,33 +188,44 @@ class MacShell(QWidget):
         )
         self.set_active_index(0)
 
-    def _make_nav_button(self, label: str, icon_path: str, index: int) -> QPushButton:
-        button = QPushButton(label)
+    def _make_nav_button(self, label: str, icon_path: str, index: int) -> QToolButton:
+        button = QToolButton()
         button.setCursor(Qt.CursorShape.PointingHandCursor)
-        button.setFixedHeight(34)
+        button.setFixedHeight(SHELL_NAV_H)
         button.setCheckable(True)
+        button.setAutoRaise(False)
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
+        button.setIconSize(SHELL_BRAND_ICON)
+        button.setText(label)
         button.setStyleSheet(
             f"""
-            QPushButton {{
-                color: {MAC_TEXT_PRIMARY};
+            QToolButton {{
+                color: {TEXT_SECONDARY};
                 background-color: transparent;
                 border: none;
-                border-radius: 10px;
-                padding: 6px 10px;
-                font-size: 12px;
-                font-weight: 600;
+                border-radius: 8px;
+                padding: 6px 4px;
+                font-size: 10px;
+                font-weight: 700;
+                qproperty-iconSize: 34px 34px;
             }}
-            QPushButton[active="true"] {{
-                background-color: rgba(255, 255, 255, 0.82);
+            QToolButton[active="true"] {{
+                background-color: {PRIMARY_COLOR};
+                color: white;
+                border-radius: 8px;
+                box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
             }}
-            QPushButton:hover {{
-                background-color: rgba(255, 255, 255, 0.55);
+            QToolButton:hover {{
+                background-color: rgba(59, 130, 246, 0.08);
+                color: {PRIMARY_COLOR};
+                border-radius: 8px;
             }}
             """
         )
         if icon_path:
-            icon = self._tint_svg(icon_path, QColor(ACCENT if index == 0 else TEXT_MUTED))
+            icon = self._tint_svg(icon_path, QColor(PRIMARY_COLOR if index == 0 else TEXT_SECONDARY))
             button.setIcon(icon)
+            button.setIconSize(SHELL_BRAND_ICON)
         button.clicked.connect(lambda _, idx=index: self._on_nav(idx))
         return button
 

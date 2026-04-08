@@ -16,6 +16,7 @@ import os
 import time
 import serial
 from PyQt6.QtCore import QThread, pyqtSignal
+from config import DEFAULT_MODEL_PATH
 
 
 class ModelUploader(QThread):
@@ -32,7 +33,7 @@ class ModelUploader(QThread):
     def __init__(self, port: str = "") -> None:
         super().__init__()
         self.port = port
-        self.file_path = "model.tflite"
+        self.file_path = str(DEFAULT_MODEL_PATH)
         self._serial: serial.Serial | None = None
         self._is_running = False
         self._cancel_requested = False

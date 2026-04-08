@@ -16,9 +16,10 @@ from ui.wand_panels.shared import make_button, make_card, make_section_label
 
 
 class WandFlashPanel(QWidget):
-    """Panel that owns compile/upload controls and flash progress state."""
+    """Panel that owns build/upload controls and flash progress state."""
 
     sig_compile_clicked = pyqtSignal()
+    sig_build_cc_clicked = pyqtSignal()
     sig_upload_clicked = pyqtSignal()
 
     def __init__(self) -> None:
@@ -41,7 +42,7 @@ class WandFlashPanel(QWidget):
         card, card_layout = make_card()
 
         btn_row = QHBoxLayout()
-        self.btn_compile = make_button("COMPILE", STYLE_BTN_OUTLINE)
+        self.btn_compile = make_button("BUILD .CC", STYLE_BTN_OUTLINE)
         self.btn_flash = make_button("FLASH ESP32", STYLE_BTN_PRIMARY)
         btn_row.addWidget(self.btn_compile)
         btn_row.addWidget(self.btn_flash)
@@ -63,5 +64,5 @@ class WandFlashPanel(QWidget):
         layout.addWidget(card)
 
     def _connect_internal_signals(self) -> None:
-        self.btn_compile.clicked.connect(self.sig_compile_clicked.emit)
+        self.btn_compile.clicked.connect(self.sig_build_cc_clicked.emit)
         self.btn_flash.clicked.connect(self.sig_upload_clicked.emit)

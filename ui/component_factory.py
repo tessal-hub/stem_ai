@@ -97,6 +97,8 @@ def make_card(
     """
     frame = QFrame()
     frame.setObjectName("CardFrame")
+    frame.setFrameShape(QFrame.Shape.NoFrame)
+    frame.setFrameShadow(QFrame.Shadow.Plain)
     frame.setStyleSheet(STYLE_CARD)
     layout = QVBoxLayout(frame)
     layout.setContentsMargins(*margins)
@@ -115,6 +117,8 @@ def make_card_frame() -> QFrame:
     """
     frame = QFrame()
     frame.setObjectName("CardFrame")
+    frame.setFrameShape(QFrame.Shape.NoFrame)
+    frame.setFrameShadow(QFrame.Shadow.Plain)
     frame.setStyleSheet(STYLE_CARD)
     return frame
 
@@ -128,6 +132,8 @@ def make_section_frame() -> QFrame:
     """
     frame = QFrame()
     frame.setObjectName("CardFrame")
+    frame.setFrameShape(QFrame.Shape.NoFrame)
+    frame.setFrameShadow(QFrame.Shadow.Plain)
     frame.setStyleSheet(STYLE_CARD)
     return frame
 
@@ -141,6 +147,8 @@ def make_borderless_frame() -> QFrame:
     """
     frame = QFrame()
     frame.setObjectName("CardFrame")
+    frame.setFrameShape(QFrame.Shape.NoFrame)
+    frame.setFrameShadow(QFrame.Shadow.Plain)
     frame.setStyleSheet(STYLE_CARD_NO_BORDER)
     return frame
 

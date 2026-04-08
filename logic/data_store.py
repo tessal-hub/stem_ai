@@ -10,12 +10,16 @@ import os
 import csv
 import glob
 import collections
+import json
+import time
+from pathlib import Path
 from threading import Lock
 from datetime import datetime
 from typing import Any, Mapping
 
 from PyQt6.QtCore import QObject, QSettings, pyqtSignal
 
+from config import DATASET_DIR, DEFAULT_MODEL_PATH, ensure_data_dir
 from .frame_protocol import FrameValidationError, validate_six_axis_values
 
 
@@ -43,7 +47,7 @@ class SettingsStore:
         "auto_save": False,
         "selected_port": "",
         "baud_rate": "115200",
-        "model_path": "model.tflite",
+        "model_path": str(DEFAULT_MODEL_PATH),
         "firmware_mode": "data",
     }
 
@@ -92,6 +96,9 @@ class SettingsStore:
 
     def load(self) -> dict[str, Any]:
         """Load all persisted settings with typed values and defaults."""
+        model_path = self.get_str("model_path", self._DEFAULTS["model_path"]).strip()
+        if not model_path or model_path == "model.tflite":
+            model_path = self._DEFAULTS["model_path"]
         return {
             "sample_rate": self.get_str("sample_rate", self._DEFAULTS["sample_rate"]),
             "accel_scale": self.get_str("accel_scale", self._DEFAULTS["accel_scale"]),
@@ -103,7 +110,7 @@ class SettingsStore:
             "auto_save": self.get_bool("auto_save", self._DEFAULTS["auto_save"]),
             "selected_port": self.get_str("selected_port", self._DEFAULTS["selected_port"]),
             "baud_rate": self.get_str("baud_rate", self._DEFAULTS["baud_rate"]),
-            "model_path": self.get_str("model_path", self._DEFAULTS["model_path"]),
+            "model_path": model_path,
             "firmware_mode": self.get_str("firmware_mode", self._DEFAULTS["firmware_mode"]),
         }
 
@@ -154,13 +161,17 @@ class DataStore(QObject):
     sig_stats_updated         = pyqtSignal(dict)
     sig_prediction_updated    = pyqtSignal(str, float)
     sig_live_buffer_updated   = pyqtSignal(list)   # Rolling snapshot for live plotting
+    sig_live_features_updated = pyqtSignal(dict)
     sig_recording_state_updated = pyqtSignal(bool)
     sig_mode_updated          = pyqtSignal(str)
     sig_connection_state_updated = pyqtSignal(bool, str)
+    sig_udp_health_updated    = pyqtSignal(dict)
 
-    def __init__(self, dataset_dir: str = "dataset", parent: QObject | None = None) -> None:
+    def __init__(self, dataset_dir: str | None = None, parent: QObject | None = None) -> None:
         super().__init__(parent)
-        self.dataset_dir = dataset_dir
+        ensure_data_dir()
+        resolved_dataset_dir = Path(dataset_dir) if dataset_dir else DATASET_DIR
+        self.dataset_dir = str(resolved_dataset_dir)
         os.makedirs(self.dataset_dir, exist_ok=True)
         self._state_lock = Lock()
         self._buffer_lock = Lock()
@@ -171,6 +182,9 @@ class DataStore(QObject):
             "RAM": "0%",
             "Port": "None",
             "Baudrate": "115200",
+            "UDP Rate": "0 Hz",
+            "UDP Jitter": "0 ms",
+            "UDP Loss": "0%",
         }
 
         # 2. ESP32 Hardware Stats (Required by PageWand)
@@ -195,12 +209,28 @@ class DataStore(QObject):
         # 5. Spell Database — dynamically loaded from filesystem
         self.spell_counts: dict[str, int] = {}
 
+        # 5a. UDP Health Snapshot
+        self.udp_health: dict[str, float | int | None] = {
+            "udp_rate_hz": 0.0,
+            "udp_jitter_ms": 0.0,
+            "udp_received": 0,
+            "udp_dropped": 0,
+            "udp_loss_pct": 0.0,
+            "udp_last_seq": None,
+        }
+
+        # 5b. Rolling live features
+        self.live_features: dict[str, Any] = {}
+
         # 6. Sensor Buffers (Dictionary of Deques)
         self.sensor_buffers: dict[str, collections.deque] = {
             key: collections.deque(maxlen=100) 
             for key in ['ax', 'ay', 'az', 'gx', 'gy', 'gz']
         }
+        self.sensor_frame_history: collections.deque[list[float]] = collections.deque(maxlen=500)
         self.live_buffer: collections.deque[list[float]] = collections.deque(maxlen=500)
+        self._last_live_emit = 0.0
+        self._live_emit_interval = 0.05
 
         # Initial filesystem scan
         self.refresh_database()
@@ -213,9 +243,18 @@ class DataStore(QObject):
             for key, value in data_dict.items():
                 if key in self.sensor_buffers:
                     self.sensor_buffers[key].append(value)
+            if all(key in data_dict for key in ('ax', 'ay', 'az', 'gx', 'gy', 'gz')):
+                self.sensor_frame_history.append([
+                    float(data_dict['ax']),
+                    float(data_dict['ay']),
+                    float(data_dict['az']),
+                    float(data_dict['gx']),
+                    float(data_dict['gy']),
+                    float(data_dict['gz']),
+                ])
         self.sig_sensor_data_updated.emit(self.sensor_buffers)
 
-    def add_live_sample(self, sample: list[float]) -> list[list[float]]:
+    def add_live_sample(self, sample: list[float], *, emit: bool = True) -> list[list[float]]:
         """Append one 6-axis sample to rolling live buffer and emit snapshot."""
         try:
             normalized_sample = validate_six_axis_values(sample)
@@ -224,18 +263,36 @@ class DataStore(QObject):
         with self._buffer_lock:
             self.live_buffer.append(normalized_sample)
             snapshot = [list(row) for row in self.live_buffer]
-        self.sig_live_buffer_updated.emit(snapshot)
-        return snapshot
+        if emit:
+            now = time.perf_counter()
+            if now - self._last_live_emit >= self._live_emit_interval:
+                self._last_live_emit = now
+                self.sig_live_buffer_updated.emit(snapshot)
+                return snapshot
+        return []
 
     def get_live_buffer_snapshot(self) -> list[list[float]]:
         """Return a thread-safe shallow copy of the rolling live buffer."""
         with self._buffer_lock:
             return [list(row) for row in self.live_buffer]
 
+    def get_recent_sensor_frames_snapshot(self) -> list[list[float]]:
+        """Return a thread-safe copy of recent 6-axis sensor frames."""
+        with self._buffer_lock:
+            return [list(row) for row in self.sensor_frame_history]
+
     def clear_live_buffer(self) -> None:
         """Clear the rolling live buffer."""
         with self._buffer_lock:
             self.live_buffer.clear()
+
+    def update_live_features(self, features: dict[str, Any]) -> None:
+        """Update rolling feature snapshot and notify subscribers."""
+        if not features:
+            return
+        with self._state_lock:
+            self.live_features = dict(features)
+        self.sig_live_features_updated.emit(dict(features))
 
     def update_prediction(self, action: str, confidence: float) -> None:
         """Update the latest AI inference result."""
@@ -292,6 +349,18 @@ class DataStore(QObject):
         self.esp32_stats.update(updates)
         self.sig_stats_updated.emit(self.esp32_stats)
 
+    def update_udp_health(self, updates: dict[str, float | int | None]) -> None:
+        """Update UDP telemetry health snapshot and notify subscribers."""
+        if not updates:
+            return
+        with self._state_lock:
+            self.udp_health.update(updates)
+            self.system_stats["UDP Rate"] = f"{self.udp_health.get('udp_rate_hz', 0.0)} Hz"
+            self.system_stats["UDP Jitter"] = f"{self.udp_health.get('udp_jitter_ms', 0.0)} ms"
+            self.system_stats["UDP Loss"] = f"{self.udp_health.get('udp_loss_pct', 0.0)}%"
+        self.sig_stats_updated.emit(self.system_stats)
+        self.sig_udp_health_updated.emit(dict(self.udp_health))
+
     # ── Settings Persistence ───────────────────────────────────────────
 
     def get_settings_snapshot(self) -> dict[str, Any]:
@@ -335,7 +404,13 @@ class DataStore(QObject):
             return []
         return sorted(f for f in os.listdir(spell_path) if f.endswith(".csv"))
 
-    def save_cropped_data(self, spell_name: str, data: list[list[float]]) -> bool:
+    def save_cropped_data(
+        self,
+        spell_name: str,
+        data: list[list[float]],
+        *,
+        tag: str = "",
+    ) -> bool:
         """Save a cropped 6-axis sample block as a single CSV file."""
         if not data or not spell_name.strip():
             return False
@@ -345,12 +420,25 @@ class DataStore(QObject):
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         file_path = os.path.join(folder, f"sample_{timestamp}.csv")
+        meta_path = os.path.join(folder, f"sample_{timestamp}.meta.json")
 
         try:
             with open(file_path, mode="w", newline="") as f:
                 writer = csv.writer(f)
                 writer.writerow(["aX", "aY", "aZ", "gX", "gY", "gZ"])
                 writer.writerows(data)
+            if tag:
+                with open(meta_path, mode="w", encoding="utf-8") as meta_file:
+                    json.dump(
+                        {
+                            "tag": tag,
+                            "timestamp": timestamp,
+                            "sample_count": len(data),
+                        },
+                        meta_file,
+                        ensure_ascii=True,
+                        indent=2,
+                    )
             self.refresh_database()
             return True
         except Exception as e:

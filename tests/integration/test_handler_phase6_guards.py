@@ -63,6 +63,7 @@ class WandStub(QObject):
     sig_bt_connect = pyqtSignal(str)
     sig_bt_disconnect = pyqtSignal()
     sig_flash_compile = pyqtSignal(list)
+    sig_train_build_requested = pyqtSignal()
     sig_term_clear = pyqtSignal()
 
     def __init__(self) -> None:
@@ -95,11 +96,13 @@ class WandStub(QObject):
 
 
 class RecordStub(QObject):
-    sig_data_cropped = pyqtSignal(list, str)
+    sig_data_cropped = pyqtSignal(list, str, str)
     sig_spell_selected = pyqtSignal(str)
     sig_spell_deleted = pyqtSignal(str)
     sig_start_record = pyqtSignal(str)
     sig_stop_record = pyqtSignal()
+    sig_clear_buffer = pyqtSignal()
+    sig_export_csv = pyqtSignal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -135,13 +138,35 @@ class RecordStub(QObject):
 
 
 class HomeStub(QObject):
+    sig_simulation_replay_requested = pyqtSignal()
+    sig_simulation_stop_requested = pyqtSignal()
+    sig_calibrate_requested = pyqtSignal()
+    sig_quick_test_requested = pyqtSignal()
+
     def __init__(self) -> None:
         super().__init__()
         self.wand_3d = _Wand3DStub()
         self.mode_events: list[str] = []
+        self.sensor_readouts: list[list[float]] = []
+        self.simulation_events: list[bool] = []
 
     def set_mode(self, mode: str) -> None:
         self.mode_events.append(mode)
+
+    def set_sensor_readout(self, values: list[float]) -> None:
+        self.sensor_readouts.append(list(values))
+
+    def set_simulation_running(self, active: bool) -> None:
+        self.simulation_events.append(active)
+
+    def _on_sensor_data_updated(self, sensor_buffers: dict) -> None:
+        latest = []
+        for key in ("ax", "ay", "az", "gx", "gy", "gz"):
+            values = sensor_buffers.get(key)
+            if values is None or len(values) == 0:
+                return
+            latest.append(float(values[-1]))
+        self.set_sensor_readout(latest)
 
 
 class SettingStub(QObject):
@@ -262,6 +287,33 @@ def test_runtime_mode_transition_blocks_record_to_update(handler_harness: Handle
 
     assert harness.handler._mode == harness.handler._MODE_RECORD
     assert any("Mode transition blocked" in msg for msg in harness.wand.logs)
+
+
+def test_raw_uart_lines_are_forwarded_to_terminal(handler_harness: HandlerHarness, qapp) -> None:
+    harness = handler_harness
+
+    harness.handler.serial_worker.sig_raw_line_received.emit("RAW:1,2,3,4,5,6")
+    qapp.processEvents()
+
+    assert any("RAW:1,2,3,4,5,6" in msg for msg in harness.wand.logs)
+
+
+def test_simulation_replays_recent_input_frames(handler_harness: HandlerHarness) -> None:
+    harness = handler_harness
+
+    harness.store.update_sensor_data({"ax": 0.1, "ay": 0.2, "az": 0.3, "gx": 1.0, "gy": 2.0, "gz": 3.0})
+    harness.store.update_sensor_data({"ax": 0.4, "ay": 0.5, "az": 0.6, "gx": 4.0, "gy": 5.0, "gz": 6.0})
+
+    harness.handler._on_simulation_replay_requested()
+    harness.handler._step_simulation_playback()
+
+    assert harness.home.simulation_events[0] is True
+    assert harness.home.wand_3d.updates[0] == (0.1, 0.2, 0.3, 1.0, 2.0, 3.0)
+    assert harness.home.wand_3d.updates[1] == (0.4, 0.5, 0.6, 4.0, 5.0, 6.0)
+
+    harness.handler._step_simulation_playback()
+
+    assert harness.home.simulation_events[-1] is False
 
 
 def test_record_start_is_blocked_in_update_mode(

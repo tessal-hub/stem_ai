@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from PyQt6.QtGui import QTextCursor
-from PyQt6.QtWidgets import QTextEdit
+from PyQt6.QtWidgets import QFrame, QTextEdit
 
 
 class TerminalWidget(QTextEdit):
@@ -12,6 +12,8 @@ class TerminalWidget(QTextEdit):
         super().__init__()
         self._max_lines = max(1, max_lines)
         self.setReadOnly(read_only)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setFrameShadow(QFrame.Shadow.Plain)
 
     def append_line(self, text: str, *, strip_right: bool = False) -> None:
         """Append one line, keep autoscroll, and cap total line count."""

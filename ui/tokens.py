@@ -12,19 +12,158 @@ from PyQt6.QtGui import QColor
 
 APP_FONT_STACK = "SF Pro Text, SF Pro Display, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
 
+# ════════════════════════════════════════════════════════════════════════════
+# MODERN PROFESSIONAL COLOR PALETTE (for modern theme)
+# ════════════════════════════════════════════════════════════════════════════
+
+# Primary brand colors
+PRIMARY_COLOR = "#3b82f6"        # Modern vibrant blue
+PRIMARY_LIGHT = "#eff6ff"        # Very light blue background
+PRIMARY_DARK = "#1e40af"         # Darker blue for hover/active
+
+# Secondary accent colors
+SECONDARY_COLOR = "#10b981"      # Emerald green
+SECONDARY_LIGHT = "#ecfdf5"      # Light emerald background
+SECONDARY_DARK = "#047857"       # Dark emerald
+
+# Surface colors (for layered depth)
+SURFACE_PRIMARY = "#ffffff"      # Main background
+SURFACE_SECONDARY = "#f9fafb"    # Secondary/elevated backgrounds
+SURFACE_TERTIARY = "#f3f4f6"     # Tertiary/hover backgrounds
+
+# Text colors
+TEXT_PRIMARY = "#111827"         # Primary text (dark)
+TEXT_SECONDARY = "#6b7280"       # Secondary text (muted)
+TEXT_TERTIARY = "#9ca3af"        # Tertiary text (very muted)
+
+# Border colors
+BORDER_COLOR = "#e5e7eb"         # Standard borders
+BORDER_LIGHT = "#f3f4f6"         # Light borders (for subtle separations)
+
+# Status/semantic colors
+STATUS_SUCCESS = "#10b981"       # Green for success
+STATUS_WARNING = "#f59e0b"       # Amber for warnings
+STATUS_ERROR = "#ef4444"         # Red for errors
+
+# Shadow colors for depth
+SHADOW_LIGHT = "rgba(0, 0, 0, 0.05)"      # Light shadow (hover effects)
+SHADOW_MEDIUM = "rgba(0, 0, 0, 0.10)"     # Medium shadow (cards)
+SHADOW_DARK = "rgba(0, 0, 0, 0.15)"       # Dark shadow (modals)
+
+# ════════════════════════════════════════════════════════════════════════════
+# MODERN COMPONENT STYLES
+# ════════════════════════════════════════════════════════════════════════════
+
+# Modern Card Style
+STYLE_MODERN_CARD = f"""
+    #CardFrame {{
+        background-color: {SURFACE_PRIMARY};
+        border: 1px solid {BORDER_COLOR};
+        border-radius: 10px;
+    }}
+    #CardFrame:hover {{
+        border-color: {BORDER_COLOR};
+    }}
+"""
+
+# Modern Button - Primary Style
+STYLE_MODERN_BTN_PRIMARY = f"""
+    QPushButton {{
+        background-color: {PRIMARY_COLOR};
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-weight: 600;
+        font-size: 13px;
+        min-height: 32px;
+        max-height: 32px;
+    }}
+    QPushButton:hover {{
+        background-color: {PRIMARY_DARK};
+    }}
+    QPushButton:pressed {{
+        background-color: {PRIMARY_DARK};
+    }}
+    QPushButton:disabled {{
+        background-color: #d1d5db;
+        color: #9ca3af;
+    }}
+"""
+
+# Modern Button - Secondary Style
+STYLE_MODERN_BTN_SECONDARY = f"""
+    QPushButton {{
+        background-color: {SURFACE_SECONDARY};
+        color: {TEXT_PRIMARY};
+        border: 1px solid {BORDER_COLOR};
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-weight: 500;
+        font-size: 13px;
+        min-height: 32px;
+        max-height: 32px;
+    }}
+    QPushButton:hover {{
+        background-color: {SURFACE_TERTIARY};
+        border-color: {PRIMARY_COLOR};
+        color: {PRIMARY_COLOR};
+    }}
+    QPushButton:pressed {{
+        background-color: #f3f4f6;
+        border-color: {PRIMARY_DARK};
+    }}
+    QPushButton:disabled {{
+        background-color: #f3f4f6;
+        color: {TEXT_TERTIARY};
+    }}
+"""
+
+# Modern Label - Section Title
+STYLE_MODERN_TITLE = f"""
+    color: {TEXT_PRIMARY};
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+"""
+
+# Modern Label - Section Subtitle
+STYLE_MODERN_SUBTITLE = f"""
+    color: {TEXT_SECONDARY};
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+"""
+
+# ════════════════════════════════════════════════════════════════════════════
+
 MAC_BG = "#f5f5f7"
 MAC_SURFACE = "rgba(255, 255, 255, 0.72)"
 MAC_SURFACE_SOLID = "#ffffff"
 MAC_SIDEBAR_BG = "rgba(242, 242, 247, 0.82)"
 MAC_TOOLBAR_BG = "rgba(248, 248, 250, 0.88)"
-MAC_BORDER = "rgba(60, 60, 67, 0.14)"
-MAC_BORDER_STRONG = "rgba(60, 60, 67, 0.22)"
+MAC_BORDER = "#d1d5db"
+MAC_BORDER_STRONG = "#c4cbd4"
 MAC_SHADOW = "rgba(0, 0, 0, 0.18)"
 MAC_SHADOW_LIGHT = "rgba(0, 0, 0, 0.08)"
 MAC_TEXT_PRIMARY = "#1d1d1f"
 MAC_TEXT_SECONDARY = "#6e6e73"
 MAC_ACCENT = "#0a84ff"
 MAC_ACCENT_DARK = "#0060df"
+
+# Shell layout tokens
+SHELL_SIDEBAR_W = 110
+SHELL_NAV_H = 58
+SHELL_BRAND_H = 72
+SHELL_BRAND_ICON = QSize(34, 34)
+
+# Home layout tokens
+HOME_STATUS_H = 32
+HOME_VIEWER_MIN_H = 360
+HOME_SENSOR_H = 140
+HOME_ATTACH_H = 36
+HOME_RIGHT_W = 280
+HOME_SENSOR_CARD_H = 54
 
 # ────────────────────────────────────────────────────────────────────────────
 # COLOR PALETTE
@@ -80,6 +219,195 @@ SETTINGS_HOVER_BG     = "#e0e7ff"      # Light blue hover for settings
 # Wand-specific accents
 WAND_ACCENT       = "#00ff88"
 WAND_ACCENT_TEXT  = "#0a0a0a"
+
+# Home page typography tokens
+STYLE_HOME_SECTION_TITLE = f"color: {TEXT_BODY}; font-size: 14px; font-weight: 800; letter-spacing: 1px;"
+STYLE_HOME_SECTION_SUBTITLE = f"color: {TEXT_MUTED}; font-weight: 900; font-size: 11px; letter-spacing: 0.8px;"
+STYLE_HOME_MODE_LABEL = f"color: {ACCENT}; font-size: 12px; font-weight: 900; letter-spacing: 1px;"
+STYLE_HOME_STAT_NAME = f"color: {TEXT_BODY}; font-size: 11px; font-weight: 700;"
+STYLE_HOME_STAT_VALUE = f"color: {TEXT_MUTED}; font-size: 11px; font-weight: 600;"
+STYLE_HOME_STATUS_BAR = f"""
+    #HomeStatusBar {{
+        background-color: {DANGER};
+        color: {ACCENT_TEXT};
+        border-radius: 8px;
+        padding: 6px 16px;
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 1px;
+    }}
+"""
+STYLE_HOME_VIEWER_CARD = f"""
+    #HomeViewerCard {{
+        background-color: {MAC_SURFACE_SOLID};
+        border: 1px solid {MAC_BORDER};
+        border-radius: 18px;
+    }}
+    #HomeViewerSurface {{
+        background-color: {BG_WHITE};
+        border: none;
+        border-radius: 14px;
+    }}
+"""
+STYLE_HOME_SENSOR_TILE = f"""
+    #HomeSensorTile {{
+        background-color: {BG_WHITE};
+        border: 1px solid {BORDER};
+        border-radius: 10px;
+    }}
+"""
+STYLE_HOME_SENSOR_CARD = f"""
+    #HomeSensorCard {{
+        background-color: {MAC_SURFACE_SOLID};
+        border: 1px solid {MAC_BORDER};
+        border-radius: 12px;
+    }}
+"""
+STYLE_HOME_SENSOR_BAR = f"""
+    QProgressBar#HomeSensorBar {{
+        background-color: {BG_LIGHT};
+        border: none;
+        border-radius: 1px;
+        min-height: 4px;
+        max-height: 4px;
+        text-align: right;
+    }}
+    QProgressBar#HomeSensorBar::chunk {{
+        background-color: {ACCENT};
+        border-radius: 1px;
+    }}
+"""
+STYLE_HOME_ATTACHMENT_BAR = f"""
+    #HomeAttachmentBar {{
+        background-color: transparent;
+        border: none;
+    }}
+"""
+STYLE_HOME_ATTACHMENT_PILL = f"""
+    QPushButton {{
+        background-color: {MAC_SURFACE_SOLID};
+        color: {TEXT_BODY};
+        border: 1px solid {MAC_BORDER};
+        border-radius: 10px;
+        font-size: 10px;
+        font-weight: 800;
+        padding: 4px 10px;
+    }}
+    QPushButton:hover {{
+        background-color: {HOVER_BG};
+        border-color: {ACCENT};
+        color: {ACCENT};
+    }}
+"""
+STYLE_HOME_RIGHT_PANEL = f"""
+    #HomeRightPanel {{
+        background-color: transparent;
+        border: none;
+    }}
+"""
+STYLE_HOME_RIGHT_SECTION = f"""
+    #HomeRightSection {{
+        background-color: {MAC_SURFACE_SOLID};
+        border: 1px solid {MAC_BORDER};
+        border-radius: 16px;
+    }}
+"""
+STYLE_HOME_MODE_PILL = f"""
+    #HomeModePill {{
+        color: {ACCENT};
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 1px;
+    }}
+"""
+STYLE_HOME_MANAGER_ROW = f"""
+    #HomeManagerRow QLabel {{
+        color: {TEXT_BODY};
+    }}
+    #HomeManagerRow QLabel#HomeManagerValue {{
+        color: {TEXT_MUTED};
+        font-weight: 700;
+    }}
+"""
+STYLE_HOME_MANAGER_BAR = f"""
+    QProgressBar#HomeManagerBar {{
+        background-color: {BG_LIGHT};
+        border: none;
+        border-radius: 1px;
+        min-height: 4px;
+        max-height: 4px;
+        text-align: right;
+    }}
+    QProgressBar#HomeManagerBar::chunk {{
+        background-color: {SUCCESS};
+        border-radius: 1px;
+    }}
+"""
+STYLE_HOME_SPELL_BTN = f"""
+    QPushButton {{
+        background-color: {MAC_SURFACE_SOLID};
+        color: {TEXT_BODY};
+        border: 1px solid {MAC_BORDER};
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 700;
+        text-align: left;
+        padding-left: 10px;
+    }}
+    QPushButton:hover {{
+        background-color: {HOVER_BG};
+        color: {ACCENT};
+        border-color: {ACCENT};
+    }}
+"""
+STYLE_HOME_MODULE_BTN = f"""
+    QPushButton {{
+        background-color: {MAC_SURFACE_SOLID};
+        color: {TEXT_BODY};
+        border: 1px solid {MAC_BORDER};
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 800;
+        padding: 4px 8px;
+    }}
+    QPushButton:hover {{
+        color: {ACCENT};
+        background-color: {HOVER_BG};
+        border-color: {ACCENT};
+    }}
+"""
+STYLE_HOME_ACTION_BTN = f"""
+    QPushButton {{
+        background-color: {ACCENT};
+        color: {ACCENT_TEXT};
+        border: none;
+        border-radius: 10px;
+        font-size: 10px;
+        font-weight: 900;
+        padding: 5px 10px;
+        letter-spacing: 0.8px;
+    }}
+    QPushButton:hover {{ background-color: {ACCENT_DARK}; }}
+    QPushButton:disabled {{ background-color: {BORDER_MID}; color: {TEXT_MUTED}; }}
+"""
+STYLE_HOME_ACTION_BTN_SECONDARY = f"""
+    QPushButton {{
+        background-color: {BG_WHITE};
+        color: {TEXT_BODY};
+        border: 1px solid {BORDER_MID};
+        border-radius: 10px;
+        font-size: 10px;
+        font-weight: 900;
+        padding: 5px 10px;
+        letter-spacing: 0.8px;
+    }}
+    QPushButton:hover {{
+        background-color: {HOVER_BG};
+        border-color: {ACCENT};
+        color: {ACCENT};
+    }}
+    QPushButton:disabled {{ background-color: {BG_LIGHT}; color: {TEXT_MUTED}; }}
+"""
 
 # ────────────────────────────────────────────────────────────────────────────
 # SIZING
@@ -167,8 +495,8 @@ STYLE_SETTING_MAIN_CONTAINER = f"""
 STYLE_WAND_CONTAINER = f"""
     #WandBox {{
         background-color: {MAC_SURFACE_SOLID};
-        border: none;
-        border-radius: 0px;
+        border: 1px solid {MAC_BORDER};
+        border-radius: 16px;
     }}
 """
 
@@ -176,8 +504,8 @@ STYLE_WAND_CONTAINER = f"""
 STYLE_CARD = f"""
     #CardFrame {{
         background-color: {MAC_SURFACE_SOLID};
-        border: none;
-        border-radius: 0px;
+        border: 1px solid {MAC_BORDER};
+        border-radius: 16px;
     }}
 """
 
@@ -192,11 +520,12 @@ STYLE_CARD_NO_BORDER = f"""
 STYLE_STATISTICS_CARD = f"""
     #CardFrame, ClickableFrame {{
         background-color: {MAC_SURFACE_SOLID};
-        border: none;
-        border-radius: 0px;
+        border: 1px solid {MAC_BORDER};
+        border-radius: 16px;
     }}
     ClickableFrame:hover {{
         background-color: {BG_LIGHT};
+        border-color: {MAC_BORDER_STRONG};
     }}
 """
 
@@ -204,8 +533,8 @@ STYLE_STATISTICS_CARD = f"""
 STYLE_SETTING_CARD = f"""
     #CardFrame {{
         background-color: {MAC_SURFACE_SOLID};
-        border: none;
-        border-radius: 0px;
+        border: 1px solid {MAC_BORDER};
+        border-radius: 16px;
     }}
 """
 
@@ -213,8 +542,8 @@ STYLE_SETTING_CARD = f"""
 STYLE_RECORD_CARD = f"""
     #CardFrame {{
         background-color: {MAC_SURFACE_SOLID};
-        border: none;
-        border-radius: 0px;
+        border: 1px solid {MAC_BORDER};
+        border-radius: 16px;
     }}
 """
 
@@ -222,8 +551,8 @@ STYLE_RECORD_CARD = f"""
 STYLE_RECORD_GRAPH_CARD = f"""
     #CardFrame {{
         background-color: {BG_DARK};
-        border: none;
-        border-radius: 0px;
+        border: 1px solid #2a2f39;
+        border-radius: 16px;
     }}
 """
 
@@ -231,8 +560,8 @@ STYLE_RECORD_GRAPH_CARD = f"""
 STYLE_WAND_CARD = f"""
     #CardFrame {{
         background-color: {MAC_SURFACE_SOLID};
-        border: none;
-        border-radius: 0px;
+        border: 1px solid {MAC_BORDER};
+        border-radius: 16px;
     }}
 """
 
@@ -430,10 +759,12 @@ STYLE_LIST = f"""
         border: 1px solid {MAC_BORDER};
         border-radius: 12px;
         outline: 0;
+        color: {TEXT_BODY};
     }}
     QListWidget::item {{
         border-bottom: 1px solid {BORDER};
         min-height: 44px;
+        color: {TEXT_BODY};
     }}
     QListWidget::item:hover {{ background-color: {HOVER_BG}; }}
 """
@@ -445,6 +776,7 @@ STYLE_RECORD_LIST = f"""
         border: 1px solid {MAC_BORDER};
         border-radius: 8px;
         outline: 0;
+        color: {TEXT_BODY};
     }}
     QListWidget::item {{
         padding: 12px;
@@ -470,6 +802,7 @@ STYLE_STATISTICS_LIST = f"""
         border: 1px solid {MAC_BORDER};
         border-radius: 8px;
         outline: 0;
+        color: {TEXT_BODY};
     }}
     QListWidget::item {{
         padding: 12px;
@@ -545,11 +878,18 @@ STYLE_COMBO = f"""
         font-size: 11px;
     }}
     QComboBox::drop-down {{ border: none; }}
+    QComboBox QAbstractItemView {{
+        background-color: {BG_WHITE};
+        border: 1px solid {BORDER_MID};
+        selection-background-color: {HOVER_BG};
+        selection-color: {TEXT_BODY};
+        color: {TEXT_BODY};
+    }}
 """
 
 # PageRecord combo
 STYLE_RECORD_COMBO = f"""
-    QComboBox {{
+    QComboBox, QLineEdit {{
         background-color: {MAC_SURFACE_SOLID};
         border: 1px solid {MAC_BORDER};
         border-radius: 6px;
@@ -560,6 +900,13 @@ STYLE_RECORD_COMBO = f"""
         min-height: 26px;
     }}
     QComboBox::drop-down {{ border: none; }}
+    QComboBox QAbstractItemView {{
+        background-color: {BG_WHITE};
+        border: 1px solid {BORDER_MID};
+        selection-background-color: {HOVER_BG};
+        selection-color: {TEXT_BODY};
+        color: {TEXT_BODY};
+    }}
 """
 
 # PageWand combo
@@ -574,11 +921,18 @@ STYLE_WAND_COMBO = f"""
         font-size: 11px;
     }}
     QComboBox::drop-down {{ border: none; }}
+    QComboBox QAbstractItemView {{
+        background-color: {BG_WHITE};
+        border: 1px solid {BORDER_MID};
+        selection-background-color: {HOVER_BG};
+        selection-color: {TEXT_BODY};
+        color: {TEXT_BODY};
+    }}
 """
 
 # PageSetting input (combo, line edit, spinbox)
 STYLE_SETTING_INPUT = f"""
-    QComboBox, QLineEdit, QSpinBox {{
+    QComboBox, QLineEdit, QSpinBox, QDoubleSpinBox {{
         background-color: {MAC_SURFACE_SOLID};
         border: 1px solid {MAC_BORDER};
         border-radius: 6px;
@@ -590,11 +944,12 @@ STYLE_SETTING_INPUT = f"""
     QComboBox::drop-down {{ border: none; width: 20px; }}
     QComboBox QAbstractItemView {{
         background-color: {BG_WHITE};
-        border: 1px solid {BORDER};
+        border: 1px solid {BORDER_MID};
         selection-background-color: {SETTINGS_HOVER_BG};
         color: {TEXT_BODY};
+        selection-color: {TEXT_BODY};
     }}
-    QSpinBox::up-button, QSpinBox::down-button {{ border: none; width: 16px; }}
+    QSpinBox::up-button, QSpinBox::down-button, QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{ border: none; width: 16px; }}
 """
 
 # Progress bar (generic, used in multiple pages)
@@ -631,10 +986,10 @@ STYLE_SETTING_PROGRESS = f"""
 
 # PageWand terminal
 STYLE_TERMINAL = f"""
-    QTextEdit {{
+    QTextEdit, QPlainTextEdit, QTextBrowser {{
         background-color: {TERM_BG};
         color: {TERM_FG};
-        border: 1px solid rgba(255, 255, 255, 0.06);
+        border: 1px solid #2a2a2a;
         border-radius: 8px;
         padding: 10px;
     }}
@@ -642,7 +997,7 @@ STYLE_TERMINAL = f"""
 
 # PageSetting console
 STYLE_CONSOLE = """
-    QTextEdit {
+    QTextEdit, QPlainTextEdit, QTextBrowser {
         background-color: #0d0d0d;
         color: #00ff88;
         border: 1px solid #2a2a2a;
@@ -660,8 +1015,15 @@ STYLE_CONSOLE = """
 # PageStatistics scroll area
 STYLE_SCROLL_AREA = f"""
     QScrollArea {{ border: none; background-color: transparent; }}
-    QScrollBar:vertical {{ border: none; background: {BG_LIGHT}; width: 8px; border-radius: 4px; }}
-    QScrollBar::handle:vertical {{ background: {BORDER_MID}; border-radius: 4px; }}
+    QScrollArea > QWidget > QWidget {{ background: transparent; }}
+    QScrollBar:vertical {{ border: none; background: transparent; width: 10px; margin: 0px; }}
+    QScrollBar::handle:vertical {{ background: rgba(128, 128, 128, 0.50); border-radius: 5px; min-height: 20px; }}
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; background: transparent; border: none; }}
+    QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
+    QScrollBar:horizontal {{ border: none; background: transparent; height: 10px; margin: 0px; }}
+    QScrollBar::handle:horizontal {{ background: rgba(128, 128, 128, 0.50); border-radius: 5px; min-width: 20px; }}
+    QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0px; background: transparent; border: none; }}
+    QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{ background: transparent; }}
 """
 
 # PageHome module bar
@@ -679,17 +1041,17 @@ STYLE_TRANSPARENT_WIDGET = "background: transparent;"
 # ────────────────────────────────────────────────────────────────────────────
 
 # PageWand rarity badge (colored background)
-STYLE_RARITY_BADGE_WAND = """
-    QLabel {{
-        background-color: {color};
-        color: #ffffff;
+STYLE_RARITY_BADGE_WAND = f"""
+    QLabel {{{{
+        background-color: {{color}};
+        color: {TEXT_BODY};
         border: none;
         border-radius: 8px;
         padding: 4px 10px;
         font-weight: 900;
         font-size: 10px;
         letter-spacing: 1px;
-    }}
+    }}}}
 """
 
 # PageStatistics rarity badge (colored border)

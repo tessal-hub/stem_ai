@@ -4,7 +4,7 @@ PageRecord — Timeline and recording view with LIVE Plotting, 3D Wand, & Snippi
 Architecture compliance (SKILL.md §2A):
     - This file is PURE VIEW. No data processing, no direct DataStore calls.
     - Receives plot data via update_plot_data(buffer_snapshot) called by Handler.
-    - Emits sig_data_cropped(list, str) with 6D data + spell name for Handler to save.
+    - Emits sig_data_cropped(list, str, str) with 6D data + spell name + tag for Handler to save.
     - Emits sig_spell_selected(str) when user clicks a spell.
     - MUST NOT import anything from /logic.
 """
@@ -13,8 +13,11 @@ import logging
 import pyqtgraph as pg
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QTime
 from PyQt6.QtWidgets import (
+    QFormLayout,
+    QGridLayout,
     QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel,
-    QListWidget, QMessageBox, QPushButton, QLineEdit, QStackedWidget, QVBoxLayout, QWidget,
+    QListWidget, QMessageBox, QPushButton, QLineEdit, QSizePolicy,
+    QStackedWidget, QVBoxLayout, QWidget,
 )
 from ui.tokens import (
     # Colors, Sizes
@@ -41,6 +44,16 @@ from ui.component_factory import (
     make_hint,
 )
 from ui.confirm_dialog import confirm_destructive
+from ui.mac_material import apply_soft_shadow
+from ui.modern_layout import (
+    create_modern_card,
+    add_card_shadow,
+    MARGIN_COMFORTABLE,
+    MARGIN_STANDARD,
+    SPACING_MD,
+    SPACING_LG,
+    SPACING_SM,
+)
 
 log = logging.getLogger(__name__)
 
@@ -58,9 +71,11 @@ class PageRecord(QWidget):
     sig_snip_record    = pyqtSignal()
     sig_sample_opened  = pyqtSignal(str)
     sig_sample_deleted = pyqtSignal(str)
-    sig_data_cropped   = pyqtSignal(list, str)  # (6D data, spell_name)
+    sig_data_cropped   = pyqtSignal(list, str, str)  # (6D data, spell_name, tag)
     sig_spell_selected = pyqtSignal(str)        # spell name when user clicks
     sig_spell_deleted  = pyqtSignal(str)        # spell name when user deletes
+    sig_clear_buffer   = pyqtSignal()           # clear recorded samples
+    sig_export_csv     = pyqtSignal()           # export samples to CSV
 
     # Widget type hints
     btn_start: QPushButton
@@ -132,8 +147,8 @@ class PageRecord(QWidget):
     def set_recording_state(self, recording: bool) -> None:
         self.btn_start.setEnabled(not recording)
         self.btn_stop.setEnabled(recording)
-        self.edit_action_name.setEnabled(not recording)
         self.combo_spell.setEnabled(not recording)
+        self.edit_tag.setEnabled(not recording)
 
         status = "● RECORDING" if recording else "● WAND IS READY"
         color = ACCENT if recording else SUCCESS
@@ -148,12 +163,12 @@ class PageRecord(QWidget):
             elapsed = self.recording_start_time.elapsed()
             minutes = elapsed // 60000
             seconds = (elapsed % 60000) // 1000
-            self.lbl_record_duration.setText(f"Duration: {minutes:02d}:{seconds:02d}")
+            self.lbl_record_duration.setText(f"{minutes:02d}:{seconds:02d}")
 
     def update_record_count(self, count: int) -> None:
         """Update the recording sample count display."""
         if self.is_live:
-            self.lbl_record_count.setText(f"Recorded: {count}")
+            self.lbl_record_count.setText(str(count))
         # When not live, _on_crop_region_changed handles the display
 
     def set_save_status(self, spell_name: str) -> None:
@@ -193,6 +208,9 @@ class PageRecord(QWidget):
             plot.getAxis("bottom").setPen(TEXT_MUTED)
             plot.setMenuEnabled(False)
             plot.setMouseEnabled(x=False, y=True)
+            plot_item = plot.getPlotItem()
+            plot_item.setClipToView(True)
+            plot_item.setDownsampling(auto=True, mode="peak")
 
         # Graph 1: Acceleration Axes (aX, aY, aZ)
         self.curve_ax = self.graph1.plot(pen=pg.mkPen(PLOT_AX_COLOR, width=2), name="aX")
@@ -293,9 +311,9 @@ class PageRecord(QWidget):
 
     def _on_start(self) -> None:
         """START: Begin recording and send command to device."""
-        label_name = self.edit_action_name.text().strip() or self.combo_spell.currentText().strip()
-        if not label_name:
-            self.lbl_wand_status.setText("⚠ Enter action name first")
+        spell_name = self.combo_spell.currentText().strip()
+        if not spell_name:
+            self.lbl_wand_status.setText("⚠ Select a spell first")
             self.lbl_wand_status.setStyleSheet(
                 f"color: {DANGER}; font-weight: bold; font-size: 13px;"
             )
@@ -306,7 +324,6 @@ class PageRecord(QWidget):
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
         self.btn_snip.setEnabled(False)
-        self.edit_action_name.setEnabled(False)
         self.combo_spell.setEnabled(False)
         self.lbl_wand_status.setText("● RECORDING DATA")
         self.lbl_wand_status.setStyleSheet(
@@ -317,7 +334,7 @@ class PageRecord(QWidget):
         self.recording_start_time.start()
         self.recording_timer.start(1000)  # Update every second
         
-        self.sig_start_record.emit(label_name)
+        self.sig_start_record.emit(spell_name)
 
     def _on_stop(self) -> None:
         """STOP: cease recording buffer and finalize file."""
@@ -334,7 +351,6 @@ class PageRecord(QWidget):
         self.btn_start.setEnabled(True)
         self.btn_stop.setEnabled(False)
         self.btn_snip.setEnabled(True)
-        self.edit_action_name.setEnabled(True)
         self.combo_spell.setEnabled(True)
 
         self.lbl_wand_status.setText("● RECORDING STOPPED - Select region to snip")
@@ -344,7 +360,7 @@ class PageRecord(QWidget):
         
         # Stop recording timer
         self.recording_timer.stop()
-        self.lbl_record_duration.setText("Duration: 00:00")
+        self.lbl_record_duration.setText("00:00")
         
         self.sig_stop_record.emit()
 
@@ -392,7 +408,8 @@ class PageRecord(QWidget):
 
         if min_idx < max_idx:
             cropped_6d = buf[min_idx:max_idx]
-            self.sig_data_cropped.emit(cropped_6d, spell_name)
+            tag = self.edit_tag.text().strip()
+            self.sig_data_cropped.emit(cropped_6d, spell_name, tag)
             self.lbl_wand_status.setText(
                 f"✂ Snipped {max_idx - min_idx} samples → {spell_name}"
             )
@@ -424,6 +441,60 @@ class PageRecord(QWidget):
         for plot in [self.graph1, self.graph2]:
             if plot.isVisible():
                 plot.getViewBox().autoRange()
+
+    def _on_clear_samples(self) -> None:
+        """Clear all recorded samples from current buffer."""
+        if not confirm_destructive(
+            self,
+            title="Clear Recorded Samples",
+            message="Clear all currently recorded samples?\n\nThis action cannot be undone.",
+            confirm_text="Clear All",
+            cancel_text="Keep Samples",
+        ):
+            return
+        
+        # Emit signal to Handler for actual clearing
+        self.sig_clear_buffer.emit()
+        # Update UI
+        self.lbl_record_count.setText("0")
+        self.crop_region.setRegion([30, 120])
+        self.is_live = True
+        self.crop_region.hide()
+        self.lbl_wand_status.setText("✔ Recording buffer cleared")
+        self.lbl_wand_status.setStyleSheet(
+            f"color: {SUCCESS}; font-weight: bold; font-size: 12px;"
+        )
+
+    def _on_export_csv(self) -> None:
+        """Export current recorded samples to CSV file."""
+        buf = self.store.get_live_buffer_snapshot()
+        if not buf or len(buf) == 0:
+            self.lbl_wand_status.setText("⚠ No samples to export")
+            self.lbl_wand_status.setStyleSheet(
+                f"color: {WARNING}; font-weight: bold; font-size: 12px;"
+            )
+            return
+        
+        # Emit signal to Handler for actual export
+        self.sig_export_csv.emit()
+        sample_count = len(buf)
+        self.lbl_wand_status.setText(f"💾 Exporting {sample_count} samples...")
+        self.lbl_wand_status.setStyleSheet(
+            f"color: {SUCCESS}; font-weight: bold; font-size: 12px;"
+        )
+        self.lbl_wand_status.setStyleSheet(
+            f"color: {SUCCESS}; font-weight: bold; font-size: 12px;"
+        )
+
+    def _on_spell_list_clicked(self, item) -> None:
+        """Handle spell list item click: auto-select spell in combo and emit signal."""
+        spell_name = item.text()
+        # Auto-select in combo box
+        idx = self.combo_spell.findText(spell_name)
+        if idx >= 0:
+            self.combo_spell.setCurrentIndex(idx)
+        # Emit signal for handler
+        self.sig_spell_selected.emit(spell_name)
 
     def _on_delete_spell(self) -> None:
         """Handle spell deletion with 2-step verification."""
@@ -469,14 +540,19 @@ class PageRecord(QWidget):
 
         self.main_container = QFrame()
         self.main_container.setObjectName("MainBox")
+        self.main_container.setFrameShape(QFrame.Shape.NoFrame)
+        self.main_container.setFrameShadow(QFrame.Shadow.Plain)
         self.main_container.setStyleSheet(STYLE_RECORD_MAIN_CONTAINER)
 
         inner = QVBoxLayout(self.main_container)
-        inner.setContentsMargins(12, 12, 12, 12)
-        inner.setSpacing(12)
+        # Use modern breathing room: 16px margins and 12px spacing
+        inner.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
+        inner.setSpacing(SPACING_LG)
 
         content = QHBoxLayout()
-        content.setSpacing(16)
+        # Increased spacing between columns
+        content.setSpacing(SPACING_LG)
+        content.setContentsMargins(0, 0, 0, 0)
         content.addWidget(self._build_left_column(), stretch=5)
         content.addWidget(self._build_right_column(), stretch=2)
         inner.addLayout(content)
@@ -486,10 +562,12 @@ class PageRecord(QWidget):
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(10)
+        layout.setSpacing(SPACING_LG)
 
         # Status row
         top_row = QHBoxLayout()
+        top_row.setContentsMargins(0, 0, 0, 0)
+        top_row.setSpacing(SPACING_MD)
         self.lbl_wand_status = QLabel("● WAITING FOR SERIAL")
         self.lbl_wand_status.setStyleSheet(
             f"color: {WARNING}; font-weight: bold; font-size: 12px;"
@@ -502,21 +580,27 @@ class PageRecord(QWidget):
         top_row.addWidget(lbl_timeline)
         layout.addLayout(top_row)
 
-        # Graph card
+        # Graph card - modern card with shadow
         graph_card = QFrame()
         graph_card.setObjectName("CardFrame")
         graph_card.setStyleSheet(STYLE_RECORD_GRAPH_CARD)
+        # Add drop shadow for elevation
+        add_card_shadow(graph_card, blur_radius=16, offset_y=4, color="rgba(0, 0, 0, 0.12)")
         graph_layout = QVBoxLayout(graph_card)
-        graph_layout.setContentsMargins(4, 4, 4, 4)
-        graph_layout.setSpacing(8)
+        graph_layout.setContentsMargins(MARGIN_STANDARD, MARGIN_STANDARD, MARGIN_STANDARD, MARGIN_STANDARD)
+        graph_layout.setSpacing(SPACING_MD)
         self.graph1 = pg.PlotWidget()
         self.graph2 = pg.PlotWidget()
+        self.graph1.setMinimumHeight(150)
+        self.graph2.setMinimumHeight(150)
         graph_layout.addWidget(self.graph1)
         graph_layout.addWidget(self.graph2, stretch=1)
         layout.addWidget(graph_card, stretch=1)
 
         # Checkboxes row
         bottom_row = QHBoxLayout()
+        bottom_row.setContentsMargins(0, 0, 0, 0)
+        bottom_row.setSpacing(SPACING_MD)
         self.chk_graph1 = make_checkbox("SHOW ACCEL (aX, aY, aZ)", checked=True)
         self.chk_graph2 = make_checkbox("SHOW GYRO (gX, gY, gZ)", checked=True)
         
@@ -540,64 +624,78 @@ class PageRecord(QWidget):
 
     def _build_right_column(self) -> QWidget:
         widget = QWidget()
-        widget.setMaximumWidth(RIGHT_MAX_W)
+        widget.setMaximumWidth(min(RIGHT_MAX_W, 280))
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
+        layout.setSpacing(SPACING_LG)
 
         layout.addWidget(make_section_label("TOOLBAR", accent_color=ACCENT))
 
-        # Action Name / Record Counter
-        lbl_action = QLabel("ACTION NAME:")
-        lbl_action.setStyleSheet(
-            f"color: {ACCENT}; font-weight: 900; font-size: 11px; letter-spacing: 1px;"
-        )
-        lbl_action.setWordWrap(True)
-        self.edit_action_name = QLineEdit()
-        self.edit_action_name.setStyleSheet(STYLE_RECORD_COMBO)
-        self.edit_action_name.setPlaceholderText("Type a spell/action name...")
-        self.edit_action_name.setMaximumWidth(240)
+        # Details card with modern shadow
+        detail_card = make_card_frame()
+        add_card_shadow(detail_card, blur_radius=12, offset_y=3, color="rgba(0, 0, 0, 0.10)")
+        detail_layout = QVBoxLayout(detail_card)
+        detail_layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
+        detail_layout.setSpacing(SPACING_MD)
 
-        self.lbl_record_count = QLabel("Recorded: 0")
-        self.lbl_record_count.setStyleSheet(
-            f"color: {TEXT_MUTED}; font-weight: 800; font-size: 11px;"
-        )
-        
-        # Add recording duration display
-        self.lbl_record_duration = QLabel("Duration: 00:00")
-        self.lbl_record_duration.setStyleSheet(
-            f"color: {TEXT_MUTED}; font-weight: 800; font-size: 11px;"
-        )
+        detail_form = QFormLayout()
+        detail_form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        detail_form.setFormAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        detail_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        detail_form.setHorizontalSpacing(SPACING_SM)
+        detail_form.setVerticalSpacing(SPACING_SM)
 
-        layout.addWidget(lbl_action)
-        layout.addWidget(self.edit_action_name)
-        layout.addWidget(self.lbl_record_count)
-        layout.addWidget(self.lbl_record_duration)
-
-        # ── Controls card ──────────────────────────────────────────
-        controls_card = make_card_frame()
-        ctrl_layout = QVBoxLayout(controls_card)
-        ctrl_layout.setContentsMargins(10, 10, 10, 10)
-        ctrl_layout.setSpacing(10)
-
-        # Spell name selector (editable combo)
-        lbl_spell = QLabel("SPELL LABEL:")
-        lbl_spell.setStyleSheet(
-            f"color: {ACCENT}; font-weight: 900; font-size: 11px; "
-            f"letter-spacing: 1px;"
-        )
-        lbl_spell.setWordWrap(True)
         self.combo_spell = QComboBox()
         self.combo_spell.setEditable(True)
         self.combo_spell.setStyleSheet(STYLE_RECORD_COMBO)
         self.combo_spell.setPlaceholderText("Type or select spell name...")
-        self.combo_spell.setMaximumWidth(240)
-        ctrl_layout.addWidget(lbl_spell)
-        ctrl_layout.addWidget(self.combo_spell)
+        self.combo_spell.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+        self.edit_tag = QLineEdit()
+        self.edit_tag.setStyleSheet(STYLE_RECORD_COMBO)
+        self.edit_tag.setPlaceholderText("e.g., Walking / Idle")
+        self.edit_tag.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+        lbl_spell = QLabel("Spell label:")
+        lbl_spell.setStyleSheet(f"color: {TEXT_BODY}; font-weight: 600; font-size: 11px;")
+        lbl_tag = QLabel("Tag:")
+        lbl_tag.setStyleSheet(f"color: {TEXT_BODY}; font-weight: 600; font-size: 11px;")
+
+        detail_form.addRow(lbl_spell, self.combo_spell)
+        detail_form.addRow(lbl_tag, self.edit_tag)
+        detail_layout.addLayout(detail_form)
+
+        count_grid = QGridLayout()
+        count_grid.setHorizontalSpacing(SPACING_MD)
+        count_grid.setVerticalSpacing(SPACING_SM)
+        count_grid.addWidget(make_hint("Recorded", color=TEXT_MUTED), 0, 0)
+        count_grid.addWidget(make_hint("Duration", color=TEXT_MUTED), 0, 1)
+
+        self.lbl_record_count = QLabel("0")
+        self.lbl_record_count.setStyleSheet(
+            f"color: {TEXT_BODY}; font-weight: 800; font-size: 16px;"
+        )
+
+        self.lbl_record_duration = QLabel("00:00")
+        self.lbl_record_duration.setStyleSheet(
+            f"color: {TEXT_BODY}; font-weight: 800; font-size: 16px;"
+        )
+        count_grid.addWidget(self.lbl_record_count, 1, 0)
+        count_grid.addWidget(self.lbl_record_duration, 1, 1)
+        detail_layout.addLayout(count_grid)
+        layout.addWidget(detail_card)
+
+        # ── Controls card with modern shadow ─────────────────────
+        controls_card = make_card_frame()
+        add_card_shadow(controls_card, blur_radius=12, offset_y=3, color="rgba(0, 0, 0, 0.10)")
+        ctrl_layout = QVBoxLayout(controls_card)
+        ctrl_layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
+        ctrl_layout.setSpacing(SPACING_MD)
 
         # Buttons: START | STOP | SNIP
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(8)
+        btn_row = QGridLayout()
+        btn_row.setHorizontalSpacing(SPACING_SM)
+        btn_row.setVerticalSpacing(SPACING_SM)
         self.btn_start = make_button("▶ START", STYLE_BTN_START, BTN_H)
         self.btn_stop  = make_button("■ STOP",  STYLE_BTN_STOP,  BTN_H)
         self.btn_snip  = make_button("✌ SNIP",  STYLE_BTN_SNIP,  BTN_H)
@@ -609,9 +707,9 @@ class PageRecord(QWidget):
         self.btn_stop.setToolTip("Stop recording and enable cropping/snipping")
         self.btn_snip.setToolTip("Save the selected region as a training sample")
         
-        btn_row.addWidget(self.btn_start)
-        btn_row.addWidget(self.btn_stop)
-        btn_row.addWidget(self.btn_snip)
+        btn_row.addWidget(self.btn_start, 0, 0)
+        btn_row.addWidget(self.btn_stop, 0, 1)
+        btn_row.addWidget(self.btn_snip, 0, 2)
         ctrl_layout.addLayout(btn_row)
 
         # Hint
@@ -619,6 +717,35 @@ class PageRecord(QWidget):
         ctrl_layout.addWidget(lbl_hint)
 
         layout.addWidget(controls_card)
+
+        # ── Batch operations card with modern shadow ───────────────────
+        batch_card = make_card_frame()
+        add_card_shadow(batch_card, blur_radius=12, offset_y=3, color="rgba(0, 0, 0, 0.10)")
+        batch_layout = QVBoxLayout(batch_card)
+        batch_layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
+        batch_layout.setSpacing(SPACING_MD)
+
+        batch_layout.addWidget(make_section_label("BATCH OPERATIONS", accent_color=TEXT_BODY))
+
+        batch_btn_row = QGridLayout()
+        batch_btn_row.setHorizontalSpacing(SPACING_SM)
+        batch_btn_row.setVerticalSpacing(SPACING_SM)
+
+        self.btn_clear_samples = make_button(
+            "🗑 CLEAR", 
+            STYLE_BTN_BASE + f" QPushButton {{ color: {DANGER}; }}", 
+            32
+        )
+        self.btn_clear_samples.setToolTip("Clear all currently recorded samples")
+
+        self.btn_export_csv = make_button("💾 EXPORT", STYLE_BTN_BASE, 32)
+        self.btn_export_csv.setToolTip("Export recorded samples as CSV")
+
+        batch_btn_row.addWidget(self.btn_clear_samples, 0, 0)
+        batch_btn_row.addWidget(self.btn_export_csv, 0, 1)
+        batch_layout.addLayout(batch_btn_row)
+
+        layout.addWidget(batch_card)
 
         # ── Spell list stack ───────────────────────────────────────
         self.stacked_spells = QStackedWidget()
@@ -632,7 +759,7 @@ class PageRecord(QWidget):
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(SPACING_MD)
         layout.addWidget(make_section_label("SPELL LIBRARY", accent_color=TEXT_BODY))
         
         # Spell list
@@ -650,8 +777,10 @@ class PageRecord(QWidget):
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(SPACING_MD)
         top_row = QHBoxLayout()
+        top_row.setContentsMargins(0, 0, 0, 0)
+        top_row.setSpacing(SPACING_SM)
         self.btn_back_spells = make_button("◀ BACK", STYLE_BTN_BACK, 36)
         self.lbl_current_spell = QLabel("SAMPLES: …")
         self.lbl_current_spell.setStyleSheet(
@@ -683,26 +812,28 @@ class PageRecord(QWidget):
         self.btn_zoom_out.clicked.connect(self._zoom_out)
         self.btn_zoom_fit.clicked.connect(self._zoom_fit)
 
+        # Batch operations
+        self.btn_clear_samples.clicked.connect(self._on_clear_samples)
+        self.btn_export_csv.clicked.connect(self._on_export_csv)
+
         # Spell list navigation
         self.btn_back_spells.clicked.connect(
             lambda: self.stacked_spells.setCurrentIndex(0)
         )
-        self.spell_list.itemClicked.connect(
-            lambda item: self.sig_spell_selected.emit(item.text())
-        )
+        self.spell_list.itemClicked.connect(self._on_spell_list_clicked)
         self.btn_delete_spell.clicked.connect(self._on_delete_spell)
 
-        # Plot refresh timer — 60 FPS
+        # Plot refresh timer — throttled for high-throughput stability
         self._plot_timer = QTimer(self)
         self._plot_timer.timeout.connect(self._render_plots)
-        self._plot_timer.start(16)  # ~60 FPS
+        self._plot_timer.start(33)  # ~30 FPS
 
     def _configure_accessibility(self) -> None:
         """Set keyboard traversal and accessibility names for core controls."""
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
-        self.edit_action_name.setAccessibleName("Record action name")
         self.combo_spell.setAccessibleName("Spell label selector")
+        self.edit_tag.setAccessibleName("Optional tag label")
         self.btn_start.setAccessibleName("Start recording")
         self.btn_stop.setAccessibleName("Stop recording")
         self.btn_snip.setAccessibleName("Snip selected range")
@@ -713,9 +844,11 @@ class PageRecord(QWidget):
         self.btn_delete_spell.setAccessibleName("Delete spell")
         self.btn_back_spells.setAccessibleName("Back to spell list")
         self.sample_list.setAccessibleName("Sample list")
+        self.btn_clear_samples.setAccessibleName("Clear recorded samples")
+        self.btn_export_csv.setAccessibleName("Export samples to CSV file")
 
-        self.setTabOrder(self.edit_action_name, self.combo_spell)
-        self.setTabOrder(self.combo_spell, self.btn_start)
+        self.setTabOrder(self.combo_spell, self.edit_tag)
+        self.setTabOrder(self.edit_tag, self.btn_start)
         self.setTabOrder(self.btn_start, self.btn_stop)
         self.setTabOrder(self.btn_stop, self.btn_snip)
         self.setTabOrder(self.btn_snip, self.btn_zoom_in)

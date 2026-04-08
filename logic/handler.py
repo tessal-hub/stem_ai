@@ -19,13 +19,16 @@ Data Flow:
 from pathlib import Path
 from threading import Lock
 
-from PyQt6.QtCore import QObject, Qt
+from PyQt6.QtCore import QObject, Qt, QTimer
+import numpy as np
+from config import APP_DATA_DIR, DEFAULT_MODEL_PATH
 from .data_store import DataStore
 from .frame_protocol import build_scale_profile
 from .serial_worker import SerialWorker
 from .model_uploader import ModelUploader
 from .recorder import DataRecorder
 from .flash_worker import FlashWorker
+from .tensorflow.pipeline import GestureModelBuildWorker
 
 
 class Handler(QObject):
@@ -49,18 +52,27 @@ class Handler(QObject):
         "RECORD": "RECORD",
     }
 
-    def __init__(self, ui_page_wand, ui_page_record, ui_page_home, data_store: DataStore, ui_page_setting=None) -> None:
+    def __init__(
+        self,
+        ui_page_wand,
+        ui_page_record,
+        ui_page_home,
+        data_store: DataStore,
+        ui_page_setting=None,
+        ui_page_statistics=None,
+    ) -> None:
         super().__init__()
         self.ui_wand = ui_page_wand          # Hardware config, stats, terminal
         self.ui_record = ui_page_record      # Recording, plotting, snipping
         self.ui_home = ui_page_home          # Dashboard with 3D wand
         self.ui_setting = ui_page_setting    # Firmware flashing UI
+        self.ui_statistics = ui_page_statistics
         self.store = data_store
 
         # ── Background Workers ──────────────────────────────────────────
         self.serial_worker = SerialWorker()
         self.uploader = ModelUploader()
-        self.recorder = DataRecorder()
+        self.recorder = DataRecorder(dataset_dir=self.store.dataset_dir)
         self.flash_worker = FlashWorker()
 
         # ── State Management ────────────────────────────────────────────
@@ -72,11 +84,21 @@ class Handler(QObject):
             self._mode = self._MODE_IDLE
             self.store.set_current_mode(self._mode)
         self._project_root = Path(__file__).resolve().parents[1]
+        self._feature_timer = QTimer(self)
+        self._feature_timer.setInterval(200)
+        self._feature_timer.timeout.connect(self._emit_live_features)
+        self._simulation_timer = QTimer(self)
+        self._simulation_timer.setInterval(20)
+        self._simulation_timer.timeout.connect(self._step_simulation_playback)
+        self._simulation_frames: list[list[float]] = []
+        self._simulation_index = 0
+        self._model_build_worker: GestureModelBuildWorker | None = None
 
         # ── Initialize connections ──────────────────────────────────────
         self._connect_signals()
         self.on_serial_scan()
         self.ui_home.set_mode(self._mode)
+        self._feature_timer.start()
 
     def _can_use_port(self, requester: str) -> bool:
         """Return True when the requester can safely take the serial port."""
@@ -152,6 +174,9 @@ class Handler(QObject):
         """Resolve an absolute file path from a project-relative setting value."""
         candidate = Path(raw_path.strip())
         if not candidate.is_absolute():
+            app_data_candidate = (APP_DATA_DIR / candidate).resolve()
+            if app_data_candidate.exists():
+                return app_data_candidate
             candidate = self._project_root / candidate
         return candidate.resolve()
 
@@ -195,6 +220,13 @@ class Handler(QObject):
         self.ui_record.sig_spell_deleted.connect(self.on_spell_deleted)
         self.ui_record.sig_start_record.connect(self.on_record_start)
         self.ui_record.sig_stop_record.connect(self.on_record_stop)
+        self.ui_record.sig_clear_buffer.connect(self.on_clear_buffer)
+        self.ui_record.sig_export_csv.connect(self.on_export_csv)
+
+        self.ui_wand.sig_train_build_requested.connect(self.on_train_build_model_requested)
+
+        if self.ui_statistics:
+            self.ui_statistics.sig_train_build_requested.connect(self.on_train_build_model_requested)
 
         # ┌─── SERIAL WORKER SIGNALS (hardware input) ───────────────┐
         # │  CRITICAL: Use QueuedConnection for thread safety!       │
@@ -209,6 +241,15 @@ class Handler(QObject):
         self.store.sig_db_updated.connect(self._on_db_updated)
         self.store.sig_stats_updated.connect(self.ui_wand.update_esp_stats)
         self.store.sig_prediction_updated.connect(self._on_prediction_received)
+        self.store.sig_live_buffer_updated.connect(self.ui_record.update_plot_data)
+
+        # --- Home → Handler (simulation playback controls) ---
+        self.ui_home.sig_simulation_replay_requested.connect(self._on_simulation_replay_requested)
+        self.ui_home.sig_simulation_stop_requested.connect(self._stop_simulation_playback)
+
+        # --- Home → Handler (calibration & quick test) ---
+        self.ui_home.sig_calibrate_requested.connect(self.on_calibrate_wand)
+        self.ui_home.sig_quick_test_requested.connect(self.on_quick_test)
 
         # --- Model Uploader → UI/Handler ---
         # CRITICAL: Use QueuedConnection for cross-thread signal safety
@@ -261,6 +302,9 @@ class Handler(QObject):
 
         # Also: same normalized list is used for CSV recording
         self._connect_queued(self.serial_worker.sig_data_received, self.recorder.add_row)
+
+        # Raw UART line logging for terminal visibility
+        self._connect_queued(self.serial_worker.sig_raw_line_received, self.ui_wand.append_terminal_text)
 
         # AI predictions
         self._connect_queued(self.serial_worker.sig_prediction_received, self.store.update_prediction)
@@ -386,16 +430,122 @@ class Handler(QObject):
             if not isinstance(norm_values, (list, tuple)) or len(norm_values) != 6:
                 return
             
-            snapshot = self.store.add_live_sample(list(norm_values))
-            self.ui_record.update_plot_data(snapshot)
+            self.store.add_live_sample(list(norm_values))
             
         except Exception as e:
             self.ui_wand.append_terminal_text(f"[ERROR] Buffer update failed: {e}")
+
+    def _emit_live_features(self) -> None:
+        """Compute rolling stats + FFT on the live buffer and emit to DataStore."""
+        snapshot = self.store.get_live_buffer_snapshot()
+        if len(snapshot) < 16:
+            return
+
+        arr = np.asarray(snapshot, dtype=float)
+        if arr.shape[1] != 6:
+            return
+
+        window = 256 if len(arr) >= 256 else len(arr)
+        accel = arr[-window:, 0:3]
+        gyro = arr[-window:, 3:6]
+        accel_mag = np.linalg.norm(accel, axis=1)
+        gyro_mag = np.linalg.norm(gyro, axis=1)
+
+        stats = {
+            "accel_mean": float(np.mean(accel_mag)),
+            "accel_var": float(np.var(accel_mag)),
+            "accel_rms": float(np.sqrt(np.mean(accel_mag ** 2))),
+            "gyro_mean": float(np.mean(gyro_mag)),
+            "gyro_var": float(np.var(gyro_mag)),
+            "gyro_rms": float(np.sqrt(np.mean(gyro_mag ** 2))),
+            "sample_count": int(window),
+        }
+
+        sample_rate_hz = self._get_sample_rate_hz()
+        fft_values = np.fft.rfft(accel_mag * np.hanning(len(accel_mag)))
+        fft_mags = np.abs(fft_values)
+        fft_freqs = np.fft.rfftfreq(len(accel_mag), d=1.0 / sample_rate_hz)
+
+        max_bins = 128
+        if len(fft_mags) > max_bins:
+            fft_mags = fft_mags[:max_bins]
+            fft_freqs = fft_freqs[:max_bins]
+
+        stats.update(
+            {
+                "fft_freqs": fft_freqs.tolist(),
+                "fft_mags": fft_mags.tolist(),
+                "fft_sample_rate_hz": sample_rate_hz,
+            }
+        )
+
+        self.store.update_live_features(stats)
+
+    def _get_sample_rate_hz(self) -> int:
+        settings = self.store.get_settings_snapshot()
+        raw_rate = str(settings.get("sample_rate", "50"))
+        digits = "".join(ch for ch in raw_rate if ch.isdigit())
+        try:
+            return max(1, int(digits))
+        except ValueError:
+            return 50
 
     def _on_prediction_received(self, label: str, confidence: float) -> None:
         """Log AI inference result to terminal."""
         text = f"[PREDICT] {label} ({confidence*100:.1f}%)"
         self.ui_wand.append_terminal_text(text)
+
+    def _on_simulation_replay_requested(self) -> None:
+        """Replay the most recent input frames through the 3D wand."""
+        if self.serial_worker.isRunning():
+            self.ui_wand.append_terminal_text("[WARN] Stop the serial connection before replaying input data.")
+            return
+
+        frames = self.store.get_recent_sensor_frames_snapshot()
+        if not frames:
+            self.ui_wand.append_terminal_text("[WARN] No recent input frames available for replay.")
+            return
+
+        self._simulation_frames = [list(frame[:6]) for frame in frames if len(frame) >= 6]
+        if not self._simulation_frames:
+            self.ui_wand.append_terminal_text("[WARN] Recent input frames were incomplete.")
+            return
+
+        self._simulation_index = 0
+        self.ui_home.set_simulation_running(True)
+        self.ui_wand.append_terminal_text(f">> Replaying {len(self._simulation_frames)} input frame(s) on the 3D model.")
+        self._step_simulation_playback()
+        self._simulation_timer.start()
+
+    def _stop_simulation_playback(self) -> None:
+        """Stop any active replay and restore the live-input controls."""
+        if self._simulation_timer.isActive():
+            self._simulation_timer.stop()
+        self._simulation_frames = []
+        self._simulation_index = 0
+        self.ui_home.set_simulation_running(False)
+
+    def _step_simulation_playback(self) -> None:
+        """Advance one simulation frame and feed it to the 3D wand."""
+        if self._simulation_index >= len(self._simulation_frames):
+            self._stop_simulation_playback()
+            return
+
+        frame = self._simulation_frames[self._simulation_index]
+        self._simulation_index += 1
+        self._apply_sensor_frame_to_home(frame)
+
+    def _apply_sensor_frame_to_home(self, norm_values: list[float]) -> None:
+        """Send one 6-axis sensor frame to the Home 3D viewer."""
+        try:
+            if not isinstance(norm_values, (list, tuple)) or len(norm_values) != 6:
+                return
+
+            ax, ay, az, gx, gy, gz = [float(v) for v in norm_values]
+            self.ui_home.wand_3d.update_orientation(ax, ay, az, gx, gy, gz)
+        except Exception as e:
+            self.ui_wand.append_terminal_text(f"[ERROR] Simulation playback failed: {e}")
+            self._stop_simulation_playback()
 
     def _on_connection_status_changed(self, connected: bool, message: str) -> None:
         """Update UI components on serial connection status change."""
@@ -491,16 +641,19 @@ class Handler(QObject):
         samples = self.store.get_samples_for_spell(spell_name)
         self.ui_record.load_samples_for_spell(spell_name, samples)
 
-    def on_data_cropped(self, cropped_data: list, spell_name: str) -> None:
+    def on_data_cropped(self, cropped_data: list, spell_name: str, tag: str = "") -> None:
         """Save cropped data sample to dataset folder."""
         if not spell_name.strip():
             self.ui_wand.append_terminal_text("[WARN] Missing spell label. Snip discarded.")
             return
 
-        success = self.store.save_cropped_data(spell_name, cropped_data)
+        success = self.store.save_cropped_data(spell_name, cropped_data, tag=tag)
         if success:
             self.ui_record.set_save_status(spell_name)
-            self.ui_wand.append_terminal_text(f">> SAVED: {len(cropped_data)} samples → {spell_name}")
+            tag_note = f" [tag: {tag}]" if tag else ""
+            self.ui_wand.append_terminal_text(
+                f">> SAVED: {len(cropped_data)} samples → {spell_name}{tag_note}"
+            )
 
     def on_spell_deleted(self, spell_name: str) -> None:
         """Delete a spell and all its training data."""
@@ -626,9 +779,9 @@ class Handler(QObject):
             return
 
         settings_snapshot = self.store.get_settings_snapshot()
-        configured_model_path = str(settings_snapshot.get("model_path", "model.tflite")).strip()
-        if not configured_model_path:
-            configured_model_path = "model.tflite"
+        configured_model_path = str(settings_snapshot.get("model_path", str(DEFAULT_MODEL_PATH))).strip()
+        if not configured_model_path or configured_model_path == "model.tflite":
+            configured_model_path = str(DEFAULT_MODEL_PATH)
         model_path = self._resolve_project_path(configured_model_path)
 
         valid_model, model_validation_message = self._validate_required_file(
@@ -707,9 +860,145 @@ class Handler(QObject):
         """Relay database changes to UI pages."""
         self.ui_record.load_spell_list(list(spell_counts.keys()))
         self.ui_wand.load_spell_payload_list(spell_counts)
+        if self.ui_statistics:
+            self.ui_statistics.update_spell_stats(spell_counts)
         
         # If currently selecting a spell on Record page, refresh its sample list
         if self.current_selected_spell:
             samples = self.store.get_samples_for_spell(self.current_selected_spell)
             self.ui_record.load_samples_for_spell(self.current_selected_spell, samples)
+
+    def on_train_build_model_requested(self) -> None:
+        """Start asynchronous training and gesture_model.cc build from current dataset."""
+        if self._model_build_worker and self._model_build_worker.isRunning():
+            self.ui_wand.append_terminal_text("[WARN] Model build is already running.")
+            return
+
+        if self.store.get_recording_state():
+            self.ui_wand.append_terminal_text("[ERROR] Stop recording before training/building model.")
+            if self.ui_statistics:
+                self.ui_statistics.set_training_finished(False, "recording is active")
+            return
+
+        self._model_build_worker = GestureModelBuildWorker(dataset_dir=self.store.dataset_dir)
+        self._connect_many_queued(
+            [
+                (self._model_build_worker.sig_status, self._on_model_build_status),
+                (self._model_build_worker.sig_progress, self._on_model_build_progress),
+                (self._model_build_worker.sig_finished, self._on_model_build_finished),
+            ]
+        )
+
+        if self.ui_statistics:
+            self.ui_statistics.set_training_state(True)
+        self.ui_wand.append_terminal_text(
+            f">> Starting train/build pipeline from dataset: {self.store.dataset_dir}"
+        )
+        self._model_build_worker.start()
+
+    def _on_model_build_status(self, message: str) -> None:
+        self.ui_wand.append_terminal_text(message)
+        if self.ui_statistics:
+            self.ui_statistics.update_training_status(message)
+
+    def _on_model_build_progress(self, value: int) -> None:
+        if self.ui_statistics:
+            self.ui_statistics.update_training_progress(value)
+
+    def _on_model_build_finished(self, success: bool, message: str) -> None:
+        if success:
+            self.ui_wand.append_terminal_text(f"[MODEL] Build success: {message}")
+            self.store.save_settings({"model_path": str(DEFAULT_MODEL_PATH)})
+        else:
+            self.ui_wand.append_terminal_text(f"[MODEL] Build failed: {message}")
+
+        if self.ui_statistics:
+            self.ui_statistics.set_training_finished(success, message)
+
+    # ── Wand Calibration & Testing ─────────────────────────────────────
+
+    def on_calibrate_wand(self) -> None:
+        """
+        Initiate wand sensor calibration.
+        Sends calibration command to device and instructs user on procedure.
+        """
+        if not self.serial_worker.isRunning():
+            self.ui_wand.append_terminal_text("[ERROR] Serial connection required for calibration")
+            return
+        
+        self.ui_wand.append_terminal_text("[CAL] Starting wand calibration procedure...")
+        self.ui_wand.append_terminal_text("[CAL] Please place wand on flat surface and hold still for 3 seconds...")
+        
+        # Send calibration command to device
+        if self.serial_worker.send_command("CMD:CALIBRATE"):
+            self.ui_wand.append_terminal_text("[CAL] Calibration command sent to device")
+        else:
+            self.ui_wand.append_terminal_text("[ERROR] Failed to send calibration command")
+
+    def on_quick_test(self) -> None:
+        """
+        Perform a quick gesture recognition test.
+        Records a brief sample and runs inference to show predictions.
+        """
+        if not self.serial_worker.isRunning():
+            self.ui_wand.append_terminal_text("[ERROR] Serial connection required for quick test")
+            return
+        
+        if self._mode != self._MODE_IDLE:
+            self.ui_wand.append_terminal_text(f"[TEST] Cannot run test in {self._mode} mode")
+            return
+        
+        # Transition to inference mode for quick test
+        if not self._transition_mode(self._MODE_INFER, reason="Quick test gesture recognition", push_to_device=True):
+            return
+        
+        self.ui_wand.append_terminal_text("[TEST] Quick test started - perform a gesture...")
+        self.ui_home.set_inference_active(True)
+        
+        # Schedule return to idle after a brief period
+        QTimer.singleShot(3000, lambda: self._end_quick_test())
+
+    def _end_quick_test(self) -> None:
+        """End quick test and return to idle mode."""
+        self._transition_mode(self._MODE_IDLE, reason="Quick test completed", push_to_device=True)
+        self.ui_home.set_inference_active(False)
+        self.ui_wand.append_terminal_text("[TEST] Quick test completed")
+
+    # ── Data Export & Clearing ─────────────────────────────────────────
+
+    def on_clear_buffer(self) -> None:
+        """Clear the live recording buffer."""
+        self.store.clear_live_buffer()
+        self.ui_wand.append_terminal_text("[REC] Recording buffer cleared")
+        self.ui_record.lbl_record_count.setText("0")
+
+    def on_export_csv(self) -> None:
+        """Export current live buffer to CSV file in dataset directory."""
+        buf = self.store.get_live_buffer_snapshot()
+        if not buf or len(buf) == 0:
+            self.ui_wand.append_terminal_text("[EXPORT] No samples to export")
+            return
+        
+        # Generate CSV filename with timestamp
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        csv_filename = f"export_{timestamp}.csv"
+        csv_path = Path(self.store.dataset_dir) / csv_filename
+        
+        # Write CSV file
+        try:
+            import csv
+            with open(csv_path, 'w', newline='') as csvfile:
+                writer = csv.writer(csvfile)
+                # Write header
+                writer.writerow(['ax', 'ay', 'az', 'gx', 'gy', 'gz'])
+                # Write data rows
+                for row in buf:
+                    writer.writerow(row)
+            
+            self.ui_wand.append_terminal_text(f"[EXPORT] Saved {len(buf)} samples to {csv_filename}")
+            self.ui_record.lbl_wand_status.setText(f"✔ Exported {len(buf)} samples")
+            self.ui_record.lbl_wand_status.setStyleSheet(f"color: #00AA44; font-weight: bold; font-size: 12px;")
+        except Exception as e:
+            self.ui_wand.append_terminal_text(f"[EXPORT] Failed: {str(e)}")
 

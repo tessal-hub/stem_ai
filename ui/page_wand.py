@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QWidget
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QScrollArea, QVBoxLayout, QWidget
 
-from ui.tokens import STYLE_WAND_MAIN_CONTAINER
+from ui.tokens import STYLE_SCROLL_AREA, STYLE_WAND_MAIN_CONTAINER
 from ui.wand_panels.connection_panel import WandConnectionPanel
 from ui.wand_panels.flash_panel import WandFlashPanel
 from ui.wand_panels.spell_payload_panel import WandSpellPayloadPanel
@@ -28,6 +28,7 @@ class PageWand(QWidget):
     sig_flash_compile = pyqtSignal(list)
     sig_flash_upload = pyqtSignal()
     sig_term_clear = pyqtSignal()
+    sig_train_build_requested = pyqtSignal()
 
     def __init__(self, data_store) -> None:
         super().__init__()
@@ -78,8 +79,16 @@ class PageWand(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setStyleSheet(STYLE_SCROLL_AREA)
+
         self.main_container = QFrame()
         self.main_container.setObjectName("MainBox")
+        self.main_container.setFrameShape(QFrame.Shape.NoFrame)
+        self.main_container.setFrameShadow(QFrame.Shadow.Plain)
         self.main_container.setStyleSheet(STYLE_WAND_MAIN_CONTAINER)
 
         inner = QVBoxLayout(self.main_container)
@@ -119,7 +128,8 @@ class PageWand(QWidget):
         content.addWidget(right_column, stretch=10)
 
         inner.addLayout(content, stretch=1)
-        outer.addWidget(self.main_container)
+        scroll.setWidget(self.main_container)
+        outer.addWidget(scroll)
 
     def _expose_legacy_attributes(self) -> None:
         """Keep historical field access paths stable for handlers/tests."""
@@ -135,6 +145,7 @@ class PageWand(QWidget):
 
         # Flash controls
         self.btn_compile = self.flash_panel.btn_compile
+        self.btn_build_cc = self.flash_panel.btn_compile
         self.btn_flash = self.flash_panel.btn_flash
         self.progress_bar = self.flash_panel.progress_bar
         self.lbl_flash_status = self.flash_panel.lbl_flash_status
@@ -161,7 +172,7 @@ class PageWand(QWidget):
         self.connection_panel.sig_bt_connect.connect(self.sig_bt_connect.emit)
         self.connection_panel.sig_bt_disconnect.connect(self.sig_bt_disconnect.emit)
 
-        self.flash_panel.sig_compile_clicked.connect(self._on_compile_clicked)
+        self.flash_panel.sig_build_cc_clicked.connect(self.sig_train_build_requested.emit)
         self.flash_panel.sig_upload_clicked.connect(self.sig_flash_upload.emit)
 
         self.terminal_panel.sig_clear_requested.connect(self.sig_term_clear.emit)
@@ -174,7 +185,7 @@ class PageWand(QWidget):
         self.combo_bt_devices.setAccessibleName("Bluetooth device list")
         self.btn_bt_scan.setAccessibleName("Scan bluetooth devices")
         self.btn_bt_connect.setAccessibleName("Connect bluetooth")
-        self.btn_compile.setAccessibleName("Compile selected payload")
+        self.btn_compile.setAccessibleName("Build gesture_model.cc")
         self.btn_flash.setAccessibleName("Flash ESP32")
         self.btn_term_clear.setAccessibleName("Clear wand terminal")
         self.list_firmware.setAccessibleName("Firmware payload spell list")

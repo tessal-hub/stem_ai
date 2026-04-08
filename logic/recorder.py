@@ -19,6 +19,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PyQt6.QtCore import QThread, pyqtSignal
+from config import DATASET_DIR, ensure_data_dir
 
 
 class DataRecorder(QThread):
@@ -32,9 +33,11 @@ class DataRecorder(QThread):
     sig_error = pyqtSignal(str)                     # standardized error channel
     sig_finished = pyqtSignal(bool, str)            # standardized completion channel
 
-    def __init__(self, dataset_dir: str = "dataset", parent=None) -> None:
+    def __init__(self, dataset_dir: str | None = None, parent=None) -> None:
         super().__init__(parent)
-        self.dataset_dir = dataset_dir
+        ensure_data_dir()
+        resolved_dataset_dir = Path(dataset_dir) if dataset_dir else DATASET_DIR
+        self.dataset_dir = str(resolved_dataset_dir)
         
         # Ensure dataset directory exists
         try:

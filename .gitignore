@@ -1,0 +1,18 @@
+# Python virtual environments
+.venv/
+.venv312/
+.venv-tf/
+
+# Python cache and artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Test/cache outputs
+.pytest_cache/
+
+# Build artifacts
+build/
+dist/
+*.spec

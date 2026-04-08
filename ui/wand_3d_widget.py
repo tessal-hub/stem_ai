@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import math
+import time
 
 import numpy as np
 import pyqtgraph.opengl as gl
@@ -191,6 +192,8 @@ class Wand3DWidget(QWidget):
 
     # Nominal sensor sample period (50 Hz ESP32 output).
     _DT: float = 1 / 50
+    _MIN_DT: float = 1 / 240
+    _MAX_DT: float = 0.1
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -242,6 +245,7 @@ class Wand3DWidget(QWidget):
         self._roll  = 0.0   # degrees
         self._pitch = 0.0   # degrees
         self._yaw   = 0.0   # degrees
+        self._last_update_ts: float | None = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -270,12 +274,19 @@ class Wand3DWidget(QWidget):
 
         Args:
             ax, ay, az: Normalised acceleration (±1.0 g range).
-            gx, gy, gz: Angular velocity in rad/s.
+            gx, gy, gz: Angular velocity in degrees/second.
         """
+        now = time.perf_counter()
+        if self._last_update_ts is None:
+            dt = self._DT
+        else:
+            dt = max(self._MIN_DT, min(now - self._last_update_ts, self._MAX_DT))
+        self._last_update_ts = now
+
         # ── 1. Gyro integration ────────────────────────────────────────
-        self._roll  += math.degrees(gx) * self._DT
-        self._pitch += math.degrees(gy) * self._DT
-        self._yaw   += math.degrees(gz) * self._DT
+        self._roll += gx * dt
+        self._pitch += gy * dt
+        self._yaw += gz * dt
 
         # ── 2. Accel-derived roll & pitch ──────────────────────────────
         accel_roll  = math.degrees(math.atan2(ay, az))
@@ -284,8 +295,10 @@ class Wand3DWidget(QWidget):
         )
 
         # ── 3. Complementary blend ─────────────────────────────────────
-        self._roll  = self._GYRO_WEIGHT * self._roll  + self._ACCEL_WEIGHT * accel_roll
-        self._pitch = self._GYRO_WEIGHT * self._pitch + self._ACCEL_WEIGHT * accel_pitch
+        blend = self._GYRO_WEIGHT ** max(1.0, dt / self._DT)
+        accel_blend = 1.0 - blend
+        self._roll = blend * self._roll + accel_blend * accel_roll
+        self._pitch = blend * self._pitch + accel_blend * accel_pitch
 
         # ── 4. Apply to all mesh parts ─────────────────────────────────
         try:

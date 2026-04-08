@@ -75,11 +75,16 @@ class MainWindow(QMainWindow):
         self.udp_worker = UdpWorker(port=5555)
         self.udp_worker.sig_data_received.connect(self._on_udp_data)
         self.udp_worker.sig_status_change.connect(self._on_udp_status_change)
+        self.udp_worker.sig_health_update.connect(self._on_udp_health_update)
         self.udp_worker.start()
 
         self.data_store.sig_connection_state_updated.connect(self.page_home.set_connection_status)
+        self.data_store.sig_stats_updated.connect(self.page_home.update_manager_stats)
+        self.data_store.sig_live_features_updated.connect(self.page_statistics.update_live_features)
         connected, _ = self.data_store.get_connection_state()
         self.page_home.set_connection_status(connected)
+        self.page_home.update_manager_stats(self.data_store.system_stats)
+        self._udp_log_count = 0
 
     # ------------------------------------------------------------------
     # Slots
@@ -100,9 +105,13 @@ class MainWindow(QMainWindow):
                     "gz": values[5],
                 }
             )
+            if self.page_record.is_live:
+                self.data_store.add_live_sample(values)
 
-        # Raw text → Wand terminal
-        self.page_wand.append_terminal_text(f">> UDP: {data}")
+        # Raw text → Wand terminal (throttled)
+        self._udp_log_count += 1
+        if self._udp_log_count % 25 == 0:
+            self.page_wand.append_terminal_text(f">> UDP: {data}")
 
         # Hardware stats → DataStore
         esp_update: dict[str, str] = {}
@@ -110,6 +119,8 @@ class MainWindow(QMainWindow):
             esp_update["Battery"] = f"{data['battery']}%"
         if "free_ram" in data:
             esp_update["RAM Free"] = f"{data['free_ram']} KB"
+        if "rssi" in data:
+            esp_update["RSSI"] = f"{data['rssi']} dBm"
         if esp_update:
             self.data_store.update_esp_stats(esp_update)
 
@@ -117,6 +128,9 @@ class MainWindow(QMainWindow):
         """Keep UDP telemetry separate from wand connection state."""
         if active:
             self.page_wand.append_terminal_text(">> UDP telemetry received.")
+
+    def _on_udp_health_update(self, health: dict) -> None:
+        self.data_store.update_udp_health(health)
 
     def _on_settings_saved(self, config: dict) -> None:
         """Persist settings through DataStore-owned settings store."""
