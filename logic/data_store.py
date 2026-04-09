@@ -258,6 +258,10 @@ class DataStore(QObject):
         self._last_live_emit = 0.0
         self._live_emit_interval = 0.05
 
+        # Debounce guard for refresh_database: at most one scan per 500 ms.
+        self._last_db_refresh: float = 0.0
+        self._db_refresh_interval: float = 0.5
+
         # Initial filesystem scan
         self.refresh_database()
 
@@ -281,18 +285,27 @@ class DataStore(QObject):
         self.sig_sensor_data_updated.emit(self.sensor_buffers)
 
     def add_live_sample(self, sample: list[float], *, emit: bool = True) -> list[list[float]]:
-        """Append one 6-axis sample to rolling live buffer and emit snapshot."""
+        """Append one 6-axis sample to rolling live buffer and emit snapshot.
+
+        The buffer copy (list comprehension) is deferred until the rate-limit
+        gate passes so that the lock is held only for the O(1) deque append on
+        the hot path (~50 Hz).  The snapshot is built outside the lock after the
+        rate check, using a second brief acquisition.
+        """
         try:
             normalized_sample = validate_six_axis_values(sample)
         except FrameValidationError:
             return []
+        # O(1) append — hold the lock for as short a time as possible.
         with self._buffer_lock:
             self.live_buffer.append(normalized_sample)
-            snapshot = [list(row) for row in self.live_buffer]
         if emit:
             now = time.perf_counter()
             if now - self._last_live_emit >= self._live_emit_interval:
                 self._last_live_emit = now
+                # Snapshot copy is now outside the hot-path lock acquisition.
+                with self._buffer_lock:
+                    snapshot = [list(row) for row in self.live_buffer]
                 self.sig_live_buffer_updated.emit(snapshot)
                 return snapshot
         return []
@@ -410,8 +423,23 @@ class DataStore(QObject):
 
     # ── Database ────────────────────────────────────────────────────────
 
-    def refresh_database(self) -> None:
-        """Scan dataset/ folder structure to rebuild spell_counts."""
+    def refresh_database(self, *, force: bool = False) -> None:
+        """Scan dataset/ folder structure to rebuild spell_counts.
+
+        Debounced: successive calls within ``_db_refresh_interval`` seconds
+        are no-ops so that rapid saves do not trigger a storm of directory
+        scans on the main thread.  The initial call at startup always runs
+        because ``_last_db_refresh`` starts at 0.
+
+        Pass ``force=True`` to bypass the debounce (used after direct writes
+        in ``save_cropped_data`` / ``delete_spell`` where the filesystem state
+        is known to have changed).
+        """
+        now = time.perf_counter()
+        if not force and now - self._last_db_refresh < self._db_refresh_interval:
+            return
+        self._last_db_refresh = now
+
         self.spell_counts.clear()
         if os.path.exists(self.dataset_dir):
             for item in os.listdir(self.dataset_dir):
@@ -419,6 +447,15 @@ class DataStore(QObject):
                 if os.path.isdir(spell_path):
                     csv_files = glob.glob(os.path.join(spell_path, "*.csv"))
                     self.spell_counts[item] = len(csv_files)
+        self.sig_db_updated.emit(self.spell_counts)
+
+    def apply_db_refresh(self, counts: dict) -> None:
+        """Apply a pre-computed spell-count dict produced by DataIOWorker.
+
+        Called in the main thread via QueuedConnection so it is safe to update
+        ``spell_counts`` and emit ``sig_db_updated`` without extra locking.
+        """
+        self.spell_counts = dict(counts)
         self.sig_db_updated.emit(self.spell_counts)
 
     def get_spell_list(self) -> list[str]:
@@ -465,7 +502,7 @@ class DataStore(QObject):
                         ensure_ascii=True,
                         indent=2,
                     )
-            self.refresh_database()
+            self.refresh_database(force=True)
             return True
         except Exception as e:
             print(f"[DataStore] Save error: {e}")
@@ -491,7 +528,7 @@ class DataStore(QObject):
             os.rmdir(spell_path)
             
             # Refresh the database
-            self.refresh_database()
+            self.refresh_database(force=True)
             return True
         except Exception as e:
             print(f"[DataStore] Delete spell error: {e}")

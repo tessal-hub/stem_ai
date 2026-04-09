@@ -84,7 +84,11 @@ class UdpWorker(QThread):
     def stop(self) -> None:
         """Gracefully asks the thread to terminate."""
         self._is_running = False
-        self.wait()  # Block until the thread actually finishes
+        if not self.wait(2000):
+            import logging
+            logging.getLogger(__name__).warning(
+                "UdpWorker: thread did not exit within 2 s after stop()"
+            )
 
     def _update_health_metrics(self, payload: dict[str, Any]) -> None:
         now = time.perf_counter()
