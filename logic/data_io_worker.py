@@ -63,25 +63,40 @@ class DataIOWorker(QThread):
         tag: str = "",
     ) -> None:
         """Schedule a cropped sample write (non-blocking)."""
-        self._job_queue.put_nowait(("save", spell_name, data, tag))
+        try:
+            self._job_queue.put_nowait(("save", spell_name, data, tag))
+        except queue.Full:
+            log.warning("DataIOWorker: job queue full, save job dropped for spell '%s'", spell_name)
 
     def enqueue_delete(self, spell_name: str) -> None:
         """Schedule a spell deletion (non-blocking)."""
-        self._job_queue.put_nowait(("delete", spell_name))
+        try:
+            self._job_queue.put_nowait(("delete", spell_name))
+        except queue.Full:
+            log.warning("DataIOWorker: job queue full, delete job dropped for spell '%s'", spell_name)
 
     def enqueue_export(self, buf: list[list[float]], path: str) -> None:
         """Schedule a buffer CSV export (non-blocking)."""
-        self._job_queue.put_nowait(("export", buf, path))
+        try:
+            self._job_queue.put_nowait(("export", buf, path))
+        except queue.Full:
+            log.warning("DataIOWorker: job queue full, export job dropped")
 
     def enqueue_refresh(self) -> None:
         """Schedule a database directory rescan (non-blocking)."""
-        self._job_queue.put_nowait(("refresh",))
+        try:
+            self._job_queue.put_nowait(("refresh",))
+        except queue.Full:
+            log.warning("DataIOWorker: job queue full, refresh job dropped")
 
     def stop(self) -> None:
         """Request the worker loop to exit and wait up to 2 s."""
         self._running = False
         # Unblock the blocking get() with a sentinel.
-        self._job_queue.put_nowait(("_stop",))
+        try:
+            self._job_queue.put_nowait(("_stop",))
+        except queue.Full:
+            pass  # Worker will exit via _running=False on its next timeout.
         if not self.wait(2000):
             log.warning("DataIOWorker: thread did not exit within 2 s")
 

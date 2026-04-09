@@ -84,6 +84,11 @@ class Handler(QObject):
         # ── State Management ────────────────────────────────────────────
         self.current_selected_spell: str = ""
         self._pending_save_spell: str = ""
+        self._pending_flash_bin_type: str = ""
+        self._pending_flash_port: str = ""
+        self._pending_flash_bin_path = None
+        self._pending_upload_port: str = ""
+        self._pending_upload_model_path = None
         self._port_owner: str | None = None
         self._mode_lock = Lock()
         self._mode = self.store.get_current_mode().strip().upper()
@@ -375,14 +380,17 @@ class Handler(QObject):
             self.serial_worker.finished.connect(self._on_serial_worker_stopped_for_disconnect)
             self.serial_worker.stop()
         else:
-            self._on_serial_worker_stopped_for_disconnect(True, "")
+            self._on_serial_worker_stopped_for_disconnect()
 
-    def _on_serial_worker_stopped_for_disconnect(self, _success: bool = True, _msg: str = "") -> None:
+    def _on_serial_worker_stopped_for_disconnect(self) -> None:
         """Complete serial disconnect after the worker thread finishes."""
         try:
             self.serial_worker.finished.disconnect(self._on_serial_worker_stopped_for_disconnect)
-        except (RuntimeError, TypeError):
-            pass
+        except (RuntimeError, TypeError) as exc:
+            import logging
+            logging.getLogger(__name__).debug(
+                "serial disconnect: signal already disconnected (%s)", exc
+            )
 
         self.ui_wand.append_terminal_text(">> Serial connection stopped")
         # CRITICAL FIX: Recreate SerialWorker so it can be started again
@@ -755,25 +763,27 @@ class Handler(QObject):
         # thread has fully exited (non-blocking — avoids stalling the UI thread).
         if self.serial_worker.isRunning():
             self._flash_log_to_console(">> Stopping serial connection to release COM port...")
-            # Capture bin_type and port in a closure for the deferred callback.
-            self.serial_worker.finished.connect(
-                lambda _ok, _msg, _bt=bin_type, _p=port, _bp=bin_path:
-                    self._on_serial_stopped_start_flash(_bt, _p, _bp)
-            )
+            # Store args for the deferred callback, then connect the named slot
+            # so it can be disconnected by reference (no lambdas).
+            self._pending_flash_bin_type = bin_type
+            self._pending_flash_port = port
+            self._pending_flash_bin_path = bin_path
+            self.serial_worker.finished.connect(self._on_serial_stopped_start_flash)
             self.serial_worker.stop()
         else:
             self._start_flash_immediately(bin_type, port, bin_path)
 
-    def _on_serial_stopped_start_flash(self, bin_type: str, port: str, bin_path) -> None:
+    def _on_serial_stopped_start_flash(self) -> None:
         """Callback: serial worker has exited — now safe to open COM port for flashing."""
-        try:
-            self.serial_worker.finished.disconnect()
-        except (RuntimeError, TypeError):
-            pass
+        self.serial_worker.finished.disconnect(self._on_serial_stopped_start_flash)
         if self._port_owner == "serial":
             self._set_port_owner(None)
         self._flash_log_to_console(">> COM port released, ready to flash\n")
-        self._start_flash_immediately(bin_type, port, bin_path)
+        self._start_flash_immediately(
+            self._pending_flash_bin_type,
+            self._pending_flash_port,
+            self._pending_flash_bin_path,
+        )
 
     def _start_flash_immediately(self, bin_type: str, port: str, bin_path) -> None:
         """Start the flash worker — called once the COM port is free."""
@@ -836,23 +846,24 @@ class Handler(QObject):
         # has fully exited so both operations don't race on the same COM port.
         if self.serial_worker.isRunning():
             self.ui_wand.append_terminal_text(">> Temporarily pausing live data for upload...")
-            self.serial_worker.finished.connect(
-                lambda _ok, _msg, _port=port, _mp=model_path:
-                    self._on_serial_stopped_start_upload(_port, _mp)
-            )
+            # Store args for the deferred callback, then connect the named slot
+            # so it can be disconnected by reference (no lambdas).
+            self._pending_upload_port = port
+            self._pending_upload_model_path = model_path
+            self.serial_worker.finished.connect(self._on_serial_stopped_start_upload)
             self.serial_worker.stop()
         else:
             self._start_upload_immediately(port, model_path)
 
-    def _on_serial_stopped_start_upload(self, port: str, model_path) -> None:
+    def _on_serial_stopped_start_upload(self) -> None:
         """Callback: serial worker has exited — now safe to open COM port for upload."""
-        try:
-            self.serial_worker.finished.disconnect()
-        except (RuntimeError, TypeError):
-            pass
+        self.serial_worker.finished.disconnect(self._on_serial_stopped_start_upload)
         if self._port_owner == "serial":
             self._set_port_owner(None)
-        self._start_upload_immediately(port, model_path)
+        self._start_upload_immediately(
+            self._pending_upload_port,
+            self._pending_upload_model_path,
+        )
 
     def _start_upload_immediately(self, port: str, model_path) -> None:
         """Begin the model upload — called once the COM port is free."""
