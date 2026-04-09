@@ -173,6 +173,12 @@ QPushButton#btn_small {{
     font-size: 12px;
 }}
 
+/* FOCUS RINGS - Visible keyboard focus for all interactive controls */
+QPushButton:focus {{
+    outline: none;
+    border: 2px solid {PRIMARY_COLOR};
+}}
+
 /* ICON BUTTON - Navigation, utilities */
 QToolButton {{
     background-color: transparent;
@@ -194,6 +200,11 @@ QToolButton:checked {{
     background-color: {PRIMARY_LIGHT};
     color: {PRIMARY_COLOR};
     border: 1px solid {PRIMARY_COLOR};
+}}
+
+QToolButton:focus {{
+    outline: none;
+    border: 2px solid {PRIMARY_COLOR};
 }}
 
 /* ═══════════════════════════════════════════════════════════════════════════

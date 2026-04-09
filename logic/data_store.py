@@ -19,7 +19,13 @@ from typing import Any, Mapping
 
 from PyQt6.QtCore import QObject, QSettings, pyqtSignal
 
-from config import DATASET_DIR, DEFAULT_MODEL_PATH, ensure_data_dir
+from config import (
+    DATASET_DIR,
+    DEFAULT_MODEL_PATH,
+    GESTURE_MODEL_CC_OUTPUT,
+    VSCODE_WORKSPACE_FILE,
+    ensure_data_dir,
+)
 from .frame_protocol import FrameValidationError, validate_six_axis_values
 
 
@@ -49,6 +55,11 @@ class SettingsStore:
         "baud_rate": "115200",
         "model_path": str(DEFAULT_MODEL_PATH),
         "firmware_mode": "data",
+        # Path configuration
+        "workspace_path": str(VSCODE_WORKSPACE_FILE),
+        "model_output_path": str(DEFAULT_MODEL_PATH),
+        "gesture_cc_path": str(GESTURE_MODEL_CC_OUTPUT),
+        "dataset_dir": str(DATASET_DIR),
     }
 
     def __init__(self) -> None:
@@ -112,6 +123,11 @@ class SettingsStore:
             "baud_rate": self.get_str("baud_rate", self._DEFAULTS["baud_rate"]),
             "model_path": model_path,
             "firmware_mode": self.get_str("firmware_mode", self._DEFAULTS["firmware_mode"]),
+            # Path configuration
+            "workspace_path": self.get_str("workspace_path", self._DEFAULTS["workspace_path"]),
+            "model_output_path": self.get_str("model_output_path", self._DEFAULTS["model_output_path"]),
+            "gesture_cc_path": self.get_str("gesture_cc_path", self._DEFAULTS["gesture_cc_path"]),
+            "dataset_dir": self.get_str("dataset_dir", self._DEFAULTS["dataset_dir"]),
         }
 
     def _normalize(self, config: Mapping[str, Any]) -> dict[str, Any]:
@@ -130,6 +146,11 @@ class SettingsStore:
             "baud_rate": str(merged["baud_rate"]),
             "model_path": str(merged["model_path"]),
             "firmware_mode": str(merged["firmware_mode"]),
+            # Path configuration
+            "workspace_path": str(merged.get("workspace_path", self._DEFAULTS["workspace_path"])),
+            "model_output_path": str(merged.get("model_output_path", self._DEFAULTS["model_output_path"])),
+            "gesture_cc_path": str(merged.get("gesture_cc_path", self._DEFAULTS["gesture_cc_path"])),
+            "dataset_dir": str(merged.get("dataset_dir", self._DEFAULTS["dataset_dir"])),
         }
 
     def save(self, config: Mapping[str, Any]) -> dict[str, Any]:
@@ -148,6 +169,11 @@ class SettingsStore:
         self.set_str("baud_rate", normalized["baud_rate"])
         self.set_str("model_path", normalized["model_path"])
         self.set_str("firmware_mode", normalized["firmware_mode"])
+        # Path configuration
+        self.set_str("workspace_path", normalized["workspace_path"])
+        self.set_str("model_output_path", normalized["model_output_path"])
+        self.set_str("gesture_cc_path", normalized["gesture_cc_path"])
+        self.set_str("dataset_dir", normalized["dataset_dir"])
         self._settings.sync()
         return normalized
 

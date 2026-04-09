@@ -497,6 +497,9 @@ class PageHome(QWidget):
 
     def _configure_accessibility(self) -> None:
         self.status_bar.setAccessibleName("Home status banner")
+        self.status_bar.setAccessibleDescription(
+            "Dynamic banner showing wand connection state"
+        )
         self.mode_label.setAccessibleName("Current wand mode")
         self.wand_3d.setAccessibleName("3D wand orientation viewer")
         self.btn_simulate.setAccessibleName("Replay last input data")

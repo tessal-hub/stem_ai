@@ -702,10 +702,10 @@ class PageRecord(QWidget):
         self.btn_stop.setEnabled(False)
         self.btn_snip.setEnabled(False)
         
-        # Add tooltips for better UX
-        self.btn_start.setToolTip("Start recording sensor data for the selected spell")
-        self.btn_stop.setToolTip("Stop recording and enable cropping/snipping")
-        self.btn_snip.setToolTip("Save the selected region as a training sample")
+        # Add tooltips for better UX (include keyboard shortcuts)
+        self.btn_start.setToolTip("Start recording sensor data (Ctrl+S)")
+        self.btn_stop.setToolTip("Stop recording and enable snipping (Ctrl+T)")
+        self.btn_snip.setToolTip("Save selected region as a training sample (Ctrl+X)")
         
         btn_row.addWidget(self.btn_start, 0, 0)
         btn_row.addWidget(self.btn_stop, 0, 1)
@@ -832,11 +832,17 @@ class PageRecord(QWidget):
         """Set keyboard traversal and accessibility names for core controls."""
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
+        self.graph1.setAccessibleName("Accelerometer live plot (aX, aY, aZ)")
+        self.graph2.setAccessibleName("Gyroscope live plot (gX, gY, gZ)")
+        self.lbl_wand_status.setAccessibleName("Recording status")
+        self.lbl_wand_status.setAccessibleDescription(
+            "Dynamic status indicator showing current recording or connection state"
+        )
         self.combo_spell.setAccessibleName("Spell label selector")
         self.edit_tag.setAccessibleName("Optional tag label")
-        self.btn_start.setAccessibleName("Start recording")
-        self.btn_stop.setAccessibleName("Stop recording")
-        self.btn_snip.setAccessibleName("Snip selected range")
+        self.btn_start.setAccessibleName("Start recording (Ctrl+S)")
+        self.btn_stop.setAccessibleName("Stop recording (Ctrl+T)")
+        self.btn_snip.setAccessibleName("Snip selected range (Ctrl+X)")
         self.btn_zoom_in.setAccessibleName("Zoom in timeline")
         self.btn_zoom_out.setAccessibleName("Zoom out timeline")
         self.btn_zoom_fit.setAccessibleName("Fit timeline to data")
@@ -854,7 +860,9 @@ class PageRecord(QWidget):
         self.setTabOrder(self.btn_snip, self.btn_zoom_in)
         self.setTabOrder(self.btn_zoom_in, self.btn_zoom_out)
         self.setTabOrder(self.btn_zoom_out, self.btn_zoom_fit)
-        self.setTabOrder(self.btn_zoom_fit, self.spell_list)
+        self.setTabOrder(self.btn_zoom_fit, self.btn_clear_samples)
+        self.setTabOrder(self.btn_clear_samples, self.btn_export_csv)
+        self.setTabOrder(self.btn_export_csv, self.spell_list)
         self.setTabOrder(self.spell_list, self.btn_delete_spell)
         self.setTabOrder(self.btn_delete_spell, self.btn_back_spells)
         self.setTabOrder(self.btn_back_spells, self.sample_list)

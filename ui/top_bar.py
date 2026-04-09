@@ -70,6 +70,8 @@ class TechButton(QPushButton):
         self._w_collapsed = INACTIVE_TAB_H          # square when icon-only
         self._w_expanded  = self._measure_expanded_width()
 
+        self.setAccessibleName(f"Navigate to {entry.label}")
+
         # ── icon / fallback emoji ────────────────────────────────────────
         from .design_tokens import TAB_FALLBACKS
         if os.path.exists(entry.icon):

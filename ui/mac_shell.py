@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, QSize, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QToolButton, QVBoxLayout, QWidget
@@ -167,7 +167,6 @@ class MacShell(QWidget):
             button = self._make_nav_button(item.label, item.icon, index)
             self._buttons.append(button)
             sidebar_layout.addWidget(button)
-
         sidebar_layout.addStretch()
 
         self.content_host = QWidget()
@@ -197,6 +196,7 @@ class MacShell(QWidget):
         button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
         button.setIconSize(SHELL_BRAND_ICON)
         button.setText(label)
+        button.setAccessibleName(f"Navigate to {label}")
         button.setStyleSheet(
             f"""
             QToolButton {{
@@ -223,7 +223,11 @@ class MacShell(QWidget):
             """
         )
         if icon_path:
-            icon = self._tint_svg(icon_path, QColor(PRIMARY_COLOR if index == 0 else TEXT_SECONDARY))
+            icon = self._tint_svg(
+                icon_path,
+                QColor(PRIMARY_COLOR if index == 0 else TEXT_SECONDARY),
+                SHELL_BRAND_ICON,
+            )
             button.setIcon(icon)
             button.setIconSize(SHELL_BRAND_ICON)
         button.clicked.connect(lambda _, idx=index: self._on_nav(idx))
@@ -234,9 +238,10 @@ class MacShell(QWidget):
         self.nav_requested.emit(index)
 
     @staticmethod
-    def _tint_svg(path: str, color: QColor) -> QIcon:
+    def _tint_svg(path: str, color: QColor, size: QSize | None = None) -> QIcon:
         renderer = QSvgRenderer(path)
-        pixmap = QPixmap(16, 16)
+        render_size = size if size is not None else QSize(16, 16)
+        pixmap = QPixmap(render_size)
         pixmap.fill(Qt.GlobalColor.transparent)
         painter = QPainter(pixmap)
         renderer.render(painter)
