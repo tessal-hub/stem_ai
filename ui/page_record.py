@@ -10,6 +10,7 @@ Architecture compliance (SKILL.md §2A):
 """
 from __future__ import annotations
 import logging
+import numpy as np
 import pyqtgraph as pg
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QTime
 from PyQt6.QtWidgets import (
@@ -270,36 +271,43 @@ class PageRecord(QWidget):
         self.lbl_record_count.setText(f"Selected: {sample_count} samples")
 
     def _render_plots(self) -> None:
-        """Timer callback (~60 FPS). Pure display — no data processing."""
-        plot_buffer = self.store.get_live_buffer_snapshot()
-        if not plot_buffer or len(plot_buffer) == 0:
-            return  # Guard against empty buffer
+        """Timer callback (~30 FPS). Pure display — no data processing.
+
+        Uses numpy column-slicing instead of per-column list comprehensions to
+        extract the six signal axes from the snapshot in a single pass.  The
+        widget visibility guard ensures no work is done when the page is hidden.
+        """
+        # Skip rendering when this widget is not visible (e.g. user is on a
+        # different page) to avoid doing unnecessary GPU/CPU work.
+        if not self.isVisible():
+            return
 
         if not self.is_live:
             return  # Guard: only render during live recording
 
+        plot_buffer = self.store.get_live_buffer_snapshot()
+        if not plot_buffer:
+            return  # Guard against empty buffer
+
         try:
-            # Extract all 6 columns for plotting (view-only, no mutation)
-            # Buffer format: [ax, ay, az, gx, gy, gz]
-            ax_data = [row[0] for row in plot_buffer]
-            ay_data = [row[1] for row in plot_buffer]
-            az_data = [row[2] for row in plot_buffer]
-            gx_data = [row[3] for row in plot_buffer]
-            gy_data = [row[4] for row in plot_buffer]
-            gz_data = [row[5] for row in plot_buffer]
+            # Single numpy conversion — avoids 6× list comprehensions over
+            # potentially 500 rows (≈30 000 Python object accesses/second at 60 fps).
+            arr = np.asarray(plot_buffer, dtype=np.float32)
+            if arr.ndim != 2 or arr.shape[1] < 6:
+                return
 
             # Update accel curves (graph1)
-            if self.graph1.isVisible() and len(ax_data) > 0:
-                self.curve_ax.setData(ax_data)
-                self.curve_ay.setData(ay_data)
-                self.curve_az.setData(az_data)
+            if self.graph1.isVisible():
+                self.curve_ax.setData(arr[:, 0])
+                self.curve_ay.setData(arr[:, 1])
+                self.curve_az.setData(arr[:, 2])
 
             # Update gyro curves (graph2)
-            if self.graph2.isVisible() and len(gx_data) > 0:
-                self.curve_gx.setData(gx_data)
-                self.curve_gy.setData(gy_data)
-                self.curve_gz.setData(gz_data)
-            
+            if self.graph2.isVisible():
+                self.curve_gx.setData(arr[:, 3])
+                self.curve_gy.setData(arr[:, 4])
+                self.curve_gz.setData(arr[:, 5])
+
             if len(plot_buffer) % 50 == 0:  # Print every 50 samples (~1 second)
                 log.debug("[PageRecord._render_plots] Rendering %d samples", len(plot_buffer))
         except Exception as e:
