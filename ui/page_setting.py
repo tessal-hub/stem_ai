@@ -600,25 +600,32 @@ class PageSetting(QWidget):
         invalid_names: list[str] = []
 
         for field, name in file_checks:
-            path_str = config.get(
-                {
-                    self.txt_workspace_path: "workspace_path",
-                    self.txt_model_output_path: "model_output_path",
-                    self.txt_gesture_cc_path: "gesture_cc_path",
-                }[field],
-                "",
-            )
-            if path_str and not Path(path_str).parent.exists():
-                field.setStyleSheet(STYLE_SETTING_INPUT + _invalid)
-                invalid_names.append(name)
+            key = {
+                self.txt_workspace_path: "workspace_path",
+                self.txt_model_output_path: "model_output_path",
+                self.txt_gesture_cc_path: "gesture_cc_path",
+            }[field]
+            path_str = config.get(key, "")
+            if path_str:
+                resolved = Path(path_str).expanduser().resolve()
+                if not resolved.parent.exists():
+                    field.setStyleSheet(STYLE_SETTING_INPUT + _invalid)
+                    invalid_names.append(name)
+                else:
+                    field.setStyleSheet(STYLE_SETTING_INPUT)
             else:
                 field.setStyleSheet(STYLE_SETTING_INPUT)
 
         for field, name in dir_checks:
             path_str = config.get("dataset_dir", "")
-            if path_str and not Path(path_str).exists():
-                field.setStyleSheet(STYLE_SETTING_INPUT + _invalid)
-                invalid_names.append(name)
+            if path_str:
+                resolved = Path(path_str).expanduser().resolve()
+                # Allow non-existent directory if its parent exists (will be created on use)
+                if not resolved.parent.exists():
+                    field.setStyleSheet(STYLE_SETTING_INPUT + _invalid)
+                    invalid_names.append(name)
+                else:
+                    field.setStyleSheet(STYLE_SETTING_INPUT)
             else:
                 field.setStyleSheet(STYLE_SETTING_INPUT)
 

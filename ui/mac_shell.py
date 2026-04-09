@@ -167,6 +167,7 @@ class MacShell(QWidget):
             button = self._make_nav_button(item.label, item.icon, index)
             self._buttons.append(button)
             sidebar_layout.addWidget(button)
+
         sidebar_layout.addStretch()
 
         self.content_host = QWidget()

@@ -404,3 +404,4 @@ class PageStatistics(QWidget):
         self.setTabOrder(self.btn_train_build, self.model_progress)
         self.setTabOrder(self.model_progress, self.btn_back_spells)
         self.setTabOrder(self.btn_back_spells, self.sample_list)
+        self.setTabOrder(self.sample_list, self.btn_train_build)
