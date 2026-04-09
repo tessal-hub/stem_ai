@@ -4,12 +4,14 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+from pathlib import Path
 from typing import Any
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QFileDialog,
     QFrame,
     QFormLayout,
     QGridLayout,
@@ -22,6 +24,7 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QSpinBox,
     QProgressBar,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -58,7 +61,13 @@ from ui.tokens import (
 from ui.confirm_dialog import confirm_destructive
 from ui.mac_material import apply_soft_shadow
 from ui.terminal_widget import TerminalWidget
-from config import VSCODE_WORKSPACE_FILE
+from ui.modern_layout import MARGIN_STANDARD, SPACING_MD
+from config import (
+    DATASET_DIR,
+    DEFAULT_MODEL_PATH,
+    GESTURE_MODEL_CC_OUTPUT,
+    VSCODE_WORKSPACE_FILE,
+)
 
 # ---------------------------------------------------------------------------
 # Widget
@@ -98,6 +107,11 @@ class PageSetting(QWidget):
             "window_overlap": self.spin_window_overlap,
             "project_name":   self.txt_project_name,
             "auto_save":      self.chk_auto_save,
+            # Path configuration
+            "workspace_path":    self.txt_workspace_path,
+            "dataset_dir":       self.txt_dataset_dir,
+            "model_output_path": self.txt_model_output_path,
+            "gesture_cc_path":   self.txt_gesture_cc_path,
         }
 
         for key, widget in widgets.items():
@@ -154,14 +168,15 @@ class PageSetting(QWidget):
         self.main_container.setStyleSheet(STYLE_SETTING_MAIN_CONTAINER)
 
         inner = QVBoxLayout(self.main_container)
-        inner.setContentsMargins(12, 12, 12, 12)
-        inner.setSpacing(12)
+        inner.setContentsMargins(MARGIN_STANDARD, MARGIN_STANDARD, MARGIN_STANDARD, MARGIN_STANDARD)
+        inner.setSpacing(SPACING_MD)
 
         cols = QHBoxLayout()
-        cols.setSpacing(12)
+        cols.setSpacing(SPACING_MD)
         cols.addWidget(self._build_hardware_column(), stretch=1)
         cols.addWidget(self._build_software_column(), stretch=1)
         inner.addLayout(cols, stretch=1)
+        inner.addWidget(self._build_paths_card())
         inner.addWidget(self._build_firmware_section())
         inner.addLayout(self._build_control_bar())
 
@@ -172,7 +187,7 @@ class PageSetting(QWidget):
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
+        layout.setSpacing(SPACING_MD)
 
         # ── Sensor card ─────────────────────────────────────────────────
         layout.addWidget(self._make_section_label("IMU SENSOR CONFIGURATION"))
@@ -212,7 +227,7 @@ class PageSetting(QWidget):
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
+        layout.setSpacing(SPACING_MD)
 
         # ── ML pipeline card ────────────────────────────────────────────
         layout.addWidget(self._make_section_label("MACHINE LEARNING PIPELINE"))
@@ -278,7 +293,7 @@ class PageSetting(QWidget):
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
+        layout.setSpacing(SPACING_MD)
 
         layout.addWidget(self._make_section_label("FIRMWARE MANAGEMENT"))
 
@@ -286,7 +301,7 @@ class PageSetting(QWidget):
 
         # Flash buttons
         button_grid = QGridLayout()
-        button_grid.setHorizontalSpacing(12)
+        button_grid.setHorizontalSpacing(SPACING_MD)
         button_grid.setVerticalSpacing(8)
 
         self.btn_flash_collect = self._make_primary_button("⬆  INSTALL DATA FIRMWARE")
@@ -329,12 +344,6 @@ class PageSetting(QWidget):
 
     def _build_control_bar(self) -> QHBoxLayout:
         row = QHBoxLayout()
-        self.btn_open_workspace = QPushButton("OPEN VSCODE WORKSPACE")
-        self.btn_open_workspace.setStyleSheet(STYLE_SETTING_BTN_OUTLINE)
-        self.btn_open_workspace.setFixedHeight(SETTINGS_BTN_H)
-        self.btn_open_workspace.setCursor(Qt.CursorShape.PointingHandCursor)
-
-        row.addWidget(self.btn_open_workspace)
         row.addStretch()
 
         self.btn_revert = QPushButton("REVERT CHANGES")
@@ -361,7 +370,16 @@ class PageSetting(QWidget):
         self.btn_clear_db.clicked.connect(self._on_clear_db_clicked)
         self.btn_flash_collect.clicked.connect(self._on_flash_collect_clicked)
         self.btn_flash_ai.clicked.connect(self._on_flash_ai_clicked)
+        # Path card buttons
         self.btn_open_workspace.clicked.connect(self._on_open_workspace_clicked)
+        self.btn_browse_workspace.clicked.connect(self._on_browse_workspace)
+        self.btn_reset_workspace.clicked.connect(self._on_reset_workspace)
+        self.btn_browse_dataset.clicked.connect(self._on_browse_dataset)
+        self.btn_reset_dataset.clicked.connect(self._on_reset_dataset)
+        self.btn_browse_model_output.clicked.connect(self._on_browse_model_output)
+        self.btn_reset_model_output.clicked.connect(self._on_reset_model_output)
+        self.btn_browse_gesture_cc.clicked.connect(self._on_browse_gesture_cc)
+        self.btn_reset_gesture_cc.clicked.connect(self._on_reset_gesture_cc)
 
     def _configure_accessibility(self) -> None:
         """Configure accessible names and deterministic keyboard traversal."""
@@ -373,12 +391,26 @@ class PageSetting(QWidget):
         self.combo_ml_pipeline.setAccessibleName("Machine learning pipeline")
         self.txt_project_name.setAccessibleName("Project name")
         self.chk_auto_save.setAccessibleName("Auto save recording samples")
+        # Path configuration fields
+        self.txt_workspace_path.setAccessibleName("VS Code workspace file path")
+        self.btn_browse_workspace.setAccessibleName("Browse for workspace file")
+        self.btn_reset_workspace.setAccessibleName("Reset workspace path to default")
+        self.btn_open_workspace.setAccessibleName("Open VS Code workspace")
+        self.txt_dataset_dir.setAccessibleName("Dataset directory path")
+        self.btn_browse_dataset.setAccessibleName("Browse for dataset directory")
+        self.btn_reset_dataset.setAccessibleName("Reset dataset directory to default")
+        self.txt_model_output_path.setAccessibleName("Model output file path")
+        self.btn_browse_model_output.setAccessibleName("Browse for model output file")
+        self.btn_reset_model_output.setAccessibleName("Reset model output path to default")
+        self.txt_gesture_cc_path.setAccessibleName("Gesture CC output file path")
+        self.btn_browse_gesture_cc.setAccessibleName("Browse for gesture CC output file")
+        self.btn_reset_gesture_cc.setAccessibleName("Reset gesture CC path to default")
+        # Firmware and action buttons
         self.btn_revert.setAccessibleName("Revert settings")
         self.btn_save.setAccessibleName("Save settings")
         self.btn_flash_collect.setAccessibleName("Install data firmware")
         self.btn_flash_ai.setAccessibleName("Install AI firmware")
         self.btn_clear_db.setAccessibleName("Erase all collected data")
-        self.btn_open_workspace.setAccessibleName("Open VS Code workspace")
 
         self.setTabOrder(self.combo_sample_rate, self.combo_accel_scale)
         self.setTabOrder(self.combo_accel_scale, self.combo_gyro_scale)
@@ -387,8 +419,20 @@ class PageSetting(QWidget):
         self.setTabOrder(self.spin_window_overlap, self.combo_ml_pipeline)
         self.setTabOrder(self.combo_ml_pipeline, self.txt_project_name)
         self.setTabOrder(self.txt_project_name, self.chk_auto_save)
-        self.setTabOrder(self.chk_auto_save, self.btn_open_workspace)
-        self.setTabOrder(self.btn_open_workspace, self.btn_revert)
+        self.setTabOrder(self.chk_auto_save, self.txt_workspace_path)
+        self.setTabOrder(self.txt_workspace_path, self.btn_browse_workspace)
+        self.setTabOrder(self.btn_browse_workspace, self.btn_reset_workspace)
+        self.setTabOrder(self.btn_reset_workspace, self.btn_open_workspace)
+        self.setTabOrder(self.btn_open_workspace, self.txt_dataset_dir)
+        self.setTabOrder(self.txt_dataset_dir, self.btn_browse_dataset)
+        self.setTabOrder(self.btn_browse_dataset, self.btn_reset_dataset)
+        self.setTabOrder(self.btn_reset_dataset, self.txt_model_output_path)
+        self.setTabOrder(self.txt_model_output_path, self.btn_browse_model_output)
+        self.setTabOrder(self.btn_browse_model_output, self.btn_reset_model_output)
+        self.setTabOrder(self.btn_reset_model_output, self.txt_gesture_cc_path)
+        self.setTabOrder(self.txt_gesture_cc_path, self.btn_browse_gesture_cc)
+        self.setTabOrder(self.btn_browse_gesture_cc, self.btn_reset_gesture_cc)
+        self.setTabOrder(self.btn_reset_gesture_cc, self.btn_revert)
         self.setTabOrder(self.btn_revert, self.btn_save)
         self.setTabOrder(self.btn_save, self.btn_flash_collect)
         self.setTabOrder(self.btn_flash_collect, self.btn_flash_ai)
@@ -400,14 +444,19 @@ class PageSetting(QWidget):
 
     def _collect_config(self) -> dict[str, Any]:
         return {
-            "sample_rate":    self.combo_sample_rate.currentText(),
-            "accel_scale":    self.combo_accel_scale.currentText(),
-            "gyro_scale":     self.combo_gyro_scale.currentText(),
-            "window_size":    self.spin_window_size.value(),
-            "window_overlap": self.spin_window_overlap.value(),
-            "ml_pipeline":    self.combo_ml_pipeline.currentText(),
-            "project_name":   self.txt_project_name.text().strip(),
-            "auto_save":      self.chk_auto_save.isChecked(),
+            "sample_rate":       self.combo_sample_rate.currentText(),
+            "accel_scale":       self.combo_accel_scale.currentText(),
+            "gyro_scale":        self.combo_gyro_scale.currentText(),
+            "window_size":       self.spin_window_size.value(),
+            "window_overlap":    self.spin_window_overlap.value(),
+            "ml_pipeline":       self.combo_ml_pipeline.currentText(),
+            "project_name":      self.txt_project_name.text().strip(),
+            "auto_save":         self.chk_auto_save.isChecked(),
+            # Path configuration
+            "workspace_path":    self.txt_workspace_path.text().strip(),
+            "dataset_dir":       self.txt_dataset_dir.text().strip(),
+            "model_output_path": self.txt_model_output_path.text().strip(),
+            "gesture_cc_path":   self.txt_gesture_cc_path.text().strip(),
         }
 
     def _on_save_clicked(self) -> None:
@@ -415,6 +464,8 @@ class PageSetting(QWidget):
         if not config.get("project_name"):
             QMessageBox.warning(self, "Missing Field", "Project name cannot be empty.")
             self.txt_project_name.setFocus()
+            return
+        if not self._validate_paths(config):
             return
         self._last_saved = config
         self.sig_settings_saved.emit(config)
@@ -451,7 +502,7 @@ class PageSetting(QWidget):
 
     def _on_open_workspace_clicked(self) -> None:
         """Open the current workspace in VS Code from inside the app."""
-        target_str = str(VSCODE_WORKSPACE_FILE)
+        target_str = self.txt_workspace_path.text().strip() or str(VSCODE_WORKSPACE_FILE)
 
         if shutil.which("code"):
             try:
@@ -475,9 +526,225 @@ class PageSetting(QWidget):
             "Could not open VSCode workspace. Ensure the 'code' command is available in PATH.",
         )
 
+    # Browse / Reset handlers for path fields
+
+    def _on_browse_workspace(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select VS Code Workspace File", self.txt_workspace_path.text(),
+            "Workspace Files (*.code-workspace);;All Files (*)"
+        )
+        if path:
+            self.txt_workspace_path.setText(path)
+            self.txt_workspace_path.setStyleSheet(STYLE_SETTING_INPUT)
+
+    def _on_reset_workspace(self) -> None:
+        self.txt_workspace_path.setText(str(VSCODE_WORKSPACE_FILE))
+        self.txt_workspace_path.setStyleSheet(STYLE_SETTING_INPUT)
+
+    def _on_browse_dataset(self) -> None:
+        path = QFileDialog.getExistingDirectory(
+            self, "Select Dataset Directory", self.txt_dataset_dir.text()
+        )
+        if path:
+            self.txt_dataset_dir.setText(path)
+            self.txt_dataset_dir.setStyleSheet(STYLE_SETTING_INPUT)
+
+    def _on_reset_dataset(self) -> None:
+        self.txt_dataset_dir.setText(str(DATASET_DIR))
+        self.txt_dataset_dir.setStyleSheet(STYLE_SETTING_INPUT)
+
+    def _on_browse_model_output(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Select Model Output File", self.txt_model_output_path.text(),
+            "TFLite Models (*.tflite);;All Files (*)"
+        )
+        if path:
+            self.txt_model_output_path.setText(path)
+            self.txt_model_output_path.setStyleSheet(STYLE_SETTING_INPUT)
+
+    def _on_reset_model_output(self) -> None:
+        self.txt_model_output_path.setText(str(DEFAULT_MODEL_PATH))
+        self.txt_model_output_path.setStyleSheet(STYLE_SETTING_INPUT)
+
+    def _on_browse_gesture_cc(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Select Gesture CC Output File", self.txt_gesture_cc_path.text(),
+            "C Source Files (*.cc *.c);;All Files (*)"
+        )
+        if path:
+            self.txt_gesture_cc_path.setText(path)
+            self.txt_gesture_cc_path.setStyleSheet(STYLE_SETTING_INPUT)
+
+    def _on_reset_gesture_cc(self) -> None:
+        self.txt_gesture_cc_path.setText(str(GESTURE_MODEL_CC_OUTPUT))
+        self.txt_gesture_cc_path.setStyleSheet(STYLE_SETTING_INPUT)
+
+    # Path validation
+
+    def _validate_paths(self, config: dict[str, Any]) -> bool:
+        """Validate path fields; highlight invalid ones with a red border. Returns True if all valid."""
+        _invalid = (
+            f"border: 2px solid {DANGER}; border-radius: 6px;"
+            f" background-color: rgba(239, 68, 68, 0.06);"
+        )
+
+        file_checks: list[tuple[QLineEdit, str]] = [
+            (self.txt_workspace_path, "Workspace File"),
+            (self.txt_model_output_path, "Model Output Path"),
+            (self.txt_gesture_cc_path, "Gesture CC Output Path"),
+        ]
+        dir_checks: list[tuple[QLineEdit, str]] = [
+            (self.txt_dataset_dir, "Dataset Directory"),
+        ]
+
+        invalid_names: list[str] = []
+
+        for field, name in file_checks:
+            key = {
+                self.txt_workspace_path: "workspace_path",
+                self.txt_model_output_path: "model_output_path",
+                self.txt_gesture_cc_path: "gesture_cc_path",
+            }[field]
+            path_str = config.get(key, "")
+            if path_str:
+                resolved = Path(path_str).expanduser().resolve()
+                if not resolved.parent.exists():
+                    field.setStyleSheet(STYLE_SETTING_INPUT + _invalid)
+                    invalid_names.append(name)
+                else:
+                    field.setStyleSheet(STYLE_SETTING_INPUT)
+            else:
+                field.setStyleSheet(STYLE_SETTING_INPUT)
+
+        for field, name in dir_checks:
+            path_str = config.get("dataset_dir", "")
+            if path_str:
+                resolved = Path(path_str).expanduser().resolve()
+                # Allow non-existent directory if its parent exists (will be created on use)
+                if not resolved.parent.exists():
+                    field.setStyleSheet(STYLE_SETTING_INPUT + _invalid)
+                    invalid_names.append(name)
+                else:
+                    field.setStyleSheet(STYLE_SETTING_INPUT)
+            else:
+                field.setStyleSheet(STYLE_SETTING_INPUT)
+
+        if invalid_names:
+            QMessageBox.warning(
+                self,
+                "Invalid Path",
+                "The following paths have inaccessible parent directories:\n• "
+                + "\n• ".join(invalid_names),
+            )
+            return False
+        return True
+
     # ------------------------------------------------------------------
     # Factory helpers
     # ------------------------------------------------------------------
+
+    def _build_paths_card(self) -> QWidget:
+        """Build the PATH CONFIGURATION card with browse/reset controls."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(SPACING_MD)
+
+        layout.addWidget(self._make_section_label("PATH CONFIGURATION"))
+
+        card, card_layout = self._make_card()
+
+        def _make_path_row(
+            field: QLineEdit,
+            btn_browse: QPushButton,
+            btn_reset: QToolButton,
+        ) -> QHBoxLayout:
+            row = QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(6)
+            row.addWidget(field, stretch=1)
+            row.addWidget(btn_browse)
+            row.addWidget(btn_reset)
+            return row
+
+        def _make_path_field(placeholder: str) -> QLineEdit:
+            field = QLineEdit()
+            field.setStyleSheet(STYLE_SETTING_INPUT)
+            field.setMinimumHeight(SETTINGS_INPUT_H)
+            field.setPlaceholderText(placeholder)
+            field.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            return field
+
+        def _make_browse_btn() -> QPushButton:
+            btn = QPushButton("Browse…")
+            btn.setStyleSheet(STYLE_SETTING_BTN_OUTLINE)
+            btn.setFixedHeight(SETTINGS_INPUT_H)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            return btn
+
+        def _make_reset_btn() -> QToolButton:
+            btn = QToolButton()
+            btn.setText("↺")
+            btn.setToolTip("Reset to default")
+            btn.setFixedSize(SETTINGS_INPUT_H, SETTINGS_INPUT_H)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            return btn
+
+        # Workspace file
+        self.txt_workspace_path = _make_path_field("Path to .code-workspace file…")
+        self.btn_browse_workspace = _make_browse_btn()
+        self.btn_reset_workspace = _make_reset_btn()
+        self.btn_open_workspace = QPushButton("Open in VS Code")
+        self.btn_open_workspace.setStyleSheet(STYLE_SETTING_BTN_PRIMARY)
+        self.btn_open_workspace.setFixedHeight(SETTINGS_INPUT_H)
+        self.btn_open_workspace.setCursor(Qt.CursorShape.PointingHandCursor)
+        workspace_row = QHBoxLayout()
+        workspace_row.setContentsMargins(0, 0, 0, 0)
+        workspace_row.setSpacing(6)
+        workspace_row.addWidget(self.txt_workspace_path, stretch=1)
+        workspace_row.addWidget(self.btn_browse_workspace)
+        workspace_row.addWidget(self.btn_reset_workspace)
+        workspace_row.addWidget(self.btn_open_workspace)
+
+        # Dataset directory
+        self.txt_dataset_dir = _make_path_field("Path to dataset directory…")
+        self.btn_browse_dataset = _make_browse_btn()
+        self.btn_reset_dataset = _make_reset_btn()
+
+        # Model output path
+        self.txt_model_output_path = _make_path_field("Path to save trained model (.tflite)…")
+        self.btn_browse_model_output = _make_browse_btn()
+        self.btn_reset_model_output = _make_reset_btn()
+
+        # Gesture CC output path
+        self.txt_gesture_cc_path = _make_path_field("Path to write gesture_model.cc…")
+        self.btn_browse_gesture_cc = _make_browse_btn()
+        self.btn_reset_gesture_cc = _make_reset_btn()
+
+        path_form = self._make_form_layout()
+        ws_widget = QWidget()
+        ws_widget.setLayout(workspace_row)
+        self._add_form_row(path_form, "Workspace File:", ws_widget)
+        ds_widget = QWidget()
+        ds_widget.setLayout(_make_path_row(self.txt_dataset_dir, self.btn_browse_dataset, self.btn_reset_dataset))
+        self._add_form_row(path_form, "Dataset Directory:", ds_widget)
+        mo_widget = QWidget()
+        mo_widget.setLayout(_make_path_row(self.txt_model_output_path, self.btn_browse_model_output, self.btn_reset_model_output))
+        self._add_form_row(path_form, "Model Output (.tflite):", mo_widget)
+        gc_widget = QWidget()
+        gc_widget.setLayout(_make_path_row(self.txt_gesture_cc_path, self.btn_browse_gesture_cc, self.btn_reset_gesture_cc))
+        self._add_form_row(path_form, "Gesture CC Output:", gc_widget)
+
+        card_layout.addLayout(path_form)
+        card_layout.addWidget(
+            self._make_hint(
+                "Browse to select a path or type it directly. "
+                "Paths must point to an accessible location. "
+                "Use ↺ to restore the application default."
+            )
+        )
+        layout.addWidget(card)
+        return widget
 
     @staticmethod
     def _make_card() -> tuple[QFrame, QVBoxLayout]:
@@ -488,7 +755,7 @@ class PageSetting(QWidget):
         apply_soft_shadow(frame, blur_radius=20, y_offset=4, color="rgba(0, 0, 0, 0.10)")
         layout = QVBoxLayout(frame)
         layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        layout.setSpacing(SPACING_MD)
         return frame, layout
 
     @staticmethod
@@ -562,6 +829,6 @@ class PageSetting(QWidget):
     @staticmethod
     def _make_hint(text: str, color: str = TEXT_MUTED) -> QLabel:
         lbl = QLabel(text)
-        lbl.setStyleSheet(f"color: {color}; font-size: 10px;")
+        lbl.setStyleSheet(f"color: {color}; font-size: 11px;")
         lbl.setWordWrap(True)
         return lbl
