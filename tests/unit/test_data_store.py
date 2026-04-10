@@ -55,16 +55,19 @@ def test_save_settings_normalizes_and_merges_values(qapp, tmp_path) -> None:
             "window_size": "12",
             "model_path": "models/test_model.tflite",
             "auto_save": "true",
+            "idf_main_dir": str(tmp_path / "idf_project" / "main"),
         }
     )
 
     assert saved["window_size"] == 12
     assert saved["model_path"] == "models/test_model.tflite"
     assert saved["auto_save"] is True
+    assert saved["idf_main_dir"].endswith("main")
 
     snapshot = store.get_settings_snapshot()
     assert snapshot["window_size"] == 12
     assert snapshot["model_path"] == "models/test_model.tflite"
+    assert snapshot["idf_main_dir"].endswith("main")
 
 
 # ── Sensor data ────────────────────────────────────────────────────────────────
@@ -248,7 +251,7 @@ def test_get_spell_list_returns_known_spells(qapp, tmp_path) -> None:
     store = DataStore(dataset_dir=str(dataset))
 
     spells = store.get_spell_list()
-    assert set(spells) == {"ACCIO", "WINGARDIUM"}
+    assert set(spells) == {"ACCIO", "WINGARDIUM", "STAND BY"}
 
 
 def test_get_samples_for_spell_returns_sorted_csv_names(qapp, tmp_path) -> None:
@@ -283,15 +286,15 @@ def test_save_cropped_data_creates_csv_file(qapp, tmp_path) -> None:
     assert store.spell_counts.get("ACCIO") == 1
 
 
-def test_save_cropped_data_writes_meta_json_when_tag_given(qapp, tmp_path) -> None:
+def test_save_cropped_data_does_not_write_meta_json(qapp, tmp_path) -> None:
     store = DataStore(dataset_dir=str(tmp_path / "dataset"))
     data = [[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]]
 
-    store.save_cropped_data("accio", data, tag="good")
+    store.save_cropped_data("accio", data)
 
     spell_dir = tmp_path / "dataset" / "ACCIO"
     meta_files = list(spell_dir.glob("*.meta.json"))
-    assert len(meta_files) == 1
+    assert len(meta_files) == 0
 
 
 def test_save_cropped_data_rejects_empty_data(qapp, tmp_path) -> None:
@@ -329,6 +332,61 @@ def test_delete_spell_returns_false_for_nonexistent_spell(qapp, tmp_path) -> Non
 def test_delete_spell_returns_false_for_blank_name(qapp, tmp_path) -> None:
     store = DataStore(dataset_dir=str(tmp_path / "dataset"))
     assert store.delete_spell("   ") is False
+
+
+def test_delete_spell_returns_false_for_system_spell(qapp, tmp_path) -> None:
+    dataset = tmp_path / "dataset"
+    (dataset / "STAND BY").mkdir(parents=True)
+
+    store = DataStore(dataset_dir=str(dataset))
+
+    assert store.delete_spell("STAND BY") is False
+    assert (dataset / "STAND BY").exists()
+
+
+def test_standby_auto_recreates_when_missing_on_refresh(qapp, tmp_path) -> None:
+    dataset = tmp_path / "dataset"
+    store = DataStore(dataset_dir=str(dataset))
+
+    standby_dir = dataset / "STAND BY"
+    assert standby_dir.exists()
+    os.rmdir(standby_dir)
+    assert not standby_dir.exists()
+
+    store.refresh_database(force=True)
+
+    assert standby_dir.exists()
+    assert store.spell_counts.get("STAND BY") == 0
+
+
+def test_migration_creates_backup_snapshot_when_legacy_meta_exists(qapp, tmp_path) -> None:
+    dataset = tmp_path / "dataset"
+    legacy_dir = dataset / "ACCIO"
+    legacy_dir.mkdir(parents=True)
+    (legacy_dir / "sample_legacy.meta.json").write_text('{"tag":"old"}', encoding="utf-8")
+
+    _ = DataStore(dataset_dir=str(dataset))
+
+    backup_root = tmp_path / "_migration_backups"
+    backups = [p for p in backup_root.iterdir() if p.is_dir()]
+    assert backups
+    manifest = backups[0] / "backup_manifest.json"
+    assert manifest.exists()
+
+
+def test_prediction_compat_with_legacy_model_after_standby_bootstrap(qapp, tmp_path) -> None:
+    dataset = tmp_path / "dataset"
+    model_path = tmp_path / "legacy_model.tflite"
+    model_path.write_bytes(b"legacy")
+
+    store = DataStore(dataset_dir=str(dataset))
+    store.save_settings({"model_path": str(model_path)})
+    store.update_prediction("LEGACY_GESTURE", 0.81)
+
+    label, confidence = store.get_prediction_state()
+    assert label == "LEGACY_GESTURE"
+    assert confidence == pytest.approx(0.81)
+    assert store.get_settings_snapshot()["model_path"] == str(model_path)
 
 
 # ── Settings reload ─────────────────────────────────────────────────────────────

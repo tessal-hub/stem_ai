@@ -62,12 +62,7 @@ from ui.confirm_dialog import confirm_destructive
 from ui.mac_material import apply_soft_shadow
 from ui.terminal_widget import TerminalWidget
 from ui.modern_layout import MARGIN_STANDARD, SPACING_MD
-from config import (
-    DATASET_DIR,
-    DEFAULT_MODEL_PATH,
-    GESTURE_MODEL_CC_OUTPUT,
-    VSCODE_WORKSPACE_FILE,
-)
+from config import WORKSPACE_ROOT
 
 # ---------------------------------------------------------------------------
 # Widget
@@ -107,11 +102,7 @@ class PageSetting(QWidget):
             "window_overlap": self.spin_window_overlap,
             "project_name":   self.txt_project_name,
             "auto_save":      self.chk_auto_save,
-            # Path configuration
-            "workspace_path":    self.txt_workspace_path,
-            "dataset_dir":       self.txt_dataset_dir,
-            "model_output_path": self.txt_model_output_path,
-            "gesture_cc_path":   self.txt_gesture_cc_path,
+            "idf_main_dir":   self.txt_idf_main_dir,
         }
 
         for key, widget in widgets.items():
@@ -370,16 +361,9 @@ class PageSetting(QWidget):
         self.btn_clear_db.clicked.connect(self._on_clear_db_clicked)
         self.btn_flash_collect.clicked.connect(self._on_flash_collect_clicked)
         self.btn_flash_ai.clicked.connect(self._on_flash_ai_clicked)
-        # Path card buttons
-        self.btn_open_workspace.clicked.connect(self._on_open_workspace_clicked)
-        self.btn_browse_workspace.clicked.connect(self._on_browse_workspace)
-        self.btn_reset_workspace.clicked.connect(self._on_reset_workspace)
-        self.btn_browse_dataset.clicked.connect(self._on_browse_dataset)
-        self.btn_reset_dataset.clicked.connect(self._on_reset_dataset)
-        self.btn_browse_model_output.clicked.connect(self._on_browse_model_output)
-        self.btn_reset_model_output.clicked.connect(self._on_reset_model_output)
-        self.btn_browse_gesture_cc.clicked.connect(self._on_browse_gesture_cc)
-        self.btn_reset_gesture_cc.clicked.connect(self._on_reset_gesture_cc)
+        self.btn_open_idf_main.clicked.connect(self._on_open_idf_main_clicked)
+        self.btn_browse_idf_main.clicked.connect(self._on_browse_idf_main)
+        self.btn_reset_idf_main.clicked.connect(self._on_reset_idf_main)
 
     def _configure_accessibility(self) -> None:
         """Configure accessible names and deterministic keyboard traversal."""
@@ -391,20 +375,10 @@ class PageSetting(QWidget):
         self.combo_ml_pipeline.setAccessibleName("Machine learning pipeline")
         self.txt_project_name.setAccessibleName("Project name")
         self.chk_auto_save.setAccessibleName("Auto save recording samples")
-        # Path configuration fields
-        self.txt_workspace_path.setAccessibleName("VS Code workspace file path")
-        self.btn_browse_workspace.setAccessibleName("Browse for workspace file")
-        self.btn_reset_workspace.setAccessibleName("Reset workspace path to default")
-        self.btn_open_workspace.setAccessibleName("Open VS Code workspace")
-        self.txt_dataset_dir.setAccessibleName("Dataset directory path")
-        self.btn_browse_dataset.setAccessibleName("Browse for dataset directory")
-        self.btn_reset_dataset.setAccessibleName("Reset dataset directory to default")
-        self.txt_model_output_path.setAccessibleName("Model output file path")
-        self.btn_browse_model_output.setAccessibleName("Browse for model output file")
-        self.btn_reset_model_output.setAccessibleName("Reset model output path to default")
-        self.txt_gesture_cc_path.setAccessibleName("Gesture CC output file path")
-        self.btn_browse_gesture_cc.setAccessibleName("Browse for gesture CC output file")
-        self.btn_reset_gesture_cc.setAccessibleName("Reset gesture CC path to default")
+        self.txt_idf_main_dir.setAccessibleName("ESP-IDF main directory path")
+        self.btn_browse_idf_main.setAccessibleName("Browse for ESP-IDF main directory")
+        self.btn_reset_idf_main.setAccessibleName("Reset IDF main directory path")
+        self.btn_open_idf_main.setAccessibleName("Open ESP-IDF project")
         # Firmware and action buttons
         self.btn_revert.setAccessibleName("Revert settings")
         self.btn_save.setAccessibleName("Save settings")
@@ -419,20 +393,11 @@ class PageSetting(QWidget):
         self.setTabOrder(self.spin_window_overlap, self.combo_ml_pipeline)
         self.setTabOrder(self.combo_ml_pipeline, self.txt_project_name)
         self.setTabOrder(self.txt_project_name, self.chk_auto_save)
-        self.setTabOrder(self.chk_auto_save, self.txt_workspace_path)
-        self.setTabOrder(self.txt_workspace_path, self.btn_browse_workspace)
-        self.setTabOrder(self.btn_browse_workspace, self.btn_reset_workspace)
-        self.setTabOrder(self.btn_reset_workspace, self.btn_open_workspace)
-        self.setTabOrder(self.btn_open_workspace, self.txt_dataset_dir)
-        self.setTabOrder(self.txt_dataset_dir, self.btn_browse_dataset)
-        self.setTabOrder(self.btn_browse_dataset, self.btn_reset_dataset)
-        self.setTabOrder(self.btn_reset_dataset, self.txt_model_output_path)
-        self.setTabOrder(self.txt_model_output_path, self.btn_browse_model_output)
-        self.setTabOrder(self.btn_browse_model_output, self.btn_reset_model_output)
-        self.setTabOrder(self.btn_reset_model_output, self.txt_gesture_cc_path)
-        self.setTabOrder(self.txt_gesture_cc_path, self.btn_browse_gesture_cc)
-        self.setTabOrder(self.btn_browse_gesture_cc, self.btn_reset_gesture_cc)
-        self.setTabOrder(self.btn_reset_gesture_cc, self.btn_revert)
+        self.setTabOrder(self.chk_auto_save, self.txt_idf_main_dir)
+        self.setTabOrder(self.txt_idf_main_dir, self.btn_browse_idf_main)
+        self.setTabOrder(self.btn_browse_idf_main, self.btn_reset_idf_main)
+        self.setTabOrder(self.btn_reset_idf_main, self.btn_open_idf_main)
+        self.setTabOrder(self.btn_open_idf_main, self.btn_revert)
         self.setTabOrder(self.btn_revert, self.btn_save)
         self.setTabOrder(self.btn_save, self.btn_flash_collect)
         self.setTabOrder(self.btn_flash_collect, self.btn_flash_ai)
@@ -452,11 +417,7 @@ class PageSetting(QWidget):
             "ml_pipeline":       self.combo_ml_pipeline.currentText(),
             "project_name":      self.txt_project_name.text().strip(),
             "auto_save":         self.chk_auto_save.isChecked(),
-            # Path configuration
-            "workspace_path":    self.txt_workspace_path.text().strip(),
-            "dataset_dir":       self.txt_dataset_dir.text().strip(),
-            "model_output_path": self.txt_model_output_path.text().strip(),
-            "gesture_cc_path":   self.txt_gesture_cc_path.text().strip(),
+            "idf_main_dir":      self.txt_idf_main_dir.text().strip(),
         }
 
     def _on_save_clicked(self) -> None:
@@ -500,9 +461,16 @@ class PageSetting(QWidget):
         self.progress_bar.setValue(0)
         self.append_console_text(initial_message)
 
-    def _on_open_workspace_clicked(self) -> None:
-        """Open the current workspace in VS Code from inside the app."""
-        target_str = self.txt_workspace_path.text().strip() or str(VSCODE_WORKSPACE_FILE)
+    def _on_open_idf_main_clicked(self) -> None:
+        """Open the currently selected ESP-IDF project root in VS Code."""
+        raw_main = self.txt_idf_main_dir.text().strip()
+        if not raw_main:
+            QMessageBox.warning(self, "Missing Path", "Please select the ESP-IDF main directory first.")
+            return
+
+        main_dir = Path(raw_main).expanduser()
+        target = main_dir.parent if main_dir.name.lower() == "main" else main_dir
+        target_str = str(target)
 
         if shutil.which("code"):
             try:
@@ -522,62 +490,23 @@ class PageSetting(QWidget):
 
         QMessageBox.warning(
             self,
-            "Open Workspace Failed",
-            "Could not open VSCode workspace. Ensure the 'code' command is available in PATH.",
+            "Open Folder Failed",
+            "Could not open ESP-IDF folder. Ensure the 'code' command is available in PATH.",
         )
 
-    # Browse / Reset handlers for path fields
-
-    def _on_browse_workspace(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Select VS Code Workspace File", self.txt_workspace_path.text(),
-            "Workspace Files (*.code-workspace);;All Files (*)"
-        )
-        if path:
-            self.txt_workspace_path.setText(path)
-            self.txt_workspace_path.setStyleSheet(STYLE_SETTING_INPUT)
-
-    def _on_reset_workspace(self) -> None:
-        self.txt_workspace_path.setText(str(VSCODE_WORKSPACE_FILE))
-        self.txt_workspace_path.setStyleSheet(STYLE_SETTING_INPUT)
-
-    def _on_browse_dataset(self) -> None:
+    def _on_browse_idf_main(self) -> None:
         path = QFileDialog.getExistingDirectory(
-            self, "Select Dataset Directory", self.txt_dataset_dir.text()
+            self,
+            "Select ESP-IDF main Directory",
+            self.txt_idf_main_dir.text() or str(WORKSPACE_ROOT),
         )
         if path:
-            self.txt_dataset_dir.setText(path)
-            self.txt_dataset_dir.setStyleSheet(STYLE_SETTING_INPUT)
+            self.txt_idf_main_dir.setText(path)
+            self.txt_idf_main_dir.setStyleSheet(STYLE_SETTING_INPUT)
 
-    def _on_reset_dataset(self) -> None:
-        self.txt_dataset_dir.setText(str(DATASET_DIR))
-        self.txt_dataset_dir.setStyleSheet(STYLE_SETTING_INPUT)
-
-    def _on_browse_model_output(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Select Model Output File", self.txt_model_output_path.text(),
-            "TFLite Models (*.tflite);;All Files (*)"
-        )
-        if path:
-            self.txt_model_output_path.setText(path)
-            self.txt_model_output_path.setStyleSheet(STYLE_SETTING_INPUT)
-
-    def _on_reset_model_output(self) -> None:
-        self.txt_model_output_path.setText(str(DEFAULT_MODEL_PATH))
-        self.txt_model_output_path.setStyleSheet(STYLE_SETTING_INPUT)
-
-    def _on_browse_gesture_cc(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Select Gesture CC Output File", self.txt_gesture_cc_path.text(),
-            "C Source Files (*.cc *.c);;All Files (*)"
-        )
-        if path:
-            self.txt_gesture_cc_path.setText(path)
-            self.txt_gesture_cc_path.setStyleSheet(STYLE_SETTING_INPUT)
-
-    def _on_reset_gesture_cc(self) -> None:
-        self.txt_gesture_cc_path.setText(str(GESTURE_MODEL_CC_OUTPUT))
-        self.txt_gesture_cc_path.setStyleSheet(STYLE_SETTING_INPUT)
+    def _on_reset_idf_main(self) -> None:
+        self.txt_idf_main_dir.setText("")
+        self.txt_idf_main_dir.setStyleSheet(STYLE_SETTING_INPUT)
 
     # Path validation
 
@@ -588,55 +517,32 @@ class PageSetting(QWidget):
             f" background-color: rgba(239, 68, 68, 0.06);"
         )
 
-        file_checks: list[tuple[QLineEdit, str]] = [
-            (self.txt_workspace_path, "Workspace File"),
-            (self.txt_model_output_path, "Model Output Path"),
-            (self.txt_gesture_cc_path, "Gesture CC Output Path"),
-        ]
-        dir_checks: list[tuple[QLineEdit, str]] = [
-            (self.txt_dataset_dir, "Dataset Directory"),
-        ]
+        idf_main_str = str(config.get("idf_main_dir", "")).strip()
+        if not idf_main_str:
+            self.txt_idf_main_dir.setStyleSheet(STYLE_SETTING_INPUT)
+            return True
 
-        invalid_names: list[str] = []
+        idf_main_dir = Path(idf_main_str).expanduser().resolve()
+        invalid_reasons: list[str] = []
+        if not idf_main_dir.exists() or not idf_main_dir.is_dir():
+            invalid_reasons.append("IDF main directory does not exist")
+        if idf_main_dir.name.lower() != "main":
+            invalid_reasons.append("Selected path must point to the IDF 'main' folder")
 
-        for field, name in file_checks:
-            key = {
-                self.txt_workspace_path: "workspace_path",
-                self.txt_model_output_path: "model_output_path",
-                self.txt_gesture_cc_path: "gesture_cc_path",
-            }[field]
-            path_str = config.get(key, "")
-            if path_str:
-                resolved = Path(path_str).expanduser().resolve()
-                if not resolved.parent.exists():
-                    field.setStyleSheet(STYLE_SETTING_INPUT + _invalid)
-                    invalid_names.append(name)
-                else:
-                    field.setStyleSheet(STYLE_SETTING_INPUT)
-            else:
-                field.setStyleSheet(STYLE_SETTING_INPUT)
+        idf_root = idf_main_dir.parent
+        if not (idf_root / "CMakeLists.txt").exists():
+            invalid_reasons.append("IDF project root is missing CMakeLists.txt")
 
-        for field, name in dir_checks:
-            path_str = config.get("dataset_dir", "")
-            if path_str:
-                resolved = Path(path_str).expanduser().resolve()
-                # Allow non-existent directory if its parent exists (will be created on use)
-                if not resolved.parent.exists():
-                    field.setStyleSheet(STYLE_SETTING_INPUT + _invalid)
-                    invalid_names.append(name)
-                else:
-                    field.setStyleSheet(STYLE_SETTING_INPUT)
-            else:
-                field.setStyleSheet(STYLE_SETTING_INPUT)
-
-        if invalid_names:
+        if invalid_reasons:
+            self.txt_idf_main_dir.setStyleSheet(STYLE_SETTING_INPUT + _invalid)
             QMessageBox.warning(
                 self,
                 "Invalid Path",
-                "The following paths have inaccessible parent directories:\n• "
-                + "\n• ".join(invalid_names),
+                "The ESP-IDF main directory is invalid:\n• " + "\n• ".join(invalid_reasons),
             )
             return False
+
+        self.txt_idf_main_dir.setStyleSheet(STYLE_SETTING_INPUT)
         return True
 
     # ------------------------------------------------------------------
@@ -644,7 +550,7 @@ class PageSetting(QWidget):
     # ------------------------------------------------------------------
 
     def _build_paths_card(self) -> QWidget:
-        """Build the PATH CONFIGURATION card with browse/reset controls."""
+        """Build the PATH CONFIGURATION card with one IDF main directory field."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -690,57 +596,32 @@ class PageSetting(QWidget):
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             return btn
 
-        # Workspace file
-        self.txt_workspace_path = _make_path_field("Path to .code-workspace file…")
-        self.btn_browse_workspace = _make_browse_btn()
-        self.btn_reset_workspace = _make_reset_btn()
-        self.btn_open_workspace = QPushButton("Open in VS Code")
-        self.btn_open_workspace.setStyleSheet(STYLE_SETTING_BTN_PRIMARY)
-        self.btn_open_workspace.setFixedHeight(SETTINGS_INPUT_H)
-        self.btn_open_workspace.setCursor(Qt.CursorShape.PointingHandCursor)
-        workspace_row = QHBoxLayout()
-        workspace_row.setContentsMargins(0, 0, 0, 0)
-        workspace_row.setSpacing(6)
-        workspace_row.addWidget(self.txt_workspace_path, stretch=1)
-        workspace_row.addWidget(self.btn_browse_workspace)
-        workspace_row.addWidget(self.btn_reset_workspace)
-        workspace_row.addWidget(self.btn_open_workspace)
+        self.txt_idf_main_dir = _make_path_field("Path to ESP-IDF main directory…")
+        self.btn_browse_idf_main = _make_browse_btn()
+        self.btn_reset_idf_main = _make_reset_btn()
+        self.btn_open_idf_main = QPushButton("Open IDF Project")
+        self.btn_open_idf_main.setStyleSheet(STYLE_SETTING_BTN_PRIMARY)
+        self.btn_open_idf_main.setFixedHeight(SETTINGS_INPUT_H)
+        self.btn_open_idf_main.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        # Dataset directory
-        self.txt_dataset_dir = _make_path_field("Path to dataset directory…")
-        self.btn_browse_dataset = _make_browse_btn()
-        self.btn_reset_dataset = _make_reset_btn()
-
-        # Model output path
-        self.txt_model_output_path = _make_path_field("Path to save trained model (.tflite)…")
-        self.btn_browse_model_output = _make_browse_btn()
-        self.btn_reset_model_output = _make_reset_btn()
-
-        # Gesture CC output path
-        self.txt_gesture_cc_path = _make_path_field("Path to write gesture_model.cc…")
-        self.btn_browse_gesture_cc = _make_browse_btn()
-        self.btn_reset_gesture_cc = _make_reset_btn()
+        idf_row = QHBoxLayout()
+        idf_row.setContentsMargins(0, 0, 0, 0)
+        idf_row.setSpacing(6)
+        idf_row.addWidget(self.txt_idf_main_dir, stretch=1)
+        idf_row.addWidget(self.btn_browse_idf_main)
+        idf_row.addWidget(self.btn_reset_idf_main)
+        idf_row.addWidget(self.btn_open_idf_main)
 
         path_form = self._make_form_layout()
-        ws_widget = QWidget()
-        ws_widget.setLayout(workspace_row)
-        self._add_form_row(path_form, "Workspace File:", ws_widget)
-        ds_widget = QWidget()
-        ds_widget.setLayout(_make_path_row(self.txt_dataset_dir, self.btn_browse_dataset, self.btn_reset_dataset))
-        self._add_form_row(path_form, "Dataset Directory:", ds_widget)
-        mo_widget = QWidget()
-        mo_widget.setLayout(_make_path_row(self.txt_model_output_path, self.btn_browse_model_output, self.btn_reset_model_output))
-        self._add_form_row(path_form, "Model Output (.tflite):", mo_widget)
-        gc_widget = QWidget()
-        gc_widget.setLayout(_make_path_row(self.txt_gesture_cc_path, self.btn_browse_gesture_cc, self.btn_reset_gesture_cc))
-        self._add_form_row(path_form, "Gesture CC Output:", gc_widget)
+        idf_widget = QWidget()
+        idf_widget.setLayout(idf_row)
+        self._add_form_row(path_form, "IDF main Directory:", idf_widget)
 
         card_layout.addLayout(path_form)
         card_layout.addWidget(
             self._make_hint(
-                "Browse to select a path or type it directly. "
-                "Paths must point to an accessible location. "
-                "Use ↺ to restore the application default."
+                "Select the ESP-IDF 'main' directory for firmware synchronization. "
+                "After model build, gesture_model.cc and generated main.cpp are written there."
             )
         )
         layout.addWidget(card)

@@ -20,6 +20,7 @@ from pathlib import Path
 
 from PyQt6.QtCore import QThread, pyqtSignal
 from config import DATASET_DIR, ensure_data_dir
+from constants import canonical_system_spell, is_system_spell, normalize_spell_name
 
 
 class DataRecorder(QThread):
@@ -71,12 +72,17 @@ class DataRecorder(QThread):
         """Convert label to filesystem-safe name."""
         if not isinstance(label, str):
             label = str(label)
-        
+
+        normalized = normalize_spell_name(label)
+        if is_system_spell(normalized):
+            return canonical_system_spell(normalized)
+
         name = label.strip() or "unknown"
-        # Replace non-alphanumeric chars with underscore
-        name = re.sub(r"[^0-9a-zA-Z_\-]", "_", name)
-        # Remove leading/trailing underscores
-        name = name.strip("_")
+        # Keep spaces for readability while replacing unsafe characters.
+        name = re.sub(r"[^0-9a-zA-Z _\-]", "_", name)
+        name = " ".join(name.split())
+        # Remove leading/trailing separators
+        name = name.strip("_-")
         # Ensure name is not empty
         return name or "unknown"
 

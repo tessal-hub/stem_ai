@@ -7,7 +7,7 @@ from logic.recorder import DataRecorder
     "raw, expected",
     [
         ("accio", "accio"),
-        ("Accio Firebolt", "Accio_Firebolt"),
+        ("Accio Firebolt", "Accio Firebolt"),
         ("  spell  ", "spell"),
         ("spell!@#name", "spell___name"),
         ("", "unknown"),
@@ -37,3 +37,7 @@ def test_sanitize_label_result_is_never_empty() -> None:
     for raw in ("", "   ", "!@#$%", "___"):
         result = DataRecorder._sanitize_label(raw)
         assert result, f"Expected non-empty result for input {raw!r}"
+
+
+def test_sanitize_label_keeps_standby_canonical_name() -> None:
+    assert DataRecorder._sanitize_label(" stand    by ") == "STAND BY"

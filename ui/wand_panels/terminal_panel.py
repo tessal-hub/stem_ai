@@ -62,6 +62,7 @@ class WandTerminalPanel(QWidget):
 
         self.btn_term_clear = QPushButton("CLEAR")
         self.btn_term_clear.setStyleSheet(STYLE_BTN_SMALL)
+        self.btn_term_clear.setMinimumHeight(30)
         self.btn_term_clear.setCursor(Qt.CursorShape.PointingHandCursor)
         header.addWidget(self.btn_term_clear)
 
@@ -69,7 +70,7 @@ class WandTerminalPanel(QWidget):
 
         self.terminal_output = TerminalWidget(max_lines=1000, read_only=True)
         self.terminal_output.setStyleSheet(STYLE_TERMINAL)
-        self.terminal_output.setMinimumHeight(TERM_MIN_H)
+        self.terminal_output.setMinimumHeight(max(TERM_MIN_H, 210))
 
         font = QFont("Consolas", 10)
         font.setStyleHint(QFont.StyleHint.Monospace)

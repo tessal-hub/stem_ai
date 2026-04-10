@@ -17,13 +17,17 @@ Data Flow:
 """
 
 from pathlib import Path
+import shutil
 from threading import Lock
 
 from PyQt6.QtCore import QObject, Qt, QTimer
+from PyQt6.QtWidgets import QFileDialog
 import numpy as np
-from config import APP_DATA_DIR, DEFAULT_MODEL_PATH
+from config import APP_DATA_DIR, DEFAULT_MODEL_PATH, GESTURE_MODEL_CC_OUTPUT, WORKSPACE_ROOT
+from constants import canonical_system_spell, is_system_spell
 from .data_store import DataStore
 from .frame_protocol import build_scale_profile
+from .firmware_main_generator import sync_firmware_sources
 from .serial_worker import SerialWorker
 from .model_uploader import ModelUploader
 from .recorder import DataRecorder
@@ -105,6 +109,7 @@ class Handler(QObject):
         self._simulation_frames: list[list[float]] = []
         self._simulation_index = 0
         self._model_build_worker: GestureModelBuildWorker | None = None
+        self._model_build_mode: str = "both"
 
         # ── Initialize connections ──────────────────────────────────────
         self._connect_signals()
@@ -216,6 +221,8 @@ class Handler(QObject):
         self.ui_wand.sig_serial_connect.connect(self.on_serial_connect)
         self.ui_wand.sig_serial_disconnect.connect(self.on_serial_disconnect)
         self.ui_wand.sig_flash_upload.connect(self.on_flash_upload)
+        self.ui_wand.sig_train_build_tflite_requested.connect(self.on_train_build_tflite_requested)
+        self.ui_wand.sig_train_build_cc_requested.connect(self.on_train_build_cc_requested)
 
         # --- UI Setting → Handler (firmware flashing) ---
         if self.ui_setting:
@@ -653,19 +660,19 @@ class Handler(QObject):
         samples = self.store.get_samples_for_spell(spell_name)
         self.ui_record.load_samples_for_spell(spell_name, samples)
 
-    def on_data_cropped(self, cropped_data: list, spell_name: str, tag: str = "") -> None:
+    def on_data_cropped(self, cropped_data: list, spell_name: str) -> None:
         """Enqueue cropped data sample save to background DataIOWorker."""
         if not spell_name.strip():
             self.ui_wand.append_terminal_text("[WARN] Missing spell label. Snip discarded.")
             return
 
         # Optimistic UI feedback; actual confirmation arrives via sig_save_done.
-        tag_note = f" [tag: {tag}]" if tag else ""
+        display_spell = canonical_system_spell(spell_name)
         self.ui_wand.append_terminal_text(
-            f">> Saving {len(cropped_data)} samples → {spell_name}{tag_note}..."
+            f">> Saving {len(cropped_data)} samples → {display_spell}..."
         )
-        self._pending_save_spell = spell_name
-        self.data_io_worker.enqueue_save(spell_name, cropped_data, tag)
+        self._pending_save_spell = display_spell
+        self.data_io_worker.enqueue_save(display_spell, cropped_data)
 
     def _on_io_save_done(self, success: bool, message: str) -> None:
         """Called in the main thread when DataIOWorker finishes a save job."""
@@ -680,6 +687,13 @@ class Handler(QObject):
         """Enqueue spell deletion to background DataIOWorker."""
         if not spell_name.strip():
             self.ui_wand.append_terminal_text("[ERROR] Invalid spell name for deletion.")
+            return
+
+        if is_system_spell(spell_name):
+            blocked_message = "[ERROR] STAND BY is a protected system spell and cannot be deleted."
+            self.ui_wand.append_terminal_text(blocked_message)
+            if hasattr(self.ui_record, "show_protected_spell_warning"):
+                self.ui_record.show_protected_spell_warning(canonical_system_spell(spell_name))
             return
 
         if self.current_selected_spell == spell_name:
@@ -934,8 +948,20 @@ class Handler(QObject):
             samples = self.store.get_samples_for_spell(self.current_selected_spell)
             self.ui_record.load_samples_for_spell(self.current_selected_spell, samples)
 
+    def on_train_build_tflite_requested(self, selected_spells: list[str]) -> None:
+        """Build only .tflite model from currently selected spells."""
+        self._start_model_build(output_mode="tflite", selected_spells=selected_spells)
+
+    def on_train_build_cc_requested(self, selected_spells: list[str]) -> None:
+        """Build .cc model payload from currently selected spells."""
+        self._start_model_build(output_mode="cc", selected_spells=selected_spells)
+
     def on_train_build_model_requested(self) -> None:
-        """Start asynchronous training and gesture_model.cc build from current dataset."""
+        """Legacy trigger for statistics page: build both .tflite and .cc artifacts."""
+        self._start_model_build(output_mode="both", selected_spells=[])
+
+    def _start_model_build(self, *, output_mode: str, selected_spells: list[str]) -> None:
+        """Start asynchronous model build pipeline for requested output mode."""
         if self._model_build_worker and self._model_build_worker.isRunning():
             self.ui_wand.append_terminal_text("[WARN] Model build is already running.")
             return
@@ -946,7 +972,13 @@ class Handler(QObject):
                 self.ui_statistics.set_training_finished(False, "recording is active")
             return
 
-        self._model_build_worker = GestureModelBuildWorker(dataset_dir=self.store.dataset_dir)
+        normalized_spells = [s.strip() for s in selected_spells if str(s).strip()]
+        self._model_build_mode = output_mode
+        self._model_build_worker = GestureModelBuildWorker(
+            dataset_dir=self.store.dataset_dir,
+            output_mode=output_mode,
+            selected_spells=normalized_spells,
+        )
         self._connect_many_queued(
             [
                 (self._model_build_worker.sig_status, self._on_model_build_status),
@@ -957,8 +989,12 @@ class Handler(QObject):
 
         if self.ui_statistics:
             self.ui_statistics.set_training_state(True)
+
+        selected_summary = (
+            ", ".join(normalized_spells) if normalized_spells else "ALL SPELLS"
+        )
         self.ui_wand.append_terminal_text(
-            f">> Starting train/build pipeline from dataset: {self.store.dataset_dir}"
+            f">> Starting model build ({output_mode}) from dataset: {self.store.dataset_dir} | spells: {selected_summary}"
         )
         self._model_build_worker.start()
 
@@ -975,11 +1011,74 @@ class Handler(QObject):
         if success:
             self.ui_wand.append_terminal_text(f"[MODEL] Build success: {message}")
             self.store.save_settings({"model_path": str(DEFAULT_MODEL_PATH)})
+
+            build_result = self._model_build_worker.build_result if self._model_build_worker else None
+            settings = self.store.get_settings_snapshot()
+            idf_main_dir = str(settings.get("idf_main_dir", "")).strip()
+            should_sync_firmware = self._model_build_mode in {"cc", "both"}
+
+            if not should_sync_firmware:
+                self.ui_wand.append_terminal_text(
+                    "[MODEL] TFLite-only build selected. Skipping firmware source synchronization."
+                )
+
+            if should_sync_firmware and not idf_main_dir:
+                self.ui_wand.append_terminal_text("[MODEL] IDF main directory is not configured. Skip firmware sync.")
+            elif should_sync_firmware and not build_result:
+                self.ui_wand.append_terminal_text("[MODEL] Build result metadata missing. Skip firmware sync.")
+            elif should_sync_firmware:
+                cc_source = Path(build_result.cc_path)
+                template_path = WORKSPACE_ROOT / "assets" / "firmware" / "main.cpp.template"
+                try:
+                    sync = sync_firmware_sources(
+                        idf_main_dir=Path(idf_main_dir),
+                        generated_cc_path=cc_source,
+                        class_names=list(build_result.classes),
+                        template_path=template_path,
+                    )
+                    if sync.backup_path:
+                        self.ui_wand.append_terminal_text(f"[MODEL] Backup main.cpp: {sync.backup_path}")
+                    self.ui_wand.append_terminal_text(f"[MODEL] Synced gesture_model.cc: {sync.gesture_cc_path}")
+                    self.ui_wand.append_terminal_text(
+                        f"[MODEL] Generated main.cpp ({sync.class_count} classes): {sync.main_cpp_path}"
+                    )
+                except Exception as exc:
+                    self.ui_wand.append_terminal_text(f"[MODEL] Firmware sync failed: {exc}")
         else:
             self.ui_wand.append_terminal_text(f"[MODEL] Build failed: {message}")
 
         if self.ui_statistics:
             self.ui_statistics.set_training_finished(success, message)
+
+    def _prompt_save_cc_output(self) -> None:
+        """Prompt for where to persist converted .cc file after successful build."""
+        source_cc = Path(GESTURE_MODEL_CC_OUTPUT)
+        valid_cc, reason = self._validate_required_file(source_cc, label="Model .cc")
+        if not valid_cc:
+            self.ui_wand.append_terminal_text(f"[MODEL] Could not open save dialog: {reason}")
+            return
+
+        selected_path, _ = QFileDialog.getSaveFileName(
+            self.ui_wand,
+            "Save Converted .cc File",
+            str(GESTURE_MODEL_CC_OUTPUT),
+            "C++ Source (*.cc);;All Files (*)",
+        )
+        if not selected_path:
+            self.ui_wand.append_terminal_text("[MODEL] Save .cc cancelled by user.")
+            return
+
+        target = Path(selected_path)
+        if not target.suffix:
+            target = target.with_suffix(".cc")
+
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.resolve() != source_cc.resolve():
+                shutil.copyfile(source_cc, target)
+            self.ui_wand.append_terminal_text(f"[MODEL] .cc saved to: {target}")
+        except OSError as exc:
+            self.ui_wand.append_terminal_text(f"[MODEL] Failed to save .cc: {exc}")
 
     # ── Wand Calibration & Testing ─────────────────────────────────────
 

@@ -4,7 +4,7 @@ PageRecord — Timeline and recording view with LIVE Plotting, 3D Wand, & Snippi
 Architecture compliance (SKILL.md §2A):
     - This file is PURE VIEW. No data processing, no direct DataStore calls.
     - Receives plot data via update_plot_data(buffer_snapshot) called by Handler.
-    - Emits sig_data_cropped(list, str, str) with 6D data + spell name + tag for Handler to save.
+    - Emits sig_data_cropped(list, str) with 6D data + spell name for Handler to save.
     - Emits sig_spell_selected(str) when user clicks a spell.
     - MUST NOT import anything from /logic.
 """
@@ -17,9 +17,10 @@ from PyQt6.QtWidgets import (
     QFormLayout,
     QGridLayout,
     QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel,
-    QListWidget, QMessageBox, QPushButton, QLineEdit, QSizePolicy,
+    QListWidget, QMessageBox, QPushButton, QSizePolicy,
     QStackedWidget, QVBoxLayout, QWidget,
 )
+from constants import canonical_system_spell, is_system_spell
 from ui.tokens import (
     # Colors, Sizes
     BG_WHITE, BG_LIGHT, BG_DARK, BORDER, BORDER_MID, TEXT_BODY, TEXT_MUTED, ACCENT, ACCENT_TEXT, 
@@ -72,7 +73,7 @@ class PageRecord(QWidget):
     sig_snip_record    = pyqtSignal()
     sig_sample_opened  = pyqtSignal(str)
     sig_sample_deleted = pyqtSignal(str)
-    sig_data_cropped   = pyqtSignal(list, str, str)  # (6D data, spell_name, tag)
+    sig_data_cropped   = pyqtSignal(list, str)  # (6D data, spell_name)
     sig_spell_selected = pyqtSignal(str)        # spell name when user clicks
     sig_spell_deleted  = pyqtSignal(str)        # spell name when user deletes
     sig_clear_buffer   = pyqtSignal()           # clear recorded samples
@@ -149,7 +150,6 @@ class PageRecord(QWidget):
         self.btn_start.setEnabled(not recording)
         self.btn_stop.setEnabled(recording)
         self.combo_spell.setEnabled(not recording)
-        self.edit_tag.setEnabled(not recording)
 
         status = "● RECORDING" if recording else "● WAND IS READY"
         color = ACCENT if recording else SUCCESS
@@ -416,8 +416,7 @@ class PageRecord(QWidget):
 
         if min_idx < max_idx:
             cropped_6d = buf[min_idx:max_idx]
-            tag = self.edit_tag.text().strip()
-            self.sig_data_cropped.emit(cropped_6d, spell_name, tag)
+            self.sig_data_cropped.emit(cropped_6d, spell_name)
             self.lbl_wand_status.setText(
                 f"✂ Snipped {max_idx - min_idx} samples → {spell_name}"
             )
@@ -497,6 +496,10 @@ class PageRecord(QWidget):
     def _on_spell_list_clicked(self, item) -> None:
         """Handle spell list item click: auto-select spell in combo and emit signal."""
         spell_name = item.text()
+        if is_system_spell(spell_name):
+            self.btn_delete_spell.setToolTip("STAND BY is protected and cannot be deleted")
+        else:
+            self.btn_delete_spell.setToolTip("Delete selected spell")
         # Auto-select in combo box
         idx = self.combo_spell.findText(spell_name)
         if idx >= 0:
@@ -513,6 +516,9 @@ class PageRecord(QWidget):
             return
 
         spell_name = current_item.text()
+        if is_system_spell(spell_name):
+            self.show_protected_spell_warning(canonical_system_spell(spell_name))
+            return
         
         # First confirmation dialog
         if not confirm_destructive(
@@ -538,6 +544,19 @@ class PageRecord(QWidget):
             cancel_text="Cancel",
         ):
             self.sig_spell_deleted.emit(spell_name)
+
+    def show_protected_spell_warning(self, spell_name: str) -> None:
+        """Display clear UX feedback when a protected spell deletion is blocked."""
+        canonical_name = canonical_system_spell(spell_name)
+        QMessageBox.warning(
+            self,
+            "Protected Spell",
+            f"{canonical_name} is a system spell and cannot be deleted.",
+        )
+        self.lbl_wand_status.setText(f"⚠ {canonical_name} is protected")
+        self.lbl_wand_status.setStyleSheet(
+            f"color: {WARNING}; font-weight: bold; font-size: 12px;"
+        )
 
     # ── UI Construction ─────────────────────────────────────────────────
 
@@ -659,18 +678,10 @@ class PageRecord(QWidget):
         self.combo_spell.setPlaceholderText("Type or select spell name...")
         self.combo_spell.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
-        self.edit_tag = QLineEdit()
-        self.edit_tag.setStyleSheet(STYLE_RECORD_COMBO)
-        self.edit_tag.setPlaceholderText("e.g., Walking / Idle")
-        self.edit_tag.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-
         lbl_spell = QLabel("Spell label:")
         lbl_spell.setStyleSheet(f"color: {TEXT_BODY}; font-weight: 600; font-size: 11px;")
-        lbl_tag = QLabel("Tag:")
-        lbl_tag.setStyleSheet(f"color: {TEXT_BODY}; font-weight: 600; font-size: 11px;")
 
         detail_form.addRow(lbl_spell, self.combo_spell)
-        detail_form.addRow(lbl_tag, self.edit_tag)
         detail_layout.addLayout(detail_form)
 
         count_grid = QGridLayout()
@@ -847,7 +858,6 @@ class PageRecord(QWidget):
             "Dynamic status indicator showing current recording or connection state"
         )
         self.combo_spell.setAccessibleName("Spell label selector")
-        self.edit_tag.setAccessibleName("Optional tag label")
         self.btn_start.setAccessibleName("Start recording (Ctrl+S)")
         self.btn_stop.setAccessibleName("Stop recording (Ctrl+T)")
         self.btn_snip.setAccessibleName("Snip selected range (Ctrl+X)")
@@ -861,8 +871,7 @@ class PageRecord(QWidget):
         self.btn_clear_samples.setAccessibleName("Clear recorded samples")
         self.btn_export_csv.setAccessibleName("Export samples to CSV file")
 
-        self.setTabOrder(self.combo_spell, self.edit_tag)
-        self.setTabOrder(self.edit_tag, self.btn_start)
+        self.setTabOrder(self.combo_spell, self.btn_start)
         self.setTabOrder(self.btn_start, self.btn_stop)
         self.setTabOrder(self.btn_stop, self.btn_snip)
         self.setTabOrder(self.btn_snip, self.btn_zoom_in)

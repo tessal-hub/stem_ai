@@ -763,7 +763,7 @@ STYLE_LIST = f"""
     }}
     QListWidget::item {{
         border-bottom: 1px solid {BORDER};
-        min-height: 44px;
+        min-height: 52px;
         color: {TEXT_BODY};
     }}
     QListWidget::item:hover {{ background-color: {HOVER_BG}; }}
@@ -915,10 +915,11 @@ STYLE_WAND_COMBO = f"""
         background-color: {MAC_SURFACE_SOLID};
         border: 1px solid {MAC_BORDER};
         border-radius: 8px;
-        padding: 4px 8px;
+        padding: 6px 10px;
         color: {TEXT_BODY};
         font-weight: 600;
-        font-size: 11px;
+        font-size: 12px;
+        min-height: 32px;
     }}
     QComboBox::drop-down {{ border: none; }}
     QComboBox QAbstractItemView {{
@@ -991,7 +992,8 @@ STYLE_TERMINAL = f"""
         color: {TERM_FG};
         border: 1px solid #2a2a2a;
         border-radius: 8px;
-        padding: 10px;
+        padding: 12px;
+        font-size: 11px;
     }}
 """
 

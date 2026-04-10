@@ -4,7 +4,7 @@ import csv
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Literal
 
 import numpy as np
 try:
@@ -35,6 +35,7 @@ class BuildResult:
     accuracy: float
     tflite_path: str
     cc_path: str
+    output_mode: str
 
 
 def _emit_status(callback: StatusCallback | None, message: str) -> None:
@@ -100,9 +101,11 @@ def build_gesture_model(
     dataset_dir: str,
     status_cb: StatusCallback | None = None,
     progress_cb: ProgressCallback | None = None,
-    epochs: int = 25,
-    window_size: int = 50,
-    step: int = 5,
+    epochs: int = 80,
+    window_size: int = 64,
+    step: int = 4,
+    selected_spells: list[str] | None = None,
+    output_mode: Literal["tflite", "cc", "both"] = "both",
 ) -> BuildResult:
     dataset_root = Path(dataset_dir)
     if not dataset_root.exists():
@@ -116,6 +119,13 @@ def build_gesture_model(
     _emit_progress(progress_cb, 5)
 
     label_dirs = sorted([d for d in dataset_root.iterdir() if d.is_dir()])
+    requested_spells = {s.strip() for s in (selected_spells or []) if s.strip()}
+    if requested_spells:
+        label_dirs = [d for d in label_dirs if d.name.strip() in requested_spells]
+        _emit_status(
+            status_cb,
+            f"[TRAIN] Applying spell filter: {', '.join(sorted(requested_spells))}",
+        )
     if len(label_dirs) < 2:
         raise RuntimeError("Need at least 2 label folders to train model.")
 
@@ -177,32 +187,38 @@ def build_gesture_model(
                 "TensorFlow is not installed and no existing model.tflite was found in app_data."
             ) from exc
 
-        _emit_status(status_cb, "[WARN] TensorFlow unavailable; exporting existing model.tflite to gesture_model.cc.")
+        _emit_status(status_cb, "[WARN] TensorFlow unavailable; using existing model.tflite.")
         APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
-        _write_c_array(DEFAULT_MODEL_PATH, GESTURE_MODEL_CC_OUTPUT)
+        if output_mode in {"cc", "both"}:
+            _write_c_array(DEFAULT_MODEL_PATH, GESTURE_MODEL_CC_OUTPUT)
         _emit_progress(progress_cb, 100)
-        _emit_status(status_cb, "[DONE] C-array export completed from existing model.tflite.")
+        _emit_status(status_cb, "[DONE] Export completed from existing model.tflite.")
         return BuildResult(
             classes=class_names,
             sample_windows=len(X),
             accuracy=0.0,
             tflite_path=str(DEFAULT_MODEL_PATH),
             cc_path=str(GESTURE_MODEL_CC_OUTPUT),
+            output_mode=output_mode,
         )
 
     y_cat = tf.keras.utils.to_categorical(y, num_classes=len(class_names))
 
-    if effective_window_size >= 10:
+    if effective_window_size >= 16:
         model = tf.keras.Sequential(
             [
                 tf.keras.layers.Input(shape=(effective_window_size, 6)),
-                tf.keras.layers.Conv1D(24, 3, activation="relu"),
+                tf.keras.layers.Conv1D(64, 5, padding="same", activation="relu"),
+                tf.keras.layers.BatchNormalization(),
+                tf.keras.layers.Conv1D(64, 3, padding="same", activation="relu"),
                 tf.keras.layers.MaxPooling1D(2),
-                tf.keras.layers.Conv1D(16, 3, activation="relu"),
+                tf.keras.layers.Dropout(0.20),
+                tf.keras.layers.Conv1D(96, 3, padding="same", activation="relu"),
                 tf.keras.layers.MaxPooling1D(2),
                 tf.keras.layers.Flatten(),
+                tf.keras.layers.Dense(128, activation="relu"),
                 tf.keras.layers.Dropout(0.30),
-                tf.keras.layers.Dense(32, activation="relu"),
+                tf.keras.layers.Dense(64, activation="relu"),
                 tf.keras.layers.Dense(len(class_names), activation="softmax"),
             ]
         )
@@ -211,12 +227,17 @@ def build_gesture_model(
             [
                 tf.keras.layers.Input(shape=(effective_window_size, 6)),
                 tf.keras.layers.Flatten(),
-                tf.keras.layers.Dense(24, activation="relu"),
+                tf.keras.layers.Dense(96, activation="relu"),
                 tf.keras.layers.Dropout(0.20),
+                tf.keras.layers.Dense(48, activation="relu"),
                 tf.keras.layers.Dense(len(class_names), activation="softmax"),
             ]
         )
-    model.compile(optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"])
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
+        loss="categorical_crossentropy",
+        metrics=["accuracy"],
+    )
 
     class ProgressCallbackAdapter(tf.keras.callbacks.Callback):
         def on_epoch_end(self, epoch, logs=None):
@@ -231,29 +252,35 @@ def build_gesture_model(
             )
 
     _emit_status(status_cb, "[TRAIN] Training model...")
+    callbacks = [
+        ProgressCallbackAdapter(),
+        tf.keras.callbacks.EarlyStopping(
+            monitor="val_accuracy",
+            patience=10,
+            restore_best_weights=True,
+            min_delta=0.001,
+        ),
+        tf.keras.callbacks.ReduceLROnPlateau(
+            monitor="val_accuracy",
+            factor=0.5,
+            patience=4,
+            min_lr=1e-5,
+        ),
+    ]
     history = model.fit(
         X,
         y_cat,
         epochs=max(1, epochs),
-        batch_size=32,
-        validation_split=0.2,
+        batch_size=16,
+        validation_split=0.15,
         verbose=0,
-        callbacks=[ProgressCallbackAdapter()],
+        callbacks=callbacks,
     )
 
     _emit_progress(progress_cb, 85)
-    _emit_status(status_cb, "[BUILD] Converting to int8 TFLite...")
-
-    def representative_dataset():
-        for i in range(0, len(X), max(1, len(X) // 100)):
-            yield [X[i : i + 1].astype(np.float32)]
+    _emit_status(status_cb, "[BUILD] Converting to float32 TFLite (accuracy-first)...")
 
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
-    converter.optimizations = [tf.lite.Optimize.DEFAULT]
-    converter.representative_dataset = representative_dataset
-    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
-    converter.inference_input_type = tf.int8
-    converter.inference_output_type = tf.int8
     tflite_model = converter.convert()
 
     APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -263,20 +290,27 @@ def build_gesture_model(
     # Keep uploader default path synced with latest built model.
     shutil.copyfile(tflite_path, DEFAULT_MODEL_PATH)
 
-    _emit_status(status_cb, f"[BUILD] Writing C-array to {GESTURE_MODEL_CC_OUTPUT}")
-    _write_c_array(tflite_path, GESTURE_MODEL_CC_OUTPUT)
+    if output_mode in {"cc", "both"}:
+        _emit_status(status_cb, f"[BUILD] Writing C-array to {GESTURE_MODEL_CC_OUTPUT}")
+        _write_c_array(tflite_path, GESTURE_MODEL_CC_OUTPUT)
     _emit_progress(progress_cb, 100)
 
     val_acc_history = history.history.get("val_accuracy", [0.0])
     final_acc = float(val_acc_history[-1]) if val_acc_history else 0.0
 
-    _emit_status(status_cb, "[DONE] Training and C-array export completed.")
+    if output_mode == "tflite":
+        _emit_status(status_cb, "[DONE] Training and .tflite export completed.")
+    elif output_mode == "cc":
+        _emit_status(status_cb, "[DONE] Training and .cc export completed.")
+    else:
+        _emit_status(status_cb, "[DONE] Training and model exports completed.")
     return BuildResult(
         classes=class_names,
         sample_windows=len(X),
         accuracy=final_acc,
         tflite_path=str(tflite_path),
         cc_path=str(GESTURE_MODEL_CC_OUTPUT),
+        output_mode=output_mode,
     )
 
 
@@ -285,9 +319,17 @@ class GestureModelBuildWorker(QThread):
     sig_progress = pyqtSignal(int)
     sig_finished = pyqtSignal(bool, str)
 
-    def __init__(self, dataset_dir: str) -> None:
+    def __init__(
+        self,
+        dataset_dir: str,
+        output_mode: Literal["tflite", "cc", "both"] = "both",
+        selected_spells: list[str] | None = None,
+    ) -> None:
         super().__init__()
         self.dataset_dir = dataset_dir
+        self.output_mode = output_mode
+        self.selected_spells = selected_spells or []
+        self.build_result: BuildResult | None = None
 
     def run(self) -> None:
         try:
@@ -295,10 +337,14 @@ class GestureModelBuildWorker(QThread):
                 dataset_dir=self.dataset_dir,
                 status_cb=self.sig_status.emit,
                 progress_cb=self.sig_progress.emit,
+                output_mode=self.output_mode,
+                selected_spells=self.selected_spells,
             )
+            self.build_result = result
             summary = (
                 f"classes={len(result.classes)}, windows={result.sample_windows}, "
-                f"val_acc={result.accuracy:.3f}, cc={result.cc_path}"
+                f"val_acc={result.accuracy:.3f}, mode={result.output_mode}, "
+                f"tflite={result.tflite_path}, cc={result.cc_path}"
             )
             self.sig_finished.emit(True, summary)
         except Exception as exc:

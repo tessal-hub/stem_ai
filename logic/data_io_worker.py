@@ -9,7 +9,7 @@ Job protocol
 ------------
 Jobs are pushed onto an internal ``queue.Queue`` as plain tuples:
 
-    ("save",   spell_name: str, data: list[list[float]], tag: str)
+    ("save",   spell_name: str, data: list[list[float]])
     ("delete", spell_name: str)
     ("export", buf: list[list[float]], path: str)
     ("refresh",)                   # trigger a database rescan only
@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import csv
 import glob as glob_module
-import json
 import logging
 import os
 import queue
@@ -31,6 +30,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PyQt6.QtCore import QThread, pyqtSignal
+from constants import canonical_system_spell, is_system_spell, normalize_spell_name
 
 log = logging.getLogger(__name__)
 
@@ -60,11 +60,10 @@ class DataIOWorker(QThread):
         self,
         spell_name: str,
         data: list[list[float]],
-        tag: str = "",
     ) -> None:
         """Schedule a cropped sample write (non-blocking)."""
         try:
-            self._job_queue.put_nowait(("save", spell_name, data, tag))
+            self._job_queue.put_nowait(("save", spell_name, data))
         except queue.Full:
             log.warning("DataIOWorker: job queue full, save job dropped for spell '%s'", spell_name)
 
@@ -116,8 +115,8 @@ class DataIOWorker(QThread):
             if kind == "_stop":
                 break
             elif kind == "save":
-                _, spell_name, data, tag = job
-                self._do_save(spell_name, data, tag)
+                _, spell_name, data = job
+                self._do_save(spell_name, data)
             elif kind == "delete":
                 _, spell_name = job
                 self._do_delete(spell_name)
@@ -133,32 +132,20 @@ class DataIOWorker(QThread):
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _do_save(self, spell_name: str, data: list[list[float]], tag: str) -> None:
+    def _do_save(self, spell_name: str, data: list[list[float]]) -> None:
         try:
-            folder = os.path.join(self._dataset_dir, spell_name.strip().upper())
+            normalized_name = normalize_spell_name(spell_name)
+            folder_name = canonical_system_spell(normalized_name)
+            folder = os.path.join(self._dataset_dir, folder_name)
             os.makedirs(folder, exist_ok=True)
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
             file_path = os.path.join(folder, f"sample_{timestamp}.csv")
-            meta_path = os.path.join(folder, f"sample_{timestamp}.meta.json")
 
             with open(file_path, mode="w", newline="") as f:
                 writer = csv.writer(f)
                 writer.writerow(["aX", "aY", "aZ", "gX", "gY", "gZ"])
                 writer.writerows(data)
-
-            if tag:
-                with open(meta_path, mode="w", encoding="utf-8") as meta_file:
-                    json.dump(
-                        {
-                            "tag": tag,
-                            "timestamp": timestamp,
-                            "sample_count": len(data),
-                        },
-                        meta_file,
-                        ensure_ascii=True,
-                        indent=2,
-                    )
 
             counts = self._scan_database()
             self.sig_db_refreshed.emit(counts)
@@ -170,7 +157,11 @@ class DataIOWorker(QThread):
 
     def _do_delete(self, spell_name: str) -> None:
         try:
-            spell_path = os.path.join(self._dataset_dir, spell_name.strip().upper())
+            if is_system_spell(spell_name):
+                self.sig_delete_done.emit(False, f"Protected system spell cannot be deleted: {spell_name}")
+                return
+
+            spell_path = os.path.join(self._dataset_dir, normalize_spell_name(spell_name))
             if not os.path.exists(spell_path):
                 self.sig_delete_done.emit(False, f"Spell not found: {spell_name}")
                 return

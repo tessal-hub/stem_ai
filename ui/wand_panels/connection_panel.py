@@ -92,6 +92,7 @@ class WandConnectionPanel(QWidget):
 
         self.combo_serial_ports = QComboBox()
         self.combo_serial_ports.setStyleSheet(STYLE_WAND_COMBO)
+        self.combo_serial_ports.setMinimumHeight(36)
         layout.addWidget(self.combo_serial_ports)
 
         btn_row = QHBoxLayout()
@@ -117,6 +118,7 @@ class WandConnectionPanel(QWidget):
 
         self.combo_bt_devices = QComboBox()
         self.combo_bt_devices.setStyleSheet(STYLE_WAND_COMBO)
+        self.combo_bt_devices.setMinimumHeight(36)
         layout.addWidget(self.combo_bt_devices)
 
         btn_row = QHBoxLayout()

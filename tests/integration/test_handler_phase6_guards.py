@@ -64,6 +64,8 @@ class WandStub(QObject):
     sig_bt_disconnect = pyqtSignal()
     sig_flash_compile = pyqtSignal(list)
     sig_train_build_requested = pyqtSignal()
+    sig_train_build_tflite_requested = pyqtSignal(list)
+    sig_train_build_cc_requested = pyqtSignal(list)
     sig_term_clear = pyqtSignal()
 
     def __init__(self) -> None:
@@ -96,7 +98,7 @@ class WandStub(QObject):
 
 
 class RecordStub(QObject):
-    sig_data_cropped = pyqtSignal(list, str, str)
+    sig_data_cropped = pyqtSignal(list, str)
     sig_spell_selected = pyqtSignal(str)
     sig_spell_deleted = pyqtSignal(str)
     sig_start_record = pyqtSignal(str)
@@ -112,6 +114,7 @@ class RecordStub(QObject):
         self.wand_ready_events: list[bool] = []
         self.plot_updates: list[list] = []
         self.loaded_spell_lists: list[list[str]] = []
+        self.protected_spell_warnings: list[str] = []
 
     def update_record_count(self, count: int) -> None:
         self.record_count_events.append(count)
@@ -135,6 +138,9 @@ class RecordStub(QObject):
     def set_save_status(self, spell_name: str) -> None:
         # No-op for test harness.
         pass
+
+    def show_protected_spell_warning(self, spell_name: str) -> None:
+        self.protected_spell_warnings.append(spell_name)
 
 
 class HomeStub(QObject):
@@ -387,6 +393,15 @@ def test_upload_finish_releases_owner_resets_mode_and_reports_status(
     assert harness.handler._mode == harness.handler._MODE_IDLE
     assert harness.wand.flash_progress and harness.wand.flash_progress[-1][0] == 100
     assert any("Model upload COMPLETE" in msg for msg in harness.wand.logs)
+
+
+def test_delete_system_spell_is_blocked_with_feedback(handler_harness: HandlerHarness) -> None:
+    harness = handler_harness
+
+    harness.handler.on_spell_deleted("STAND BY")
+
+    assert any("protected system spell" in msg for msg in harness.wand.logs)
+    assert harness.record.protected_spell_warnings == ["STAND BY"]
 
     assert harness.handler._transition_mode(harness.handler._MODE_UPDATE, reason="setup")
     harness.handler._set_port_owner("upload")
