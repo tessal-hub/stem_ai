@@ -13,7 +13,6 @@ Architecture:
     - Writes to 0x10000 address (app firmware partition)
 """
 
-import os
 import re
 import sys
 import subprocess

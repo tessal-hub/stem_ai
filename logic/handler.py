@@ -215,16 +215,23 @@ class Handler(QObject):
 
     def _connect_signals(self) -> None:
         """Wire all component signals for non-blocking MVC architecture."""
+        self._connect_ui_action_signals()
+        self._connect_signals_serial_worker()
+        self._connect_store_and_home_signals()
+        self._connect_worker_output_signals()
 
-        # --- UI Wand → Handler (user actions) ---
+    def _connect_ui_action_signals(self) -> None:
+        """Wire user-action signals from all UI pages to handler slots."""
+        # UI Wand → Handler
         self.ui_wand.sig_serial_scan.connect(self.on_serial_scan)
         self.ui_wand.sig_serial_connect.connect(self.on_serial_connect)
         self.ui_wand.sig_serial_disconnect.connect(self.on_serial_disconnect)
         self.ui_wand.sig_flash_upload.connect(self.on_flash_upload)
         self.ui_wand.sig_train_build_tflite_requested.connect(self.on_train_build_tflite_requested)
         self.ui_wand.sig_train_build_cc_requested.connect(self.on_train_build_cc_requested)
+        self.ui_wand.sig_train_build_requested.connect(self.on_train_build_model_requested)
 
-        # --- UI Setting → Handler (firmware flashing) ---
+        # UI Setting → Handler (firmware flashing)
         if self.ui_setting:
             self.ui_setting.sig_flash_data_firmware.connect(
                 lambda: self.handle_firmware_flash("data")
@@ -233,7 +240,7 @@ class Handler(QObject):
                 lambda: self.handle_firmware_flash("inference")
             )
 
-        # --- UI Record → Handler (recording & data cropping) ---
+        # UI Record → Handler (recording & data cropping)
         self.ui_record.sig_data_cropped.connect(self.on_data_cropped)
         self.ui_record.sig_spell_selected.connect(self.on_spell_selected)
         self.ui_record.sig_spell_deleted.connect(self.on_spell_deleted)
@@ -242,36 +249,29 @@ class Handler(QObject):
         self.ui_record.sig_clear_buffer.connect(self.on_clear_buffer)
         self.ui_record.sig_export_csv.connect(self.on_export_csv)
 
-        self.ui_wand.sig_train_build_requested.connect(self.on_train_build_model_requested)
-
+        # UI Statistics → Handler (optional)
         if self.ui_statistics:
             self.ui_statistics.sig_train_build_requested.connect(self.on_train_build_model_requested)
 
-        # ┌─── SERIAL WORKER SIGNALS (hardware input) ───────────────┐
-        # │  CRITICAL: Use QueuedConnection for thread safety!       │
-        # │  SerialWorker runs in its own QThread and emits signals  │
-        # │  in that thread. Without QueuedConnection, slots run in  │
-        # │  SerialWorker's thread, updating UI from wrong thread.   │
-        # │  This causes PyQtGraph & OpenGL to silently fail.        │
-        # └─────────────────────────────────────────────────────────┘
-        self._connect_signals_serial_worker()
-
-        # --- DataStore → UI (state updates) ---
+    def _connect_store_and_home_signals(self) -> None:
+        """Wire DataStore state-update signals and Home page interaction signals."""
+        # DataStore → UI (state updates)
         self.store.sig_db_updated.connect(self._on_db_updated)
         self.store.sig_stats_updated.connect(self.ui_wand.update_esp_stats)
         self.store.sig_prediction_updated.connect(self._on_prediction_received)
         self.store.sig_live_buffer_updated.connect(self.ui_record.update_plot_data)
 
-        # --- Home → Handler (simulation playback controls) ---
+        # Home → Handler (simulation playback controls)
         self.ui_home.sig_simulation_replay_requested.connect(self._on_simulation_replay_requested)
         self.ui_home.sig_simulation_stop_requested.connect(self._stop_simulation_playback)
 
-        # --- Home → Handler (calibration & quick test) ---
+        # Home → Handler (calibration & quick test)
         self.ui_home.sig_calibrate_requested.connect(self.on_calibrate_wand)
         self.ui_home.sig_quick_test_requested.connect(self.on_quick_test)
 
-        # --- Model Uploader → UI/Handler ---
-        # CRITICAL: Use QueuedConnection for cross-thread signal safety
+    def _connect_worker_output_signals(self) -> None:
+        """Wire background-worker output signals to UI/handler slots (all queued for thread safety)."""
+        # Model Uploader → UI/Handler
         self._connect_many_queued(
             [
                 (self.uploader.sig_progress, self.ui_wand.update_flash_progress),
@@ -281,7 +281,7 @@ class Handler(QObject):
             ]
         )
 
-        # --- Flash Worker → UI/Handler ---
+        # Flash Worker → UI/Handler
         if self.ui_setting:
             self._connect_many_queued(
                 [
@@ -292,7 +292,7 @@ class Handler(QObject):
                 ]
             )
 
-        # --- Data Recorder → UI ---
+        # Data Recorder → UI
         self._connect_many_queued(
             [
                 (self.recorder.sig_record_count, self.ui_record.update_record_count),
@@ -304,7 +304,7 @@ class Handler(QObject):
             ]
         )
 
-        # --- DataIOWorker → Handler/UI (off-thread file I/O results) ---
+        # DataIOWorker → Handler/UI (off-thread file I/O results)
         self._connect_many_queued(
             [
                 (self.data_io_worker.sig_save_done, self._on_io_save_done),
@@ -314,7 +314,7 @@ class Handler(QObject):
             ]
         )
 
-        # --- FeatureWorker → DataStore (off-thread FFT / stat features) ---
+        # FeatureWorker → DataStore (off-thread FFT / stat features)
         self._connect_queued(
             self.feature_worker.sig_features_ready,
             self.store.update_live_features,

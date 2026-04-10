@@ -67,7 +67,6 @@ from ui.modern_layout import (
     SPACING_SM,
     SPACING_XS,
 )
-from ui.mac_material import apply_soft_shadow
 
 
 _HOME_SYSTEM_STAT_KEYS = (

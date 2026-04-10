@@ -1,6 +1,5 @@
 import serial
 import time
-import sys
 
 # --- CONFIGURATION ---
 # Change these variables before running the script

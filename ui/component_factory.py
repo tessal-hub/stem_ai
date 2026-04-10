@@ -7,9 +7,7 @@ consistent module. Ensures consistent styling and behavior across the applicatio
 Factories return bare widgets; signal connections happen in parent components.
 """
 
-import os
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,

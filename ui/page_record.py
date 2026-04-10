@@ -46,7 +46,6 @@ from ui.component_factory import (
     make_hint,
 )
 from ui.confirm_dialog import confirm_destructive
-from ui.mac_material import apply_soft_shadow
 from ui.modern_layout import (
     create_modern_card,
     add_card_shadow,
