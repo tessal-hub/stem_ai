@@ -166,4 +166,4 @@ def save_cc(data, path="gesture_model.cc", var="gesture_model"):
 
 save_cc(best_bytes)
 print(f"THÀNH CÔNG! Đã lưu gesture_model.tflite ({best_kb:.1f} KB)")
-print(f"THÀNH CÔNG! Đã lưu gesture_model.cc")
+print("THÀNH CÔNG! Đã lưu gesture_model.cc")

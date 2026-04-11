@@ -8,7 +8,6 @@ Provides helpers for:
   - Building spacer items
 """
 
-from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QFrame,
@@ -74,19 +73,17 @@ def add_card_shadow(
     offset_x: float = 0,
     offset_y: float = 4,
     color: str = "rgba(0, 0, 0, 0.12)",
-    spread: float = 0,
 ) -> QGraphicsDropShadowEffect:
     """
     Add a drop shadow to a widget for depth and elevation.
-    
+
     Args:
         widget: Widget to apply shadow to
         blur_radius: Shadow blur radius (0-20 typically)
         offset_x: Horizontal offset
         offset_y: Vertical offset
         color: Shadow color (QColor-compatible string)
-        spread: Shadow spread radius
-    
+
     Returns:
         The shadow effect applied to the widget
     """
@@ -94,7 +91,6 @@ def add_card_shadow(
     shadow.setBlurRadius(blur_radius)
     shadow.setOffset(offset_x, offset_y)
     shadow.setColor(QColor(color))
-    shadow.setBlurRadius(spread)
     widget.setGraphicsEffect(shadow)
     return shadow
 

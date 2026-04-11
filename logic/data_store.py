@@ -322,32 +322,46 @@ class DataStore(QObject):
         return sorted(root.rglob("*.meta.json"))
 
     def _count_legacy_meta_files(self) -> int:
-        return len(self._iter_legacy_meta_files())
+        root = Path(self.dataset_dir)
+        if not root.exists():
+            return 0
+        return sum(1 for _ in root.rglob("*.meta.json"))
 
-    def _backup_dataset_snapshot(self) -> Path:
-        """Create rollback snapshot before migration writes are changed."""
+    def _backup_dataset_snapshot(self) -> Path | None:
+        """Create rollback snapshot before migration writes are changed.
+
+        Returns the backup directory path on success, or None if the backup
+        could not be created (e.g. disk full, permission denied).
+        """
         dataset_root = Path(self.dataset_dir)
         backup_root = dataset_root.parent / "_migration_backups"
-        backup_root.mkdir(parents=True, exist_ok=True)
+        try:
+            backup_root.mkdir(parents=True, exist_ok=True)
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        target_dir = backup_root / f"dataset_backup_{timestamp}"
-        shutil.copytree(dataset_root, target_dir)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            target_dir = backup_root / f"dataset_backup_{timestamp}"
+            shutil.copytree(dataset_root, target_dir)
 
-        csv_count = len(list(target_dir.rglob("*.csv")))
-        meta_count = len(list(target_dir.rglob("*.meta.json")))
-        manifest = {
-            "source": str(dataset_root),
-            "backup": str(target_dir),
-            "csv_files": csv_count,
-            "meta_json_files": meta_count,
-            "timestamp": timestamp,
-        }
-        (target_dir / "backup_manifest.json").write_text(
-            json.dumps(manifest, ensure_ascii=True, indent=2),
-            encoding="utf-8",
-        )
-        return target_dir
+            csv_count = len(list(target_dir.rglob("*.csv")))
+            meta_count = len(list(target_dir.rglob("*.meta.json")))
+            manifest = {
+                "source": str(dataset_root),
+                "backup": str(target_dir),
+                "csv_files": csv_count,
+                "meta_json_files": meta_count,
+                "timestamp": timestamp,
+            }
+            (target_dir / "backup_manifest.json").write_text(
+                json.dumps(manifest, ensure_ascii=True, indent=2),
+                encoding="utf-8",
+            )
+            return target_dir
+        except OSError:
+            log.exception(
+                "Dataset backup failed — continuing without backup (dataset_dir=%s)",
+                self.dataset_dir,
+            )
+            return None
 
     def _prepare_legacy_meta_migration(self) -> None:
         """Prepare one-time migration context for stopping new .meta.json writes.
@@ -361,11 +375,18 @@ class DataStore(QObject):
         meta_count = self._count_legacy_meta_files()
         if meta_count > 0:
             backup_dir = self._backup_dataset_snapshot()
-            log.info(
-                "Legacy metadata migration prepared: %d .meta.json file(s); backup created at %s",
-                meta_count,
-                backup_dir,
-            )
+            if backup_dir is not None:
+                log.info(
+                    "Legacy metadata migration prepared: %d .meta.json file(s); backup created at %s",
+                    meta_count,
+                    backup_dir,
+                )
+            else:
+                log.warning(
+                    "Legacy metadata migration prepared: %d .meta.json file(s); backup FAILED — "
+                    "proceeding without a backup snapshot.",
+                    meta_count,
+                )
         self._legacy_meta_migration_prepared = True
 
     def _ensure_system_spell_directories(self) -> None:
@@ -401,28 +422,30 @@ class DataStore(QObject):
     def add_live_sample(self, sample: list[float], *, emit: bool = True) -> list[list[float]]:
         """Append one 6-axis sample to rolling live buffer and emit snapshot.
 
-        The buffer copy (list comprehension) is deferred until the rate-limit
-        gate passes so that the lock is held only for the O(1) deque append on
-        the hot path (~50 Hz).  The snapshot is built outside the lock after the
-        rate check, using a second brief acquisition.
+        The rate-limit check and timestamp update are performed inside
+        ``_buffer_lock`` so that concurrent callers from different threads
+        cannot both pass the gate and emit duplicate snapshots.
         """
         try:
             normalized_sample = validate_six_axis_values(sample)
         except FrameValidationError:
             return []
-        # O(1) append — hold the lock for as short a time as possible.
+
+        if not emit:
+            with self._buffer_lock:
+                self.live_buffer.append(normalized_sample)
+            return []
+
+        now = time.perf_counter()
         with self._buffer_lock:
             self.live_buffer.append(normalized_sample)
-        if emit:
-            now = time.perf_counter()
-            if now - self._last_live_emit >= self._live_emit_interval:
-                self._last_live_emit = now
-                # Snapshot copy is now outside the hot-path lock acquisition.
-                with self._buffer_lock:
-                    snapshot = [list(row) for row in self.live_buffer]
-                self.sig_live_buffer_updated.emit(snapshot)
-                return snapshot
-        return []
+            if now - self._last_live_emit < self._live_emit_interval:
+                return []
+            self._last_live_emit = now
+            snapshot = [list(row) for row in self.live_buffer]
+
+        self.sig_live_buffer_updated.emit(snapshot)
+        return snapshot
 
     def get_live_buffer_snapshot(self) -> list[list[float]]:
         """Return a thread-safe shallow copy of the rolling live buffer."""
@@ -617,8 +640,8 @@ class DataStore(QObject):
                 writer.writerows(data)
             self.refresh_database(force=True)
             return True
-        except Exception as e:
-            print(f"[DataStore] Save error: {e}")
+        except Exception:
+            log.exception("DataStore.save_cropped_data failed for spell=%r", spell_name)
             return False
 
     def delete_spell(self, spell_name: str) -> bool:
@@ -646,6 +669,6 @@ class DataStore(QObject):
             # Refresh the database
             self.refresh_database(force=True)
             return True
-        except Exception as e:
-            print(f"[DataStore] Delete spell error: {e}")
+        except Exception:
+            log.exception("DataStore.delete_spell failed for spell=%r", spell_name)
             return False

@@ -5,20 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from PyQt6.QtCore import Qt, QSize, pyqtSignal
-from PyQt6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
+from PyQt6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PyQt6.QtSvg import QSvgRenderer
-from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QToolButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QToolButton, QVBoxLayout, QWidget
 
 from ui.tokens import (
     APP_FONT_STACK,
-    ACCENT,
-    BG_LIGHT,
-    BG_WHITE,
-    BORDER,
-    MAC_BG,
-    MAC_BORDER,
-    MAC_SIDEBAR_BG,
-    MAC_TOOLBAR_BG,
     MAC_TEXT_PRIMARY,
     PRIMARY_COLOR,
     SURFACE_PRIMARY,
@@ -78,6 +70,31 @@ class MacShell(QWidget):
         chrome_layout.setContentsMargins(0, 0, 0, 0)
         chrome_layout.setSpacing(0)
 
+        body = QWidget()
+        body_layout = QHBoxLayout(body)
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.setSpacing(0)
+
+        self.content_host = QWidget()
+        self.content_host.setStyleSheet(f"background-color: {SURFACE_SECONDARY};")
+        self.content_layout = QVBoxLayout(self.content_host)
+        self.content_layout.setContentsMargins(0, 0, 0, 0)
+        self.content_layout.setSpacing(0)
+
+        body_layout.addWidget(self._build_sidebar())
+        body_layout.addWidget(self.content_host, stretch=1)
+
+        chrome_layout.addWidget(self._build_toolbar(title))
+        chrome_layout.addWidget(body, stretch=1)
+        outer.addWidget(chrome)
+
+        self.setStyleSheet(
+            f"* {{ font-family: {APP_FONT_STACK}; }} QPushButton {{ text-align: left; }}"
+        )
+        self.set_active_index(0)
+
+    def _build_toolbar(self, title: str) -> QWidget:
+        """Build the top toolbar with title and subtitle labels."""
         toolbar = QWidget()
         toolbar.setFixedHeight(44)
         toolbar.setStyleSheet(
@@ -105,21 +122,10 @@ class MacShell(QWidget):
 
         toolbar_layout.addWidget(title_block)
         toolbar_layout.addStretch()
+        return toolbar
 
-        body = QWidget()
-        body_layout = QHBoxLayout(body)
-        body_layout.setContentsMargins(0, 0, 0, 0)
-        body_layout.setSpacing(0)
-
-        self.sidebar = QWidget()
-        self.sidebar.setFixedWidth(SHELL_SIDEBAR_W)
-        self.sidebar.setStyleSheet(
-            f"background-color: {SURFACE_SECONDARY}; border-right: 1px solid {BORDER_LIGHT};"
-        )
-        sidebar_layout = QVBoxLayout(self.sidebar)
-        sidebar_layout.setContentsMargins(10, 12, 10, 12)
-        sidebar_layout.setSpacing(8)
-
+    def _build_brand_widget(self) -> QWidget:
+        """Build the brand icon + title block shown at the top of the sidebar."""
         brand = QWidget()
         brand.setFixedHeight(SHELL_BRAND_H)
         brand_layout = QVBoxLayout(brand)
@@ -155,13 +161,26 @@ class MacShell(QWidget):
         brand_layout.addWidget(brand_icon_row)
         brand_layout.addWidget(brand_title)
         brand_layout.addWidget(brand_subtitle)
-        sidebar_layout.addWidget(brand)
+        return brand
 
-        sidebar_title = QLabel("NAV")
-        sidebar_title.setStyleSheet(
+    def _build_sidebar(self) -> QWidget:
+        """Build the fixed-width sidebar with brand and navigation buttons."""
+        self.sidebar = QWidget()
+        self.sidebar.setFixedWidth(SHELL_SIDEBAR_W)
+        self.sidebar.setStyleSheet(
+            f"background-color: {SURFACE_SECONDARY}; border-right: 1px solid {BORDER_LIGHT};"
+        )
+        sidebar_layout = QVBoxLayout(self.sidebar)
+        sidebar_layout.setContentsMargins(10, 12, 10, 12)
+        sidebar_layout.setSpacing(8)
+
+        sidebar_layout.addWidget(self._build_brand_widget())
+
+        nav_title = QLabel("NAV")
+        nav_title.setStyleSheet(
             f"color: {TEXT_MUTED}; font-size: 10px; font-weight: 800; letter-spacing: 1.6px;"
         )
-        sidebar_layout.addWidget(sidebar_title)
+        sidebar_layout.addWidget(nav_title)
 
         for index, item in enumerate(NAV_ITEMS):
             button = self._make_nav_button(item.label, item.icon, index)
@@ -169,24 +188,7 @@ class MacShell(QWidget):
             sidebar_layout.addWidget(button)
 
         sidebar_layout.addStretch()
-
-        self.content_host = QWidget()
-        self.content_host.setStyleSheet(f"background-color: {SURFACE_SECONDARY};")
-        self.content_layout = QVBoxLayout(self.content_host)
-        self.content_layout.setContentsMargins(0, 0, 0, 0)
-        self.content_layout.setSpacing(0)
-
-        body_layout.addWidget(self.sidebar)
-        body_layout.addWidget(self.content_host, stretch=1)
-
-        chrome_layout.addWidget(toolbar)
-        chrome_layout.addWidget(body, stretch=1)
-        outer.addWidget(chrome)
-
-        self.setStyleSheet(
-            f"* {{ font-family: {APP_FONT_STACK}; }} QPushButton {{ text-align: left; }}"
-        )
-        self.set_active_index(0)
+        return self.sidebar
 
     def _make_nav_button(self, label: str, icon_path: str, index: int) -> QToolButton:
         button = QToolButton()

@@ -8,7 +8,6 @@ This module merges:
 """
 
 from PyQt6.QtCore import QSize
-from PyQt6.QtGui import QColor
 
 APP_FONT_STACK = "SF Pro Text, SF Pro Display, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
 
@@ -51,101 +50,13 @@ SHADOW_MEDIUM = "rgba(0, 0, 0, 0.10)"     # Medium shadow (cards)
 SHADOW_DARK = "rgba(0, 0, 0, 0.15)"       # Dark shadow (modals)
 
 # ════════════════════════════════════════════════════════════════════════════
-# MODERN COMPONENT STYLES
-# ════════════════════════════════════════════════════════════════════════════
-
-# Modern Card Style
-STYLE_MODERN_CARD = f"""
-    #CardFrame {{
-        background-color: {SURFACE_PRIMARY};
-        border: 1px solid {BORDER_COLOR};
-        border-radius: 10px;
-    }}
-    #CardFrame:hover {{
-        border-color: {BORDER_COLOR};
-    }}
-"""
-
-# Modern Button - Primary Style
-STYLE_MODERN_BTN_PRIMARY = f"""
-    QPushButton {{
-        background-color: {PRIMARY_COLOR};
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 8px 16px;
-        font-weight: 600;
-        font-size: 13px;
-        min-height: 32px;
-        max-height: 32px;
-    }}
-    QPushButton:hover {{
-        background-color: {PRIMARY_DARK};
-    }}
-    QPushButton:pressed {{
-        background-color: {PRIMARY_DARK};
-    }}
-    QPushButton:disabled {{
-        background-color: #d1d5db;
-        color: #9ca3af;
-    }}
-"""
-
-# Modern Button - Secondary Style
-STYLE_MODERN_BTN_SECONDARY = f"""
-    QPushButton {{
-        background-color: {SURFACE_SECONDARY};
-        color: {TEXT_PRIMARY};
-        border: 1px solid {BORDER_COLOR};
-        border-radius: 8px;
-        padding: 8px 16px;
-        font-weight: 500;
-        font-size: 13px;
-        min-height: 32px;
-        max-height: 32px;
-    }}
-    QPushButton:hover {{
-        background-color: {SURFACE_TERTIARY};
-        border-color: {PRIMARY_COLOR};
-        color: {PRIMARY_COLOR};
-    }}
-    QPushButton:pressed {{
-        background-color: #f3f4f6;
-        border-color: {PRIMARY_DARK};
-    }}
-    QPushButton:disabled {{
-        background-color: #f3f4f6;
-        color: {TEXT_TERTIARY};
-    }}
-"""
-
-# Modern Label - Section Title
-STYLE_MODERN_TITLE = f"""
-    color: {TEXT_PRIMARY};
-    font-size: 16px;
-    font-weight: 700;
-    letter-spacing: 0.4px;
-"""
-
-# Modern Label - Section Subtitle
-STYLE_MODERN_SUBTITLE = f"""
-    color: {TEXT_SECONDARY};
-    font-size: 13px;
-    font-weight: 500;
-    letter-spacing: 0.3px;
-"""
-
-# ════════════════════════════════════════════════════════════════════════════
 
 MAC_BG = "#f5f5f7"
-MAC_SURFACE = "rgba(255, 255, 255, 0.72)"
 MAC_SURFACE_SOLID = "#ffffff"
 MAC_SIDEBAR_BG = "rgba(242, 242, 247, 0.82)"
 MAC_TOOLBAR_BG = "rgba(248, 248, 250, 0.88)"
 MAC_BORDER = "#d1d5db"
 MAC_BORDER_STRONG = "#c4cbd4"
-MAC_SHADOW = "rgba(0, 0, 0, 0.18)"
-MAC_SHADOW_LIGHT = "rgba(0, 0, 0, 0.08)"
 MAC_TEXT_PRIMARY = "#1d1d1f"
 MAC_TEXT_SECONDARY = "#6e6e73"
 MAC_ACCENT = "#0a84ff"
@@ -160,10 +71,8 @@ SHELL_BRAND_ICON = QSize(34, 34)
 # Home layout tokens
 HOME_STATUS_H = 32
 HOME_VIEWER_MIN_H = 360
-HOME_SENSOR_H = 140
 HOME_ATTACH_H = 36
 HOME_RIGHT_W = 280
-HOME_SENSOR_CARD_H = 54
 
 # ────────────────────────────────────────────────────────────────────────────
 # COLOR PALETTE
@@ -184,7 +93,6 @@ ACCENT_DARK  = MAC_ACCENT_DARK
 ACCENT_TEXT  = "#ffffff"
 SUCCESS      = "#10b981"
 DANGER       = "#ef4444"
-DANGER_DARK  = "#dc2626"      # Darker red for hover states
 WARNING      = "#f59e0b"
 HOVER_BG     = "rgba(10, 132, 255, 0.10)"
 
@@ -193,8 +101,6 @@ TERM_FG      = "#10b981"
 TERM_BG      = "#0d1117"
 
 # Graph colors (used in plotting)
-GRAPH_LINE_1 = "#00d4ff"
-GRAPH_LINE_2 = "#00ff88"
 CROP_REGION  = "#ff336644"
 PLOT_AX_COLOR = "#ff5555"
 PLOT_AY_COLOR = "#55ff55"
@@ -218,7 +124,6 @@ SETTINGS_HOVER_BG     = "#e0e7ff"      # Light blue hover for settings
 
 # Wand-specific accents
 WAND_ACCENT       = "#00ff88"
-WAND_ACCENT_TEXT  = "#0a0a0a"
 
 # Home page typography tokens
 STYLE_HOME_SECTION_TITLE = f"color: {TEXT_BODY}; font-size: 14px; font-weight: 800; letter-spacing: 1px;"
@@ -249,39 +154,11 @@ STYLE_HOME_VIEWER_CARD = f"""
         border-radius: 14px;
     }}
 """
-STYLE_HOME_SENSOR_TILE = f"""
-    #HomeSensorTile {{
-        background-color: {BG_WHITE};
-        border: 1px solid {BORDER};
-        border-radius: 10px;
-    }}
-"""
-STYLE_HOME_SENSOR_CARD = f"""
-    #HomeSensorCard {{
-        background-color: {MAC_SURFACE_SOLID};
-        border: 1px solid {MAC_BORDER};
-        border-radius: 12px;
-    }}
-"""
-STYLE_HOME_SENSOR_BAR = f"""
-    QProgressBar#HomeSensorBar {{
-        background-color: {BG_LIGHT};
-        border: none;
-        border-radius: 1px;
-        min-height: 4px;
-        max-height: 4px;
-        text-align: right;
-    }}
-    QProgressBar#HomeSensorBar::chunk {{
-        background-color: {ACCENT};
-        border-radius: 1px;
-    }}
-"""
-STYLE_HOME_ATTACHMENT_BAR = f"""
-    #HomeAttachmentBar {{
+STYLE_HOME_ATTACHMENT_BAR = """
+    #HomeAttachmentBar {
         background-color: transparent;
         border: none;
-    }}
+    }
 """
 STYLE_HOME_ATTACHMENT_PILL = f"""
     QPushButton {{
@@ -299,25 +176,17 @@ STYLE_HOME_ATTACHMENT_PILL = f"""
         color: {ACCENT};
     }}
 """
-STYLE_HOME_RIGHT_PANEL = f"""
-    #HomeRightPanel {{
+STYLE_HOME_RIGHT_PANEL = """
+    #HomeRightPanel {
         background-color: transparent;
         border: none;
-    }}
+    }
 """
 STYLE_HOME_RIGHT_SECTION = f"""
     #HomeRightSection {{
         background-color: {MAC_SURFACE_SOLID};
         border: 1px solid {MAC_BORDER};
         border-radius: 16px;
-    }}
-"""
-STYLE_HOME_MODE_PILL = f"""
-    #HomeModePill {{
-        color: {ACCENT};
-        font-size: 12px;
-        font-weight: 900;
-        letter-spacing: 1px;
     }}
 """
 STYLE_HOME_MANAGER_ROW = f"""
@@ -415,15 +284,10 @@ STYLE_HOME_ACTION_BTN_SECONDARY = f"""
 
 ICON          = QSize(18, 18)
 STATUS_H      = 28
-MODE_BOX_H    = 38
-MODULE_BAR_H  = 40
-MGR_BOX_H     = 90
 SPELL_BTN_H   = 36
 MODULE_BTN_H  = 28
-SIM_MIN_H     = 320
 GRAPH_MIN_H   = 360
 TERM_MIN_H    = 140
-TERM_MAX_H    = 760
 PROGRESS_H    = 10
 RIGHT_MAX_W   = 320
 BTN_H         = 32
@@ -491,15 +355,6 @@ STYLE_SETTING_MAIN_CONTAINER = f"""
 # CONTAINER & CARD STYLES
 # ────────────────────────────────────────────────────────────────────────────
 
-# PageHome wand container (3D widget box)
-STYLE_WAND_CONTAINER = f"""
-    #WandBox {{
-        background-color: {MAC_SURFACE_SOLID};
-        border: 1px solid {MAC_BORDER};
-        border-radius: 16px;
-    }}
-"""
-
 # Generic card frames
 STYLE_CARD = f"""
     #CardFrame {{
@@ -509,11 +364,11 @@ STYLE_CARD = f"""
     }}
 """
 
-STYLE_CARD_NO_BORDER = f"""
-    #CardFrame {{
+STYLE_CARD_NO_BORDER = """
+    #CardFrame {
         background-color: transparent;
         border: none;
-    }}
+    }
 """
 
 # PageStatistics card style (also applies to ClickableFrame)
@@ -531,15 +386,6 @@ STYLE_STATISTICS_CARD = f"""
 
 # PageSetting card style
 STYLE_SETTING_CARD = f"""
-    #CardFrame {{
-        background-color: {MAC_SURFACE_SOLID};
-        border: 1px solid {MAC_BORDER};
-        border-radius: 16px;
-    }}
-"""
-
-# PageRecord card style
-STYLE_RECORD_CARD = f"""
     #CardFrame {{
         background-color: {MAC_SURFACE_SOLID};
         border: 1px solid {MAC_BORDER};
@@ -1015,25 +861,17 @@ STYLE_CONSOLE = """
 # ────────────────────────────────────────────────────────────────────────────
 
 # PageStatistics scroll area
-STYLE_SCROLL_AREA = f"""
-    QScrollArea {{ border: none; background-color: transparent; }}
-    QScrollArea > QWidget > QWidget {{ background: transparent; }}
-    QScrollBar:vertical {{ border: none; background: transparent; width: 10px; margin: 0px; }}
-    QScrollBar::handle:vertical {{ background: rgba(128, 128, 128, 0.50); border-radius: 5px; min-height: 20px; }}
-    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; background: transparent; border: none; }}
-    QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
-    QScrollBar:horizontal {{ border: none; background: transparent; height: 10px; margin: 0px; }}
-    QScrollBar::handle:horizontal {{ background: rgba(128, 128, 128, 0.50); border-radius: 5px; min-width: 20px; }}
-    QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0px; background: transparent; border: none; }}
-    QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{ background: transparent; }}
-"""
-
-# PageHome module bar
-STYLE_MODULE_BAR = f"""
-    QWidget {{
-        background-color: transparent;
-        border: none;
-    }}
+STYLE_SCROLL_AREA = """
+    QScrollArea { border: none; background-color: transparent; }
+    QScrollArea > QWidget > QWidget { background: transparent; }
+    QScrollBar:vertical { border: none; background: transparent; width: 10px; margin: 0px; }
+    QScrollBar::handle:vertical { background: rgba(128, 128, 128, 0.50); border-radius: 5px; min-height: 20px; }
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; background: transparent; border: none; }
+    QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
+    QScrollBar:horizontal { border: none; background: transparent; height: 10px; margin: 0px; }
+    QScrollBar::handle:horizontal { background: rgba(128, 128, 128, 0.50); border-radius: 5px; min-width: 20px; }
+    QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; background: transparent; border: none; }
+    QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: transparent; }
 """
 
 STYLE_TRANSPARENT_WIDGET = "background: transparent;"
