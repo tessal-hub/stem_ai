@@ -61,11 +61,18 @@ class DataRecorder(QThread):
         self._row_queue: queue.Queue[list[float]] = queue.Queue(maxsize=2000)
 
     def stop(self) -> None:
-        """Stop the recorder worker thread cooperatively."""
+        """Request the recorder worker thread to exit cooperatively.
+
+        Sets the stop flag and enqueues a sentinel so the worker unblocks
+        immediately.  Does *not* block the calling thread — callers that need
+        to wait for the thread to finish should connect to ``finished`` or call
+        ``wait()`` themselves in a non-UI context.
+        """
         self._stop_requested = True
-        self._command_queue.put(("stop", None))
-        if self.isRunning():
-            self.wait(3000)
+        try:
+            self._command_queue.put_nowait(("stop", None))
+        except Exception:
+            pass  # Queue.Full is unlikely; worker will exit via _stop_requested.
 
     @staticmethod
     def _sanitize_label(label: str) -> str:
