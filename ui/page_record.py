@@ -16,15 +16,15 @@ from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QTime
 from PyQt6.QtWidgets import (
     QFormLayout,
     QGridLayout,
-    QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel,
+    QComboBox, QFrame, QHBoxLayout, QLabel,
     QListWidget, QMessageBox, QPushButton, QSizePolicy,
     QStackedWidget, QVBoxLayout, QWidget,
 )
 from constants import canonical_system_spell, is_system_spell
 from ui.tokens import (
     # Colors, Sizes
-    BG_WHITE, BG_LIGHT, BG_DARK, BORDER, BORDER_MID, TEXT_BODY, TEXT_MUTED, ACCENT, ACCENT_TEXT, 
-    HOVER_BG, SUCCESS, DANGER, WARNING, BTN_H, RIGHT_MAX_W, CROP_REGION,
+    BG_DARK, TEXT_BODY, TEXT_MUTED, ACCENT,
+    SUCCESS, DANGER, WARNING, BTN_H, RIGHT_MAX_W, CROP_REGION,
     PLOT_AX_COLOR, PLOT_AY_COLOR, PLOT_AZ_COLOR,
     PLOT_GX_COLOR, PLOT_GY_COLOR, PLOT_GZ_COLOR, PLOT_HANDLE_HOVER_COLOR,
     # Styles (page-specific)
@@ -47,7 +47,6 @@ from ui.component_factory import (
 )
 from ui.confirm_dialog import confirm_destructive
 from ui.modern_layout import (
-    create_modern_card,
     add_card_shadow,
     MARGIN_COMFORTABLE,
     MARGIN_STANDARD,
@@ -474,20 +473,15 @@ class PageRecord(QWidget):
     def _on_export_csv(self) -> None:
         """Export current recorded samples to CSV file."""
         buf = self.store.get_live_buffer_snapshot()
-        if not buf or len(buf) == 0:
+        if not buf:
             self.lbl_wand_status.setText("⚠ No samples to export")
             self.lbl_wand_status.setStyleSheet(
                 f"color: {WARNING}; font-weight: bold; font-size: 12px;"
             )
             return
-        
-        # Emit signal to Handler for actual export
+
         self.sig_export_csv.emit()
-        sample_count = len(buf)
-        self.lbl_wand_status.setText(f"💾 Exporting {sample_count} samples...")
-        self.lbl_wand_status.setStyleSheet(
-            f"color: {SUCCESS}; font-weight: bold; font-size: 12px;"
-        )
+        self.lbl_wand_status.setText(f"💾 Exporting {len(buf)} samples...")
         self.lbl_wand_status.setStyleSheet(
             f"color: {SUCCESS}; font-weight: bold; font-size: 12px;"
         )

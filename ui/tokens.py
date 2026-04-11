@@ -154,11 +154,11 @@ STYLE_HOME_VIEWER_CARD = f"""
         border-radius: 14px;
     }}
 """
-STYLE_HOME_ATTACHMENT_BAR = f"""
-    #HomeAttachmentBar {{
+STYLE_HOME_ATTACHMENT_BAR = """
+    #HomeAttachmentBar {
         background-color: transparent;
         border: none;
-    }}
+    }
 """
 STYLE_HOME_ATTACHMENT_PILL = f"""
     QPushButton {{
@@ -176,11 +176,11 @@ STYLE_HOME_ATTACHMENT_PILL = f"""
         color: {ACCENT};
     }}
 """
-STYLE_HOME_RIGHT_PANEL = f"""
-    #HomeRightPanel {{
+STYLE_HOME_RIGHT_PANEL = """
+    #HomeRightPanel {
         background-color: transparent;
         border: none;
-    }}
+    }
 """
 STYLE_HOME_RIGHT_SECTION = f"""
     #HomeRightSection {{
@@ -364,11 +364,11 @@ STYLE_CARD = f"""
     }}
 """
 
-STYLE_CARD_NO_BORDER = f"""
-    #CardFrame {{
+STYLE_CARD_NO_BORDER = """
+    #CardFrame {
         background-color: transparent;
         border: none;
-    }}
+    }
 """
 
 # PageStatistics card style (also applies to ClickableFrame)
@@ -861,17 +861,17 @@ STYLE_CONSOLE = """
 # ────────────────────────────────────────────────────────────────────────────
 
 # PageStatistics scroll area
-STYLE_SCROLL_AREA = f"""
-    QScrollArea {{ border: none; background-color: transparent; }}
-    QScrollArea > QWidget > QWidget {{ background: transparent; }}
-    QScrollBar:vertical {{ border: none; background: transparent; width: 10px; margin: 0px; }}
-    QScrollBar::handle:vertical {{ background: rgba(128, 128, 128, 0.50); border-radius: 5px; min-height: 20px; }}
-    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; background: transparent; border: none; }}
-    QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
-    QScrollBar:horizontal {{ border: none; background: transparent; height: 10px; margin: 0px; }}
-    QScrollBar::handle:horizontal {{ background: rgba(128, 128, 128, 0.50); border-radius: 5px; min-width: 20px; }}
-    QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0px; background: transparent; border: none; }}
-    QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{ background: transparent; }}
+STYLE_SCROLL_AREA = """
+    QScrollArea { border: none; background-color: transparent; }
+    QScrollArea > QWidget > QWidget { background: transparent; }
+    QScrollBar:vertical { border: none; background: transparent; width: 10px; margin: 0px; }
+    QScrollBar::handle:vertical { background: rgba(128, 128, 128, 0.50); border-radius: 5px; min-height: 20px; }
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; background: transparent; border: none; }
+    QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
+    QScrollBar:horizontal { border: none; background: transparent; height: 10px; margin: 0px; }
+    QScrollBar::handle:horizontal { background: rgba(128, 128, 128, 0.50); border-radius: 5px; min-width: 20px; }
+    QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; background: transparent; border: none; }
+    QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: transparent; }
 """
 
 STYLE_TRANSPARENT_WIDGET = "background: transparent;"

@@ -15,7 +15,6 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QSizePolicy,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -23,23 +22,12 @@ from PyQt6.QtWidgets import (
 
 from ui.tokens import (
     # Colors
-    ACCENT,
-    ACCENT_TEXT,
     BG_DARK,
-    BG_LIGHT,
-    BG_WHITE,
-    BORDER,
-    BORDER_MID,
     TEXT_BODY,
     TEXT_MUTED,
-    HOVER_BG,
-    WAND_ACCENT,
     SETTINGS_ACCENT,
     # Sizes
-    ICON,
     BTN_H,
-    SPELL_BTN_H,
-    MODULE_BTN_H,
     SETTINGS_BTN_H,
     SETTINGS_INPUT_H,
     LABEL_W,
@@ -50,8 +38,6 @@ from ui.tokens import (
     STYLE_SETTING_BTN_OUTLINE,
     STYLE_SETTING_BTN_PRIMARY,
     STYLE_SETTING_BTN_DANGER,
-    STYLE_SPELL_BTN,
-    STYLE_MODULE_BTN,
     # Card styles
     STYLE_CARD,
     STYLE_CARD_NO_BORDER,
@@ -63,9 +49,6 @@ from ui.tokens import (
     STYLE_RECORD_COMBO,
     STYLE_WAND_COMBO,
     STYLE_SETTING_INPUT,
-    STYLE_LIST,
-    STYLE_RECORD_LIST,
-    STYLE_STATISTICS_LIST,
     STYLE_RARITY_BADGE_WAND,
     STYLE_RARITY_BADGE_STATISTICS,
     # Status/template styles

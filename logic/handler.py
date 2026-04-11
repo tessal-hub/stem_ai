@@ -17,12 +17,13 @@ Data Flow:
 """
 
 from pathlib import Path
+import logging
 import shutil
+from datetime import datetime
 from threading import Lock
 
 from PyQt6.QtCore import QObject, Qt, QTimer
 from PyQt6.QtWidgets import QFileDialog
-import numpy as np
 from config import APP_DATA_DIR, DEFAULT_MODEL_PATH, GESTURE_MODEL_CC_OUTPUT, WORKSPACE_ROOT
 from constants import canonical_system_spell, is_system_spell
 from .data_store import DataStore
@@ -211,6 +212,29 @@ class Handler(QObject):
             return False, f"{label} file check failed: {exc}"
         return True, ""
 
+    @staticmethod
+    def _parse_sensor_frame_6d(
+        norm_values,
+    ) -> "tuple[float, float, float, float, float, float] | None":
+        """Unpack and validate a 6-element sensor frame.
+
+        Returns ``(ax, ay, az, gx, gy, gz)`` as floats, or ``None`` if the
+        input is not a 6-element sequence of numeric values.
+        """
+        if not isinstance(norm_values, (list, tuple)) or len(norm_values) != 6:
+            return None
+        try:
+            return tuple(float(v) for v in norm_values)
+        except (TypeError, ValueError):
+            return None
+
+    def _log_io_result(self, operation: str, success: bool, message: str) -> None:
+        """Log the outcome of an off-thread I/O operation to the terminal."""
+        if success:
+            self.ui_wand.append_terminal_text(f">> {operation}: {message}")
+        else:
+            self.ui_wand.append_terminal_text(f"[ERROR] {operation} failed: {message}")
+
     # ── Signal Wiring (MVC Controller Pattern) ──────────────────────────
 
     def _connect_signals(self) -> None:
@@ -394,7 +418,6 @@ class Handler(QObject):
         try:
             self.serial_worker.finished.disconnect(self._on_serial_worker_stopped_for_disconnect)
         except (RuntimeError, TypeError) as exc:
-            import logging
             logging.getLogger(__name__).debug(
                 "serial disconnect: signal already disconnected (%s)", exc
             )
@@ -424,38 +447,25 @@ class Handler(QObject):
         Args:
             norm_values: [ax, ay, az, gx, gy, gz] normalized sensor readings
         """
+        frame = self._parse_sensor_frame_6d(norm_values)
+        if frame is None:
+            return
+        ax, ay, az, gx, gy, gz = frame
         try:
-            if not isinstance(norm_values, (list, tuple)) or len(norm_values) != 6:
-                return
-
-            ax, ay, az, gx, gy, gz = [float(v) for v in norm_values]
-
             # Update 3D wand orientation (PageHome)
             self.ui_home.wand_3d.update_orientation(ax, ay, az, gx, gy, gz)
-
         except Exception as e:
             self.ui_wand.append_terminal_text(f"[ERROR] 3D wand update failed: {e}")
 
     def _on_sensor_frame_received(self, norm_values: list[float]) -> None:
         """Mirror normalized sensor samples into DataStore sensor buffers."""
-        try:
-            if not isinstance(norm_values, (list, tuple)) or len(norm_values) != 6:
-                return
-
-            ax, ay, az, gx, gy, gz = [float(v) for v in norm_values]
-            self.store.update_sensor_data(
-                {
-                    "ax": ax,
-                    "ay": ay,
-                    "az": az,
-                    "gx": gx,
-                    "gy": gy,
-                    "gz": gz,
-                }
-            )
-        except Exception:
-            # Ignore malformed frames; SerialWorker already validates protocol.
+        frame = self._parse_sensor_frame_6d(norm_values)
+        if frame is None:
             return
+        ax, ay, az, gx, gy, gz = frame
+        self.store.update_sensor_data(
+            {"ax": ax, "ay": ay, "az": az, "gx": gx, "gy": gy, "gz": gz}
+        )
 
     def _on_sensor_data_updated(self, sensor_buffers: dict) -> None:
         """Receive updated sensor buffer data from DataStore."""
@@ -463,27 +473,20 @@ class Handler(QObject):
         pass
 
     def _on_raw_data_received(self, norm_values: list[float]) -> None:
-        """
-        Route sensor samples into DataStore rolling live buffer for PageRecord.
-        
-        Called on every serial data frame (50 Hz).
-        Maintains FIFO buffer of last 500 samples (~10 seconds).
-        Only updates when PageRecord is in LIVE mode (is_live=True).
-        When STOP pressed, buffer freezes for crop/snip operations.
-        
+        """Route sensor samples into DataStore rolling live buffer for PageRecord.
+
+        Only buffers when PageRecord is in live mode (is_live=True); the buffer
+        freezes on STOP so crop/snip operations have a stable snapshot.
+
         Args:
             norm_values: [ax, ay, az, gx, gy, gz] normalized sensor readings
         """
+        if not self.ui_record.is_live:
+            return
+        if self._parse_sensor_frame_6d(norm_values) is None:
+            return
         try:
-            # Guard: Only buffer if PageRecord is in live/recording mode
-            if not self.ui_record.is_live:
-                return
-            
-            if not isinstance(norm_values, (list, tuple)) or len(norm_values) != 6:
-                return
-            
             self.store.add_live_sample(list(norm_values))
-            
         except Exception as e:
             self.ui_wand.append_terminal_text(f"[ERROR] Buffer update failed: {e}")
 
@@ -556,11 +559,11 @@ class Handler(QObject):
 
     def _apply_sensor_frame_to_home(self, norm_values: list[float]) -> None:
         """Send one 6-axis sensor frame to the Home 3D viewer."""
+        frame = self._parse_sensor_frame_6d(norm_values)
+        if frame is None:
+            return
+        ax, ay, az, gx, gy, gz = frame
         try:
-            if not isinstance(norm_values, (list, tuple)) or len(norm_values) != 6:
-                return
-
-            ax, ay, az, gx, gy, gz = [float(v) for v in norm_values]
             self.ui_home.wand_3d.update_orientation(ax, ay, az, gx, gy, gz)
         except Exception as e:
             self.ui_wand.append_terminal_text(f"[ERROR] Simulation playback failed: {e}")
@@ -678,9 +681,7 @@ class Handler(QObject):
         """Called in the main thread when DataIOWorker finishes a save job."""
         if success:
             self.ui_record.set_save_status(self._pending_save_spell)
-            self.ui_wand.append_terminal_text(f">> SAVED: {message}")
-        else:
-            self.ui_wand.append_terminal_text(f"[ERROR] Save failed: {message}")
+        self._log_io_result("SAVED", success, message)
         self._pending_save_spell = ""
 
     def on_spell_deleted(self, spell_name: str) -> None:
@@ -703,17 +704,11 @@ class Handler(QObject):
 
     def _on_io_delete_done(self, success: bool, message: str) -> None:
         """Called in the main thread when DataIOWorker finishes a delete job."""
-        if success:
-            self.ui_wand.append_terminal_text(f">> DELETED: {message}")
-        else:
-            self.ui_wand.append_terminal_text(f"[ERROR] Delete failed: {message}")
+        self._log_io_result("DELETED", success, message)
 
     def _on_io_export_done(self, success: bool, message: str) -> None:
         """Called in the main thread when DataIOWorker finishes an export job."""
-        if success:
-            self.ui_wand.append_terminal_text(f">> EXPORT: {message}")
-        else:
-            self.ui_wand.append_terminal_text(f"[ERROR] Export failed: {message}")
+        self._log_io_result("EXPORT", success, message)
 
     # ── Firmware Flash Actions ─────────────────────────────────────────
 
@@ -1144,7 +1139,6 @@ class Handler(QObject):
             self.ui_wand.append_terminal_text("[EXPORT] No samples to export")
             return
 
-        from datetime import datetime
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         csv_filename = f"export_{timestamp}.csv"
         csv_path = str(Path(self.store.dataset_dir) / csv_filename)

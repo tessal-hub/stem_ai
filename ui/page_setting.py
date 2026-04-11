@@ -31,19 +31,11 @@ from PyQt6.QtWidgets import (
 
 from ui.tokens import (
     # Colors
-    ACCENT_TEXT,
-    BG_LIGHT,
-    BG_WHITE,
-    BORDER,
-    BORDER_MID,
     DANGER,
     LABEL_W,
     SETTINGS_ACCENT,
-    SETTINGS_ACCENT_DARK,
     SETTINGS_BTN_H,
-    SETTINGS_HOVER_BG,
     SETTINGS_INPUT_H,
-    SUCCESS,
     TEXT_BODY,
     TEXT_MUTED,
     # Styles
