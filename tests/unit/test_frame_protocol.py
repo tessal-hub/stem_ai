@@ -164,6 +164,13 @@ def test_validate_six_axis_values_rejects_non_numeric_type() -> None:
         validate_six_axis_values([1.0, 2.0, 3.0, 4.0, 5.0, [6.0]])  # type: ignore[list-item]
 
 
+def test_validate_six_axis_values_rejects_boolean_values() -> None:
+    from logic.frame_protocol import validate_six_axis_values, FrameValidationError
+
+    with pytest.raises(FrameValidationError):
+        validate_six_axis_values([1.0, 2.0, 3.0, 4.0, 5.0, True])  # type: ignore[list-item]
+
+
 # ── parse_prediction_frame edge cases ──────────────────────────────────────────
 
 
@@ -179,4 +186,3 @@ def test_parse_prediction_frame_rejects_non_string() -> None:
 
     with pytest.raises(FrameValidationError):
         parse_prediction_frame(42)  # type: ignore[arg-type]
-
