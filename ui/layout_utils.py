@@ -3,7 +3,7 @@ Shared layout utility functions.
 Consolidates common layout operations used across multiple UI pages.
 """
 
-from PyQt6.QtWidgets import QLayout, QWidget
+from PyQt6.QtWidgets import QLayout
 
 
 def clear_layout(layout: QLayout | None) -> None:

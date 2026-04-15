@@ -26,23 +26,15 @@ from ui.tokens import (
     PRIMARY_COLOR,
     PRIMARY_LIGHT,
     PRIMARY_DARK,
-    SECONDARY_COLOR,
-    SECONDARY_LIGHT,
-    SECONDARY_DARK,
     SURFACE_PRIMARY,
     SURFACE_SECONDARY,
     SURFACE_TERTIARY,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
-    TEXT_TERTIARY,
     BORDER_COLOR,
     BORDER_LIGHT,
     STATUS_SUCCESS,
-    STATUS_WARNING,
     STATUS_ERROR,
-    SHADOW_LIGHT,
-    SHADOW_MEDIUM,
-    SHADOW_DARK,
     APP_FONT_STACK,
 )
 
@@ -173,6 +165,12 @@ QPushButton#btn_small {{
     font-size: 12px;
 }}
 
+/* FOCUS RINGS - Visible keyboard focus for all interactive controls */
+QPushButton:focus {{
+    outline: none;
+    border: 2px solid {PRIMARY_COLOR};
+}}
+
 /* ICON BUTTON - Navigation, utilities */
 QToolButton {{
     background-color: transparent;
@@ -194,6 +192,11 @@ QToolButton:checked {{
     background-color: {PRIMARY_LIGHT};
     color: {PRIMARY_COLOR};
     border: 1px solid {PRIMARY_COLOR};
+}}
+
+QToolButton:focus {{
+    outline: none;
+    border: 2px solid {PRIMARY_COLOR};
 }}
 
 /* ═══════════════════════════════════════════════════════════════════════════

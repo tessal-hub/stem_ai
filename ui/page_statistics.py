@@ -44,6 +44,7 @@ from ui.component_factory import (
 )
 from ui.layout_utils import clear_layout
 from ui.mac_material import apply_soft_shadow
+from ui.modern_layout import MARGIN_STANDARD, SPACING_MD
 
 
 class ClickableFrame(QFrame):
@@ -147,10 +148,10 @@ class PageStatistics(QWidget):
         self.main_container.setFrameShadow(QFrame.Shadow.Plain)
         self.main_container.setStyleSheet(STYLE_STATISTICS_MAIN_CONTAINER)
         inner = QVBoxLayout(self.main_container)
-        inner.setContentsMargins(12, 12, 12, 12)
-        inner.setSpacing(12)
+        inner.setContentsMargins(MARGIN_STANDARD, MARGIN_STANDARD, MARGIN_STANDARD, MARGIN_STANDARD)
+        inner.setSpacing(SPACING_MD)
         content = QHBoxLayout()
-        content.setSpacing(12)
+        content.setSpacing(SPACING_MD)
         content.addWidget(self._build_left_column(), stretch=5)
         content.addWidget(self._build_right_column(), stretch=3)
         inner.addLayout(content)
@@ -391,9 +392,16 @@ class PageStatistics(QWidget):
         """Apply basic screen-reader names and tab traversal for keyboard use."""
         self.lbl_total_samples.setAccessibleName("Total samples metric")
         self.lbl_total_spells.setAccessibleName("Active spells metric")
+        self.lbl_train_status.setAccessibleName("Model training status")
+        self.lbl_build_status.setAccessibleName("Model build status")
+        self.lbl_dominant_freq.setAccessibleName("Dominant FFT frequency")
+        self.fft_plot.setAccessibleName("Frequency spectrum FFT plot")
+        self.model_progress.setAccessibleName("Training progress")
         self.btn_back_spells.setAccessibleName("Back to mastery list")
         self.sample_list.setAccessibleName("Samples for selected spell")
         self.btn_train_build.setAccessibleName("Train and build gesture model")
 
+        self.setTabOrder(self.btn_train_build, self.model_progress)
+        self.setTabOrder(self.model_progress, self.btn_back_spells)
         self.setTabOrder(self.btn_back_spells, self.sample_list)
         self.setTabOrder(self.sample_list, self.btn_train_build)

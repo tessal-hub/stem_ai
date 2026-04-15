@@ -20,6 +20,7 @@ from pathlib import Path
 
 from PyQt6.QtCore import QThread, pyqtSignal
 from config import DATASET_DIR, ensure_data_dir
+from constants import canonical_system_spell, is_system_spell, normalize_spell_name
 
 
 class DataRecorder(QThread):
@@ -60,23 +61,35 @@ class DataRecorder(QThread):
         self._row_queue: queue.Queue[list[float]] = queue.Queue(maxsize=2000)
 
     def stop(self) -> None:
-        """Stop the recorder worker thread cooperatively."""
+        """Request the recorder worker thread to exit cooperatively.
+
+        Sets the stop flag and enqueues a sentinel so the worker unblocks
+        immediately.  Does *not* block the calling thread — callers that need
+        to wait for the thread to finish should connect to ``finished`` or call
+        ``wait()`` themselves in a non-UI context.
+        """
         self._stop_requested = True
-        self._command_queue.put(("stop", None))
-        if self.isRunning():
-            self.wait(3000)
+        try:
+            self._command_queue.put_nowait(("stop", None))
+        except Exception:
+            pass  # Queue.Full is unlikely; worker will exit via _stop_requested.
 
     @staticmethod
     def _sanitize_label(label: str) -> str:
         """Convert label to filesystem-safe name."""
         if not isinstance(label, str):
             label = str(label)
-        
+
+        normalized = normalize_spell_name(label)
+        if is_system_spell(normalized):
+            return canonical_system_spell(normalized)
+
         name = label.strip() or "unknown"
-        # Replace non-alphanumeric chars with underscore
-        name = re.sub(r"[^0-9a-zA-Z_\-]", "_", name)
-        # Remove leading/trailing underscores
-        name = name.strip("_")
+        # Keep spaces for readability while replacing unsafe characters.
+        name = re.sub(r"[^0-9a-zA-Z _\-]", "_", name)
+        name = " ".join(name.split())
+        # Remove leading/trailing separators
+        name = name.strip("_-")
         # Ensure name is not empty
         return name or "unknown"
 

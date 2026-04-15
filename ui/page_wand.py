@@ -29,6 +29,8 @@ class PageWand(QWidget):
     sig_flash_upload = pyqtSignal()
     sig_term_clear = pyqtSignal()
     sig_train_build_requested = pyqtSignal()
+    sig_train_build_tflite_requested = pyqtSignal(list)
+    sig_train_build_cc_requested = pyqtSignal(list)
 
     def __init__(self, data_store) -> None:
         super().__init__()
@@ -144,9 +146,10 @@ class PageWand(QWidget):
         self.lbl_bt_status = self.connection_panel.lbl_bt_status
 
         # Flash controls
-        self.btn_compile = self.flash_panel.btn_compile
-        self.btn_build_cc = self.flash_panel.btn_compile
-        self.btn_flash = self.flash_panel.btn_flash
+        self.btn_build_tflite = self.flash_panel.btn_build_tflite
+        self.btn_build_cc = self.flash_panel.btn_build_cc
+        self.btn_compile = self.flash_panel.btn_build_cc
+        self.btn_flash = self.flash_panel.btn_build_tflite
         self.progress_bar = self.flash_panel.progress_bar
         self.lbl_flash_status = self.flash_panel.lbl_flash_status
 
@@ -158,6 +161,8 @@ class PageWand(QWidget):
         self.layout_stats = self.stats_panel.layout_stats
         self.stats_plot = self.stats_panel.stats_plot
         self.list_firmware = self.payload_panel.list_firmware
+        self.list_selected_spells = self.payload_panel.list_selected_spells
+        self.list_available_spells = self.payload_panel.list_available_spells
 
     # ------------------------------------------------------------------
     # Signal wiring
@@ -172,8 +177,8 @@ class PageWand(QWidget):
         self.connection_panel.sig_bt_connect.connect(self.sig_bt_connect.emit)
         self.connection_panel.sig_bt_disconnect.connect(self.sig_bt_disconnect.emit)
 
-        self.flash_panel.sig_build_cc_clicked.connect(self.sig_train_build_requested.emit)
-        self.flash_panel.sig_upload_clicked.connect(self.sig_flash_upload.emit)
+        self.flash_panel.sig_build_tflite_clicked.connect(self._on_build_tflite_clicked)
+        self.flash_panel.sig_build_cc_clicked.connect(self._on_build_cc_clicked)
 
         self.terminal_panel.sig_clear_requested.connect(self.sig_term_clear.emit)
 
@@ -185,20 +190,22 @@ class PageWand(QWidget):
         self.combo_bt_devices.setAccessibleName("Bluetooth device list")
         self.btn_bt_scan.setAccessibleName("Scan bluetooth devices")
         self.btn_bt_connect.setAccessibleName("Connect bluetooth")
-        self.btn_compile.setAccessibleName("Build gesture_model.cc")
-        self.btn_flash.setAccessibleName("Flash ESP32")
+        self.btn_build_tflite.setAccessibleName("Build gesture_model.tflite")
+        self.btn_build_cc.setAccessibleName("Build gesture_model.cc")
         self.btn_term_clear.setAccessibleName("Clear wand terminal")
-        self.list_firmware.setAccessibleName("Firmware payload spell list")
+        self.list_selected_spells.setAccessibleName("Selected spells for training")
+        self.list_available_spells.setAccessibleName("Available spells for training")
 
         self.setTabOrder(self.combo_serial_ports, self.btn_serial_scan)
         self.setTabOrder(self.btn_serial_scan, self.btn_serial_connect)
         self.setTabOrder(self.btn_serial_connect, self.combo_bt_devices)
         self.setTabOrder(self.combo_bt_devices, self.btn_bt_scan)
         self.setTabOrder(self.btn_bt_scan, self.btn_bt_connect)
-        self.setTabOrder(self.btn_bt_connect, self.btn_compile)
-        self.setTabOrder(self.btn_compile, self.btn_flash)
-        self.setTabOrder(self.btn_flash, self.btn_term_clear)
-        self.setTabOrder(self.btn_term_clear, self.list_firmware)
+        self.setTabOrder(self.btn_bt_connect, self.btn_build_tflite)
+        self.setTabOrder(self.btn_build_tflite, self.btn_build_cc)
+        self.setTabOrder(self.btn_build_cc, self.btn_term_clear)
+        self.setTabOrder(self.btn_term_clear, self.list_selected_spells)
+        self.setTabOrder(self.list_selected_spells, self.list_available_spells)
 
     # ------------------------------------------------------------------
     # Slot implementations
@@ -206,3 +213,11 @@ class PageWand(QWidget):
 
     def _on_compile_clicked(self) -> None:
         self.sig_flash_compile.emit(self.payload_panel.get_checked_spells())
+
+    def _on_build_tflite_clicked(self) -> None:
+        selected_spells = self.payload_panel.get_checked_spells()
+        self.sig_train_build_tflite_requested.emit(selected_spells)
+
+    def _on_build_cc_clicked(self) -> None:
+        selected_spells = self.payload_panel.get_checked_spells()
+        self.sig_train_build_cc_requested.emit(selected_spells)

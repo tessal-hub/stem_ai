@@ -93,6 +93,8 @@ def validate_six_axis_values(values: Sequence[object]) -> list[float]:
     parsed: list[float] = []
     for index, raw in enumerate(values):
         try:
+            if isinstance(raw, bool):
+                raise TypeError("boolean values are not supported")
             if not isinstance(raw, (int, float, str)):
                 raise TypeError(f"unsupported scalar type: {type(raw).__name__}")
             number = float(raw)

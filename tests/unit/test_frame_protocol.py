@@ -54,3 +54,135 @@ def test_parse_prediction_frame_success() -> None:
 def test_parse_prediction_frame_rejects_malformed_frames(frame: str) -> None:
     with pytest.raises(FrameValidationError):
         parse_prediction_frame(frame)
+
+
+# ── normalize_sensor_values ──────────────────────────────────────────────────
+
+
+def test_normalize_sensor_values_divides_by_profile() -> None:
+    from logic.frame_protocol import normalize_sensor_values, SensorScaleProfile
+
+    profile = SensorScaleProfile(accel_lsb_per_g=8192.0, gyro_lsb_per_dps=65.5)
+    raw = [8192.0, 4096.0, 0.0, 131.0, 65.5, 32.75]
+    result = normalize_sensor_values(raw, profile)
+    assert result == pytest.approx([1.0, 0.5, 0.0, 2.0, 1.0, 0.5])
+
+
+def test_normalize_sensor_values_rejects_invalid_length() -> None:
+    from logic.frame_protocol import normalize_sensor_values, FrameValidationError
+
+    with pytest.raises(FrameValidationError):
+        normalize_sensor_values([1.0, 2.0, 3.0])
+
+
+def test_normalize_sensor_values_uses_default_profile_when_omitted() -> None:
+    from logic.frame_protocol import normalize_sensor_values, DEFAULT_SCALE_PROFILE
+
+    raw = [
+        DEFAULT_SCALE_PROFILE.accel_lsb_per_g,
+        0.0,
+        0.0,
+        DEFAULT_SCALE_PROFILE.gyro_lsb_per_dps,
+        0.0,
+        0.0,
+    ]
+    result = normalize_sensor_values(raw)
+    assert result[0] == pytest.approx(1.0)
+    assert result[3] == pytest.approx(1.0)
+
+
+# ── parse_sensor_csv_frame edge cases ──────────────────────────────────────────
+
+
+def test_parse_sensor_csv_frame_rejects_wrong_field_count() -> None:
+    from logic.frame_protocol import parse_sensor_csv_frame, FrameValidationError
+
+    with pytest.raises(FrameValidationError):
+        parse_sensor_csv_frame("1,2,3")
+
+
+def test_parse_sensor_csv_frame_rejects_non_string_input() -> None:
+    from logic.frame_protocol import parse_sensor_csv_frame, FrameValidationError
+
+    with pytest.raises(FrameValidationError):
+        parse_sensor_csv_frame(123456)  # type: ignore[arg-type]
+
+
+def test_parse_sensor_csv_frame_rejects_non_numeric_field() -> None:
+    from logic.frame_protocol import parse_sensor_csv_frame, FrameValidationError
+
+    with pytest.raises(FrameValidationError):
+        parse_sensor_csv_frame("1,2,3,4,5,abc")
+
+
+# ── build_scale_profile edge cases ──────────────────────────────────────────────
+
+
+def test_build_scale_profile_returns_default_for_none() -> None:
+    from logic.frame_protocol import build_scale_profile, DEFAULT_SCALE_PROFILE
+
+    assert build_scale_profile(None) == DEFAULT_SCALE_PROFILE
+
+
+def test_build_scale_profile_supports_all_accel_scales() -> None:
+    from logic.frame_protocol import build_scale_profile, ACCEL_LSB_BY_SCALE
+
+    for label, expected_lsb in ACCEL_LSB_BY_SCALE.items():
+        profile = build_scale_profile({"accel_scale": label, "gyro_scale": ""})
+        assert profile.accel_lsb_per_g == pytest.approx(expected_lsb), label
+
+
+def test_build_scale_profile_supports_all_gyro_scales() -> None:
+    from logic.frame_protocol import build_scale_profile, GYRO_LSB_BY_SCALE
+
+    for label, expected_lsb in GYRO_LSB_BY_SCALE.items():
+        profile = build_scale_profile({"accel_scale": "", "gyro_scale": label})
+        assert profile.gyro_lsb_per_dps == pytest.approx(expected_lsb), label
+
+
+# ── validate_six_axis_values edge cases ──────────────────────────────────────────
+
+
+def test_validate_six_axis_values_accepts_string_numerics() -> None:
+    from logic.frame_protocol import validate_six_axis_values
+
+    result = validate_six_axis_values(["1.0", "2.0", "3.0", "4.0", "5.0", "6.0"])
+    assert result == pytest.approx([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+
+
+def test_validate_six_axis_values_rejects_nan() -> None:
+    from logic.frame_protocol import validate_six_axis_values, FrameValidationError
+
+    with pytest.raises(FrameValidationError):
+        validate_six_axis_values([1.0, 2.0, 3.0, 4.0, float("nan"), 6.0])
+
+
+def test_validate_six_axis_values_rejects_non_numeric_type() -> None:
+    from logic.frame_protocol import validate_six_axis_values, FrameValidationError
+
+    with pytest.raises(FrameValidationError):
+        validate_six_axis_values([1.0, 2.0, 3.0, 4.0, 5.0, [6.0]])  # type: ignore[list-item]
+
+
+def test_validate_six_axis_values_rejects_boolean_values() -> None:
+    from logic.frame_protocol import validate_six_axis_values, FrameValidationError
+
+    with pytest.raises(FrameValidationError):
+        validate_six_axis_values([1.0, 2.0, 3.0, 4.0, 5.0, True])  # type: ignore[list-item]
+
+
+# ── parse_prediction_frame edge cases ──────────────────────────────────────────
+
+
+def test_parse_prediction_frame_rejects_non_finite_confidence() -> None:
+    from logic.frame_protocol import parse_prediction_frame, FrameValidationError
+
+    with pytest.raises(FrameValidationError):
+        parse_prediction_frame("PREDICT:SWIPE:inf")
+
+
+def test_parse_prediction_frame_rejects_non_string() -> None:
+    from logic.frame_protocol import parse_prediction_frame, FrameValidationError
+
+    with pytest.raises(FrameValidationError):
+        parse_prediction_frame(42)  # type: ignore[arg-type]

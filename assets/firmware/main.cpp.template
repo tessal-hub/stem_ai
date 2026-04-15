@@ -1,0 +1,318 @@
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_log.h"
+#include "driver/i2c_master.h"
+
+#include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
+#include "tensorflow/lite/micro/micro_interpreter.h"
+#include "tensorflow/lite/micro/system_setup.h"
+#include "tensorflow/lite/schema/schema_generated.h"
+
+#include "gesture_model.cc"
+
+// AUTO-GENERATED FILE: do not edit manually.
+// {{AUTOGEN_METADATA}}
+
+static const char* TAG = "SPELLBOOK";
+
+namespace spellbook {
+
+// Default hardware profile for ESP32 + MPU6050.
+#ifndef STEM_I2C_PORT
+#define STEM_I2C_PORT I2C_NUM_0
+#endif
+
+#ifndef STEM_I2C_SDA_PIN
+#define STEM_I2C_SDA_PIN GPIO_NUM_8
+#endif
+
+#ifndef STEM_I2C_SCL_PIN
+#define STEM_I2C_SCL_PIN GPIO_NUM_9
+#endif
+
+#ifndef STEM_I2C_FREQ_HZ
+#define STEM_I2C_FREQ_HZ 400000
+#endif
+
+#ifndef STEM_TFLM_ARENA_BYTES
+#define STEM_TFLM_ARENA_BYTES (60 * 1024)
+#endif
+
+#ifndef STEM_INFERENCE_INTERVAL_MS
+#define STEM_INFERENCE_INTERVAL_MS 20
+#endif
+
+#define MPU6050_ADDR 0x68
+#define WINDOW_SIZE 64
+#define CHANNELS 6
+#define IMU_SCALE 32768.0f
+#define BUFFER_LENGTH (WINDOW_SIZE * CHANNELS)
+
+enum class SpellId {
+{{SPELL_ENUM_BLOCK}}
+};
+
+constexpr const char* kSpellNames[] = {
+{{SPELL_NAME_TABLE_BLOCK}}
+};
+
+constexpr std::size_t kSpellClassCount = {{SPELL_CLASS_COUNT}};
+constexpr int kIdleClassIndex = {{SPELL_IDLE_INDEX}};
+
+alignas(16) static std::uint8_t g_tensor_arena[STEM_TFLM_ARENA_BYTES];
+static i2c_master_dev_handle_t s_mpu_handle = nullptr;
+static float s_input_buffer[BUFFER_LENGTH] = {0};
+static int s_sample_count = 0;
+static int s_cooldown = 0;
+
+static tflite::MicroInterpreter* s_interpreter = nullptr;
+static TfLiteTensor* s_input = nullptr;
+static TfLiteTensor* s_output = nullptr;
+static tflite::MicroMutableOpResolver<13> s_resolver;
+
+struct ImuFrame {
+  float ax;
+  float ay;
+  float az;
+  float gx;
+  float gy;
+  float gz;
+};
+
+static bool InitI2cBus() {
+  i2c_master_bus_config_t bus_cfg = {};
+  bus_cfg.i2c_port = STEM_I2C_PORT;
+  bus_cfg.sda_io_num = STEM_I2C_SDA_PIN;
+  bus_cfg.scl_io_num = STEM_I2C_SCL_PIN;
+  bus_cfg.clk_source = I2C_CLK_SRC_DEFAULT;
+  bus_cfg.glitch_ignore_cnt = 7;
+  bus_cfg.flags.enable_internal_pullup = true;
+
+  i2c_master_bus_handle_t bus_handle;
+  if (i2c_new_master_bus(&bus_cfg, &bus_handle) != ESP_OK) {
+    ESP_LOGE(TAG, "I2C bus init failed");
+    return false;
+  }
+
+  i2c_device_config_t dev_cfg = {};
+  dev_cfg.dev_addr_length = I2C_ADDR_BIT_LEN_7;
+  dev_cfg.device_address = MPU6050_ADDR;
+  dev_cfg.scl_speed_hz = STEM_I2C_FREQ_HZ;
+  if (i2c_master_bus_add_device(bus_handle, &dev_cfg, &s_mpu_handle) != ESP_OK) {
+    ESP_LOGE(TAG, "MPU6050 add device failed");
+    return false;
+  }
+
+  ESP_LOGI(TAG, "I2C bus ready (SDA=%d, SCL=%d, %dHz)",
+           STEM_I2C_SDA_PIN, STEM_I2C_SCL_PIN, STEM_I2C_FREQ_HZ);
+  return true;
+}
+
+static bool InitMpu6050() {
+  uint8_t wake[] = {0x6B, 0x00};
+  if (i2c_master_transmit(s_mpu_handle, wake, sizeof(wake), -1) != ESP_OK) {
+    ESP_LOGE(TAG, "MPU6050 wake failed");
+    return false;
+  }
+
+  uint8_t dlpf[] = {0x1A, 0x04};
+  if (i2c_master_transmit(s_mpu_handle, dlpf, sizeof(dlpf), -1) != ESP_OK) {
+    ESP_LOGE(TAG, "MPU6050 DLPF config failed");
+    return false;
+  }
+
+  uint8_t accel_cfg[] = {0x1C, 0x00};
+  if (i2c_master_transmit(s_mpu_handle, accel_cfg, sizeof(accel_cfg), -1) != ESP_OK) {
+    ESP_LOGE(TAG, "MPU6050 accel config failed");
+    return false;
+  }
+
+  uint8_t gyro_cfg[] = {0x1B, 0x00};
+  if (i2c_master_transmit(s_mpu_handle, gyro_cfg, sizeof(gyro_cfg), -1) != ESP_OK) {
+    ESP_LOGE(TAG, "MPU6050 gyro config failed");
+    return false;
+  }
+
+  ESP_LOGI(TAG, "MPU6050 ready");
+  return true;
+}
+
+static bool InitInference() {
+  tflite::InitializeTarget();
+
+  const tflite::Model* model = tflite::GetModel(g_model);
+  if (model->version() != TFLITE_SCHEMA_VERSION) {
+    ESP_LOGE(TAG, "Model schema mismatch (%lu vs %d)",
+             static_cast<unsigned long>(model->version()), TFLITE_SCHEMA_VERSION);
+    return false;
+  }
+
+  s_resolver.AddConv2D();
+  s_resolver.AddDepthwiseConv2D();
+  s_resolver.AddMaxPool2D();
+  s_resolver.AddReshape();
+  s_resolver.AddFullyConnected();
+  s_resolver.AddExpandDims();
+  s_resolver.AddSoftmax();
+  s_resolver.AddShape();
+  s_resolver.AddStridedSlice();
+  s_resolver.AddPack();
+  s_resolver.AddMul();
+  s_resolver.AddAdd();
+  s_resolver.AddQuantize();
+
+  static tflite::MicroInterpreter interpreter(
+      model, s_resolver, g_tensor_arena, STEM_TFLM_ARENA_BYTES);
+  s_interpreter = &interpreter;
+
+  if (s_interpreter->AllocateTensors() != kTfLiteOk) {
+    ESP_LOGE(TAG, "AllocateTensors failed, increase STEM_TFLM_ARENA_BYTES");
+    return false;
+  }
+
+  s_input = s_interpreter->input(0);
+  s_output = s_interpreter->output(0);
+
+  ESP_LOGI(TAG, "TFLM ready, arena used: %d / %d",
+           static_cast<int>(s_interpreter->arena_used_bytes()),
+           STEM_TFLM_ARENA_BYTES);
+  return true;
+}
+
+static bool ReadImuFrame(ImuFrame* out) {
+  if (out == nullptr) {
+    return false;
+  }
+
+  uint8_t reg = 0x3B;
+  uint8_t data[14];
+  if (i2c_master_transmit_receive(s_mpu_handle, &reg, 1, data, 14, -1) != ESP_OK) {
+    return false;
+  }
+
+  out->ax = static_cast<int16_t>((data[0] << 8) | data[1]) / IMU_SCALE;
+  out->ay = static_cast<int16_t>((data[2] << 8) | data[3]) / IMU_SCALE;
+  out->az = static_cast<int16_t>((data[4] << 8) | data[5]) / IMU_SCALE;
+  out->gx = static_cast<int16_t>((data[8] << 8) | data[9]) / IMU_SCALE;
+  out->gy = static_cast<int16_t>((data[10] << 8) | data[11]) / IMU_SCALE;
+  out->gz = static_cast<int16_t>((data[12] << 8) | data[13]) / IMU_SCALE;
+  return true;
+}
+
+SpellId SpellFromIndex(int class_index) {
+  switch (class_index) {
+{{SPELL_SWITCH_BLOCK}}
+    default:
+      return SpellId::UNKNOWN;
+  }
+}
+
+const char* SpellNameFromIndex(int class_index) {
+  if (class_index < 0 || class_index >= static_cast<int>(kSpellClassCount)) {
+    return "UNKNOWN";
+  }
+  return kSpellNames[class_index];
+}
+
+static SpellId RunInference(const ImuFrame& frame) {
+  if (s_input == nullptr || s_output == nullptr || s_interpreter == nullptr) {
+    return SpellId::UNKNOWN;
+  }
+
+  memmove(s_input_buffer,
+          s_input_buffer + CHANNELS,
+          (BUFFER_LENGTH - CHANNELS) * sizeof(float));
+
+  s_input_buffer[BUFFER_LENGTH - 6] = frame.ax;
+  s_input_buffer[BUFFER_LENGTH - 5] = frame.ay;
+  s_input_buffer[BUFFER_LENGTH - 4] = frame.az;
+  s_input_buffer[BUFFER_LENGTH - 3] = frame.gx;
+  s_input_buffer[BUFFER_LENGTH - 2] = frame.gy;
+  s_input_buffer[BUFFER_LENGTH - 1] = frame.gz;
+
+  s_sample_count++;
+  if (s_cooldown > 0) {
+    s_cooldown--;
+  }
+
+  if (s_sample_count < WINDOW_SIZE || s_cooldown > 0) {
+    return SpellId::UNKNOWN;
+  }
+
+  const float in_scale = s_input->params.scale;
+  const int in_zp = s_input->params.zero_point;
+  for (int i = 0; i < BUFFER_LENGTH; ++i) {
+    int val = static_cast<int>(s_input_buffer[i] / in_scale + in_zp);
+    val = val > 127 ? 127 : val;
+    val = val < -128 ? -128 : val;
+    s_input->data.int8[i] = static_cast<int8_t>(val);
+  }
+
+  if (s_interpreter->Invoke() != kTfLiteOk) {
+    ESP_LOGE(TAG, "Invoke failed");
+    return SpellId::UNKNOWN;
+  }
+
+  const float out_scale = s_output->params.scale;
+  const int out_zp = s_output->params.zero_point;
+  float max_prob = 0.0f;
+  int max_idx = -1;
+  for (int i = 0; i < static_cast<int>(kSpellClassCount); ++i) {
+    const float prob = (s_output->data.int8[i] - out_zp) * out_scale;
+    if (prob > max_prob) {
+      max_prob = prob;
+      max_idx = i;
+    }
+  }
+
+  if (max_prob > 0.85f && max_idx >= 0 && max_idx != kIdleClassIndex) {
+    s_cooldown = WINDOW_SIZE;
+    return SpellFromIndex(max_idx);
+  }
+
+  return SpellId::UNKNOWN;
+}
+
+__attribute__((weak)) void OnSpellDetected(SpellId spell) {
+  switch (spell) {
+{{SPELL_DISPATCH_CASES}}
+    default:
+      break;
+  }
+}
+
+void AppMainLoopStep() {
+  ImuFrame frame{};
+  if (!ReadImuFrame(&frame)) {
+    return;
+  }
+
+  const SpellId spell = RunInference(frame);
+  if (spell != SpellId::UNKNOWN) {
+    OnSpellDetected(spell);
+  }
+}
+
+bool InitializeSpellRuntime() {
+  return InitI2cBus() && InitMpu6050() && InitInference();
+}
+
+}  // namespace spellbook
+
+extern "C" void app_main(void) {
+  if (!spellbook::InitializeSpellRuntime()) {
+    ESP_LOGE("MAIN", "Runtime initialization failed");
+    return;
+  }
+
+  ESP_LOGI("MAIN", "Starting inference loop");
+  while (1) {
+    spellbook::AppMainLoopStep();
+    vTaskDelay(pdMS_TO_TICKS(STEM_INFERENCE_INTERVAL_MS));
+  }
+}

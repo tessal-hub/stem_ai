@@ -22,12 +22,7 @@ from ui.wand_3d_widget import Wand3DWidget
 from ui.tokens import (
     ACCENT,
     ACCENT_TEXT,
-    BG_LIGHT,
-    BG_WHITE,
-    BORDER,
-    BORDER_MID,
     DANGER,
-    HOVER_BG,
     HOME_ATTACH_H,
     HOME_RIGHT_W,
     HOME_STATUS_H,
@@ -41,7 +36,6 @@ from ui.tokens import (
     STYLE_HOME_MANAGER_BAR,
     STYLE_HOME_MANAGER_ROW,
     STYLE_HOME_MODE_LABEL,
-    STYLE_HOME_MODULE_BTN,
     STYLE_HOME_RIGHT_PANEL,
     STYLE_HOME_RIGHT_SECTION,
     STYLE_HOME_SECTION_SUBTITLE,
@@ -49,25 +43,19 @@ from ui.tokens import (
     STYLE_HOME_SPELL_BTN,
     STYLE_HOME_STAT_NAME,
     STYLE_HOME_STAT_VALUE,
-    STYLE_HOME_STATUS_BAR,
     STYLE_HOME_VIEWER_CARD,
     STYLE_SCROLL_AREA,
     STYLE_TRANSPARENT_WIDGET,
-    TEXT_BODY,
     TEXT_MUTED,
 )
 from ui.modern_layout import (
-    create_modern_card,
     add_card_shadow,
-    create_elevated_panel,
     MARGIN_COMFORTABLE,
-    MARGIN_STANDARD,
     SPACING_MD,
     SPACING_LG,
     SPACING_SM,
     SPACING_XS,
 )
-from ui.mac_material import apply_soft_shadow
 
 
 _HOME_SYSTEM_STAT_KEYS = (
@@ -497,6 +485,9 @@ class PageHome(QWidget):
 
     def _configure_accessibility(self) -> None:
         self.status_bar.setAccessibleName("Home status banner")
+        self.status_bar.setAccessibleDescription(
+            "Dynamic banner showing wand connection state"
+        )
         self.mode_label.setAccessibleName("Current wand mode")
         self.wand_3d.setAccessibleName("3D wand orientation viewer")
         self.btn_simulate.setAccessibleName("Replay last input data")

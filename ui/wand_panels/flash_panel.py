@@ -1,4 +1,4 @@
-"""Firmware flash control panel."""
+"""Model building control panel for .tflite and .cc outputs."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from ui.wand_panels.shared import make_button, make_card, make_section_label
 class WandFlashPanel(QWidget):
     """Panel that owns build/upload controls and flash progress state."""
 
-    sig_compile_clicked = pyqtSignal()
+    sig_build_tflite_clicked = pyqtSignal()
     sig_build_cc_clicked = pyqtSignal()
     sig_upload_clicked = pyqtSignal()
 
@@ -35,27 +35,35 @@ class WandFlashPanel(QWidget):
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(4)
 
-        layout.addWidget(make_section_label("FIRMWARE FLASHER"))
+        title = make_section_label("MODEL BUILDING")
+        title.setStyleSheet(
+            f"color: {TEXT_MUTED}; font-weight: 900; font-size: 11px; letter-spacing: 1px;"
+        )
+        layout.addWidget(title)
 
-        card, card_layout = make_card()
+        card, card_layout = make_card(margins=(16, 14, 16, 14), spacing=14)
 
         btn_row = QHBoxLayout()
-        self.btn_compile = make_button("BUILD .CC", STYLE_BTN_OUTLINE)
-        self.btn_flash = make_button("FLASH ESP32", STYLE_BTN_PRIMARY)
-        btn_row.addWidget(self.btn_compile)
-        btn_row.addWidget(self.btn_flash)
+        btn_row.setSpacing(10)
+        self.btn_build_tflite = make_button("BUILD .TFLITE", STYLE_BTN_OUTLINE, height=38)
+        self.btn_build_cc = make_button("BUILD .CC", STYLE_BTN_PRIMARY, height=38)
+        # Legacy aliases kept for existing access paths.
+        self.btn_compile = self.btn_build_cc
+        self.btn_flash = self.btn_build_tflite
+        btn_row.addWidget(self.btn_build_tflite)
+        btn_row.addWidget(self.btn_build_cc)
         card_layout.addLayout(btn_row)
 
-        self.lbl_flash_status = QLabel("● Ready to compile")
+        self.lbl_flash_status = QLabel("● Ready to build model")
         self.lbl_flash_status.setStyleSheet(
-            f"color: {TEXT_MUTED}; font-size: 11px; font-weight: 800;"
+            f"color: {TEXT_MUTED}; font-size: 12px; font-weight: 800;"
         )
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setStyleSheet(STYLE_PROGRESS)
-        self.progress_bar.setFixedHeight(PROGRESS_H)
+        self.progress_bar.setFixedHeight(max(PROGRESS_H, 14))
         self.progress_bar.setValue(0)
 
         card_layout.addWidget(self.lbl_flash_status)
@@ -64,5 +72,5 @@ class WandFlashPanel(QWidget):
         layout.addWidget(card)
 
     def _connect_internal_signals(self) -> None:
-        self.btn_compile.clicked.connect(self.sig_build_cc_clicked.emit)
-        self.btn_flash.clicked.connect(self.sig_upload_clicked.emit)
+        self.btn_build_tflite.clicked.connect(self.sig_build_tflite_clicked.emit)
+        self.btn_build_cc.clicked.connect(self.sig_build_cc_clicked.emit)

@@ -7,8 +7,9 @@ import pyqtgraph as pg
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
+from ui.layout_utils import clear_layout
 from ui.tokens import ACCENT, BG_WHITE, BORDER_MID, TEXT_BODY, TEXT_MUTED
-from ui.wand_panels.shared import clear_layout, make_card, make_section_label
+from ui.wand_panels.shared import make_card, make_section_label
 
 
 class WandStatsPanel(QWidget):

@@ -17,17 +17,24 @@ Data Flow:
 """
 
 from pathlib import Path
+import logging
+import shutil
+from datetime import datetime
 from threading import Lock
 
 from PyQt6.QtCore import QObject, Qt, QTimer
-import numpy as np
-from config import APP_DATA_DIR, DEFAULT_MODEL_PATH
+from PyQt6.QtWidgets import QFileDialog
+from config import APP_DATA_DIR, DEFAULT_MODEL_PATH, GESTURE_MODEL_CC_OUTPUT, WORKSPACE_ROOT
+from constants import canonical_system_spell, is_system_spell
 from .data_store import DataStore
 from .frame_protocol import build_scale_profile
+from .firmware_main_generator import sync_firmware_sources
 from .serial_worker import SerialWorker
 from .model_uploader import ModelUploader
 from .recorder import DataRecorder
 from .flash_worker import FlashWorker
+from .data_io_worker import DataIOWorker
+from .feature_worker import FeatureWorker
 from .tensorflow.pipeline import GestureModelBuildWorker
 
 
@@ -74,9 +81,19 @@ class Handler(QObject):
         self.uploader = ModelUploader()
         self.recorder = DataRecorder(dataset_dir=self.store.dataset_dir)
         self.flash_worker = FlashWorker()
+        self.data_io_worker = DataIOWorker(dataset_dir=self.store.dataset_dir)
+        self.data_io_worker.start()
+        self.feature_worker = FeatureWorker()
+        self.feature_worker.start()
 
         # ── State Management ────────────────────────────────────────────
         self.current_selected_spell: str = ""
+        self._pending_save_spell: str = ""
+        self._pending_flash_bin_type: str = ""
+        self._pending_flash_port: str = ""
+        self._pending_flash_bin_path = None
+        self._pending_upload_port: str = ""
+        self._pending_upload_model_path = None
         self._port_owner: str | None = None
         self._mode_lock = Lock()
         self._mode = self.store.get_current_mode().strip().upper()
@@ -93,6 +110,7 @@ class Handler(QObject):
         self._simulation_frames: list[list[float]] = []
         self._simulation_index = 0
         self._model_build_worker: GestureModelBuildWorker | None = None
+        self._model_build_mode: str = "both"
 
         # ── Initialize connections ──────────────────────────────────────
         self._connect_signals()
@@ -194,18 +212,50 @@ class Handler(QObject):
             return False, f"{label} file check failed: {exc}"
         return True, ""
 
+    @staticmethod
+    def _parse_sensor_frame_6d(
+        norm_values,
+    ) -> "tuple[float, float, float, float, float, float] | None":
+        """Unpack and validate a 6-element sensor frame.
+
+        Returns ``(ax, ay, az, gx, gy, gz)`` as floats, or ``None`` if the
+        input is not a 6-element sequence of numeric values.
+        """
+        if not isinstance(norm_values, (list, tuple)) or len(norm_values) != 6:
+            return None
+        try:
+            return tuple(float(v) for v in norm_values)
+        except (TypeError, ValueError):
+            return None
+
+    def _log_io_result(self, operation: str, success: bool, message: str) -> None:
+        """Log the outcome of an off-thread I/O operation to the terminal."""
+        if success:
+            self.ui_wand.append_terminal_text(f">> {operation}: {message}")
+        else:
+            self.ui_wand.append_terminal_text(f"[ERROR] {operation} failed: {message}")
+
     # ── Signal Wiring (MVC Controller Pattern) ──────────────────────────
 
     def _connect_signals(self) -> None:
         """Wire all component signals for non-blocking MVC architecture."""
+        self._connect_ui_action_signals()
+        self._connect_signals_serial_worker()
+        self._connect_store_and_home_signals()
+        self._connect_worker_output_signals()
 
-        # --- UI Wand → Handler (user actions) ---
+    def _connect_ui_action_signals(self) -> None:
+        """Wire user-action signals from all UI pages to handler slots."""
+        # UI Wand → Handler
         self.ui_wand.sig_serial_scan.connect(self.on_serial_scan)
         self.ui_wand.sig_serial_connect.connect(self.on_serial_connect)
         self.ui_wand.sig_serial_disconnect.connect(self.on_serial_disconnect)
         self.ui_wand.sig_flash_upload.connect(self.on_flash_upload)
+        self.ui_wand.sig_train_build_tflite_requested.connect(self.on_train_build_tflite_requested)
+        self.ui_wand.sig_train_build_cc_requested.connect(self.on_train_build_cc_requested)
+        self.ui_wand.sig_train_build_requested.connect(self.on_train_build_model_requested)
 
-        # --- UI Setting → Handler (firmware flashing) ---
+        # UI Setting → Handler (firmware flashing)
         if self.ui_setting:
             self.ui_setting.sig_flash_data_firmware.connect(
                 lambda: self.handle_firmware_flash("data")
@@ -214,7 +264,7 @@ class Handler(QObject):
                 lambda: self.handle_firmware_flash("inference")
             )
 
-        # --- UI Record → Handler (recording & data cropping) ---
+        # UI Record → Handler (recording & data cropping)
         self.ui_record.sig_data_cropped.connect(self.on_data_cropped)
         self.ui_record.sig_spell_selected.connect(self.on_spell_selected)
         self.ui_record.sig_spell_deleted.connect(self.on_spell_deleted)
@@ -223,36 +273,29 @@ class Handler(QObject):
         self.ui_record.sig_clear_buffer.connect(self.on_clear_buffer)
         self.ui_record.sig_export_csv.connect(self.on_export_csv)
 
-        self.ui_wand.sig_train_build_requested.connect(self.on_train_build_model_requested)
-
+        # UI Statistics → Handler (optional)
         if self.ui_statistics:
             self.ui_statistics.sig_train_build_requested.connect(self.on_train_build_model_requested)
 
-        # ┌─── SERIAL WORKER SIGNALS (hardware input) ───────────────┐
-        # │  CRITICAL: Use QueuedConnection for thread safety!       │
-        # │  SerialWorker runs in its own QThread and emits signals  │
-        # │  in that thread. Without QueuedConnection, slots run in  │
-        # │  SerialWorker's thread, updating UI from wrong thread.   │
-        # │  This causes PyQtGraph & OpenGL to silently fail.        │
-        # └─────────────────────────────────────────────────────────┘
-        self._connect_signals_serial_worker()
-
-        # --- DataStore → UI (state updates) ---
+    def _connect_store_and_home_signals(self) -> None:
+        """Wire DataStore state-update signals and Home page interaction signals."""
+        # DataStore → UI (state updates)
         self.store.sig_db_updated.connect(self._on_db_updated)
         self.store.sig_stats_updated.connect(self.ui_wand.update_esp_stats)
         self.store.sig_prediction_updated.connect(self._on_prediction_received)
         self.store.sig_live_buffer_updated.connect(self.ui_record.update_plot_data)
 
-        # --- Home → Handler (simulation playback controls) ---
+        # Home → Handler (simulation playback controls)
         self.ui_home.sig_simulation_replay_requested.connect(self._on_simulation_replay_requested)
         self.ui_home.sig_simulation_stop_requested.connect(self._stop_simulation_playback)
 
-        # --- Home → Handler (calibration & quick test) ---
+        # Home → Handler (calibration & quick test)
         self.ui_home.sig_calibrate_requested.connect(self.on_calibrate_wand)
         self.ui_home.sig_quick_test_requested.connect(self.on_quick_test)
 
-        # --- Model Uploader → UI/Handler ---
-        # CRITICAL: Use QueuedConnection for cross-thread signal safety
+    def _connect_worker_output_signals(self) -> None:
+        """Wire background-worker output signals to UI/handler slots (all queued for thread safety)."""
+        # Model Uploader → UI/Handler
         self._connect_many_queued(
             [
                 (self.uploader.sig_progress, self.ui_wand.update_flash_progress),
@@ -262,7 +305,7 @@ class Handler(QObject):
             ]
         )
 
-        # --- Flash Worker → UI/Handler ---
+        # Flash Worker → UI/Handler
         if self.ui_setting:
             self._connect_many_queued(
                 [
@@ -273,7 +316,7 @@ class Handler(QObject):
                 ]
             )
 
-        # --- Data Recorder → UI ---
+        # Data Recorder → UI
         self._connect_many_queued(
             [
                 (self.recorder.sig_record_count, self.ui_record.update_record_count),
@@ -283,6 +326,22 @@ class Handler(QObject):
                 (self.recorder.sig_recording_state, self.ui_record.set_recording_state),
                 (self.recorder.sig_recording_state, self._on_recorder_state_changed),
             ]
+        )
+
+        # DataIOWorker → Handler/UI (off-thread file I/O results)
+        self._connect_many_queued(
+            [
+                (self.data_io_worker.sig_save_done, self._on_io_save_done),
+                (self.data_io_worker.sig_delete_done, self._on_io_delete_done),
+                (self.data_io_worker.sig_export_done, self._on_io_export_done),
+                (self.data_io_worker.sig_db_refreshed, self.store.apply_db_refresh),
+            ]
+        )
+
+        # FeatureWorker → DataStore (off-thread FFT / stat features)
+        self._connect_queued(
+            self.feature_worker.sig_features_ready,
+            self.store.update_live_features,
         )
 
     def _connect_signals_serial_worker(self) -> None:
@@ -342,12 +401,28 @@ class Handler(QObject):
         self.serial_worker.start()
 
     def on_serial_disconnect(self) -> None:
-        """Stop serial worker and prepare for restart."""
+        """Stop serial worker and prepare for restart (non-blocking).
+
+        Uses a deferred callback connected to the worker's ``finished`` signal
+        so the UI thread is never blocked waiting for the thread to exit.
+        """
         if self.serial_worker.isRunning():
+            # One-shot: finish teardown once the worker thread has actually exited.
+            self.serial_worker.finished.connect(self._on_serial_worker_stopped_for_disconnect)
             self.serial_worker.stop()
-            self.serial_worker.wait()  # Wait for thread to fully exit
-            self.ui_wand.append_terminal_text(">> Serial connection stopped")
-        
+        else:
+            self._on_serial_worker_stopped_for_disconnect()
+
+    def _on_serial_worker_stopped_for_disconnect(self) -> None:
+        """Complete serial disconnect after the worker thread finishes."""
+        try:
+            self.serial_worker.finished.disconnect(self._on_serial_worker_stopped_for_disconnect)
+        except (RuntimeError, TypeError) as exc:
+            logging.getLogger(__name__).debug(
+                "serial disconnect: signal already disconnected (%s)", exc
+            )
+
+        self.ui_wand.append_terminal_text(">> Serial connection stopped")
         # CRITICAL FIX: Recreate SerialWorker so it can be started again
         # (Can't call start() on a finished QThread - must create new instance)
         self.serial_worker = SerialWorker()
@@ -357,7 +432,7 @@ class Handler(QObject):
 
         if self._mode != self._MODE_UPDATE:
             self._transition_mode(self._MODE_IDLE, reason="manual disconnect")
-        
+
         self.ui_wand.append_terminal_text(">> Ready to reconnect")
 
     # ── Data Reception (Main Data Flow) ─────────────────────────────────
@@ -372,38 +447,25 @@ class Handler(QObject):
         Args:
             norm_values: [ax, ay, az, gx, gy, gz] normalized sensor readings
         """
+        frame = self._parse_sensor_frame_6d(norm_values)
+        if frame is None:
+            return
+        ax, ay, az, gx, gy, gz = frame
         try:
-            if not isinstance(norm_values, (list, tuple)) or len(norm_values) != 6:
-                return
-
-            ax, ay, az, gx, gy, gz = [float(v) for v in norm_values]
-
             # Update 3D wand orientation (PageHome)
             self.ui_home.wand_3d.update_orientation(ax, ay, az, gx, gy, gz)
-
         except Exception as e:
             self.ui_wand.append_terminal_text(f"[ERROR] 3D wand update failed: {e}")
 
     def _on_sensor_frame_received(self, norm_values: list[float]) -> None:
         """Mirror normalized sensor samples into DataStore sensor buffers."""
-        try:
-            if not isinstance(norm_values, (list, tuple)) or len(norm_values) != 6:
-                return
-
-            ax, ay, az, gx, gy, gz = [float(v) for v in norm_values]
-            self.store.update_sensor_data(
-                {
-                    "ax": ax,
-                    "ay": ay,
-                    "az": az,
-                    "gx": gx,
-                    "gy": gy,
-                    "gz": gz,
-                }
-            )
-        except Exception:
-            # Ignore malformed frames; SerialWorker already validates protocol.
+        frame = self._parse_sensor_frame_6d(norm_values)
+        if frame is None:
             return
+        ax, ay, az, gx, gy, gz = frame
+        self.store.update_sensor_data(
+            {"ax": ax, "ay": ay, "az": az, "gx": gx, "gy": gy, "gz": gz}
+        )
 
     def _on_sensor_data_updated(self, sensor_buffers: dict) -> None:
         """Receive updated sensor buffer data from DataStore."""
@@ -411,75 +473,35 @@ class Handler(QObject):
         pass
 
     def _on_raw_data_received(self, norm_values: list[float]) -> None:
-        """
-        Route sensor samples into DataStore rolling live buffer for PageRecord.
-        
-        Called on every serial data frame (50 Hz).
-        Maintains FIFO buffer of last 500 samples (~10 seconds).
-        Only updates when PageRecord is in LIVE mode (is_live=True).
-        When STOP pressed, buffer freezes for crop/snip operations.
-        
+        """Route sensor samples into DataStore rolling live buffer for PageRecord.
+
+        Only buffers when PageRecord is in live mode (is_live=True); the buffer
+        freezes on STOP so crop/snip operations have a stable snapshot.
+
         Args:
             norm_values: [ax, ay, az, gx, gy, gz] normalized sensor readings
         """
+        if not self.ui_record.is_live:
+            return
+        if self._parse_sensor_frame_6d(norm_values) is None:
+            return
         try:
-            # Guard: Only buffer if PageRecord is in live/recording mode
-            if not self.ui_record.is_live:
-                return
-            
-            if not isinstance(norm_values, (list, tuple)) or len(norm_values) != 6:
-                return
-            
             self.store.add_live_sample(list(norm_values))
-            
         except Exception as e:
             self.ui_wand.append_terminal_text(f"[ERROR] Buffer update failed: {e}")
 
     def _emit_live_features(self) -> None:
-        """Compute rolling stats + FFT on the live buffer and emit to DataStore."""
+        """Enqueue the current live buffer snapshot for off-thread feature extraction.
+
+        The actual FFT and statistical computation runs in FeatureWorker to keep
+        the Qt event loop free.  Results arrive back in the main thread via
+        ``sig_features_ready`` → ``store.update_live_features``.
+        """
         snapshot = self.store.get_live_buffer_snapshot()
-        if len(snapshot) < 16:
+        if not snapshot:
             return
-
-        arr = np.asarray(snapshot, dtype=float)
-        if arr.shape[1] != 6:
-            return
-
-        window = 256 if len(arr) >= 256 else len(arr)
-        accel = arr[-window:, 0:3]
-        gyro = arr[-window:, 3:6]
-        accel_mag = np.linalg.norm(accel, axis=1)
-        gyro_mag = np.linalg.norm(gyro, axis=1)
-
-        stats = {
-            "accel_mean": float(np.mean(accel_mag)),
-            "accel_var": float(np.var(accel_mag)),
-            "accel_rms": float(np.sqrt(np.mean(accel_mag ** 2))),
-            "gyro_mean": float(np.mean(gyro_mag)),
-            "gyro_var": float(np.var(gyro_mag)),
-            "gyro_rms": float(np.sqrt(np.mean(gyro_mag ** 2))),
-            "sample_count": int(window),
-        }
-
-        sample_rate_hz = self._get_sample_rate_hz()
-        fft_values = np.fft.rfft(accel_mag * np.hanning(len(accel_mag)))
-        fft_mags = np.abs(fft_values)
-        fft_freqs = np.fft.rfftfreq(len(accel_mag), d=1.0 / sample_rate_hz)
-
-        max_bins = 128
-        if len(fft_mags) > max_bins:
-            fft_mags = fft_mags[:max_bins]
-            fft_freqs = fft_freqs[:max_bins]
-
-        stats.update(
-            {
-                "fft_freqs": fft_freqs.tolist(),
-                "fft_mags": fft_mags.tolist(),
-                "fft_sample_rate_hz": sample_rate_hz,
-            }
-        )
-
-        self.store.update_live_features(stats)
+        self.feature_worker.set_sample_rate(self._get_sample_rate_hz())
+        self.feature_worker.enqueue(snapshot)
 
     def _get_sample_rate_hz(self) -> int:
         settings = self.store.get_settings_snapshot()
@@ -537,11 +559,11 @@ class Handler(QObject):
 
     def _apply_sensor_frame_to_home(self, norm_values: list[float]) -> None:
         """Send one 6-axis sensor frame to the Home 3D viewer."""
+        frame = self._parse_sensor_frame_6d(norm_values)
+        if frame is None:
+            return
+        ax, ay, az, gx, gy, gz = frame
         try:
-            if not isinstance(norm_values, (list, tuple)) or len(norm_values) != 6:
-                return
-
-            ax, ay, az, gx, gy, gz = [float(v) for v in norm_values]
             self.ui_home.wand_3d.update_orientation(ax, ay, az, gx, gy, gz)
         except Exception as e:
             self.ui_wand.append_terminal_text(f"[ERROR] Simulation playback failed: {e}")
@@ -641,35 +663,52 @@ class Handler(QObject):
         samples = self.store.get_samples_for_spell(spell_name)
         self.ui_record.load_samples_for_spell(spell_name, samples)
 
-    def on_data_cropped(self, cropped_data: list, spell_name: str, tag: str = "") -> None:
-        """Save cropped data sample to dataset folder."""
+    def on_data_cropped(self, cropped_data: list, spell_name: str) -> None:
+        """Enqueue cropped data sample save to background DataIOWorker."""
         if not spell_name.strip():
             self.ui_wand.append_terminal_text("[WARN] Missing spell label. Snip discarded.")
             return
 
-        success = self.store.save_cropped_data(spell_name, cropped_data, tag=tag)
+        # Optimistic UI feedback; actual confirmation arrives via sig_save_done.
+        display_spell = canonical_system_spell(spell_name)
+        self.ui_wand.append_terminal_text(
+            f">> Saving {len(cropped_data)} samples → {display_spell}..."
+        )
+        self._pending_save_spell = display_spell
+        self.data_io_worker.enqueue_save(display_spell, cropped_data)
+
+    def _on_io_save_done(self, success: bool, message: str) -> None:
+        """Called in the main thread when DataIOWorker finishes a save job."""
         if success:
-            self.ui_record.set_save_status(spell_name)
-            tag_note = f" [tag: {tag}]" if tag else ""
-            self.ui_wand.append_terminal_text(
-                f">> SAVED: {len(cropped_data)} samples → {spell_name}{tag_note}"
-            )
+            self.ui_record.set_save_status(self._pending_save_spell)
+        self._log_io_result("SAVED", success, message)
+        self._pending_save_spell = ""
 
     def on_spell_deleted(self, spell_name: str) -> None:
-        """Delete a spell and all its training data."""
+        """Enqueue spell deletion to background DataIOWorker."""
         if not spell_name.strip():
             self.ui_wand.append_terminal_text("[ERROR] Invalid spell name for deletion.")
             return
 
-        # Check if this spell is currently selected
+        if is_system_spell(spell_name):
+            blocked_message = "[ERROR] STAND BY is a protected system spell and cannot be deleted."
+            self.ui_wand.append_terminal_text(blocked_message)
+            if hasattr(self.ui_record, "show_protected_spell_warning"):
+                self.ui_record.show_protected_spell_warning(canonical_system_spell(spell_name))
+            return
+
         if self.current_selected_spell == spell_name:
             self.current_selected_spell = ""
 
-        success = self.store.delete_spell(spell_name)
-        if success:
-            self.ui_wand.append_terminal_text(f">> DELETED: Spell '{spell_name}' and all its training data.")
-        else:
-            self.ui_wand.append_terminal_text(f"[ERROR] Failed to delete spell '{spell_name}'.")
+        self.data_io_worker.enqueue_delete(spell_name)
+
+    def _on_io_delete_done(self, success: bool, message: str) -> None:
+        """Called in the main thread when DataIOWorker finishes a delete job."""
+        self._log_io_result("DELETED", success, message)
+
+    def _on_io_export_done(self, success: bool, message: str) -> None:
+        """Called in the main thread when DataIOWorker finishes an export job."""
+        self._log_io_result("EXPORT", success, message)
 
     # ── Firmware Flash Actions ─────────────────────────────────────────
 
@@ -728,16 +767,35 @@ class Handler(QObject):
                 self.ui_setting.set_flash_buttons_enabled(True)
             return
 
-        # CRITICAL: Stop serial connection and WAIT for port to close
-        # (FlashWorker and SerialWorker cannot share the same COM port)
+        # Must release the COM port before flashing.  Stop the serial worker and
+        # defer the actual flash start to a callback that fires once the worker
+        # thread has fully exited (non-blocking — avoids stalling the UI thread).
         if self.serial_worker.isRunning():
             self._flash_log_to_console(">> Stopping serial connection to release COM port...")
+            # Store args for the deferred callback, then connect the named slot
+            # so it can be disconnected by reference (no lambdas).
+            self._pending_flash_bin_type = bin_type
+            self._pending_flash_port = port
+            self._pending_flash_bin_path = bin_path
+            self.serial_worker.finished.connect(self._on_serial_stopped_start_flash)
             self.serial_worker.stop()
-            self.serial_worker.wait()  # Wait for serial thread to fully exit
-            if self._port_owner == "serial":
-                self._set_port_owner(None)
-            self._flash_log_to_console(">> COM port released, ready to flash\n")
+        else:
+            self._start_flash_immediately(bin_type, port, bin_path)
 
+    def _on_serial_stopped_start_flash(self) -> None:
+        """Callback: serial worker has exited — now safe to open COM port for flashing."""
+        self.serial_worker.finished.disconnect(self._on_serial_stopped_start_flash)
+        if self._port_owner == "serial":
+            self._set_port_owner(None)
+        self._flash_log_to_console(">> COM port released, ready to flash\n")
+        self._start_flash_immediately(
+            self._pending_flash_bin_type,
+            self._pending_flash_port,
+            self._pending_flash_bin_path,
+        )
+
+    def _start_flash_immediately(self, bin_type: str, port: str, bin_path) -> None:
+        """Start the flash worker — called once the COM port is free."""
         if not self._transition_mode(
             self._MODE_UPDATE,
             reason=f"{bin_type} firmware flash",
@@ -793,14 +851,31 @@ class Handler(QObject):
             self.ui_wand.update_flash_progress(0)
             return
 
-        # Stop serial if running
+        # Stop serial if running — defer upload start until the worker thread
+        # has fully exited so both operations don't race on the same COM port.
         if self.serial_worker.isRunning():
-            self.serial_worker.stop()
-            self.serial_worker.wait()
-            if self._port_owner == "serial":
-                self._set_port_owner(None)
             self.ui_wand.append_terminal_text(">> Temporarily pausing live data for upload...")
+            # Store args for the deferred callback, then connect the named slot
+            # so it can be disconnected by reference (no lambdas).
+            self._pending_upload_port = port
+            self._pending_upload_model_path = model_path
+            self.serial_worker.finished.connect(self._on_serial_stopped_start_upload)
+            self.serial_worker.stop()
+        else:
+            self._start_upload_immediately(port, model_path)
 
+    def _on_serial_stopped_start_upload(self) -> None:
+        """Callback: serial worker has exited — now safe to open COM port for upload."""
+        self.serial_worker.finished.disconnect(self._on_serial_stopped_start_upload)
+        if self._port_owner == "serial":
+            self._set_port_owner(None)
+        self._start_upload_immediately(
+            self._pending_upload_port,
+            self._pending_upload_model_path,
+        )
+
+    def _start_upload_immediately(self, port: str, model_path) -> None:
+        """Begin the model upload — called once the COM port is free."""
         if not self._transition_mode(
             self._MODE_UPDATE,
             reason="model upload",
@@ -868,8 +943,20 @@ class Handler(QObject):
             samples = self.store.get_samples_for_spell(self.current_selected_spell)
             self.ui_record.load_samples_for_spell(self.current_selected_spell, samples)
 
+    def on_train_build_tflite_requested(self, selected_spells: list[str]) -> None:
+        """Build only .tflite model from currently selected spells."""
+        self._start_model_build(output_mode="tflite", selected_spells=selected_spells)
+
+    def on_train_build_cc_requested(self, selected_spells: list[str]) -> None:
+        """Build .cc model payload from currently selected spells."""
+        self._start_model_build(output_mode="cc", selected_spells=selected_spells)
+
     def on_train_build_model_requested(self) -> None:
-        """Start asynchronous training and gesture_model.cc build from current dataset."""
+        """Legacy trigger for statistics page: build both .tflite and .cc artifacts."""
+        self._start_model_build(output_mode="both", selected_spells=[])
+
+    def _start_model_build(self, *, output_mode: str, selected_spells: list[str]) -> None:
+        """Start asynchronous model build pipeline for requested output mode."""
         if self._model_build_worker and self._model_build_worker.isRunning():
             self.ui_wand.append_terminal_text("[WARN] Model build is already running.")
             return
@@ -880,7 +967,13 @@ class Handler(QObject):
                 self.ui_statistics.set_training_finished(False, "recording is active")
             return
 
-        self._model_build_worker = GestureModelBuildWorker(dataset_dir=self.store.dataset_dir)
+        normalized_spells = [s.strip() for s in selected_spells if str(s).strip()]
+        self._model_build_mode = output_mode
+        self._model_build_worker = GestureModelBuildWorker(
+            dataset_dir=self.store.dataset_dir,
+            output_mode=output_mode,
+            selected_spells=normalized_spells,
+        )
         self._connect_many_queued(
             [
                 (self._model_build_worker.sig_status, self._on_model_build_status),
@@ -891,8 +984,12 @@ class Handler(QObject):
 
         if self.ui_statistics:
             self.ui_statistics.set_training_state(True)
+
+        selected_summary = (
+            ", ".join(normalized_spells) if normalized_spells else "ALL SPELLS"
+        )
         self.ui_wand.append_terminal_text(
-            f">> Starting train/build pipeline from dataset: {self.store.dataset_dir}"
+            f">> Starting model build ({output_mode}) from dataset: {self.store.dataset_dir} | spells: {selected_summary}"
         )
         self._model_build_worker.start()
 
@@ -909,11 +1006,74 @@ class Handler(QObject):
         if success:
             self.ui_wand.append_terminal_text(f"[MODEL] Build success: {message}")
             self.store.save_settings({"model_path": str(DEFAULT_MODEL_PATH)})
+
+            build_result = self._model_build_worker.build_result if self._model_build_worker else None
+            settings = self.store.get_settings_snapshot()
+            idf_main_dir = str(settings.get("idf_main_dir", "")).strip()
+            should_sync_firmware = self._model_build_mode in {"cc", "both"}
+
+            if not should_sync_firmware:
+                self.ui_wand.append_terminal_text(
+                    "[MODEL] TFLite-only build selected. Skipping firmware source synchronization."
+                )
+
+            if should_sync_firmware and not idf_main_dir:
+                self.ui_wand.append_terminal_text("[MODEL] IDF main directory is not configured. Skip firmware sync.")
+            elif should_sync_firmware and not build_result:
+                self.ui_wand.append_terminal_text("[MODEL] Build result metadata missing. Skip firmware sync.")
+            elif should_sync_firmware:
+                cc_source = Path(build_result.cc_path)
+                template_path = WORKSPACE_ROOT / "assets" / "firmware" / "main.cpp.template"
+                try:
+                    sync = sync_firmware_sources(
+                        idf_main_dir=Path(idf_main_dir),
+                        generated_cc_path=cc_source,
+                        class_names=list(build_result.classes),
+                        template_path=template_path,
+                    )
+                    if sync.backup_path:
+                        self.ui_wand.append_terminal_text(f"[MODEL] Backup main.cpp: {sync.backup_path}")
+                    self.ui_wand.append_terminal_text(f"[MODEL] Synced gesture_model.cc: {sync.gesture_cc_path}")
+                    self.ui_wand.append_terminal_text(
+                        f"[MODEL] Generated main.cpp ({sync.class_count} classes): {sync.main_cpp_path}"
+                    )
+                except Exception as exc:
+                    self.ui_wand.append_terminal_text(f"[MODEL] Firmware sync failed: {exc}")
         else:
             self.ui_wand.append_terminal_text(f"[MODEL] Build failed: {message}")
 
         if self.ui_statistics:
             self.ui_statistics.set_training_finished(success, message)
+
+    def _prompt_save_cc_output(self) -> None:
+        """Prompt for where to persist converted .cc file after successful build."""
+        source_cc = Path(GESTURE_MODEL_CC_OUTPUT)
+        valid_cc, reason = self._validate_required_file(source_cc, label="Model .cc")
+        if not valid_cc:
+            self.ui_wand.append_terminal_text(f"[MODEL] Could not open save dialog: {reason}")
+            return
+
+        selected_path, _ = QFileDialog.getSaveFileName(
+            self.ui_wand,
+            "Save Converted .cc File",
+            str(GESTURE_MODEL_CC_OUTPUT),
+            "C++ Source (*.cc);;All Files (*)",
+        )
+        if not selected_path:
+            self.ui_wand.append_terminal_text("[MODEL] Save .cc cancelled by user.")
+            return
+
+        target = Path(selected_path)
+        if not target.suffix:
+            target = target.with_suffix(".cc")
+
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.resolve() != source_cc.resolve():
+                shutil.copyfile(source_cc, target)
+            self.ui_wand.append_terminal_text(f"[MODEL] .cc saved to: {target}")
+        except OSError as exc:
+            self.ui_wand.append_terminal_text(f"[MODEL] Failed to save .cc: {exc}")
 
     # ── Wand Calibration & Testing ─────────────────────────────────────
 
@@ -973,32 +1133,16 @@ class Handler(QObject):
         self.ui_record.lbl_record_count.setText("0")
 
     def on_export_csv(self) -> None:
-        """Export current live buffer to CSV file in dataset directory."""
+        """Enqueue export of the current live buffer to a CSV file (non-blocking)."""
         buf = self.store.get_live_buffer_snapshot()
-        if not buf or len(buf) == 0:
+        if not buf:
             self.ui_wand.append_terminal_text("[EXPORT] No samples to export")
             return
-        
-        # Generate CSV filename with timestamp
-        from datetime import datetime
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         csv_filename = f"export_{timestamp}.csv"
-        csv_path = Path(self.store.dataset_dir) / csv_filename
-        
-        # Write CSV file
-        try:
-            import csv
-            with open(csv_path, 'w', newline='') as csvfile:
-                writer = csv.writer(csvfile)
-                # Write header
-                writer.writerow(['ax', 'ay', 'az', 'gx', 'gy', 'gz'])
-                # Write data rows
-                for row in buf:
-                    writer.writerow(row)
-            
-            self.ui_wand.append_terminal_text(f"[EXPORT] Saved {len(buf)} samples to {csv_filename}")
-            self.ui_record.lbl_wand_status.setText(f"✔ Exported {len(buf)} samples")
-            self.ui_record.lbl_wand_status.setStyleSheet(f"color: #00AA44; font-weight: bold; font-size: 12px;")
-        except Exception as e:
-            self.ui_wand.append_terminal_text(f"[EXPORT] Failed: {str(e)}")
+        csv_path = str(Path(self.store.dataset_dir) / csv_filename)
+
+        self.ui_wand.append_terminal_text(f"[EXPORT] Exporting {len(buf)} samples to {csv_filename}...")
+        self.data_io_worker.enqueue_export(buf, csv_path)
 

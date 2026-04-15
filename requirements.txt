@@ -7,19 +7,22 @@ pyserial>=3.5
 
 # Plotting & Visualization
 pyqtgraph>=0.13.3
-matplotlib>=3.8.0
 
 # Data Processing
 numpy>=1.26.0
-scipy>=1.11.0
-pandas>=2.1.0
+
+#esp
+esptool
 
 # Utils & Serialization
-pydantic>=2.4.0
-PyYAML>=6.0.1
+pyserial>=3.5
 
 # Packaging
 pyinstaller>=6.2.0
+
+# Training scripts (optional, not required for app runtime)
+tensorflow>=2.16.0
+pandas>=2.1.0
 
 # Testing
 pytest>=8.2.0

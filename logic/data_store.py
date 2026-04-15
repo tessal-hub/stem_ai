@@ -11,6 +11,8 @@ import csv
 import glob
 import collections
 import json
+import logging
+import shutil
 import time
 from pathlib import Path
 from threading import Lock
@@ -19,7 +21,12 @@ from typing import Any, Mapping
 
 from PyQt6.QtCore import QObject, QSettings, pyqtSignal
 
-from config import DATASET_DIR, DEFAULT_MODEL_PATH, ensure_data_dir
+from config import (
+    DATASET_DIR,
+    DEFAULT_MODEL_PATH,
+    ensure_data_dir,
+)
+from constants import SYSTEM_SPELL_NAMES, canonical_system_spell, is_system_spell, normalize_spell_name
 from .frame_protocol import FrameValidationError, validate_six_axis_values
 
 
@@ -28,6 +35,7 @@ from .frame_protocol import FrameValidationError, validate_six_axis_values
 # - Add migration notes for backward compatibility at bump time.
 # - Keep version 1 as the baseline for current live buffer/state structure.
 SCHEMA_VERSION = 1
+log = logging.getLogger(__name__)
 
 
 class SettingsStore:
@@ -49,6 +57,8 @@ class SettingsStore:
         "baud_rate": "115200",
         "model_path": str(DEFAULT_MODEL_PATH),
         "firmware_mode": "data",
+        "idf_main_dir": "",
+        "demo_spell_cleanup_done": False,
     }
 
     def __init__(self) -> None:
@@ -99,6 +109,8 @@ class SettingsStore:
         model_path = self.get_str("model_path", self._DEFAULTS["model_path"]).strip()
         if not model_path or model_path == "model.tflite":
             model_path = self._DEFAULTS["model_path"]
+
+        idf_main_dir = self._resolve_idf_main_dir()
         return {
             "sample_rate": self.get_str("sample_rate", self._DEFAULTS["sample_rate"]),
             "accel_scale": self.get_str("accel_scale", self._DEFAULTS["accel_scale"]),
@@ -112,7 +124,49 @@ class SettingsStore:
             "baud_rate": self.get_str("baud_rate", self._DEFAULTS["baud_rate"]),
             "model_path": model_path,
             "firmware_mode": self.get_str("firmware_mode", self._DEFAULTS["firmware_mode"]),
+            "idf_main_dir": idf_main_dir,
+            "demo_spell_cleanup_done": self.get_bool(
+                "demo_spell_cleanup_done",
+                self._DEFAULTS["demo_spell_cleanup_done"],
+            ),
         }
+
+    @staticmethod
+    def _normalize_idf_main_dir(value: str) -> str:
+        raw = str(value).strip()
+        if not raw:
+            return ""
+        path = Path(raw).expanduser()
+        if path.name.lower() == "main":
+            return str(path)
+        nested_main = path / "main"
+        if nested_main.exists() and nested_main.is_dir():
+            return str(nested_main)
+        return str(path)
+
+    def _resolve_idf_main_dir(self) -> str:
+        configured = self.get_str("idf_main_dir", "").strip()
+        if configured:
+            return self._normalize_idf_main_dir(configured)
+
+        legacy_workspace = self.get_str("workspace_path", "").strip()
+        if legacy_workspace:
+            workspace_path = Path(legacy_workspace).expanduser()
+            candidate = workspace_path.parent / "main"
+            if candidate.exists() and candidate.is_dir():
+                resolved = self._normalize_idf_main_dir(str(candidate))
+                self.set_str("idf_main_dir", resolved)
+                return resolved
+
+        legacy_cc = self.get_str("gesture_cc_path", "").strip()
+        if legacy_cc:
+            cc_parent = Path(legacy_cc).expanduser().parent
+            if cc_parent.exists() and cc_parent.is_dir() and cc_parent.name.lower() == "main":
+                resolved = self._normalize_idf_main_dir(str(cc_parent))
+                self.set_str("idf_main_dir", resolved)
+                return resolved
+
+        return self._DEFAULTS["idf_main_dir"]
 
     def _normalize(self, config: Mapping[str, Any]) -> dict[str, Any]:
         merged = dict(self._DEFAULTS)
@@ -130,6 +184,13 @@ class SettingsStore:
             "baud_rate": str(merged["baud_rate"]),
             "model_path": str(merged["model_path"]),
             "firmware_mode": str(merged["firmware_mode"]),
+            "idf_main_dir": self._normalize_idf_main_dir(
+                str(merged.get("idf_main_dir", self._DEFAULTS["idf_main_dir"]))
+            ),
+            "demo_spell_cleanup_done": self._to_bool(
+                merged.get("demo_spell_cleanup_done", self._DEFAULTS["demo_spell_cleanup_done"]),
+                self._DEFAULTS["demo_spell_cleanup_done"],
+            ),
         }
 
     def save(self, config: Mapping[str, Any]) -> dict[str, Any]:
@@ -148,6 +209,15 @@ class SettingsStore:
         self.set_str("baud_rate", normalized["baud_rate"])
         self.set_str("model_path", normalized["model_path"])
         self.set_str("firmware_mode", normalized["firmware_mode"])
+        self.set_str("idf_main_dir", normalized["idf_main_dir"])
+        self.set_bool("demo_spell_cleanup_done", normalized["demo_spell_cleanup_done"])
+
+        # Cleanup deprecated path keys from older schema revisions.
+        self._settings.remove("workspace_path")
+        self._settings.remove("model_output_path")
+        self._settings.remove("gesture_cc_path")
+        self._settings.remove("dataset_dir")
+
         self._settings.sync()
         return normalized
 
@@ -175,6 +245,7 @@ class DataStore(QObject):
         os.makedirs(self.dataset_dir, exist_ok=True)
         self._state_lock = Lock()
         self._buffer_lock = Lock()
+        self._db_write_lock = Lock()
 
         # 1. State Variables (Requested Fix)
         self.system_stats: dict[str, str] = {
@@ -232,8 +303,102 @@ class DataStore(QObject):
         self._last_live_emit = 0.0
         self._live_emit_interval = 0.05
 
+        # Debounce guard for refresh_database: at most one scan per 500 ms.
+        self._last_db_refresh: float = 0.0
+        self._db_refresh_interval: float = 0.5
+
+        # Migration guard to avoid repeated full-dataset backup on every refresh.
+        self._legacy_meta_migration_prepared: bool = False
+
+        self._prepare_legacy_meta_migration()
+
         # Initial filesystem scan
         self.refresh_database()
+
+    def _iter_legacy_meta_files(self) -> list[Path]:
+        root = Path(self.dataset_dir)
+        if not root.exists():
+            return []
+        return sorted(root.rglob("*.meta.json"))
+
+    def _count_legacy_meta_files(self) -> int:
+        root = Path(self.dataset_dir)
+        if not root.exists():
+            return 0
+        return sum(1 for _ in root.rglob("*.meta.json"))
+
+    def _backup_dataset_snapshot(self) -> Path | None:
+        """Create rollback snapshot before migration writes are changed.
+
+        Returns the backup directory path on success, or None if the backup
+        could not be created (e.g. disk full, permission denied).
+        """
+        dataset_root = Path(self.dataset_dir)
+        backup_root = dataset_root.parent / "_migration_backups"
+        try:
+            backup_root.mkdir(parents=True, exist_ok=True)
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            target_dir = backup_root / f"dataset_backup_{timestamp}"
+            shutil.copytree(dataset_root, target_dir)
+
+            csv_count = len(list(target_dir.rglob("*.csv")))
+            meta_count = len(list(target_dir.rglob("*.meta.json")))
+            manifest = {
+                "source": str(dataset_root),
+                "backup": str(target_dir),
+                "csv_files": csv_count,
+                "meta_json_files": meta_count,
+                "timestamp": timestamp,
+            }
+            (target_dir / "backup_manifest.json").write_text(
+                json.dumps(manifest, ensure_ascii=True, indent=2),
+                encoding="utf-8",
+            )
+            return target_dir
+        except OSError:
+            log.exception(
+                "Dataset backup failed — continuing without backup (dataset_dir=%s)",
+                self.dataset_dir,
+            )
+            return None
+
+    def _prepare_legacy_meta_migration(self) -> None:
+        """Prepare one-time migration context for stopping new .meta.json writes.
+
+        Existing .meta.json files are kept intact (read-passive compatibility).
+        Cleanup of legacy metadata remains opt-in and is not done automatically.
+        """
+        if self._legacy_meta_migration_prepared:
+            return
+
+        meta_count = self._count_legacy_meta_files()
+        if meta_count > 0:
+            backup_dir = self._backup_dataset_snapshot()
+            if backup_dir is not None:
+                log.info(
+                    "Legacy metadata migration prepared: %d .meta.json file(s); backup created at %s",
+                    meta_count,
+                    backup_dir,
+                )
+            else:
+                log.warning(
+                    "Legacy metadata migration prepared: %d .meta.json file(s); backup FAILED — "
+                    "proceeding without a backup snapshot.",
+                    meta_count,
+                )
+        self._legacy_meta_migration_prepared = True
+
+    def _ensure_system_spell_directories(self) -> None:
+        """Ensure protected system spells always exist on disk.
+
+        NOTE: Folder creation runs under a dedicated write lock. Signal emission
+        is intentionally performed outside this lock to avoid lock+emit reentry.
+        """
+        with self._db_write_lock:
+            for spell_name in SYSTEM_SPELL_NAMES:
+                spell_path = Path(self.dataset_dir) / spell_name
+                spell_path.mkdir(parents=True, exist_ok=True)
 
     # ── State Mutation ──────────────────────────────────────────────────
 
@@ -255,21 +420,32 @@ class DataStore(QObject):
         self.sig_sensor_data_updated.emit(self.sensor_buffers)
 
     def add_live_sample(self, sample: list[float], *, emit: bool = True) -> list[list[float]]:
-        """Append one 6-axis sample to rolling live buffer and emit snapshot."""
+        """Append one 6-axis sample to rolling live buffer and emit snapshot.
+
+        The rate-limit check and timestamp update are performed inside
+        ``_buffer_lock`` so that concurrent callers from different threads
+        cannot both pass the gate and emit duplicate snapshots.
+        """
         try:
             normalized_sample = validate_six_axis_values(sample)
         except FrameValidationError:
             return []
+
+        if not emit:
+            with self._buffer_lock:
+                self.live_buffer.append(normalized_sample)
+            return []
+
+        now = time.perf_counter()
         with self._buffer_lock:
             self.live_buffer.append(normalized_sample)
+            if now - self._last_live_emit < self._live_emit_interval:
+                return []
+            self._last_live_emit = now
             snapshot = [list(row) for row in self.live_buffer]
-        if emit:
-            now = time.perf_counter()
-            if now - self._last_live_emit >= self._live_emit_interval:
-                self._last_live_emit = now
-                self.sig_live_buffer_updated.emit(snapshot)
-                return snapshot
-        return []
+
+        self.sig_live_buffer_updated.emit(snapshot)
+        return snapshot
 
     def get_live_buffer_snapshot(self) -> list[list[float]]:
         """Return a thread-safe shallow copy of the rolling live buffer."""
@@ -372,6 +548,7 @@ class DataStore(QObject):
         """Reload settings from persistent storage into runtime memory."""
         with self._state_lock:
             self.settings = self.settings_store.load()
+            self._ensure_system_spell_directories()
             return dict(self.settings)
 
     def save_settings(self, updates: Mapping[str, Any]) -> dict[str, Any]:
@@ -384,8 +561,25 @@ class DataStore(QObject):
 
     # ── Database ────────────────────────────────────────────────────────
 
-    def refresh_database(self) -> None:
-        """Scan dataset/ folder structure to rebuild spell_counts."""
+    def refresh_database(self, *, force: bool = False) -> None:
+        """Scan dataset/ folder structure to rebuild spell_counts.
+
+        Debounced: successive calls within ``_db_refresh_interval`` seconds
+        are no-ops so that rapid saves do not trigger a storm of directory
+        scans on the main thread.  The initial call at startup always runs
+        because ``_last_db_refresh`` starts at 0.
+
+        Pass ``force=True`` to bypass the debounce (used after direct writes
+        in ``save_cropped_data`` / ``delete_spell`` where the filesystem state
+        is known to have changed).
+        """
+        now = time.perf_counter()
+        if not force and now - self._last_db_refresh < self._db_refresh_interval:
+            return
+        self._last_db_refresh = now
+
+        self._ensure_system_spell_directories()
+
         self.spell_counts.clear()
         if os.path.exists(self.dataset_dir):
             for item in os.listdir(self.dataset_dir):
@@ -393,6 +587,24 @@ class DataStore(QObject):
                 if os.path.isdir(spell_path):
                     csv_files = glob.glob(os.path.join(spell_path, "*.csv"))
                     self.spell_counts[item] = len(csv_files)
+
+        for spell_name in SYSTEM_SPELL_NAMES:
+            self.spell_counts.setdefault(spell_name, 0)
+
+        log.debug("Legacy .meta.json remaining: %d", self._count_legacy_meta_files())
+        self.sig_db_updated.emit(self.spell_counts)
+
+    def apply_db_refresh(self, counts: dict) -> None:
+        """Apply a pre-computed spell-count dict produced by DataIOWorker.
+
+        Called in the main thread via QueuedConnection so it is safe to update
+        ``spell_counts`` and emit ``sig_db_updated`` without extra locking.
+        """
+        self._ensure_system_spell_directories()
+        merged = dict(counts)
+        for spell_name in SYSTEM_SPELL_NAMES:
+            merged.setdefault(spell_name, 0)
+        self.spell_counts = merged
         self.sig_db_updated.emit(self.spell_counts)
 
     def get_spell_list(self) -> list[str]:
@@ -408,41 +620,28 @@ class DataStore(QObject):
         self,
         spell_name: str,
         data: list[list[float]],
-        *,
-        tag: str = "",
     ) -> bool:
         """Save a cropped 6-axis sample block as a single CSV file."""
         if not data or not spell_name.strip():
             return False
 
-        folder = os.path.join(self.dataset_dir, spell_name.strip().upper())
+        normalized_name = normalize_spell_name(spell_name)
+        folder_name = canonical_system_spell(normalized_name)
+        folder = os.path.join(self.dataset_dir, folder_name)
         os.makedirs(folder, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         file_path = os.path.join(folder, f"sample_{timestamp}.csv")
-        meta_path = os.path.join(folder, f"sample_{timestamp}.meta.json")
 
         try:
             with open(file_path, mode="w", newline="") as f:
                 writer = csv.writer(f)
                 writer.writerow(["aX", "aY", "aZ", "gX", "gY", "gZ"])
                 writer.writerows(data)
-            if tag:
-                with open(meta_path, mode="w", encoding="utf-8") as meta_file:
-                    json.dump(
-                        {
-                            "tag": tag,
-                            "timestamp": timestamp,
-                            "sample_count": len(data),
-                        },
-                        meta_file,
-                        ensure_ascii=True,
-                        indent=2,
-                    )
-            self.refresh_database()
+            self.refresh_database(force=True)
             return True
-        except Exception as e:
-            print(f"[DataStore] Save error: {e}")
+        except Exception:
+            log.exception("DataStore.save_cropped_data failed for spell=%r", spell_name)
             return False
 
     def delete_spell(self, spell_name: str) -> bool:
@@ -450,7 +649,10 @@ class DataStore(QObject):
         if not spell_name.strip():
             return False
 
-        spell_path = os.path.join(self.dataset_dir, spell_name.strip().upper())
+        if is_system_spell(spell_name):
+            return False
+
+        spell_path = os.path.join(self.dataset_dir, normalize_spell_name(spell_name))
         if not os.path.exists(spell_path):
             return False
 
@@ -465,8 +667,8 @@ class DataStore(QObject):
             os.rmdir(spell_path)
             
             # Refresh the database
-            self.refresh_database()
+            self.refresh_database(force=True)
             return True
-        except Exception as e:
-            print(f"[DataStore] Delete spell error: {e}")
+        except Exception:
+            log.exception("DataStore.delete_spell failed for spell=%r", spell_name)
             return False

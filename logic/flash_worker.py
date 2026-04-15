@@ -13,7 +13,6 @@ Architecture:
     - Writes to 0x10000 address (app firmware partition)
 """
 
-import os
 import re
 import sys
 import subprocess
@@ -26,12 +25,10 @@ class FlashWorker(QThread):
     """Flash firmware to ESP32-S3 via esptool in background thread."""
 
     # ── Signals ──────────────────────────────────────────────────────────
-    progress = pyqtSignal(int)          # 0-100 progress percent
-    log_msg = pyqtSignal(str)           # Real-time console output
-    finished = pyqtSignal(bool, str)    # (success, message)
-    sig_progress = pyqtSignal(int)      # standardized progress channel
-    sig_error = pyqtSignal(str)         # standardized error channel
-    sig_finished = pyqtSignal(bool, str)  # standardized completion channel
+    log_msg      = pyqtSignal(str)           # Real-time console output
+    sig_progress = pyqtSignal(int)           # 0-100 progress percent
+    sig_error    = pyqtSignal(str)           # error message
+    sig_finished = pyqtSignal(bool, str)     # (success, message)
 
     def __init__(self) -> None:
         super().__init__()
@@ -52,129 +49,115 @@ class FlashWorker(QThread):
         self.start()
 
     def run(self) -> None:
-        """Core run loop — execute esptool flash command."""
+        """Core run loop — validate inputs, build command, then execute flash."""
         try:
-            # ── Step 1: Validate inputs ───────────────────────────────
-            if not self._port:
-                self.log_msg.emit("[ERROR] No serial port specified")
-                self.finished.emit(False, "No serial port specified")
-                self.sig_error.emit("No serial port specified")
-                self.sig_finished.emit(False, "No serial port specified")
+            bin_file = self._validate_flash_inputs()
+            if bin_file is None:
                 return
-
-            if not self._bin_path:
-                self.log_msg.emit("[ERROR] No binary file path specified")
-                self.finished.emit(False, "No binary file path specified")
-                self.sig_error.emit("No binary file path specified")
-                self.sig_finished.emit(False, "No binary file path specified")
-                return
-
-            # ── Step 2: Resolve file path (absolute) ──────────────────
-            bin_file = Path(self._bin_path).resolve()
-            if not bin_file.exists():
-                self.log_msg.emit(f"[ERROR] Binary file not found: {bin_file}")
-                self.finished.emit(False, f"Binary file not found: {bin_file}")
-                self.sig_error.emit(f"Binary file not found: {bin_file}")
-                self.sig_finished.emit(False, f"Binary file not found: {bin_file}")
-                return
-
-            file_size = bin_file.stat().st_size
-            if file_size == 0:
-                self.log_msg.emit(f"[ERROR] Binary file is empty: {bin_file}")
-                self.finished.emit(False, f"Binary file is empty: {bin_file}")
-                self.sig_error.emit(f"Binary file is empty: {bin_file}")
-                self.sig_finished.emit(False, f"Binary file is empty: {bin_file}")
-                return
-
-            self.log_msg.emit(f"[INFO] Binary file: {bin_file}")
-            self.log_msg.emit(f"[INFO] Binary size: {file_size} bytes")
-
-            # ── Step 3: Check esptool availability ────────────────────
-            if not self._check_esptool_available():
-                self.log_msg.emit("[ERROR] esptool not installed. Run: pip install esptool")
-                self.finished.emit(False, "esptool not installed")
-                self.sig_error.emit("esptool not installed")
-                self.sig_finished.emit(False, "esptool not installed")
-                return
-
-            # ── Step 4: Build esptool command ────────────────────────
-            # Using sys.executable to ensure venv compatibility
-            cmd = [
-                sys.executable,
-                "-m",
-                "esptool",
-                "--chip", "esp32s3",
-                "--port", self._port,
-                "--baud", "115200",
-                "--before", "default_reset",
-                "--after", "hard_reset",
-                "write_flash",
-                "-z",
-                "--flash_mode", "dio",
-                "--flash_freq", "80m",
-                "--flash_size", "keep",
-                "0x10000",           # Address where app firmware is flashed
-                str(bin_file),
-            ]
-
-            self.log_msg.emit(f"[INFO] Command: {' '.join(cmd)}")
-            self.log_msg.emit(f"[INFO] Using Python: {sys.executable}")
-            self.log_msg.emit("=" * 70)
-            self.progress.emit(0)
-            self.sig_progress.emit(0)
-
-            # ── Step 5: Execute flash command ────────────────────────
-            self._process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                encoding="utf-8",
-                errors="ignore",
-            )
-
-            # ── Step 6: Stream output and parse progress ─────────────
-            if self._process and self._process.stdout:
-                success = self._parse_esptool_output(self._process.stdout)
-
-                # Wait for process to finish
-                return_code = self._process.wait(timeout=300)
-
-                if return_code == 0 and success:
-                    self.progress.emit(100)
-                    self.sig_progress.emit(100)
-                    self.log_msg.emit("=" * 70)
-                    self.log_msg.emit("[SUCCESS] Firmware flash completed!")
-                    self.finished.emit(True, "Flash successful")
-                    self.sig_finished.emit(True, "Flash successful")
-                else:
-                    self.log_msg.emit("=" * 70)
-                    self.log_msg.emit(f"[FAILED] Firmware flash failed (exit code: {return_code})")
-                    self.finished.emit(False, "Flash failed")
-                    self.sig_error.emit(f"Flash failed (exit code: {return_code})")
-                    self.sig_finished.emit(False, "Flash failed")
-            else:
-                self.log_msg.emit("[ERROR] Failed to start esptool process")
-                self.finished.emit(False, "Process failed")
-                self.sig_error.emit("Failed to start esptool process")
-                self.sig_finished.emit(False, "Process failed")
-
+            cmd = self._build_esptool_cmd(bin_file)
+            self._execute_flash(cmd)
         except subprocess.TimeoutExpired:
             self.log_msg.emit("[ERROR] Flash operation timed out (5 minutes)")
-            self.finished.emit(False, "Timeout")
             self.sig_error.emit("Flash operation timed out")
             self.sig_finished.emit(False, "Timeout")
             if self._process:
                 self._process.kill()
-
         except Exception as e:
             self.log_msg.emit(f"[ERROR] Flash exception: {type(e).__name__}: {e}")
-            self.finished.emit(False, f"Exception: {e}")
             self.sig_error.emit(f"Flash exception: {type(e).__name__}: {e}")
             self.sig_finished.emit(False, f"Exception: {e}")
-
         finally:
             self._cleanup()
+
+    def _fail(self, message: str) -> None:
+        """Emit error and finished-failure signals with a single call."""
+        self.log_msg.emit(f"[ERROR] {message}")
+        self.sig_error.emit(message)
+        self.sig_finished.emit(False, message)
+
+    def _validate_flash_inputs(self) -> "Path | None":
+        """Validate port, binary path, binary size, and esptool availability.
+
+        Returns the resolved ``Path`` on success, or ``None`` on any failure
+        (error signals are already emitted before returning ``None``).
+        """
+        if not self._port:
+            self._fail("No serial port specified")
+            return None
+
+        if not self._bin_path:
+            self._fail("No binary file path specified")
+            return None
+
+        bin_file = Path(self._bin_path).resolve()
+        if not bin_file.exists():
+            self._fail(f"Binary file not found: {bin_file}")
+            return None
+
+        file_size = bin_file.stat().st_size
+        if file_size == 0:
+            self._fail(f"Binary file is empty: {bin_file}")
+            return None
+
+        self.log_msg.emit(f"[INFO] Binary file: {bin_file}")
+        self.log_msg.emit(f"[INFO] Binary size: {file_size} bytes")
+
+        if not self._check_esptool_available():
+            self._fail("esptool not installed. Run: pip install esptool")
+            return None
+
+        return bin_file
+
+    def _build_esptool_cmd(self, bin_file: "Path") -> list[str]:
+        """Return the esptool command list for the configured port and binary."""
+        return [
+            sys.executable, "-m", "esptool",
+            "--chip", "esp32s3",
+            "--port", self._port,
+            "--baud", "115200",
+            "--before", "default_reset",
+            "--after", "hard_reset",
+            "write_flash", "-z",
+            "--flash_mode", "dio",
+            "--flash_freq", "80m",
+            "--flash_size", "keep",
+            "0x10000",           # Address where app firmware is flashed
+            str(bin_file),
+        ]
+
+    def _execute_flash(self, cmd: list[str]) -> None:
+        """Spawn the esptool subprocess, stream its output, and emit results."""
+        self.log_msg.emit(f"[INFO] Command: {' '.join(cmd)}")
+        self.log_msg.emit(f"[INFO] Using Python: {sys.executable}")
+        self.log_msg.emit("=" * 70)
+        self.sig_progress.emit(0)
+
+        self._process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
+        )
+
+        if not (self._process and self._process.stdout):
+            self._fail("Failed to start esptool process")
+            return
+
+        success = self._parse_esptool_output(self._process.stdout)
+        return_code = self._process.wait(timeout=300)
+
+        if return_code == 0 and success:
+            self.sig_progress.emit(100)
+            self.log_msg.emit("=" * 70)
+            self.log_msg.emit("[SUCCESS] Firmware flash completed!")
+            self.sig_finished.emit(True, "Flash successful")
+        else:
+            self.log_msg.emit("=" * 70)
+            self.log_msg.emit(f"[FAILED] Firmware flash failed (exit code: {return_code})")
+            self.sig_error.emit(f"Flash failed (exit code: {return_code})")
+            self.sig_finished.emit(False, "Flash failed")
 
     def _check_esptool_available(self) -> bool:
         """Check if esptool is installed in current Python environment."""

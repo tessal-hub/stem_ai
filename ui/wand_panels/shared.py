@@ -3,25 +3,9 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QFrame, QLabel, QLayout, QPushButton, QVBoxLayout
+from PyQt6.QtWidgets import QFrame, QLabel, QPushButton, QVBoxLayout
 
 from ui.tokens import BTN_H, STYLE_WAND_CARD, TEXT_BODY
-
-
-def clear_layout(layout: QLayout | None) -> None:
-    """Recursively remove and delete all child items in a layout."""
-    if layout is None:
-        return
-
-    while layout.count():
-        item = layout.takeAt(0)
-        if item is None:
-            continue
-        if (widget := item.widget()) is not None:
-            widget.deleteLater()
-        elif (child := item.layout()) is not None:
-            clear_layout(child)
-            child.deleteLater()
 
 
 def make_card(
