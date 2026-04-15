@@ -2,6 +2,9 @@
 PyQt6>=6.5.0
 PyOpenGL>=3.1.0
 
+# Serial Communication
+pyserial>=3.5
+
 # Plotting & Visualization
 pyqtgraph>=0.13.3
 
