@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QGraphicsDropShadowEffect, QWidget
-from PyQt6.QtGui import QColor
+from PyQt6.QtWidgets import QWidget
 
 
 def apply_soft_shadow(
@@ -14,8 +13,6 @@ def apply_soft_shadow(
     y_offset: int = 7,
     color: str = "rgba(0, 0, 0, 0.18)",
 ) -> None:
-    effect = QGraphicsDropShadowEffect(widget)
-    effect.setBlurRadius(blur_radius)
-    effect.setOffset(x_offset, y_offset)
-    effect.setColor(QColor(color))
-    widget.setGraphicsEffect(effect)
+    # Global no-shadow mode: keep API stable while disabling elevation effects.
+    _ = (blur_radius, x_offset, y_offset, color)
+    widget.setGraphicsEffect(None)

@@ -47,7 +47,6 @@ from ui.component_factory import (
 )
 from ui.confirm_dialog import confirm_destructive
 from ui.modern_layout import (
-    add_card_shadow,
     MARGIN_COMFORTABLE,
     MARGIN_STANDARD,
     SPACING_MD,
@@ -90,6 +89,8 @@ class PageRecord(QWidget):
 
         self.is_live: bool = True
         self.current_spell_name: str = ""
+        self._spell_list_empty_label = "No spells available yet. Record and save a sample to populate the library."
+        self._sample_list_empty_label = "No samples in this spell yet. Start recording and use SNIP to create one."
 
         # Recording timer for duration tracking
         self.recording_timer = QTimer()
@@ -179,7 +180,10 @@ class PageRecord(QWidget):
 
     def load_spell_list(self, spells: list[str]) -> None:
         self.spell_list.clear()
-        self.spell_list.addItems(spells)
+        if spells:
+            self.spell_list.addItems(spells)
+        else:
+            self.spell_list.addItem(self._spell_list_empty_label)
         # Also update the spell combo box
         current_text = self.combo_spell.currentText()
         self.combo_spell.clear()
@@ -193,7 +197,10 @@ class PageRecord(QWidget):
         self.current_spell_name = spell_name
         self.lbl_current_spell.setText(f"SAMPLES: {spell_name}")
         self.sample_list.clear()
-        self.sample_list.addItems(samples)
+        if samples:
+            self.sample_list.addItems(samples)
+        else:
+            self.sample_list.addItem(self._sample_list_empty_label)
         self.stacked_spells.setCurrentIndex(1)
 
     # ── Plot Setup & Rendering ──────────────────────────────────────────
@@ -489,6 +496,8 @@ class PageRecord(QWidget):
     def _on_spell_list_clicked(self, item) -> None:
         """Handle spell list item click: auto-select spell in combo and emit signal."""
         spell_name = item.text()
+        if spell_name == self._spell_list_empty_label:
+            return
         if is_system_spell(spell_name):
             self.btn_delete_spell.setToolTip("STAND BY is protected and cannot be deleted")
         else:
@@ -509,6 +518,8 @@ class PageRecord(QWidget):
             return
 
         spell_name = current_item.text()
+        if spell_name == self._spell_list_empty_label:
+            return
         if is_system_spell(spell_name):
             self.show_protected_spell_warning(canonical_system_spell(spell_name))
             return
@@ -604,8 +615,6 @@ class PageRecord(QWidget):
         graph_card = QFrame()
         graph_card.setObjectName("CardFrame")
         graph_card.setStyleSheet(STYLE_RECORD_GRAPH_CARD)
-        # Add drop shadow for elevation
-        add_card_shadow(graph_card, blur_radius=16, offset_y=4, color="rgba(0, 0, 0, 0.12)")
         graph_layout = QVBoxLayout(graph_card)
         graph_layout.setContentsMargins(MARGIN_STANDARD, MARGIN_STANDARD, MARGIN_STANDARD, MARGIN_STANDARD)
         graph_layout.setSpacing(SPACING_MD)
@@ -644,7 +653,8 @@ class PageRecord(QWidget):
 
     def _build_right_column(self) -> QWidget:
         widget = QWidget()
-        widget.setMaximumWidth(min(RIGHT_MAX_W, 280))
+        widget.setMaximumWidth(RIGHT_MAX_W)
+        widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_LG)
@@ -653,7 +663,6 @@ class PageRecord(QWidget):
 
         # Details card with modern shadow
         detail_card = make_card_frame()
-        add_card_shadow(detail_card, blur_radius=12, offset_y=3, color="rgba(0, 0, 0, 0.10)")
         detail_layout = QVBoxLayout(detail_card)
         detail_layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
         detail_layout.setSpacing(SPACING_MD)
@@ -699,7 +708,6 @@ class PageRecord(QWidget):
 
         # ── Controls card with modern shadow ─────────────────────
         controls_card = make_card_frame()
-        add_card_shadow(controls_card, blur_radius=12, offset_y=3, color="rgba(0, 0, 0, 0.10)")
         ctrl_layout = QVBoxLayout(controls_card)
         ctrl_layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
         ctrl_layout.setSpacing(SPACING_MD)
@@ -732,7 +740,6 @@ class PageRecord(QWidget):
 
         # ── Batch operations card with modern shadow ───────────────────
         batch_card = make_card_frame()
-        add_card_shadow(batch_card, blur_radius=12, offset_y=3, color="rgba(0, 0, 0, 0.10)")
         batch_layout = QVBoxLayout(batch_card)
         batch_layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
         batch_layout.setSpacing(SPACING_MD)
@@ -777,6 +784,7 @@ class PageRecord(QWidget):
         # Spell list
         self.spell_list = QListWidget()
         self.spell_list.setStyleSheet(STYLE_RECORD_LIST)
+        self.spell_list.setMinimumHeight(180)
         layout.addWidget(self.spell_list)
         
         # Delete button at bottom
@@ -804,6 +812,7 @@ class PageRecord(QWidget):
         layout.addLayout(top_row)
         self.sample_list = QListWidget()
         self.sample_list.setStyleSheet(STYLE_RECORD_LIST)
+        self.sample_list.setMinimumHeight(180)
         layout.addWidget(self.sample_list)
         return page
 

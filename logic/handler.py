@@ -95,6 +95,7 @@ class Handler(QObject):
         self._pending_upload_port: str = ""
         self._pending_upload_model_path = None
         self._port_owner: str | None = None
+        self._port_lock = Lock()
         self._mode_lock = Lock()
         self._mode = self.store.get_current_mode().strip().upper()
         if self._mode not in self._ALLOWED_TRANSITIONS:
@@ -111,6 +112,7 @@ class Handler(QObject):
         self._simulation_index = 0
         self._model_build_worker: GestureModelBuildWorker | None = None
         self._model_build_mode: str = "both"
+        self._shutdown_done: bool = False
 
         # ── Initialize connections ──────────────────────────────────────
         self._connect_signals()
@@ -118,18 +120,37 @@ class Handler(QObject):
         self.ui_home.set_mode(self._mode)
         self._feature_timer.start()
 
-    def _can_use_port(self, requester: str) -> bool:
-        """Return True when the requester can safely take the serial port."""
-        if self._port_owner is None or self._port_owner == requester:
-            return True
+    def _can_use_port(self, requester: str, *, allow_owner: str | None = None) -> bool:
+        """Atomically claim serial-port ownership for *requester*.
+
+        Returns True when the caller can proceed and ownership has been claimed
+        (or was already owned by the same requester). Optionally allows takeover
+        from one specific owner (used when flash/upload intentionally pause serial).
+        """
+        with self._port_lock:
+            current_owner = self._port_owner
+            if (
+                current_owner is None
+                or current_owner == requester
+                or (allow_owner is not None and current_owner == allow_owner)
+            ):
+                self._port_owner = requester
+                return True
+
         self.ui_wand.append_terminal_text(
-            f"[ERROR] Port is busy with {self._port_owner}."
+            f"[ERROR] Port is busy with {current_owner}."
         )
         return False
 
     def _set_port_owner(self, owner: str | None) -> None:
         """Track which subsystem currently owns the serial port."""
-        self._port_owner = owner
+        with self._port_lock:
+            self._port_owner = owner
+
+    def _get_port_owner(self) -> str | None:
+        """Read current serial-port owner under lock."""
+        with self._port_lock:
+            return self._port_owner
 
     def _connect_queued(self, signal, slot) -> None:
         """Connect one signal-slot pair with Qt queued connection semantics."""
@@ -335,6 +356,7 @@ class Handler(QObject):
                 (self.data_io_worker.sig_delete_done, self._on_io_delete_done),
                 (self.data_io_worker.sig_export_done, self._on_io_export_done),
                 (self.data_io_worker.sig_db_refreshed, self.store.apply_db_refresh),
+                (self.data_io_worker.sig_queue_warning, self._on_io_queue_warning),
             ]
         )
 
@@ -353,14 +375,11 @@ class Handler(QObject):
         from SerialWorker's QThread back to the main Qt event loop.
         This is essential for thread-safe UI updates (pyqtgraph, OpenGL).
         """
-        # KEY: sig_data_received → 3D wand and recording buffer
-        # CRITICAL: QueuedConnection ensures slots run in main thread
-        self._connect_queued(self.serial_worker.sig_data_received, self._on_data_received)
-        self._connect_queued(self.serial_worker.sig_data_received, self._on_sensor_frame_received)
-        self._connect_queued(self.serial_worker.sig_data_received, self._on_raw_data_received)
-
-        # Also: same normalized list is used for CSV recording
-        self._connect_queued(self.serial_worker.sig_data_received, self.recorder.add_row)
+        # KEY: fan-in all high-frequency frame handling into one queued slot.
+        # This keeps cross-thread dispatch at one callback/frame while preserving
+        # the same downstream behavior (3D update, sensor buffers, live buffer,
+        # and recorder ingestion).
+        self._connect_queued(self.serial_worker.sig_data_received, self._on_serial_data_received)
 
         # Raw UART line logging for terminal visibility
         self._connect_queued(self.serial_worker.sig_raw_line_received, self.ui_wand.append_terminal_text)
@@ -371,6 +390,13 @@ class Handler(QObject):
         # Connection status
         self._connect_queued(self.serial_worker.sig_connection_status, self._on_connection_status_changed)
         self._connect_queued(self.serial_worker.sig_error, self.ui_wand.append_terminal_text)
+
+    def _on_serial_data_received(self, norm_values: list[float]) -> None:
+        """Route one normalized frame through all standard data paths."""
+        self._on_data_received(norm_values)
+        self._on_sensor_frame_received(norm_values)
+        self._on_raw_data_received(norm_values)
+        self.recorder.add_row(norm_values)
 
     # ── Serial Connection Actions ───────────────────────────────────────
 
@@ -397,8 +423,13 @@ class Handler(QObject):
         self.ui_wand.append_terminal_text(f">> Connecting to {port} @ 115200 baud...")
         self._configure_serial_scale_profile()
         self.serial_worker.port = port
-        self._set_port_owner("serial")
-        self.serial_worker.start()
+        try:
+            self.serial_worker.start()
+        except Exception as exc:
+            self._set_port_owner(None)
+            self.ui_wand.append_terminal_text(
+                f"[ERROR] Failed to start serial worker: {type(exc).__name__}: {exc}"
+            )
 
     def on_serial_disconnect(self) -> None:
         """Stop serial worker and prepare for restart (non-blocking).
@@ -427,7 +458,7 @@ class Handler(QObject):
         # (Can't call start() on a finished QThread - must create new instance)
         self.serial_worker = SerialWorker()
         self._connect_signals_serial_worker()  # Rewire signals to new instance
-        if self._port_owner == "serial":
+        if self._get_port_owner() == "serial":
             self._set_port_owner(None)
 
         if self._mode != self._MODE_UPDATE:
@@ -588,7 +619,7 @@ class Handler(QObject):
         
         # Clear buffer on disconnect
         self.store.clear_live_buffer()
-        if self._port_owner == "serial":
+        if self._get_port_owner() == "serial":
             self._set_port_owner(None)
         if self._mode != self._MODE_UPDATE:
             self._transition_mode(self._MODE_IDLE, reason="serial disconnected")
@@ -710,6 +741,10 @@ class Handler(QObject):
         """Called in the main thread when DataIOWorker finishes an export job."""
         self._log_io_result("EXPORT", success, message)
 
+    def _on_io_queue_warning(self, message: str) -> None:
+        """Surface DataIOWorker backpressure drops to the UI terminal."""
+        self.ui_wand.append_terminal_text(f"[WARN] {message}")
+
     # ── Firmware Flash Actions ─────────────────────────────────────────
 
     def handle_firmware_flash(self, bin_type: str) -> None:
@@ -723,11 +758,6 @@ class Handler(QObject):
         port = self.ui_wand.combo_serial_ports.currentText() if self.ui_wand else None
         if not port:
             self._flash_log_to_console("[ERROR] No serial port selected. Please select a port first.")
-            if self.ui_setting:
-                self.ui_setting.set_flash_buttons_enabled(True)
-            return
-
-        if not self._can_use_port("flash") and self._port_owner != "serial":
             if self.ui_setting:
                 self.ui_setting.set_flash_buttons_enabled(True)
             return
@@ -767,6 +797,11 @@ class Handler(QObject):
                 self.ui_setting.set_flash_buttons_enabled(True)
             return
 
+        if not self._can_use_port("flash", allow_owner="serial"):
+            if self.ui_setting:
+                self.ui_setting.set_flash_buttons_enabled(True)
+            return
+
         # Must release the COM port before flashing.  Stop the serial worker and
         # defer the actual flash start to a callback that fires once the worker
         # thread has fully exited (non-blocking — avoids stalling the UI thread).
@@ -785,7 +820,7 @@ class Handler(QObject):
     def _on_serial_stopped_start_flash(self) -> None:
         """Callback: serial worker has exited — now safe to open COM port for flashing."""
         self.serial_worker.finished.disconnect(self._on_serial_stopped_start_flash)
-        if self._port_owner == "serial":
+        if self._get_port_owner() == "serial":
             self._set_port_owner(None)
         self._flash_log_to_console(">> COM port released, ready to flash\n")
         self._start_flash_immediately(
@@ -800,6 +835,7 @@ class Handler(QObject):
             self._MODE_UPDATE,
             reason=f"{bin_type} firmware flash",
         ):
+            self._set_port_owner(None)
             if self.ui_setting:
                 self.ui_setting.set_flash_buttons_enabled(True)
             return
@@ -825,9 +861,6 @@ class Handler(QObject):
             self.ui_wand.append_terminal_text("[ERROR] Serial port required for upload.")
             return
 
-        if not self._can_use_port("upload") and self._port_owner != "serial":
-            return
-
         if self.uploader.isRunning():
             self.ui_wand.append_terminal_text("[ERROR] Upload is already running.")
             return
@@ -851,6 +884,9 @@ class Handler(QObject):
             self.ui_wand.update_flash_progress(0)
             return
 
+        if not self._can_use_port("upload", allow_owner="serial"):
+            return
+
         # Stop serial if running — defer upload start until the worker thread
         # has fully exited so both operations don't race on the same COM port.
         if self.serial_worker.isRunning():
@@ -867,7 +903,7 @@ class Handler(QObject):
     def _on_serial_stopped_start_upload(self) -> None:
         """Callback: serial worker has exited — now safe to open COM port for upload."""
         self.serial_worker.finished.disconnect(self._on_serial_stopped_start_upload)
-        if self._port_owner == "serial":
+        if self._get_port_owner() == "serial":
             self._set_port_owner(None)
         self._start_upload_immediately(
             self._pending_upload_port,
@@ -880,6 +916,7 @@ class Handler(QObject):
             self._MODE_UPDATE,
             reason="model upload",
         ):
+            self._set_port_owner(None)
             return
 
         self.ui_wand.append_terminal_text(f">> Initiating model upload for {model_path}...")
@@ -888,7 +925,7 @@ class Handler(QObject):
 
     def _on_upload_finished(self, success: bool, message: str) -> None:
         """Callback when model upload completes."""
-        if self._port_owner == "upload":
+        if self._get_port_owner() == "upload":
             self._set_port_owner(None)
         self._transition_mode(self._MODE_IDLE, reason="model upload finished")
         if success:
@@ -915,7 +952,7 @@ class Handler(QObject):
 
     def _on_firmware_flash_finished(self, success: bool, message: str) -> None:
         """Callback when firmware flash completes."""
-        if self._port_owner == "flash":
+        if self._get_port_owner() == "flash":
             self._set_port_owner(None)
         self._transition_mode(self._MODE_IDLE, reason="firmware flash finished")
         if success:
@@ -928,6 +965,74 @@ class Handler(QObject):
             self._flash_log_to_console(f"{'='*60}\n")
             if self.ui_setting:
                 self.ui_setting.set_flash_buttons_enabled(True)
+
+    # ── Lifecycle Cleanup ───────────────────────────────────────────────
+
+    def shutdown(self) -> None:
+        """Stop timers and background workers for clean application exit.
+
+        This method is idempotent and safe to call from multiple shutdown paths
+        (for example: ``QApplication.aboutToQuit`` and ``MainWindow.closeEvent``).
+        """
+        if self._shutdown_done:
+            return
+        self._shutdown_done = True
+
+        # Stop periodic timers first to prevent new work from being enqueued.
+        if self._feature_timer.isActive():
+            self._feature_timer.stop()
+        self._stop_simulation_playback()
+
+        # Stop serial stream and recorder ingestion before stopping workers.
+        try:
+            if self.serial_worker.isRunning():
+                self.serial_worker.stop()
+                self.serial_worker.wait(2000)
+        except Exception as exc:
+            logging.getLogger(__name__).warning("Handler shutdown: serial stop failed: %s", exc)
+
+        try:
+            self.recorder.stop()
+            if self.recorder.isRunning():
+                self.recorder.wait(2000)
+        except Exception as exc:
+            logging.getLogger(__name__).warning("Handler shutdown: recorder stop failed: %s", exc)
+
+        # Stop long-lived worker threads.
+        try:
+            self.data_io_worker.stop()
+        except Exception as exc:
+            logging.getLogger(__name__).warning("Handler shutdown: data I/O worker stop failed: %s", exc)
+
+        try:
+            self.feature_worker.stop()
+        except Exception as exc:
+            logging.getLogger(__name__).warning("Handler shutdown: feature worker stop failed: %s", exc)
+
+        # Stop transient workers if currently active.
+        try:
+            self.flash_worker.stop()
+            if self.flash_worker.isRunning():
+                self.flash_worker.wait(2000)
+        except Exception as exc:
+            logging.getLogger(__name__).warning("Handler shutdown: flash worker stop failed: %s", exc)
+
+        try:
+            self.uploader.stop()
+            if self.uploader.isRunning():
+                self.uploader.wait(2000)
+        except Exception as exc:
+            logging.getLogger(__name__).warning("Handler shutdown: uploader stop failed: %s", exc)
+
+        # Build worker has no cooperative cancel hook yet; best-effort wait.
+        try:
+            if self._model_build_worker and self._model_build_worker.isRunning():
+                self._model_build_worker.requestInterruption()
+                self._model_build_worker.wait(500)
+        except Exception as exc:
+            logging.getLogger(__name__).warning("Handler shutdown: model build worker wait failed: %s", exc)
+
+        self._set_port_owner(None)
 
     # ── Database Callbacks ─────────────────────────────────────────────
 

@@ -102,6 +102,24 @@ def test_update_sensor_data_partial_dict_does_not_append_frame_history(qapp, tmp
     assert frames == []
 
 
+def test_update_sensor_data_throttles_signal_emission(qapp, tmp_path, monkeypatch) -> None:
+    store = DataStore(dataset_dir=str(tmp_path / "dataset"))
+    events: list[dict] = []
+    store.sig_sensor_data_updated.connect(lambda payload: events.append(dict(payload)))
+
+    ticks = iter([0.00, 0.01, 0.02, 0.11])
+    monkeypatch.setattr("logic.data_store.time.perf_counter", lambda: next(ticks))
+
+    payload = {"ax": 1.0, "ay": 2.0, "az": 3.0, "gx": 4.0, "gy": 5.0, "gz": 6.0}
+    store.update_sensor_data(payload)
+    store.update_sensor_data(payload)
+    store.update_sensor_data(payload)
+    store.update_sensor_data(payload)
+
+    assert len(events) == 2
+    assert events[-1]["ax"][-1] == pytest.approx(1.0)
+
+
 def test_clear_live_buffer_empties_the_buffer(qapp, tmp_path) -> None:
     store = DataStore(dataset_dir=str(tmp_path / "dataset"))
     store.add_live_sample([1, 2, 3, 4, 5, 6])
@@ -284,6 +302,18 @@ def test_save_cropped_data_creates_csv_file(qapp, tmp_path) -> None:
     csv_files = list(spell_dir.glob("*.csv"))
     assert len(csv_files) == 1
     assert store.spell_counts.get("ACCIO") == 1
+
+
+def test_save_cropped_data_writes_lowercase_header(qapp, tmp_path) -> None:
+    store = DataStore(dataset_dir=str(tmp_path / "dataset"))
+    data = [[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]]
+
+    assert store.save_cropped_data("accio", data) is True
+
+    csv_files = list((tmp_path / "dataset" / "ACCIO").glob("*.csv"))
+    assert len(csv_files) == 1
+    header = csv_files[0].read_text(encoding="utf-8").splitlines()[0]
+    assert header == "ax,ay,az,gx,gy,gz"
 
 
 def test_save_cropped_data_does_not_write_meta_json(qapp, tmp_path) -> None:

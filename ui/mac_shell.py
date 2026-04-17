@@ -24,6 +24,7 @@ from ui.tokens import (
     SHELL_SIDEBAR_W,
     TEXT_MUTED,
 )
+from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_SM, SPACING_MD
 
 
 @dataclass(frozen=True)
@@ -101,8 +102,8 @@ class MacShell(QWidget):
             f"background-color: {SURFACE_PRIMARY}; border-bottom: 1px solid {BORDER_LIGHT};"
         )
         toolbar_layout = QHBoxLayout(toolbar)
-        toolbar_layout.setContentsMargins(16, 6, 16, 6)
-        toolbar_layout.setSpacing(8)
+        toolbar_layout.setContentsMargins(MARGIN_COMFORTABLE, SPACING_SM, MARGIN_COMFORTABLE, SPACING_SM)
+        toolbar_layout.setSpacing(SPACING_SM)
 
         self.title_label = QLabel(title)
         self.title_label.setStyleSheet(
@@ -130,7 +131,7 @@ class MacShell(QWidget):
         brand.setFixedHeight(SHELL_BRAND_H)
         brand_layout = QVBoxLayout(brand)
         brand_layout.setContentsMargins(0, 0, 0, 0)
-        brand_layout.setSpacing(2)
+        brand_layout.setSpacing(SPACING_SM)
 
         brand_icon_row = QWidget()
         icon_layout = QHBoxLayout(brand_icon_row)
@@ -171,8 +172,8 @@ class MacShell(QWidget):
             f"background-color: {SURFACE_SECONDARY}; border-right: 1px solid {BORDER_LIGHT};"
         )
         sidebar_layout = QVBoxLayout(self.sidebar)
-        sidebar_layout.setContentsMargins(10, 12, 10, 12)
-        sidebar_layout.setSpacing(8)
+        sidebar_layout.setContentsMargins(SPACING_MD, MARGIN_COMFORTABLE, SPACING_MD, MARGIN_COMFORTABLE)
+        sidebar_layout.setSpacing(SPACING_SM)
 
         sidebar_layout.addWidget(self._build_brand_widget())
 
@@ -216,7 +217,6 @@ class MacShell(QWidget):
                 background-color: {PRIMARY_COLOR};
                 color: white;
                 border-radius: 8px;
-                box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
             }}
             QToolButton:hover {{
                 background-color: rgba(59, 130, 246, 0.08);

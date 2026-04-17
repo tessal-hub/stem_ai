@@ -6,6 +6,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QScrollArea, QVBoxLayout, QWidget
 
 from ui.tokens import STYLE_SCROLL_AREA, STYLE_WAND_MAIN_CONTAINER
+from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_MD, SPACING_LG
 from ui.wand_panels.connection_panel import WandConnectionPanel
 from ui.wand_panels.flash_panel import WandFlashPanel
 from ui.wand_panels.spell_payload_panel import WandSpellPayloadPanel
@@ -94,11 +95,11 @@ class PageWand(QWidget):
         self.main_container.setStyleSheet(STYLE_WAND_MAIN_CONTAINER)
 
         inner = QVBoxLayout(self.main_container)
-        inner.setContentsMargins(12, 12, 12, 12)
-        inner.setSpacing(12)
+        inner.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
+        inner.setSpacing(SPACING_LG)
 
         content = QHBoxLayout()
-        content.setSpacing(12)
+        content.setSpacing(SPACING_LG)
 
         self.flash_panel = WandFlashPanel()
         self.connection_panel = WandConnectionPanel()
@@ -109,10 +110,10 @@ class PageWand(QWidget):
         left_column = QWidget()
         left_layout = QVBoxLayout(left_column)
         left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.setSpacing(12)
+        left_layout.setSpacing(SPACING_LG)
 
         tools_row = QHBoxLayout()
-        tools_row.setSpacing(12)
+        tools_row.setSpacing(SPACING_MD)
         tools_row.addWidget(self.flash_panel, stretch=1)
         tools_row.addWidget(self.connection_panel, stretch=1)
 
@@ -122,7 +123,7 @@ class PageWand(QWidget):
         right_column = QWidget()
         right_layout = QVBoxLayout(right_column)
         right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(12)
+        right_layout.setSpacing(SPACING_LG)
         right_layout.addWidget(self.stats_panel, stretch=1)
         right_layout.addWidget(self.payload_panel, stretch=1)
 

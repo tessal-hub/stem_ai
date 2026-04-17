@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QPushButton, QVBoxLayout
-
-from ui.mac_material import apply_soft_shadow
 from ui.tokens import (
     ACCENT,
     ACCENT_TEXT,
@@ -80,7 +78,6 @@ class ConfirmDialog(QDialog):
         self.setStyleSheet(
             f"QDialog#ConfirmDialog {{ background-color: {BG_WHITE}; border: 1px solid {BORDER}; border-radius: 14px; }}"
         )
-        apply_soft_shadow(self)
 
 
 def confirm_destructive(

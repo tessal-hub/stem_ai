@@ -229,14 +229,7 @@ def handler_harness(qapp, tmp_path, monkeypatch):
     )
 
     yield harness
-
-    handler.uploader.stop()
-    handler.uploader.wait(100)
-    handler.flash_worker.stop()
-    handler.flash_worker.wait(100)
-    handler.serial_worker.stop()
-    handler.serial_worker.wait(100)
-    handler.recorder.stop()
+    handler.shutdown()
 
 
 def test_record_start_requires_active_connection(handler_harness: HandlerHarness) -> None:
@@ -320,6 +313,49 @@ def test_simulation_replays_recent_input_frames(handler_harness: HandlerHarness)
     harness.handler._step_simulation_playback()
 
     assert harness.home.simulation_events[-1] is False
+
+
+def test_handler_shutdown_is_idempotent(handler_harness: HandlerHarness) -> None:
+    harness = handler_harness
+
+    harness.handler.shutdown()
+    harness.handler.shutdown()
+
+    assert harness.handler._shutdown_done is True
+    assert harness.handler._feature_timer.isActive() is False
+
+
+def test_data_io_queue_warning_is_forwarded_to_terminal(
+    handler_harness: HandlerHarness,
+    qapp,
+) -> None:
+    harness = handler_harness
+
+    harness.handler.data_io_worker.sig_queue_warning.emit("DataIOWorker queue full: save job dropped")
+    qapp.processEvents()
+
+    assert any("DataIOWorker queue full" in msg for msg in harness.wand.logs)
+
+
+def test_port_claim_allows_flash_takeover_from_serial_owner(
+    handler_harness: HandlerHarness,
+) -> None:
+    harness = handler_harness
+    harness.handler._set_port_owner("serial")
+
+    assert harness.handler._can_use_port("flash", allow_owner="serial") is True
+    assert harness.handler._get_port_owner() == "flash"
+
+
+def test_port_claim_blocks_when_owned_by_other_subsystem(
+    handler_harness: HandlerHarness,
+) -> None:
+    harness = handler_harness
+    harness.handler._set_port_owner("upload")
+
+    assert harness.handler._can_use_port("flash", allow_owner="serial") is False
+    assert harness.handler._get_port_owner() == "upload"
+    assert any("Port is busy with upload" in msg for msg in harness.wand.logs)
 
 
 def test_record_start_is_blocked_in_update_mode(

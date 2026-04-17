@@ -8,10 +8,8 @@ Provides helpers for:
   - Building spacer items
 """
 
-from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QFrame,
-    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QSizePolicy,
     QSpacerItem,
@@ -73,9 +71,9 @@ def add_card_shadow(
     offset_x: float = 0,
     offset_y: float = 4,
     color: str = "rgba(0, 0, 0, 0.12)",
-) -> QGraphicsDropShadowEffect:
+) -> None:
     """
-    Add a drop shadow to a widget for depth and elevation.
+    Shadow hook kept for API compatibility. No-op in global no-shadow mode.
 
     Args:
         widget: Widget to apply shadow to
@@ -85,14 +83,10 @@ def add_card_shadow(
         color: Shadow color (QColor-compatible string)
 
     Returns:
-        The shadow effect applied to the widget
+        None
     """
-    shadow = QGraphicsDropShadowEffect()
-    shadow.setBlurRadius(blur_radius)
-    shadow.setOffset(offset_x, offset_y)
-    shadow.setColor(QColor(color))
-    widget.setGraphicsEffect(shadow)
-    return shadow
+    _ = (blur_radius, offset_x, offset_y, color)
+    widget.setGraphicsEffect(None)
 
 
 def create_spacer(
@@ -199,24 +193,19 @@ def create_elevated_panel(
     spacing: int = SPACING_MD,
 ) -> tuple[QFrame, QVBoxLayout]:
     """
-    Create an elevated panel with shadow for prominence.
+    Create an elevated panel container.
     
     Args:
-        shadow_blur: Shadow blur radius
-        shadow_offset_y: Shadow vertical offset
+        shadow_blur: Unused in no-shadow mode; kept for compatibility
+        shadow_offset_y: Unused in no-shadow mode; kept for compatibility
         margin: Internal margin
         spacing: Item spacing
     
     Returns:
         Tuple of (elevated_panel, layout)
     """
+    _ = (shadow_blur, shadow_offset_y)
     panel, layout = create_modern_card(margin=margin, spacing=spacing)
-    add_card_shadow(
-        panel,
-        blur_radius=shadow_blur,
-        offset_y=shadow_offset_y,
-        color="rgba(0, 0, 0, 0.08)",
-    )
     return panel, layout
 
 
@@ -248,9 +237,7 @@ def apply_card_styling(widget: QWidget, with_shadow: bool = True) -> None:
     
     Args:
         widget: Widget to style
-        with_shadow: If True, add drop shadow
+        with_shadow: Unused in no-shadow mode; kept for compatibility
     """
+    _ = with_shadow
     widget.setObjectName("ModernCard")
-    
-    if with_shadow:
-        add_card_shadow(widget, blur_radius=12, offset_y=3)

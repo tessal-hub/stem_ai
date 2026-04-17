@@ -33,6 +33,7 @@ class MainWindow(QMainWindow):
     def __init__(self, data_store) -> None:
         super().__init__()
         self.data_store = data_store
+        self.handler: object | None = None
 
         self.setWindowTitle("STEM Spell Book")
         self.setWindowIcon(QIcon("assets/icon/wand.svg"))
@@ -141,6 +142,12 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         log.info("Application closing.")
+        handler = getattr(self, "handler", None)
+        if handler is not None:
+            try:
+                handler.shutdown()
+            except Exception as exc:
+                log.warning("Handler shutdown during closeEvent failed: %s", exc)
         if self.udp_worker.isRunning():
             self.udp_worker.stop()
         event.accept()

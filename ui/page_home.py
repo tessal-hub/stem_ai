@@ -49,7 +49,6 @@ from ui.tokens import (
     TEXT_MUTED,
 )
 from ui.modern_layout import (
-    add_card_shadow,
     MARGIN_COMFORTABLE,
     SPACING_MD,
     SPACING_LG,
@@ -214,8 +213,6 @@ class PageHome(QWidget):
         box = QFrame()
         box.setObjectName("HomeViewerCard")
         box.setStyleSheet(STYLE_HOME_VIEWER_CARD)
-        # Add shadow for elevation
-        add_card_shadow(box, blur_radius=14, offset_y=4, color="rgba(0, 0, 0, 0.10)")
         
         layout = QVBoxLayout(box)
         layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
@@ -303,8 +300,8 @@ class PageHome(QWidget):
     def _build_right_column(self) -> QWidget:
         widget = QWidget()
         widget.setObjectName("HomeRightPanel")
-        widget.setFixedWidth(HOME_RIGHT_W)
-        widget.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        widget.setMaximumWidth(HOME_RIGHT_W)
+        widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         widget.setStyleSheet(STYLE_HOME_RIGHT_PANEL)
 
         layout = QVBoxLayout(widget)
@@ -320,8 +317,6 @@ class PageHome(QWidget):
         box.setObjectName("HomeRightSection")
         box.setStyleSheet(STYLE_HOME_RIGHT_SECTION)
         box.setFixedHeight(48)
-        # Add shadow for proper card elevation
-        add_card_shadow(box, blur_radius=10, offset_y=2, color="rgba(0, 0, 0, 0.08)")
 
         layout = QHBoxLayout(box)
         layout.setContentsMargins(MARGIN_COMFORTABLE, 0, MARGIN_COMFORTABLE, 0)
@@ -337,8 +332,6 @@ class PageHome(QWidget):
         box = QFrame()
         box.setObjectName("HomeRightSection")
         box.setStyleSheet(STYLE_HOME_RIGHT_SECTION)
-        # Add shadow for proper card elevation
-        add_card_shadow(box, blur_radius=10, offset_y=2, color="rgba(0, 0, 0, 0.08)")
 
         layout = QVBoxLayout(box)
         layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
@@ -358,7 +351,9 @@ class PageHome(QWidget):
         max_display = 3
         if not spells:
             no_spell = QLabel("No spells recorded yet.")
-            no_spell.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px; font-style: italic;")
+            no_spell.setWordWrap(True)
+            no_spell.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px; font-style: italic; padding: 4px 0;")
+            no_spell.setAccessibleName("No spells recorded yet")
             spell_layout.addWidget(no_spell)
         else:
             for spell in spells[:max_display]:
@@ -366,6 +361,7 @@ class PageHome(QWidget):
             if len(spells) > max_display:
                 overflow_lbl = QLabel(f"+ {len(spells) - max_display} more")
                 overflow_lbl.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 10px; font-style: italic; padding: 2px 0;")
+                overflow_lbl.setAccessibleName("Additional spells hidden from the overview")
                 spell_layout.addWidget(overflow_lbl)
 
         spell_layout.addStretch()
@@ -377,8 +373,6 @@ class PageHome(QWidget):
         box.setObjectName("HomeRightSection")
         box.setStyleSheet(STYLE_HOME_RIGHT_SECTION)
         box.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
-        # Add shadow for proper card elevation
-        add_card_shadow(box, blur_radius=10, offset_y=2, color="rgba(0, 0, 0, 0.08)")
 
         layout = QVBoxLayout(box)
         layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)

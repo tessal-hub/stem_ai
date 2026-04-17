@@ -56,6 +56,8 @@ def main():
                       ui_page_statistics=window.page_statistics,
                       ui_page_setting=window.page_setting,
                       data_store=data_store)
+    window.handler = handler
+    app.aboutToQuit.connect(handler.shutdown)
     
     # 5. Hiển thị cửa sổ
     # Maximize keeps window border/titlebar so close/minimize controls remain available.

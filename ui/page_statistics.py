@@ -43,8 +43,8 @@ from ui.component_factory import (
     make_section_label,
 )
 from ui.layout_utils import clear_layout
-from ui.mac_material import apply_soft_shadow
 from ui.modern_layout import MARGIN_STANDARD, SPACING_MD
+from ui.modern_layout import SPACING_SM
 
 
 class ClickableFrame(QFrame):
@@ -78,6 +78,8 @@ class PageStatistics(QWidget):
         if not features:
             self.lbl_accel_stats.setText("Accel: mean --  var --  rms --")
             self.lbl_gyro_stats.setText("Gyro: mean --  var --  rms --")
+            self.lbl_dominant_freq.setText("Dominant: waiting for data")
+            self.fft_stack.setCurrentWidget(self.fft_placeholder)
             return
 
         self.lbl_accel_stats.setText(
@@ -106,6 +108,7 @@ class PageStatistics(QWidget):
                 self.lbl_dominant_freq.setText(f"Dominant: {dominant_freq:.1f} Hz")
             except (ValueError, IndexError):
                 self.lbl_dominant_freq.setText("Dominant: -- Hz")
+            self.fft_stack.setCurrentWidget(self.fft_plot)
 
     def update_spell_stats(self, spell_counts: dict[str, int]) -> None:
         # FIX: Gán vào biến local để Pylance xác nhận không bị đổi thành None giữa chừng
@@ -162,11 +165,11 @@ class PageStatistics(QWidget):
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
+        layout.setSpacing(SPACING_MD)
 
         top_row = QGridLayout()
-        top_row.setHorizontalSpacing(12)
-        top_row.setVerticalSpacing(4)
+        top_row.setHorizontalSpacing(SPACING_MD)
+        top_row.setVerticalSpacing(SPACING_SM)
         self.lbl_total_samples = self._make_section_label("TOTAL SAMPLES: 0", accent=False)
         self.lbl_total_spells  = self._make_section_label("ACTIVE SPELLS: 0",  accent=False)
         lbl_title = self._make_section_label("DATA DISTRIBUTION")
@@ -179,8 +182,8 @@ class PageStatistics(QWidget):
 
         feature_card = self._make_standard_frame()
         feature_layout = QVBoxLayout(feature_card)
-        feature_layout.setContentsMargins(10, 10, 10, 10)
-        feature_layout.setSpacing(6)
+        feature_layout.setContentsMargins(MARGIN_STANDARD, MARGIN_STANDARD, MARGIN_STANDARD, MARGIN_STANDARD)
+        feature_layout.setSpacing(SPACING_SM)
         feature_layout.addWidget(self._make_section_label("LIVE FEATURES", accent=False))
         self.lbl_accel_stats = QLabel("Accel: mean --  var --  rms --")
         self.lbl_accel_stats.setStyleSheet(
@@ -196,8 +199,8 @@ class PageStatistics(QWidget):
 
         model_card = self._make_standard_frame()
         model_layout = QVBoxLayout(model_card)
-        model_layout.setContentsMargins(10, 10, 10, 10)
-        model_layout.setSpacing(6)
+        model_layout.setContentsMargins(MARGIN_STANDARD, MARGIN_STANDARD, MARGIN_STANDARD, MARGIN_STANDARD)
+        model_layout.setSpacing(SPACING_SM)
         model_layout.addWidget(self._make_section_label("MODEL TRAIN / BUILD", accent=False))
 
         self.lbl_train_status = QLabel("Train: idle")
@@ -228,6 +231,12 @@ class PageStatistics(QWidget):
         graph_card = self._make_standard_frame()
         graph_layout = QVBoxLayout(graph_card)
         graph_layout.setContentsMargins(0, 0, 0, 0)
+        self.fft_stack = QStackedWidget()
+        self.fft_placeholder = self._make_graph_placeholder()
+        self.fft_placeholder.setText("Waiting for live features…")
+        self.fft_placeholder.setMinimumHeight(320)
+        self.fft_stack.addWidget(self.fft_placeholder)
+
         self.fft_plot = pg.PlotWidget()
 
         # FFT frequency analysis header
@@ -247,7 +256,9 @@ class PageStatistics(QWidget):
         self.fft_plot.setLabel("left", "FFT magnitude", color=TEXT_MUTED)
         self.fft_plot.setLabel("bottom", "Frequency (Hz)", color=TEXT_MUTED)
         self.fft_curve = self.fft_plot.plot(pen=pg.mkPen(WAND_ACCENT, width=2))
-        graph_layout.addWidget(self.fft_plot)
+        self.fft_stack.addWidget(self.fft_plot)
+        self.fft_stack.setCurrentWidget(self.fft_placeholder)
+        graph_layout.addWidget(self.fft_stack)
         layout.addWidget(graph_card, stretch=1)
         return widget
 
@@ -256,7 +267,7 @@ class PageStatistics(QWidget):
         widget.setMaximumWidth(RIGHT_MAX_W)
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(10)
+        layout.setSpacing(SPACING_MD)
         self.stacked_spells = QStackedWidget()
         self.stacked_spells.addWidget(self._build_mastery_page())
         self.stacked_spells.addWidget(self._build_sample_list_page())
@@ -267,7 +278,7 @@ class PageStatistics(QWidget):
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(10)
+        layout.setSpacing(SPACING_MD)
         layout.addWidget(self._make_section_label("SPELL MASTERY"))
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -276,7 +287,7 @@ class PageStatistics(QWidget):
         scroll_content.setStyleSheet(STYLE_TRANSPARENT_WIDGET)
         self._spell_cards_layout = QVBoxLayout(scroll_content)
         self._spell_cards_layout.setContentsMargins(0, 0, 0, 0)
-        self._spell_cards_layout.setSpacing(8)
+        self._spell_cards_layout.setSpacing(SPACING_SM)
         scroll.setWidget(scroll_content)
         layout.addWidget(scroll)
         return page
@@ -285,12 +296,12 @@ class PageStatistics(QWidget):
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(10)
+        layout.setSpacing(SPACING_MD)
         top_row = QHBoxLayout()
         self.btn_back_spells = QPushButton("◀ BACK")
         self.btn_back_spells.setFixedHeight(32)
         self.btn_back_spells.setStyleSheet(STYLE_STATISTICS_BTN_BACK)
-        self.lbl_current_spell = QLabel("SAMPLES: …")
+        self.lbl_current_spell = QLabel("SAMPLES: —")
         self.lbl_current_spell.setStyleSheet(f"color: {WAND_ACCENT}; font-weight: bold; font-size: 11px;")
         top_row.addWidget(self.btn_back_spells)
         top_row.addWidget(self.lbl_current_spell)
@@ -298,6 +309,7 @@ class PageStatistics(QWidget):
         layout.addLayout(top_row)
         self.sample_list = QListWidget()
         self.sample_list.setStyleSheet(STYLE_STATISTICS_LIST)
+        self.sample_list.setMinimumHeight(220)
         layout.addWidget(self.sample_list)
         return page
 
@@ -305,9 +317,8 @@ class PageStatistics(QWidget):
         card = ClickableFrame()
         card.setObjectName("CardFrame")
         card.setStyleSheet(STYLE_STATISTICS_CARD)
-        apply_soft_shadow(card, blur_radius=16, y_offset=3, color="rgba(0, 0, 0, 0.08)")
         layout = QHBoxLayout(card)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setContentsMargins(MARGIN_STANDARD, MARGIN_STANDARD, MARGIN_STANDARD, MARGIN_STANDARD)
         info = QVBoxLayout()
         info.addWidget(self._make_card_name_label(spell_name))
         info.addWidget(self._make_card_count_label(count))
@@ -323,7 +334,6 @@ class PageStatistics(QWidget):
         frame = QFrame()
         frame.setObjectName("CardFrame")
         frame.setStyleSheet(STYLE_STATISTICS_CARD)
-        apply_soft_shadow(frame, blur_radius=16, y_offset=3, color="rgba(0, 0, 0, 0.08)")
         return frame
 
     @staticmethod

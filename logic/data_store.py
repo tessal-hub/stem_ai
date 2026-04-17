@@ -300,6 +300,8 @@ class DataStore(QObject):
         }
         self.sensor_frame_history: collections.deque[list[float]] = collections.deque(maxlen=500)
         self.live_buffer: collections.deque[list[float]] = collections.deque(maxlen=500)
+        self._last_sensor_emit = -0.1
+        self._sensor_emit_interval = 0.1
         self._last_live_emit = 0.0
         self._live_emit_interval = 0.05
 
@@ -404,6 +406,8 @@ class DataStore(QObject):
 
     def update_sensor_data(self, data_dict: dict[str, float]) -> None:
         """Update sensor deques with a new sample and notify UI."""
+        now = time.perf_counter()
+        sensor_snapshot: dict[str, list[float]] | None = None
         with self._buffer_lock:
             for key, value in data_dict.items():
                 if key in self.sensor_buffers:
@@ -417,7 +421,14 @@ class DataStore(QObject):
                     float(data_dict['gy']),
                     float(data_dict['gz']),
                 ])
-        self.sig_sensor_data_updated.emit(self.sensor_buffers)
+            if now - self._last_sensor_emit >= self._sensor_emit_interval:
+                self._last_sensor_emit = now
+                sensor_snapshot = {
+                    key: list(values) for key, values in self.sensor_buffers.items()
+                }
+
+        if sensor_snapshot is not None:
+            self.sig_sensor_data_updated.emit(sensor_snapshot)
 
     def add_live_sample(self, sample: list[float], *, emit: bool = True) -> list[list[float]]:
         """Append one 6-axis sample to rolling live buffer and emit snapshot.
@@ -636,7 +647,7 @@ class DataStore(QObject):
         try:
             with open(file_path, mode="w", newline="") as f:
                 writer = csv.writer(f)
-                writer.writerow(["aX", "aY", "aZ", "gX", "gY", "gZ"])
+                writer.writerow(["ax", "ay", "az", "gx", "gy", "gz"])
                 writer.writerows(data)
             self.refresh_database(force=True)
             return True

@@ -51,9 +51,8 @@ from ui.tokens import (
     STYLE_SCROLL_AREA,
 )
 from ui.confirm_dialog import confirm_destructive
-from ui.mac_material import apply_soft_shadow
 from ui.terminal_widget import TerminalWidget
-from ui.modern_layout import MARGIN_STANDARD, SPACING_MD
+from ui.modern_layout import MARGIN_COMFORTABLE, MARGIN_STANDARD, SPACING_MD, SPACING_SM
 from config import WORKSPACE_ROOT
 
 # ---------------------------------------------------------------------------
@@ -285,7 +284,7 @@ class PageSetting(QWidget):
         # Flash buttons
         button_grid = QGridLayout()
         button_grid.setHorizontalSpacing(SPACING_MD)
-        button_grid.setVerticalSpacing(8)
+        button_grid.setVerticalSpacing(SPACING_SM)
 
         self.btn_flash_collect = self._make_primary_button("⬆  INSTALL DATA FIRMWARE")
         self.btn_flash_ai      = self._make_primary_button("⬆  INSTALL AI ENGINE")
@@ -327,6 +326,8 @@ class PageSetting(QWidget):
 
     def _build_control_bar(self) -> QHBoxLayout:
         row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(SPACING_SM)
         row.addStretch()
 
         self.btn_revert = QPushButton("REVERT CHANGES")
@@ -559,7 +560,7 @@ class PageSetting(QWidget):
         ) -> QHBoxLayout:
             row = QHBoxLayout()
             row.setContentsMargins(0, 0, 0, 0)
-            row.setSpacing(6)
+            row.setSpacing(SPACING_SM)
             row.addWidget(field, stretch=1)
             row.addWidget(btn_browse)
             row.addWidget(btn_reset)
@@ -598,7 +599,7 @@ class PageSetting(QWidget):
 
         idf_row = QHBoxLayout()
         idf_row.setContentsMargins(0, 0, 0, 0)
-        idf_row.setSpacing(6)
+        idf_row.setSpacing(SPACING_SM)
         idf_row.addWidget(self.txt_idf_main_dir, stretch=1)
         idf_row.addWidget(self.btn_browse_idf_main)
         idf_row.addWidget(self.btn_reset_idf_main)
@@ -625,9 +626,8 @@ class PageSetting(QWidget):
         frame = QFrame()
         frame.setObjectName("CardFrame")
         frame.setStyleSheet(STYLE_SETTING_CARD)
-        apply_soft_shadow(frame, blur_radius=20, y_offset=4, color="rgba(0, 0, 0, 0.10)")
         layout = QVBoxLayout(frame)
-        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
         layout.setSpacing(SPACING_MD)
         return frame, layout
 
@@ -637,8 +637,8 @@ class PageSetting(QWidget):
         form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         form.setFormAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
-        form.setHorizontalSpacing(12)
-        form.setVerticalSpacing(10)
+        form.setHorizontalSpacing(SPACING_MD)
+        form.setVerticalSpacing(SPACING_SM)
         return form
 
     @staticmethod

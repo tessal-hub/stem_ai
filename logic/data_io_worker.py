@@ -34,6 +34,9 @@ from constants import canonical_system_spell, is_system_spell, normalize_spell_n
 
 log = logging.getLogger(__name__)
 
+_QUEUE_MAXSIZE = 50
+_QUEUE_WARN_THRESHOLD = 40
+
 
 class DataIOWorker(QThread):
     """Background thread that handles all dataset file operations."""
@@ -43,14 +46,24 @@ class DataIOWorker(QThread):
     sig_save_done    = pyqtSignal(bool, str)   # (success, message)
     sig_delete_done  = pyqtSignal(bool, str)   # (success, message)
     sig_export_done  = pyqtSignal(bool, str)   # (success, message)
+    sig_queue_warning = pyqtSignal(str)        # queue drop/backpressure warnings
     # Emitted after any operation that changes the dataset directory layout.
     sig_db_refreshed = pyqtSignal(dict)        # spell_counts: {name: int}
 
     def __init__(self, dataset_dir: str, parent=None) -> None:
         super().__init__(parent)
         self._dataset_dir = dataset_dir
-        self._job_queue: queue.Queue[tuple] = queue.Queue()
+        self._job_queue: queue.Queue[tuple] = queue.Queue(maxsize=_QUEUE_MAXSIZE)
         self._running = False
+
+    def _warn_if_queue_pressure(self) -> None:
+        qsize = self._job_queue.qsize()
+        if qsize >= _QUEUE_WARN_THRESHOLD:
+            log.warning(
+                "DataIOWorker: queue depth high (%d/%d)",
+                qsize,
+                _QUEUE_MAXSIZE,
+            )
 
     # ------------------------------------------------------------------
     # Public API — call from the main thread
@@ -64,29 +77,41 @@ class DataIOWorker(QThread):
         """Schedule a cropped sample write (non-blocking)."""
         try:
             self._job_queue.put_nowait(("save", spell_name, data))
+            self._warn_if_queue_pressure()
         except queue.Full:
-            log.warning("DataIOWorker: job queue full, save job dropped for spell '%s'", spell_name)
+            msg = f"DataIOWorker queue full: save job dropped for spell '{spell_name}'"
+            log.warning(msg)
+            self.sig_queue_warning.emit(msg)
 
     def enqueue_delete(self, spell_name: str) -> None:
         """Schedule a spell deletion (non-blocking)."""
         try:
             self._job_queue.put_nowait(("delete", spell_name))
+            self._warn_if_queue_pressure()
         except queue.Full:
-            log.warning("DataIOWorker: job queue full, delete job dropped for spell '%s'", spell_name)
+            msg = f"DataIOWorker queue full: delete job dropped for spell '{spell_name}'"
+            log.warning(msg)
+            self.sig_queue_warning.emit(msg)
 
     def enqueue_export(self, buf: list[list[float]], path: str) -> None:
         """Schedule a buffer CSV export (non-blocking)."""
         try:
             self._job_queue.put_nowait(("export", buf, path))
+            self._warn_if_queue_pressure()
         except queue.Full:
-            log.warning("DataIOWorker: job queue full, export job dropped")
+            msg = "DataIOWorker queue full: export job dropped"
+            log.warning(msg)
+            self.sig_queue_warning.emit(msg)
 
     def enqueue_refresh(self) -> None:
         """Schedule a database directory rescan (non-blocking)."""
         try:
             self._job_queue.put_nowait(("refresh",))
+            self._warn_if_queue_pressure()
         except queue.Full:
-            log.warning("DataIOWorker: job queue full, refresh job dropped")
+            msg = "DataIOWorker queue full: refresh job dropped"
+            log.warning(msg)
+            self.sig_queue_warning.emit(msg)
 
     def stop(self) -> None:
         """Request the worker loop to exit and wait up to 2 s."""
@@ -144,7 +169,7 @@ class DataIOWorker(QThread):
 
             with open(file_path, mode="w", newline="") as f:
                 writer = csv.writer(f)
-                writer.writerow(["aX", "aY", "aZ", "gX", "gY", "gZ"])
+                writer.writerow(["ax", "ay", "az", "gx", "gy", "gz"])
                 writer.writerows(data)
 
             counts = self._scan_database()

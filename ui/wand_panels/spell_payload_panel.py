@@ -18,6 +18,7 @@ from logic.rarity_utils import RARITY_TIERS, RarityTier
 from ui.tokens import (
     STYLE_LIST,
     STYLE_RARITY_BADGE_WAND,
+    TEXT_MUTED,
 )
 from ui.wand_panels.shared import make_section_label
 
@@ -58,7 +59,7 @@ class WandSpellPayloadPanel(QWidget):
         left_col = QWidget()
         left_layout = QVBoxLayout(left_col)
         left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.setSpacing(6)
+        left_layout.setSpacing(8)
         left_title = QLabel("SELECTED FOR TRAINING")
         left_title.setStyleSheet("font-size: 10px; font-weight: 800; letter-spacing: 1px;")
         left_layout.addWidget(left_title)
@@ -67,12 +68,13 @@ class WandSpellPayloadPanel(QWidget):
         self.list_selected_spells.setStyleSheet(STYLE_LIST)
         self.list_selected_spells.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
         self.list_selected_spells.setMinimumHeight(220)
+        self.list_selected_spells.setAccessibleName("Selected spells list")
         left_layout.addWidget(self.list_selected_spells, stretch=1)
 
         right_col = QWidget()
         right_layout = QVBoxLayout(right_col)
         right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(6)
+        right_layout.setSpacing(8)
         right_title = QLabel("AVAILABLE SPELLS")
         right_title.setStyleSheet("font-size: 10px; font-weight: 800; letter-spacing: 1px;")
         right_layout.addWidget(right_title)
@@ -81,6 +83,7 @@ class WandSpellPayloadPanel(QWidget):
         self.list_available_spells.setStyleSheet(STYLE_LIST)
         self.list_available_spells.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
         self.list_available_spells.setMinimumHeight(220)
+        self.list_available_spells.setAccessibleName("Available spells list")
         right_layout.addWidget(self.list_available_spells, stretch=1)
 
         split.addWidget(left_col)
@@ -98,6 +101,11 @@ class WandSpellPayloadPanel(QWidget):
     def _refresh_lists(self) -> None:
         self.list_selected_spells.clear()
         self.list_available_spells.clear()
+
+        if not self._spell_order:
+            self._add_empty_row(self.list_selected_spells, "Waiting for recorded spells")
+            self._add_empty_row(self.list_available_spells, "Waiting for available spells")
+            return
 
         for name in self._spell_order:
             count = int(self._spell_counts.get(name, 0))
@@ -129,6 +137,14 @@ class WandSpellPayloadPanel(QWidget):
         row.addStretch()
         row.addWidget(badge)
 
+        item.setSizeHint(widget.sizeHint())
+        list_widget.setItemWidget(item, widget)
+
+    def _add_empty_row(self, list_widget: QListWidget, text: str) -> None:
+        item = QListWidgetItem(list_widget)
+        widget = QLabel(text)
+        widget.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px; font-style: italic; padding: 8px 12px;")
+        widget.setWordWrap(True)
         item.setSizeHint(widget.sizeHint())
         list_widget.setItemWidget(item, widget)
 
