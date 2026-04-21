@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
     QFormLayout,
     QGridLayout,
     QComboBox, QFrame, QHBoxLayout, QLabel,
-    QListWidget, QMessageBox, QPushButton, QSizePolicy,
+    QListWidget, QListWidgetItem, QMessageBox, QPushButton, QSizePolicy,
     QStackedWidget, QVBoxLayout, QWidget,
 )
 from constants import canonical_system_spell, is_system_spell
@@ -84,8 +84,8 @@ class PageRecord(QWidget):
     def __init__(self, data_store) -> None:
         super().__init__()
         self.store = data_store
-        # Initial spell list (read-only snapshot at startup)
-        self._initial_spell_list = data_store.get_spell_list()
+        # Initial spell-count snapshot at startup for static list rendering.
+        self._initial_spell_counts = dict(getattr(data_store, "spell_counts", {}))
 
         self.is_live: bool = True
         self.current_spell_name: str = ""
@@ -105,7 +105,7 @@ class PageRecord(QWidget):
         log.debug("[PageRecord] Initialized - is_live=True, QTimer started for plot rendering")
 
         # Populate spell combo and list
-        self.load_spell_list(self._initial_spell_list)
+        self.load_spell_list(self._initial_spell_counts)
 
     def keyPressEvent(self, event) -> None:
         """Handle keyboard shortcuts for recording actions."""
@@ -178,16 +178,36 @@ class PageRecord(QWidget):
             f"color: {SUCCESS}; font-weight: bold; font-size: 12px;"
         )
 
-    def load_spell_list(self, spells: list[str]) -> None:
+    def load_spell_list(self, spells: list[str] | dict[str, int]) -> None:
+        if isinstance(spells, dict):
+            spell_counts = {
+                str(name): int(count)
+                for name, count in spells.items()
+                if str(name).strip()
+            }
+        else:
+            spell_counts = {
+                str(name): int(getattr(self.store, "spell_counts", {}).get(str(name), 0))
+                for name in spells
+                if str(name).strip()
+            }
+
+        spell_names = list(spell_counts.keys())
+
         self.spell_list.clear()
-        if spells:
-            self.spell_list.addItems(spells)
+        if spell_names:
+            for spell_name in spell_names:
+                count = spell_counts.get(spell_name, 0)
+                item = QListWidgetItem(f"{spell_name} ({count})")
+                item.setData(Qt.ItemDataRole.UserRole, spell_name)
+                self.spell_list.addItem(item)
         else:
             self.spell_list.addItem(self._spell_list_empty_label)
+
         # Also update the spell combo box
         current_text = self.combo_spell.currentText()
         self.combo_spell.clear()
-        self.combo_spell.addItems(spells)
+        self.combo_spell.addItems(spell_names)
         if current_text:
             idx = self.combo_spell.findText(current_text)
             if idx >= 0:
@@ -495,7 +515,7 @@ class PageRecord(QWidget):
 
     def _on_spell_list_clicked(self, item) -> None:
         """Handle spell list item click: auto-select spell in combo and emit signal."""
-        spell_name = item.text()
+        spell_name = str(item.data(Qt.ItemDataRole.UserRole) or item.text())
         if spell_name == self._spell_list_empty_label:
             return
         if is_system_spell(spell_name):
@@ -517,7 +537,7 @@ class PageRecord(QWidget):
             QMessageBox.critical(self, "No Selection", "Please select a spell to delete from the list.")
             return
 
-        spell_name = current_item.text()
+        spell_name = str(current_item.data(Qt.ItemDataRole.UserRole) or current_item.text())
         if spell_name == self._spell_list_empty_label:
             return
         if is_system_spell(spell_name):

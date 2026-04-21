@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pyqtgraph as pg
 from PyQt6.QtGui import QColor
-from PyQt6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QGridLayout, QLabel, QVBoxLayout, QWidget
 
 from ui.layout_utils import clear_layout
 from ui.tokens import ACCENT, BG_WHITE, BORDER_MID, TEXT_BODY, TEXT_MUTED
@@ -26,13 +26,19 @@ class WandStatsPanel(QWidget):
             lbl.setStyleSheet(
                 f"color: {TEXT_MUTED}; font-size: 11px; font-style: italic;"
             )
-            self.layout_stats.addWidget(lbl)
+            self.layout_stats.addWidget(lbl, 0, 0)
             return
 
-        for key, val in stats.items():
+        for idx, (key, val) in enumerate(stats.items()):
             lbl = QLabel(f"■  {key}: {val}")
             lbl.setStyleSheet(f"color: {TEXT_BODY}; font-size: 11px; font-weight: 600;")
-            self.layout_stats.addWidget(lbl)
+            lbl.setWordWrap(True)
+            row = idx // 2
+            col = idx % 2
+            self.layout_stats.addWidget(lbl, row, col)
+
+        self.layout_stats.setColumnStretch(0, 1)
+        self.layout_stats.setColumnStretch(1, 1)
 
     def update_spell_chart(self, spell_counts: dict[str, int]) -> None:
         self.stats_plot.clear()
@@ -70,7 +76,9 @@ class WandStatsPanel(QWidget):
 
         card, card_layout = make_card()
 
-        self.layout_stats = QHBoxLayout()
+        self.layout_stats = QGridLayout()
+        self.layout_stats.setHorizontalSpacing(16)
+        self.layout_stats.setVerticalSpacing(6)
         card_layout.addLayout(self.layout_stats)
 
         self.stats_plot = pg.PlotWidget()

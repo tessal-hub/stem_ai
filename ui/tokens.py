@@ -145,7 +145,7 @@ STYLE_HOME_STATUS_BAR = f"""
 STYLE_HOME_VIEWER_CARD = f"""
     #HomeViewerCard {{
         background-color: {MAC_SURFACE_SOLID};
-        border: 1px solid {MAC_BORDER};
+        border: none;
         border-radius: 18px;
     }}
     #HomeViewerSurface {{
@@ -185,7 +185,7 @@ STYLE_HOME_RIGHT_PANEL = """
 STYLE_HOME_RIGHT_SECTION = f"""
     #HomeRightSection {{
         background-color: {MAC_SURFACE_SOLID};
-        border: 1px solid {MAC_BORDER};
+        border: none;
         border-radius: 16px;
     }}
 """
@@ -359,7 +359,7 @@ STYLE_SETTING_MAIN_CONTAINER = f"""
 STYLE_CARD = f"""
     #CardFrame {{
         background-color: {MAC_SURFACE_SOLID};
-        border: 1px solid {MAC_BORDER};
+        border: none;
         border-radius: 16px;
     }}
 """
@@ -375,12 +375,12 @@ STYLE_CARD_NO_BORDER = """
 STYLE_STATISTICS_CARD = f"""
     #CardFrame, ClickableFrame {{
         background-color: {MAC_SURFACE_SOLID};
-        border: 1px solid {MAC_BORDER};
+        border: none;
         border-radius: 16px;
     }}
     ClickableFrame:hover {{
         background-color: {BG_LIGHT};
-        border-color: {MAC_BORDER_STRONG};
+        border: none;
     }}
 """
 
@@ -388,7 +388,7 @@ STYLE_STATISTICS_CARD = f"""
 STYLE_SETTING_CARD = f"""
     #CardFrame {{
         background-color: {MAC_SURFACE_SOLID};
-        border: 1px solid {MAC_BORDER};
+        border: none;
         border-radius: 16px;
     }}
 """
@@ -397,7 +397,7 @@ STYLE_SETTING_CARD = f"""
 STYLE_RECORD_GRAPH_CARD = f"""
     #CardFrame {{
         background-color: {BG_DARK};
-        border: 1px solid #2a2f39;
+        border: none;
         border-radius: 16px;
     }}
 """
@@ -406,7 +406,7 @@ STYLE_RECORD_GRAPH_CARD = f"""
 STYLE_WAND_CARD = f"""
     #CardFrame {{
         background-color: {MAC_SURFACE_SOLID};
-        border: 1px solid {MAC_BORDER};
+        border: none;
         border-radius: 16px;
     }}
 """

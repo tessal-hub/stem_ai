@@ -1038,7 +1038,7 @@ class Handler(QObject):
 
     def _on_db_updated(self, spell_counts: dict) -> None:
         """Relay database changes to UI pages."""
-        self.ui_record.load_spell_list(list(spell_counts.keys()))
+        self.ui_record.load_spell_list(spell_counts)
         self.ui_wand.load_spell_payload_list(spell_counts)
         if self.ui_statistics:
             self.ui_statistics.update_spell_stats(spell_counts)

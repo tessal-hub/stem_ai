@@ -20,11 +20,6 @@ class PageWand(QWidget):
     sig_serial_connect = pyqtSignal(str)
     sig_serial_disconnect = pyqtSignal()
 
-    # Bluetooth signals
-    sig_bt_scan = pyqtSignal()
-    sig_bt_connect = pyqtSignal(str)
-    sig_bt_disconnect = pyqtSignal()
-
     # Tool signals
     sig_flash_compile = pyqtSignal(list)
     sig_flash_upload = pyqtSignal()
@@ -61,10 +56,12 @@ class PageWand(QWidget):
         self.connection_panel.update_serial_port_list(ports)
 
     def set_bluetooth_status(self, connected: bool, device_name: str = "") -> None:
-        self.connection_panel.set_bluetooth_status(connected, device_name)
+        """Deprecated no-op: bluetooth feature removed from UI."""
+        _ = (connected, device_name)
 
     def update_bt_device_list(self, devices: list[str]) -> None:
-        self.connection_panel.update_bt_device_list(devices)
+        """Deprecated no-op: bluetooth feature removed from UI."""
+        _ = devices
 
     def update_esp_stats(self, stats: dict[str, str]) -> None:
         self.stats_panel.update_esp_stats(stats)
@@ -136,15 +133,11 @@ class PageWand(QWidget):
 
     def _expose_legacy_attributes(self) -> None:
         """Keep historical field access paths stable for handlers/tests."""
-        # Serial/Bluetooth controls
+        # Serial controls
         self.combo_serial_ports = self.connection_panel.combo_serial_ports
-        self.combo_bt_devices = self.connection_panel.combo_bt_devices
         self.btn_serial_scan = self.connection_panel.btn_serial_scan
         self.btn_serial_connect = self.connection_panel.btn_serial_connect
-        self.btn_bt_scan = self.connection_panel.btn_bt_scan
-        self.btn_bt_connect = self.connection_panel.btn_bt_connect
         self.lbl_serial_status = self.connection_panel.lbl_serial_status
-        self.lbl_bt_status = self.connection_panel.lbl_bt_status
 
         # Flash controls
         self.btn_build_tflite = self.flash_panel.btn_build_tflite
@@ -174,10 +167,6 @@ class PageWand(QWidget):
         self.connection_panel.sig_serial_connect.connect(self.sig_serial_connect.emit)
         self.connection_panel.sig_serial_disconnect.connect(self.sig_serial_disconnect.emit)
 
-        self.connection_panel.sig_bt_scan.connect(self.sig_bt_scan.emit)
-        self.connection_panel.sig_bt_connect.connect(self.sig_bt_connect.emit)
-        self.connection_panel.sig_bt_disconnect.connect(self.sig_bt_disconnect.emit)
-
         self.flash_panel.sig_build_tflite_clicked.connect(self._on_build_tflite_clicked)
         self.flash_panel.sig_build_cc_clicked.connect(self._on_build_cc_clicked)
 
@@ -188,9 +177,6 @@ class PageWand(QWidget):
         self.combo_serial_ports.setAccessibleName("Serial port list")
         self.btn_serial_scan.setAccessibleName("Scan serial ports")
         self.btn_serial_connect.setAccessibleName("Connect serial")
-        self.combo_bt_devices.setAccessibleName("Bluetooth device list")
-        self.btn_bt_scan.setAccessibleName("Scan bluetooth devices")
-        self.btn_bt_connect.setAccessibleName("Connect bluetooth")
         self.btn_build_tflite.setAccessibleName("Build gesture_model.tflite")
         self.btn_build_cc.setAccessibleName("Build gesture_model.cc")
         self.btn_term_clear.setAccessibleName("Clear wand terminal")
@@ -199,10 +185,7 @@ class PageWand(QWidget):
 
         self.setTabOrder(self.combo_serial_ports, self.btn_serial_scan)
         self.setTabOrder(self.btn_serial_scan, self.btn_serial_connect)
-        self.setTabOrder(self.btn_serial_connect, self.combo_bt_devices)
-        self.setTabOrder(self.combo_bt_devices, self.btn_bt_scan)
-        self.setTabOrder(self.btn_bt_scan, self.btn_bt_connect)
-        self.setTabOrder(self.btn_bt_connect, self.btn_build_tflite)
+        self.setTabOrder(self.btn_serial_connect, self.btn_build_tflite)
         self.setTabOrder(self.btn_build_tflite, self.btn_build_cc)
         self.setTabOrder(self.btn_build_cc, self.btn_term_clear)
         self.setTabOrder(self.btn_term_clear, self.list_selected_spells)
