@@ -7,12 +7,14 @@ from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from ui.tokens import (
     DANGER,
+    SETTINGS_INPUT_H,
     STATUS_LABEL_STYLE_TEMPLATE,
     STYLE_BTN_OUTLINE,
     STYLE_BTN_PRIMARY,
+    STYLE_SETTINGS_FORM_LABEL,
     STYLE_WAND_COMBO,
-    TEXT_BODY,
 )
+from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_SM
 from ui.wand_panels.connection_presenter import ConnectionStatusPresenter
 from ui.wand_panels.shared import make_button, make_card, make_section_label
 
@@ -63,18 +65,26 @@ class WandConnectionPanel(QWidget):
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(SPACING_SM)
 
         layout.addWidget(make_section_label("CONNECTION"))
         layout.addWidget(self._build_serial_card())
         layout.addStretch()
 
     def _build_serial_card(self):
-        card, layout = make_card(margins=(12, 12, 12, 12), spacing=8)
+        card, layout = make_card(
+            margins=(
+                MARGIN_COMFORTABLE,
+                MARGIN_COMFORTABLE,
+                MARGIN_COMFORTABLE,
+                MARGIN_COMFORTABLE,
+            ),
+            spacing=SPACING_SM,
+        )
 
         status_row = QHBoxLayout()
         lbl_name = QLabel("SERIAL:")
-        lbl_name.setStyleSheet(f"color: {TEXT_BODY}; font-weight: bold; font-size: 11px;")
+        lbl_name.setStyleSheet(STYLE_SETTINGS_FORM_LABEL)
         self.lbl_serial_status = QLabel("● DISCONNECTED")
         self.lbl_serial_status.setStyleSheet(
             STATUS_LABEL_STYLE_TEMPLATE.format(color=DANGER)
@@ -86,7 +96,7 @@ class WandConnectionPanel(QWidget):
 
         self.combo_serial_ports = QComboBox()
         self.combo_serial_ports.setStyleSheet(STYLE_WAND_COMBO)
-        self.combo_serial_ports.setMinimumHeight(36)
+        self.combo_serial_ports.setMinimumHeight(SETTINGS_INPUT_H)
         self.combo_serial_ports.addItem("No serial ports detected")
         layout.addWidget(self.combo_serial_ports)
 

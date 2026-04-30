@@ -24,7 +24,8 @@ from constants import canonical_system_spell, is_system_spell
 from ui.tokens import (
     # Colors, Sizes
     BG_DARK, TEXT_BODY, TEXT_MUTED, ACCENT,
-    SUCCESS, DANGER, WARNING, BTN_H, RIGHT_MAX_W, CROP_REGION,
+    SUCCESS, DANGER, WARNING, BTN_H, SPELL_BTN_H, RIGHT_MAX_W, CROP_REGION,
+    RECORD_GRAPH_MIN_H, RECORD_LIST_MIN_H,
     PLOT_AX_COLOR, PLOT_AY_COLOR, PLOT_AZ_COLOR,
     PLOT_GX_COLOR, PLOT_GY_COLOR, PLOT_GZ_COLOR, PLOT_HANDLE_HOVER_COLOR,
     # Styles (page-specific)
@@ -34,9 +35,14 @@ from ui.tokens import (
     STYLE_BTN_START,
     STYLE_BTN_STOP,
     STYLE_BTN_SNIP,
+    STYLE_BTN_DANGER_OUTLINE,
     STYLE_BTN_BACK,
     STYLE_RECORD_LIST,
     STYLE_RECORD_COMBO,
+    STYLE_RECORD_CURRENT_SPELL,
+    STYLE_RECORD_FIELD_LABEL,
+    STYLE_RECORD_METRIC_VALUE,
+    STYLE_RECORD_STATUS_TEMPLATE,
 )
 from ui.component_factory import (
     make_card_frame,
@@ -48,7 +54,6 @@ from ui.component_factory import (
 from ui.confirm_dialog import confirm_destructive
 from ui.modern_layout import (
     MARGIN_COMFORTABLE,
-    MARGIN_STANDARD,
     SPACING_MD,
     SPACING_LG,
     SPACING_SM,
@@ -137,12 +142,12 @@ class PageRecord(QWidget):
         if is_ready:
             self.lbl_wand_status.setText("● WAND IS READY")
             self.lbl_wand_status.setStyleSheet(
-                f"color: {SUCCESS}; font-weight: bold; font-size: 12px;"
+                STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
             )
         else:
             self.lbl_wand_status.setText("● WAND NOT READY")
             self.lbl_wand_status.setStyleSheet(
-                f"color: {DANGER}; font-weight: bold; font-size: 12px;"
+                STYLE_RECORD_STATUS_TEMPLATE.format(color=DANGER)
             )
 
     def set_recording_state(self, recording: bool) -> None:
@@ -154,7 +159,7 @@ class PageRecord(QWidget):
         color = ACCENT if recording else SUCCESS
         self.lbl_wand_status.setText(status)
         self.lbl_wand_status.setStyleSheet(
-            f"color: {color}; font-weight: bold; font-size: 12px;"
+            STYLE_RECORD_STATUS_TEMPLATE.format(color=color)
         )
 
     def _update_recording_duration(self) -> None:
@@ -175,7 +180,7 @@ class PageRecord(QWidget):
         """Visual feedback after a successful crop-save."""
         self.lbl_wand_status.setText(f"✔ SAVED TO {spell_name}")
         self.lbl_wand_status.setStyleSheet(
-            f"color: {SUCCESS}; font-weight: bold; font-size: 12px;"
+            STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
         )
 
     def load_spell_list(self, spells: list[str] | dict[str, int]) -> None:
@@ -348,7 +353,7 @@ class PageRecord(QWidget):
         if not spell_name:
             self.lbl_wand_status.setText("⚠ Select a spell first")
             self.lbl_wand_status.setStyleSheet(
-                f"color: {DANGER}; font-weight: bold; font-size: 13px;"
+                STYLE_RECORD_STATUS_TEMPLATE.format(color=DANGER)
             )
             return
 
@@ -360,7 +365,7 @@ class PageRecord(QWidget):
         self.combo_spell.setEnabled(False)
         self.lbl_wand_status.setText("● RECORDING DATA")
         self.lbl_wand_status.setStyleSheet(
-            f"color: {SUCCESS}; font-weight: bold; font-size: 12px;"
+            STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
         )
         
         # Start recording timer
@@ -388,7 +393,7 @@ class PageRecord(QWidget):
 
         self.lbl_wand_status.setText("● RECORDING STOPPED - Select region to snip")
         self.lbl_wand_status.setStyleSheet(
-            f"color: {WARNING}; font-weight: bold; font-size: 13px;"
+            STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
         )
         
         # Stop recording timer
@@ -407,7 +412,7 @@ class PageRecord(QWidget):
         if not spell_name:
             self.lbl_wand_status.setText("⚠ Enter a spell name first!")
             self.lbl_wand_status.setStyleSheet(
-                f"color: {DANGER}; font-weight: bold; font-size: 13px;"
+                STYLE_RECORD_STATUS_TEMPLATE.format(color=DANGER)
             )
             return
 
@@ -415,7 +420,7 @@ class PageRecord(QWidget):
         if len(region) < 2:
             self.lbl_wand_status.setText("⚠ Invalid crop region")
             self.lbl_wand_status.setStyleSheet(
-                f"color: {DANGER}; font-weight: bold; font-size: 13px;"
+                STYLE_RECORD_STATUS_TEMPLATE.format(color=DANGER)
             )
             return
 
@@ -446,12 +451,12 @@ class PageRecord(QWidget):
                 f"✂ Snipped {max_idx - min_idx} samples → {spell_name}"
             )
             self.lbl_wand_status.setStyleSheet(
-                f"color: {SUCCESS}; font-weight: bold; font-size: 13px;"
+                STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
             )
         else:
             self.lbl_wand_status.setText("⚠ Invalid selection range")
             self.lbl_wand_status.setStyleSheet(
-                f"color: {DANGER}; font-weight: bold; font-size: 13px;"
+                STYLE_RECORD_STATUS_TEMPLATE.format(color=DANGER)
             )
 
         self.sig_snip_record.emit()
@@ -494,7 +499,7 @@ class PageRecord(QWidget):
         self.crop_region.hide()
         self.lbl_wand_status.setText("✔ Recording buffer cleared")
         self.lbl_wand_status.setStyleSheet(
-            f"color: {SUCCESS}; font-weight: bold; font-size: 12px;"
+            STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
         )
 
     def _on_export_csv(self) -> None:
@@ -503,14 +508,14 @@ class PageRecord(QWidget):
         if not buf:
             self.lbl_wand_status.setText("⚠ No samples to export")
             self.lbl_wand_status.setStyleSheet(
-                f"color: {WARNING}; font-weight: bold; font-size: 12px;"
+                STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
             )
             return
 
         self.sig_export_csv.emit()
         self.lbl_wand_status.setText(f"💾 Exporting {len(buf)} samples...")
         self.lbl_wand_status.setStyleSheet(
-            f"color: {SUCCESS}; font-weight: bold; font-size: 12px;"
+            STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
         )
 
     def _on_spell_list_clicked(self, item) -> None:
@@ -579,7 +584,7 @@ class PageRecord(QWidget):
         )
         self.lbl_wand_status.setText(f"⚠ {canonical_name} is protected")
         self.lbl_wand_status.setStyleSheet(
-            f"color: {WARNING}; font-weight: bold; font-size: 12px;"
+            STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
         )
 
     # ── UI Construction ─────────────────────────────────────────────────
@@ -621,7 +626,7 @@ class PageRecord(QWidget):
         top_row.setSpacing(SPACING_MD)
         self.lbl_wand_status = QLabel("● WAITING FOR SERIAL")
         self.lbl_wand_status.setStyleSheet(
-            f"color: {WARNING}; font-weight: bold; font-size: 12px;"
+            STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
         )
         lbl_timeline = make_section_label("TIMELINE:", accent_color=ACCENT)
         lbl_timeline.setAlignment(
@@ -636,12 +641,17 @@ class PageRecord(QWidget):
         graph_card.setObjectName("CardFrame")
         graph_card.setStyleSheet(STYLE_RECORD_GRAPH_CARD)
         graph_layout = QVBoxLayout(graph_card)
-        graph_layout.setContentsMargins(MARGIN_STANDARD, MARGIN_STANDARD, MARGIN_STANDARD, MARGIN_STANDARD)
+        graph_layout.setContentsMargins(
+            MARGIN_COMFORTABLE,
+            MARGIN_COMFORTABLE,
+            MARGIN_COMFORTABLE,
+            MARGIN_COMFORTABLE,
+        )
         graph_layout.setSpacing(SPACING_MD)
         self.graph1 = pg.PlotWidget()
         self.graph2 = pg.PlotWidget()
-        self.graph1.setMinimumHeight(150)
-        self.graph2.setMinimumHeight(150)
+        self.graph1.setMinimumHeight(RECORD_GRAPH_MIN_H)
+        self.graph2.setMinimumHeight(RECORD_GRAPH_MIN_H)
         graph_layout.addWidget(self.graph1)
         graph_layout.addWidget(self.graph2, stretch=1)
         layout.addWidget(graph_card, stretch=1)
@@ -654,9 +664,9 @@ class PageRecord(QWidget):
         self.chk_graph2 = make_checkbox("SHOW GYRO (gX, gY, gZ)", checked=True)
         
         # Add zoom controls
-        self.btn_zoom_in = make_button("🔍+", STYLE_BTN_BASE, 32)
-        self.btn_zoom_out = make_button("🔍-", STYLE_BTN_BASE, 32)
-        self.btn_zoom_fit = make_button("🔍□", STYLE_BTN_BASE, 32)
+        self.btn_zoom_in = make_button("🔍+", STYLE_BTN_BASE, BTN_H)
+        self.btn_zoom_out = make_button("🔍-", STYLE_BTN_BASE, BTN_H)
+        self.btn_zoom_fit = make_button("🔍□", STYLE_BTN_BASE, BTN_H)
         self.btn_zoom_in.setToolTip("Zoom in on plots")
         self.btn_zoom_out.setToolTip("Zoom out on plots")
         self.btn_zoom_fit.setToolTip("Fit plots to data")
@@ -701,7 +711,7 @@ class PageRecord(QWidget):
         self.combo_spell.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         lbl_spell = QLabel("Spell label:")
-        lbl_spell.setStyleSheet(f"color: {TEXT_BODY}; font-weight: 600; font-size: 11px;")
+        lbl_spell.setStyleSheet(STYLE_RECORD_FIELD_LABEL)
 
         detail_form.addRow(lbl_spell, self.combo_spell)
         detail_layout.addLayout(detail_form)
@@ -713,14 +723,10 @@ class PageRecord(QWidget):
         count_grid.addWidget(make_hint("Duration", color=TEXT_MUTED), 0, 1)
 
         self.lbl_record_count = QLabel("0")
-        self.lbl_record_count.setStyleSheet(
-            f"color: {TEXT_BODY}; font-weight: 800; font-size: 16px;"
-        )
+        self.lbl_record_count.setStyleSheet(STYLE_RECORD_METRIC_VALUE)
 
         self.lbl_record_duration = QLabel("00:00")
-        self.lbl_record_duration.setStyleSheet(
-            f"color: {TEXT_BODY}; font-weight: 800; font-size: 16px;"
-        )
+        self.lbl_record_duration.setStyleSheet(STYLE_RECORD_METRIC_VALUE)
         count_grid.addWidget(self.lbl_record_count, 1, 0)
         count_grid.addWidget(self.lbl_record_duration, 1, 1)
         detail_layout.addLayout(count_grid)
@@ -772,12 +778,12 @@ class PageRecord(QWidget):
 
         self.btn_clear_samples = make_button(
             "🗑 CLEAR", 
-            STYLE_BTN_BASE + f" QPushButton {{ color: {DANGER}; }}", 
-            32
+            STYLE_BTN_DANGER_OUTLINE, 
+            BTN_H,
         )
         self.btn_clear_samples.setToolTip("Clear all currently recorded samples")
 
-        self.btn_export_csv = make_button("💾 EXPORT", STYLE_BTN_BASE, 32)
+        self.btn_export_csv = make_button("💾 EXPORT", STYLE_BTN_BASE, BTN_H)
         self.btn_export_csv.setToolTip("Export recorded samples as CSV")
 
         batch_btn_row.addWidget(self.btn_clear_samples, 0, 0)
@@ -804,11 +810,13 @@ class PageRecord(QWidget):
         # Spell list
         self.spell_list = QListWidget()
         self.spell_list.setStyleSheet(STYLE_RECORD_LIST)
-        self.spell_list.setMinimumHeight(180)
+        self.spell_list.setMinimumHeight(RECORD_LIST_MIN_H)
         layout.addWidget(self.spell_list)
         
         # Delete button at bottom
-        self.btn_delete_spell = make_button("DELETE SPELL", STYLE_BTN_BASE + f" QPushButton {{ color: {DANGER}; }}", 36)
+        self.btn_delete_spell = make_button(
+            "DELETE SPELL", STYLE_BTN_DANGER_OUTLINE, SPELL_BTN_H
+        )
         self.btn_delete_spell.setToolTip("Delete selected spell")
         layout.addWidget(self.btn_delete_spell)
         return page
@@ -821,10 +829,10 @@ class PageRecord(QWidget):
         top_row = QHBoxLayout()
         top_row.setContentsMargins(0, 0, 0, 0)
         top_row.setSpacing(SPACING_SM)
-        self.btn_back_spells = make_button("◀ BACK", STYLE_BTN_BACK, 36)
+        self.btn_back_spells = make_button("◀ BACK", STYLE_BTN_BACK, SPELL_BTN_H)
         self.lbl_current_spell = QLabel("SAMPLES: …")
         self.lbl_current_spell.setStyleSheet(
-            f"color: {ACCENT}; font-weight: bold; font-size: 11px;"
+            STYLE_RECORD_CURRENT_SPELL
         )
         self.lbl_current_spell.setWordWrap(True)
         top_row.addWidget(self.btn_back_spells)
@@ -832,7 +840,7 @@ class PageRecord(QWidget):
         layout.addLayout(top_row)
         self.sample_list = QListWidget()
         self.sample_list.setStyleSheet(STYLE_RECORD_LIST)
-        self.sample_list.setMinimumHeight(180)
+        self.sample_list.setMinimumHeight(RECORD_LIST_MIN_H)
         layout.addWidget(self.sample_list)
         return page
 

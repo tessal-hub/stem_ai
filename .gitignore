@@ -12,6 +12,8 @@ __pycache__/
 # Test/cache outputs
 .pytest_cache/
 
+app_data/
+
 # Build artifacts
 build/
 dist/

@@ -5,7 +5,7 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QFrame, QLabel, QPushButton, QVBoxLayout
 
-from ui.tokens import BTN_H, STYLE_WAND_CARD, TEXT_BODY
+from ui.tokens import BTN_H, STYLE_SECTION_LABEL_TEMPLATE, STYLE_WAND_CARD, TEXT_BODY
 
 
 def make_card(
@@ -35,7 +35,5 @@ def make_button(label: str, style: str, height: int = BTN_H) -> QPushButton:
 def make_section_label(text: str) -> QLabel:
     """Create a bold section title label used across wand panels."""
     lbl = QLabel(text)
-    lbl.setStyleSheet(
-        f"color: {TEXT_BODY}; font-weight: 900; font-size: 13px; letter-spacing: 1px;"
-    )
+    lbl.setStyleSheet(STYLE_SECTION_LABEL_TEMPLATE.format(color=TEXT_BODY))
     return lbl

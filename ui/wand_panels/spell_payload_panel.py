@@ -15,11 +15,17 @@ from PyQt6.QtWidgets import (
 )
 
 from logic.rarity_utils import RARITY_TIERS, RarityTier
+from ui.modern_layout import MARGIN_STANDARD, SPACING_SM
 from ui.tokens import (
     STYLE_LIST,
-    STYLE_RARITY_BADGE_WAND,
+    STYLE_TRANSPARENT_WIDGET,
+    STYLE_WAND_EMPTY_ROW_TEMPLATE,
+    STYLE_WAND_LIST_TITLE,
+    STYLE_WAND_SPELL_NAME,
+    WAND_SPELL_LIST_MIN_H,
     TEXT_MUTED,
 )
+from ui.component_factory import make_rarity_badge_wand
 from ui.wand_panels.shared import make_section_label
 
 
@@ -50,7 +56,7 @@ class WandSpellPayloadPanel(QWidget):
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(SPACING_SM)
 
         layout.addWidget(make_section_label("FIRMWARE PAYLOAD"))
 
@@ -59,30 +65,30 @@ class WandSpellPayloadPanel(QWidget):
         left_col = QWidget()
         left_layout = QVBoxLayout(left_col)
         left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.setSpacing(8)
+        left_layout.setSpacing(SPACING_SM)
         left_title = QLabel("SELECTED FOR TRAINING")
-        left_title.setStyleSheet("font-size: 10px; font-weight: 800; letter-spacing: 1px;")
+        left_title.setStyleSheet(STYLE_WAND_LIST_TITLE)
         left_layout.addWidget(left_title)
 
         self.list_selected_spells = QListWidget()
         self.list_selected_spells.setStyleSheet(STYLE_LIST)
         self.list_selected_spells.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
-        self.list_selected_spells.setMinimumHeight(220)
+        self.list_selected_spells.setMinimumHeight(WAND_SPELL_LIST_MIN_H)
         self.list_selected_spells.setAccessibleName("Selected spells list")
         left_layout.addWidget(self.list_selected_spells, stretch=1)
 
         right_col = QWidget()
         right_layout = QVBoxLayout(right_col)
         right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(8)
+        right_layout.setSpacing(SPACING_SM)
         right_title = QLabel("AVAILABLE SPELLS")
-        right_title.setStyleSheet("font-size: 10px; font-weight: 800; letter-spacing: 1px;")
+        right_title.setStyleSheet(STYLE_WAND_LIST_TITLE)
         right_layout.addWidget(right_title)
 
         self.list_available_spells = QListWidget()
         self.list_available_spells.setStyleSheet(STYLE_LIST)
         self.list_available_spells.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
-        self.list_available_spells.setMinimumHeight(220)
+        self.list_available_spells.setMinimumHeight(WAND_SPELL_LIST_MIN_H)
         self.list_available_spells.setAccessibleName("Available spells list")
         right_layout.addWidget(self.list_available_spells, stretch=1)
 
@@ -119,13 +125,13 @@ class WandSpellPayloadPanel(QWidget):
         item.setData(Qt.ItemDataRole.UserRole, spell_name)
 
         widget = QWidget()
-        widget.setStyleSheet("background: transparent;")
+        widget.setStyleSheet(STYLE_TRANSPARENT_WIDGET)
 
         row = QHBoxLayout(widget)
-        row.setContentsMargins(12, 8, 12, 8)
+        row.setContentsMargins(MARGIN_STANDARD, SPACING_SM, MARGIN_STANDARD, SPACING_SM)
 
         name_label = QLabel(spell_name)
-        name_label.setStyleSheet("font-size: 12px; font-weight: 700;")
+        name_label.setStyleSheet(STYLE_WAND_SPELL_NAME)
         font = QFont()
         font.setBold(True)
         name_label.setFont(font)
@@ -143,7 +149,7 @@ class WandSpellPayloadPanel(QWidget):
     def _add_empty_row(self, list_widget: QListWidget, text: str) -> None:
         item = QListWidgetItem(list_widget)
         widget = QLabel(text)
-        widget.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px; font-style: italic; padding: 8px 12px;")
+        widget.setStyleSheet(STYLE_WAND_EMPTY_ROW_TEMPLATE.format(color=TEXT_MUTED))
         widget.setWordWrap(True)
         item.setSizeHint(widget.sizeHint())
         list_widget.setItemWidget(item, widget)
@@ -169,10 +175,7 @@ class WandSpellPayloadPanel(QWidget):
 
     @staticmethod
     def _make_rarity_badge(label: str, color: str) -> QLabel:
-        lbl = QLabel(label)
-        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl.setStyleSheet(STYLE_RARITY_BADGE_WAND.format(color=color))
-        return lbl
+        return make_rarity_badge_wand(label, color)
 
     @staticmethod
     def _resolve_rarity(count: int) -> RarityTier:

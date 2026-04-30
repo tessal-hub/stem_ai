@@ -36,7 +36,8 @@ from ui.tokens import (
     SETTINGS_ACCENT,
     SETTINGS_BTN_H,
     SETTINGS_INPUT_H,
-    TEXT_BODY,
+    PROGRESS_H,
+    SETTING_CONSOLE_MIN_H,
     TEXT_MUTED,
     # Styles
     STYLE_SETTING_MAIN_CONTAINER,
@@ -47,12 +48,16 @@ from ui.tokens import (
     STYLE_SETTING_INPUT,
     STYLE_SETTING_CHECKBOX,
     STYLE_SETTING_PROGRESS,
+    STYLE_SETTINGS_FORM_LABEL,
+    STYLE_SETTINGS_HINT_TEMPLATE,
+    STYLE_SETTINGS_INPUT_INVALID,
+    STYLE_SETTINGS_SECTION_LABEL_TEMPLATE,
     STYLE_CONSOLE,
     STYLE_SCROLL_AREA,
 )
 from ui.confirm_dialog import confirm_destructive
 from ui.terminal_widget import TerminalWidget
-from ui.modern_layout import MARGIN_COMFORTABLE, MARGIN_STANDARD, SPACING_MD, SPACING_SM
+from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_LG, SPACING_MD, SPACING_SM
 from config import WORKSPACE_ROOT
 
 # ---------------------------------------------------------------------------
@@ -150,11 +155,16 @@ class PageSetting(QWidget):
         self.main_container.setStyleSheet(STYLE_SETTING_MAIN_CONTAINER)
 
         inner = QVBoxLayout(self.main_container)
-        inner.setContentsMargins(MARGIN_STANDARD, MARGIN_STANDARD, MARGIN_STANDARD, MARGIN_STANDARD)
-        inner.setSpacing(SPACING_MD)
+        inner.setContentsMargins(
+            MARGIN_COMFORTABLE,
+            MARGIN_COMFORTABLE,
+            MARGIN_COMFORTABLE,
+            MARGIN_COMFORTABLE,
+        )
+        inner.setSpacing(SPACING_LG)
 
         cols = QHBoxLayout()
-        cols.setSpacing(SPACING_MD)
+        cols.setSpacing(SPACING_LG)
         cols.addWidget(self._build_hardware_column(), stretch=1)
         cols.addWidget(self._build_software_column(), stretch=1)
         inner.addLayout(cols, stretch=1)
@@ -298,7 +308,7 @@ class PageSetting(QWidget):
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self.progress_bar.setStyleSheet(STYLE_SETTING_PROGRESS)
-        self.progress_bar.setMinimumHeight(22)
+        self.progress_bar.setMinimumHeight(PROGRESS_H)
         self.progress_bar.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Fixed,
@@ -310,7 +320,7 @@ class PageSetting(QWidget):
             self._make_section_label("Console Output", color=TEXT_MUTED)
         )
         self.console_log = TerminalWidget(max_lines=1000, read_only=True)
-        self.console_log.setMinimumHeight(180)
+        self.console_log.setMinimumHeight(SETTING_CONSOLE_MIN_H)
         self.console_log.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Expanding,
@@ -505,11 +515,6 @@ class PageSetting(QWidget):
 
     def _validate_paths(self, config: dict[str, Any]) -> bool:
         """Validate path fields; highlight invalid ones with a red border. Returns True if all valid."""
-        _invalid = (
-            f"border: 2px solid {DANGER}; border-radius: 6px;"
-            f" background-color: rgba(239, 68, 68, 0.06);"
-        )
-
         idf_main_str = str(config.get("idf_main_dir", "")).strip()
         if not idf_main_str:
             self.txt_idf_main_dir.setStyleSheet(STYLE_SETTING_INPUT)
@@ -527,7 +532,9 @@ class PageSetting(QWidget):
             invalid_reasons.append("IDF project root is missing CMakeLists.txt")
 
         if invalid_reasons:
-            self.txt_idf_main_dir.setStyleSheet(STYLE_SETTING_INPUT + _invalid)
+            self.txt_idf_main_dir.setStyleSheet(
+                STYLE_SETTING_INPUT + STYLE_SETTINGS_INPUT_INVALID
+            )
             QMessageBox.warning(
                 self,
                 "Invalid Path",
@@ -644,16 +651,14 @@ class PageSetting(QWidget):
     @staticmethod
     def _add_form_row(form: QFormLayout, label_text: str, widget: QWidget) -> None:
         label = QLabel(label_text)
-        label.setStyleSheet(f"color: {TEXT_BODY}; font-weight: 600; font-size: 11px;")
+        label.setStyleSheet(STYLE_SETTINGS_FORM_LABEL)
         widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         form.addRow(label, widget)
 
     @staticmethod
     def _make_section_label(text: str, color: str = SETTINGS_ACCENT) -> QLabel:
         lbl = QLabel(text)
-        lbl.setStyleSheet(
-            f"color: {color}; font-weight: 900; font-size: 12px; letter-spacing: 1px;"
-        )
+        lbl.setStyleSheet(STYLE_SETTINGS_SECTION_LABEL_TEMPLATE.format(color=color))
         lbl.setWordWrap(True)
         return lbl
 
@@ -692,7 +697,7 @@ class PageSetting(QWidget):
     def _make_form_row(label_text: str, widget: QWidget) -> QHBoxLayout:
         row = QHBoxLayout()
         lbl = QLabel(label_text)
-        lbl.setStyleSheet(f"color: {TEXT_BODY}; font-weight: 600; font-size: 11px;")
+        lbl.setStyleSheet(STYLE_SETTINGS_FORM_LABEL)
         lbl.setMinimumWidth(LABEL_W)
         lbl.setMaximumWidth(LABEL_W)
         row.addWidget(lbl)
@@ -702,6 +707,6 @@ class PageSetting(QWidget):
     @staticmethod
     def _make_hint(text: str, color: str = TEXT_MUTED) -> QLabel:
         lbl = QLabel(text)
-        lbl.setStyleSheet(f"color: {color}; font-size: 11px;")
+        lbl.setStyleSheet(STYLE_SETTINGS_HINT_TEMPLATE.format(color=color))
         lbl.setWordWrap(True)
         return lbl

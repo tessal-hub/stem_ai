@@ -22,31 +22,40 @@ from ui.wand_3d_widget import Wand3DWidget
 from ui.tokens import (
     ACCENT,
     ACCENT_TEXT,
+    BTN_H,
+    BTN_SMALL_H,
     DANGER,
     HOME_ATTACH_H,
+    HOME_MANAGER_DOT,
+    HOME_MODE_H,
     HOME_RIGHT_W,
     HOME_STATUS_H,
+    HOME_VIEWER_INNER_MARGIN,
     HOME_VIEWER_MIN_H,
     ICON,
+    PROGRESS_H,
     STYLE_HOME_ACTION_BTN,
     STYLE_HOME_ACTION_BTN_SECONDARY,
     STYLE_HOME_ATTACHMENT_BAR,
     STYLE_HOME_ATTACHMENT_PILL,
+    STYLE_HOME_EMPTY_SPELL_TEXT,
     STYLE_HOME_MAIN_CONTAINER as STYLE_MAIN_CONTAINER,
     STYLE_HOME_MANAGER_BAR,
+    STYLE_HOME_MANAGER_INDICATOR,
     STYLE_HOME_MANAGER_ROW,
     STYLE_HOME_MODE_LABEL,
+    STYLE_HOME_OVERFLOW_TEXT,
     STYLE_HOME_RIGHT_PANEL,
     STYLE_HOME_RIGHT_SECTION,
     STYLE_HOME_SECTION_SUBTITLE,
     STYLE_HOME_SECTION_TITLE,
+    STYLE_HOME_STATUS_TEMPLATE,
     STYLE_HOME_SPELL_BTN,
     STYLE_HOME_STAT_NAME,
     STYLE_HOME_STAT_VALUE,
     STYLE_HOME_VIEWER_CARD,
     STYLE_SCROLL_AREA,
     STYLE_TRANSPARENT_WIDGET,
-    TEXT_MUTED,
 )
 from ui.modern_layout import (
     MARGIN_COMFORTABLE,
@@ -188,17 +197,7 @@ class PageHome(QWidget):
 
     @staticmethod
     def _status_style(bg_color: str, fg_color: str) -> str:
-        return f"""
-            QLabel {{
-                background-color: {bg_color};
-                color: {fg_color};
-                padding: 6px 16px;
-                font-size: 12px;
-                font-weight: 900;
-                border-radius: 8px;
-                letter-spacing: 1px;
-            }}
-        """
+        return STYLE_HOME_STATUS_TEMPLATE.format(bg_color=bg_color, fg_color=fg_color)
 
     def _build_center_column(self) -> QWidget:
         widget = QWidget()
@@ -223,7 +222,7 @@ class PageHome(QWidget):
         header.setSpacing(SPACING_MD)
         title_block = QVBoxLayout()
         title_block.setContentsMargins(0, 0, 0, 0)
-        title_block.setSpacing(2)
+        title_block.setSpacing(SPACING_XS)
         title = QLabel("3D WAND ORIENTATION")
         title.setStyleSheet(STYLE_HOME_SECTION_TITLE)
         subtitle = QLabel("Complementary filter using normalized MPU6050 samples")
@@ -242,7 +241,12 @@ class PageHome(QWidget):
         self.sim_view.setMinimumHeight(HOME_VIEWER_MIN_H)
 
         sim_inner = QVBoxLayout(self.sim_view)
-        sim_inner.setContentsMargins(1, 1, 1, 1)
+        sim_inner.setContentsMargins(
+            HOME_VIEWER_INNER_MARGIN,
+            HOME_VIEWER_INNER_MARGIN,
+            HOME_VIEWER_INNER_MARGIN,
+            HOME_VIEWER_INNER_MARGIN,
+        )
         self.wand_3d = Wand3DWidget()
         sim_inner.addWidget(self.wand_3d, stretch=1)
 
@@ -316,7 +320,7 @@ class PageHome(QWidget):
         box = QFrame()
         box.setObjectName("HomeRightSection")
         box.setStyleSheet(STYLE_HOME_RIGHT_SECTION)
-        box.setFixedHeight(48)
+        box.setFixedHeight(HOME_MODE_H)
 
         layout = QHBoxLayout(box)
         layout.setContentsMargins(MARGIN_COMFORTABLE, 0, MARGIN_COMFORTABLE, 0)
@@ -352,7 +356,7 @@ class PageHome(QWidget):
         if not spells:
             no_spell = QLabel("No spells recorded yet.")
             no_spell.setWordWrap(True)
-            no_spell.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px; font-style: italic; padding: 4px 0;")
+            no_spell.setStyleSheet(STYLE_HOME_EMPTY_SPELL_TEXT)
             no_spell.setAccessibleName("No spells recorded yet")
             spell_layout.addWidget(no_spell)
         else:
@@ -360,7 +364,7 @@ class PageHome(QWidget):
                 spell_layout.addWidget(self._make_spell_button(f"✨ {spell}"))
             if len(spells) > max_display:
                 overflow_lbl = QLabel(f"+ {len(spells) - max_display} more")
-                overflow_lbl.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 10px; font-style: italic; padding: 2px 0;")
+                overflow_lbl.setStyleSheet(STYLE_HOME_OVERFLOW_TEXT)
                 overflow_lbl.setAccessibleName("Additional spells hidden from the overview")
                 spell_layout.addWidget(overflow_lbl)
 
@@ -424,8 +428,8 @@ class PageHome(QWidget):
             top.setSpacing(SPACING_SM)
 
             indicator = QLabel()
-            indicator.setFixedSize(8, 8)
-            indicator.setStyleSheet(f"background-color: {ACCENT}; border-radius: 4px;")
+            indicator.setFixedSize(HOME_MANAGER_DOT, HOME_MANAGER_DOT)
+            indicator.setStyleSheet(STYLE_HOME_MANAGER_INDICATOR)
 
             name_label = QLabel(key)
             name_label.setStyleSheet(STYLE_HOME_STAT_NAME)
@@ -444,7 +448,7 @@ class PageHome(QWidget):
             progress.setObjectName("HomeManagerBar")
             progress.setRange(0, 100)
             progress.setTextVisible(False)
-            progress.setFixedHeight(4)
+            progress.setFixedHeight(PROGRESS_H)
             progress.setStyleSheet(STYLE_HOME_MANAGER_BAR)
             progress.setValue(self._stat_value_to_percent(value))
 
@@ -458,7 +462,7 @@ class PageHome(QWidget):
     @staticmethod
     def _make_spell_button(label: str) -> QPushButton:
         btn = QPushButton(label)
-        btn.setFixedHeight(32)
+        btn.setFixedHeight(BTN_H)
         btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         btn.setStyleSheet(STYLE_HOME_SPELL_BTN)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -468,7 +472,7 @@ class PageHome(QWidget):
     @staticmethod
     def _make_module_button(mod: ModuleEntry) -> QPushButton:
         btn = QPushButton(mod.label)
-        btn.setFixedHeight(24)
+        btn.setFixedHeight(BTN_SMALL_H)
         btn.setStyleSheet(STYLE_HOME_ATTACHMENT_PILL)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.setAccessibleName(f"Attachment toggle {mod.label}")

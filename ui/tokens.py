@@ -16,9 +16,9 @@ APP_FONT_STACK = "SF Pro Text, SF Pro Display, -apple-system, BlinkMacSystemFont
 # ════════════════════════════════════════════════════════════════════════════
 
 # Primary brand colors
-PRIMARY_COLOR = "#3b82f6"        # Modern vibrant blue
-PRIMARY_LIGHT = "#eff6ff"        # Very light blue background
-PRIMARY_DARK = "#1e40af"         # Darker blue for hover/active
+PRIMARY_COLOR = "#6366f1"        # Indigo primary action
+PRIMARY_LIGHT = "#eef2ff"        # Light indigo hover background
+PRIMARY_DARK = "#4f46e5"         # Indigo hover/active
 
 # Secondary accent colors
 SECONDARY_COLOR = "#10b981"      # Emerald green
@@ -26,9 +26,12 @@ SECONDARY_LIGHT = "#ecfdf5"      # Light emerald background
 SECONDARY_DARK = "#047857"       # Dark emerald
 
 # Surface colors (for layered depth)
-SURFACE_PRIMARY = "#ffffff"      # Main background
-SURFACE_SECONDARY = "#f9fafb"    # Secondary/elevated backgrounds
-SURFACE_TERTIARY = "#f3f4f6"     # Tertiary/hover backgrounds
+SURFACE_0 = "#f8f9fb"            # Page background
+SURFACE_1 = "#ffffff"            # Card/content surface
+SURFACE_2 = "#f1f3f7"            # Sidebar/panel surface
+SURFACE_PRIMARY = SURFACE_1
+SURFACE_SECONDARY = SURFACE_0
+SURFACE_TERTIARY = SURFACE_2
 
 # Text colors
 TEXT_PRIMARY = "#111827"         # Primary text (dark)
@@ -36,8 +39,8 @@ TEXT_SECONDARY = "#6b7280"       # Secondary text (muted)
 TEXT_TERTIARY = "#9ca3af"        # Tertiary text (very muted)
 
 # Border colors
-BORDER_COLOR = "#e5e7eb"         # Standard borders
-BORDER_LIGHT = "#f3f4f6"         # Light borders (for subtle separations)
+BORDER_COLOR = "#e4e7ec"         # Standard borders
+BORDER_LIGHT = "#eceff4"         # Light borders (for subtle separations)
 
 # Status/semantic colors
 STATUS_SUCCESS = "#10b981"       # Green for success
@@ -51,16 +54,16 @@ SHADOW_DARK = "rgba(0, 0, 0, 0.15)"       # Dark shadow (modals)
 
 # ════════════════════════════════════════════════════════════════════════════
 
-MAC_BG = "#f5f5f7"
-MAC_SURFACE_SOLID = "#ffffff"
-MAC_SIDEBAR_BG = "rgba(242, 242, 247, 0.82)"
-MAC_TOOLBAR_BG = "rgba(248, 248, 250, 0.88)"
-MAC_BORDER = "#d1d5db"
-MAC_BORDER_STRONG = "#c4cbd4"
-MAC_TEXT_PRIMARY = "#1d1d1f"
-MAC_TEXT_SECONDARY = "#6e6e73"
-MAC_ACCENT = "#0a84ff"
-MAC_ACCENT_DARK = "#0060df"
+MAC_BG = SURFACE_0
+MAC_SURFACE_SOLID = SURFACE_1
+MAC_SIDEBAR_BG = SURFACE_2
+MAC_TOOLBAR_BG = SURFACE_1
+MAC_BORDER = BORDER_COLOR
+MAC_BORDER_STRONG = BORDER_COLOR
+MAC_TEXT_PRIMARY = TEXT_PRIMARY
+MAC_TEXT_SECONDARY = TEXT_SECONDARY
+MAC_ACCENT = PRIMARY_COLOR
+MAC_ACCENT_DARK = PRIMARY_DARK
 
 # Shell layout tokens
 SHELL_SIDEBAR_W = 110
@@ -73,19 +76,22 @@ HOME_STATUS_H = 32
 HOME_VIEWER_MIN_H = 360
 HOME_ATTACH_H = 36
 HOME_RIGHT_W = 280
+HOME_MANAGER_DOT = 8
+HOME_MODE_H = 48
+HOME_VIEWER_INNER_MARGIN = 0
 
 # ────────────────────────────────────────────────────────────────────────────
 # COLOR PALETTE
 # ────────────────────────────────────────────────────────────────────────────
 
 # Base neutrals
-BG_WHITE     = MAC_SURFACE_SOLID
-BG_LIGHT     = "#f5f5f7"
+BG_WHITE     = SURFACE_1
+BG_LIGHT     = SURFACE_2
 BG_DARK      = "#111827"
-BORDER       = MAC_BORDER
-BORDER_MID   = MAC_BORDER_STRONG
-TEXT_BODY    = MAC_TEXT_PRIMARY
-TEXT_MUTED   = MAC_TEXT_SECONDARY
+BORDER       = BORDER_COLOR
+BORDER_MID   = BORDER_COLOR
+TEXT_BODY    = TEXT_PRIMARY
+TEXT_MUTED   = TEXT_TERTIARY
 
 # Common accent colors (used in multiple pages)
 ACCENT       = MAC_ACCENT
@@ -94,10 +100,10 @@ ACCENT_TEXT  = "#ffffff"
 SUCCESS      = "#10b981"
 DANGER       = "#ef4444"
 WARNING      = "#f59e0b"
-HOVER_BG     = "rgba(10, 132, 255, 0.10)"
+HOVER_BG     = "rgba(99, 102, 241, 0.08)"
 
 # Terminal colors (used in wand page)
-TERM_FG      = "#10b981"
+TERM_FG      = "#22c55e"
 TERM_BG      = "#0d1117"
 
 # Graph colors (used in plotting)
@@ -120,17 +126,26 @@ RARITY_EPIC  = "#f59e0b"
 # Settings-specific accents
 SETTINGS_ACCENT       = "#6366f1"
 SETTINGS_ACCENT_DARK  = "#4f46e5"
-SETTINGS_HOVER_BG     = "#e0e7ff"      # Light blue hover for settings
+SETTINGS_HOVER_BG     = PRIMARY_LIGHT   # Light indigo hover for settings
 
 # Wand-specific accents
-WAND_ACCENT       = "#00ff88"
+WAND_ACCENT       = ACCENT
 
 # Home page typography tokens
-STYLE_HOME_SECTION_TITLE = f"color: {TEXT_BODY}; font-size: 14px; font-weight: 800; letter-spacing: 1px;"
-STYLE_HOME_SECTION_SUBTITLE = f"color: {TEXT_MUTED}; font-weight: 900; font-size: 11px; letter-spacing: 0.8px;"
+STYLE_HOME_SECTION_TITLE = f"color: {TEXT_BODY}; font-size: 14px; font-weight: 900; letter-spacing: 1px;"
+STYLE_HOME_SECTION_SUBTITLE = f"color: {TEXT_MUTED}; font-weight: 700; font-size: 11px; letter-spacing: 0.8px;"
 STYLE_HOME_MODE_LABEL = f"color: {ACCENT}; font-size: 12px; font-weight: 900; letter-spacing: 1px;"
 STYLE_HOME_STAT_NAME = f"color: {TEXT_BODY}; font-size: 11px; font-weight: 700;"
 STYLE_HOME_STAT_VALUE = f"color: {TEXT_MUTED}; font-size: 11px; font-weight: 600;"
+STYLE_HOME_EMPTY_SPELL_TEXT = f"color: {TEXT_MUTED}; font-size: 12px; font-style: italic; padding: 4px 0;"
+STYLE_HOME_OVERFLOW_TEXT = f"color: {TEXT_MUTED}; font-size: 10px; font-style: italic; padding: 2px 0;"
+STYLE_HOME_MANAGER_INDICATOR = f"background-color: {ACCENT}; border-radius: 4px;"
+STYLE_HOME_STATUS_TEMPLATE = (
+    "QLabel {{ "
+    "background-color: {bg_color}; "
+    f"color: {{fg_color}}; padding: 6px 16px; font-size: 12px; "
+    "font-weight: 900; border-radius: 8px; letter-spacing: 1px; }}"
+)
 STYLE_HOME_STATUS_BAR = f"""
     #HomeStatusBar {{
         background-color: {DANGER};
@@ -144,13 +159,13 @@ STYLE_HOME_STATUS_BAR = f"""
 """
 STYLE_HOME_VIEWER_CARD = f"""
     #HomeViewerCard {{
-        background-color: {MAC_SURFACE_SOLID};
-        border: none;
-        border-radius: 18px;
+        background-color: {BG_WHITE};
+        border: 1px solid {BORDER};
+        border-radius: 14px;
     }}
     #HomeViewerSurface {{
         background-color: {BG_WHITE};
-        border: none;
+        border: 1px solid {BORDER};
         border-radius: 14px;
     }}
 """
@@ -184,9 +199,9 @@ STYLE_HOME_RIGHT_PANEL = """
 """
 STYLE_HOME_RIGHT_SECTION = f"""
     #HomeRightSection {{
-        background-color: {MAC_SURFACE_SOLID};
-        border: none;
-        border-radius: 16px;
+        background-color: {BG_WHITE};
+        border: 1px solid {BORDER};
+        border-radius: 14px;
     }}
 """
 STYLE_HOME_MANAGER_ROW = f"""
@@ -200,16 +215,16 @@ STYLE_HOME_MANAGER_ROW = f"""
 """
 STYLE_HOME_MANAGER_BAR = f"""
     QProgressBar#HomeManagerBar {{
-        background-color: {BG_LIGHT};
+        background-color: {BORDER};
         border: none;
-        border-radius: 1px;
-        min-height: 4px;
-        max-height: 4px;
+        border-radius: 4px;
+        min-height: 6px;
+        max-height: 6px;
         text-align: right;
     }}
     QProgressBar#HomeManagerBar::chunk {{
-        background-color: {SUCCESS};
-        border-radius: 1px;
+        background-color: {ACCENT};
+        border-radius: 4px;
     }}
 """
 STYLE_HOME_SPELL_BTN = f"""
@@ -249,10 +264,10 @@ STYLE_HOME_ACTION_BTN = f"""
     QPushButton {{
         background-color: {ACCENT};
         color: {ACCENT_TEXT};
-        border: none;
-        border-radius: 10px;
-        font-size: 10px;
-        font-weight: 900;
+        border: 1px solid {ACCENT};
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 700;
         padding: 5px 10px;
         letter-spacing: 0.8px;
     }}
@@ -261,12 +276,12 @@ STYLE_HOME_ACTION_BTN = f"""
 """
 STYLE_HOME_ACTION_BTN_SECONDARY = f"""
     QPushButton {{
-        background-color: {BG_WHITE};
-        color: {TEXT_BODY};
-        border: 1px solid {BORDER_MID};
-        border-radius: 10px;
-        font-size: 10px;
-        font-weight: 900;
+        background-color: transparent;
+        color: {TEXT_SECONDARY};
+        border: 1px solid {ACCENT};
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 700;
         padding: 5px 10px;
         letter-spacing: 0.8px;
     }}
@@ -288,12 +303,20 @@ SPELL_BTN_H   = 36
 MODULE_BTN_H  = 28
 GRAPH_MIN_H   = 360
 TERM_MIN_H    = 140
-PROGRESS_H    = 10
+PROGRESS_H    = 6
 RIGHT_MAX_W   = 320
 BTN_H         = 32
-SETTINGS_BTN_H    = 30
-SETTINGS_INPUT_H  = 28
+BTN_SMALL_H   = 28
+SETTINGS_BTN_H    = 32
+SETTINGS_INPUT_H  = 32
 LABEL_W       = 144
+RECORD_GRAPH_MIN_H = 150
+RECORD_LIST_MIN_H = 180
+SETTING_CONSOLE_MIN_H = 180
+STATISTICS_FFT_MIN_H = 320
+STATISTICS_SAMPLE_LIST_MIN_H = 220
+WAND_SPELL_LIST_MIN_H = 220
+WAND_TERMINAL_MIN_H = 210
 
 # ────────────────────────────────────────────────────────────────────────────
 # MAIN CONTAINER STYLES (used in all pages)
@@ -358,9 +381,9 @@ STYLE_SETTING_MAIN_CONTAINER = f"""
 # Generic card frames
 STYLE_CARD = f"""
     #CardFrame {{
-        background-color: {MAC_SURFACE_SOLID};
-        border: none;
-        border-radius: 16px;
+        background-color: {BG_WHITE};
+        border: 1px solid {BORDER};
+        border-radius: 14px;
     }}
 """
 
@@ -374,40 +397,40 @@ STYLE_CARD_NO_BORDER = """
 # PageStatistics card style (also applies to ClickableFrame)
 STYLE_STATISTICS_CARD = f"""
     #CardFrame, ClickableFrame {{
-        background-color: {MAC_SURFACE_SOLID};
-        border: none;
-        border-radius: 16px;
+        background-color: {BG_WHITE};
+        border: 1px solid {BORDER};
+        border-radius: 14px;
     }}
     ClickableFrame:hover {{
         background-color: {BG_LIGHT};
-        border: none;
+        border: 1px solid {BORDER};
     }}
 """
 
 # PageSetting card style
 STYLE_SETTING_CARD = f"""
     #CardFrame {{
-        background-color: {MAC_SURFACE_SOLID};
-        border: none;
-        border-radius: 16px;
+        background-color: {BG_WHITE};
+        border: 1px solid {BORDER};
+        border-radius: 14px;
     }}
 """
 
 # PageRecord graph card style
 STYLE_RECORD_GRAPH_CARD = f"""
     #CardFrame {{
-        background-color: {BG_DARK};
-        border: none;
-        border-radius: 16px;
+        background-color: {BG_WHITE};
+        border: 1px solid {BORDER};
+        border-radius: 14px;
     }}
 """
 
 # PageWand card style
 STYLE_WAND_CARD = f"""
     #CardFrame {{
-        background-color: {MAC_SURFACE_SOLID};
-        border: none;
-        border-radius: 16px;
+        background-color: {BG_WHITE};
+        border: 1px solid {BORDER};
+        border-radius: 14px;
     }}
 """
 
@@ -418,40 +441,81 @@ STYLE_WAND_CARD = f"""
 # Base button (PageRecord)
 STYLE_BTN_BASE = f"""
     QPushButton {{
-        background-color: {MAC_SURFACE_SOLID};
-        border: 1px solid {MAC_BORDER};
+        background-color: transparent;
+        border: 1px solid {BORDER};
         border-radius: 8px;
-        font-size: 12px;
-        font-weight: 600;
+        color: {TEXT_SECONDARY};
+        font-size: 11px;
+        font-weight: 700;
         padding: 5px 10px;
         min-width: 64px;
     }}
     QPushButton:hover {{
         background-color: {HOVER_BG};
         border-color: {ACCENT};
+        color: {ACCENT};
     }}
 """
 
 # Specific Record buttons
-STYLE_BTN_START = STYLE_BTN_BASE + f" QPushButton {{ color: {SUCCESS}; }}"
-STYLE_BTN_STOP  = STYLE_BTN_BASE + f" QPushButton {{ color: {DANGER}; }}"
-STYLE_BTN_SNIP  = (
-    STYLE_BTN_BASE +
-    f" QPushButton {{ color: {ACCENT}; background-color: {HOVER_BG}; border-color: {ACCENT}; }}"
-)
+STYLE_BTN_START = f"""
+    QPushButton {{
+        background-color: {ACCENT};
+        color: {ACCENT_TEXT};
+        border: 1px solid {ACCENT};
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 5px 10px;
+        letter-spacing: 1px;
+    }}
+    QPushButton:hover {{ background-color: {ACCENT_DARK}; }}
+    QPushButton:disabled {{ background-color: {BORDER_MID}; color: {TEXT_MUTED}; }}
+"""
+STYLE_BTN_STOP = f"""
+    QPushButton {{
+        background-color: transparent;
+        color: {DANGER};
+        border: 1px solid {DANGER};
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 5px 10px;
+    }}
+    QPushButton:hover {{ background-color: {DANGER}; color: {ACCENT_TEXT}; }}
+    QPushButton:disabled {{ opacity: 0.5; }}
+"""
+STYLE_BTN_SNIP = f"""
+    QPushButton {{
+        background-color: transparent;
+        color: {TEXT_SECONDARY};
+        border: 1px solid {ACCENT};
+        border-radius: 8px;
+        font-size: 10px;
+        font-weight: 700;
+        padding: 2px 8px;
+    }}
+    QPushButton:hover {{
+        background-color: {HOVER_BG};
+        border-color: {ACCENT};
+        color: {ACCENT};
+    }}
+    QPushButton:disabled {{ opacity: 0.5; }}
+"""
+STYLE_BTN_DANGER_OUTLINE = STYLE_BTN_STOP
 STYLE_BTN_BACK = STYLE_BTN_BASE + f" QPushButton {{ color: {TEXT_BODY}; }}"
 
 # Outline button (generic, used in PageWand, PageSetting)
 STYLE_BTN_OUTLINE = f"""
     QPushButton {{
-        background-color: {MAC_SURFACE_SOLID};
-        color: {TEXT_BODY};
-        border: 1px solid {MAC_BORDER};
+        background-color: transparent;
+        color: {TEXT_SECONDARY};
+        border: 1px solid {ACCENT};
         border-radius: 8px;
         font-size: 11px;
-        font-weight: 600;
+        font-weight: 700;
         padding: 5px 10px;
-        letter-spacing: 1px;
+        letter-spacing: 0.5px;
     }}
     QPushButton:hover {{
         background-color: {HOVER_BG};
@@ -466,7 +530,7 @@ STYLE_BTN_PRIMARY = f"""
     QPushButton {{
         background-color: {ACCENT};
         color: {ACCENT_TEXT};
-        border: none;
+        border: 1px solid {ACCENT};
         border-radius: 8px;
         font-size: 11px;
         font-weight: 700;
@@ -480,12 +544,14 @@ STYLE_BTN_PRIMARY = f"""
 # Small button (PageWand)
 STYLE_BTN_SMALL = f"""
     QPushButton {{
-        background-color: {BG_WHITE};
-        color: {TEXT_MUTED};
-        border: 1px solid {BORDER_MID};
-        border-radius: 5px;
-        font-size: 9px;
-        font-weight: bold;
+        background-color: transparent;
+        color: {TEXT_SECONDARY};
+        border: 1px solid {ACCENT};
+        border-radius: 8px;
+        min-height: 28px;
+        max-height: 28px;
+        font-size: 10px;
+        font-weight: 700;
         padding: 2px 8px;
     }}
     QPushButton:hover {{
@@ -498,12 +564,12 @@ STYLE_BTN_SMALL = f"""
 # Settings-specific buttons
 STYLE_SETTING_BTN_OUTLINE = f"""
     QPushButton {{
-        background-color: {MAC_SURFACE_SOLID};
-        color: {TEXT_BODY};
-        border: 1px solid {MAC_BORDER};
-        border-radius: 6px;
+        background-color: transparent;
+        color: {TEXT_SECONDARY};
+        border: 1px solid {ACCENT};
+        border-radius: 8px;
         font-size: 11px;
-        font-weight: bold;
+        font-weight: 700;
         padding: 5px 10px;
     }}
     QPushButton:hover {{
@@ -518,29 +584,29 @@ STYLE_SETTING_BTN_OUTLINE = f"""
 
 STYLE_SETTING_BTN_PRIMARY = f"""
     QPushButton {{
-        background-color: {SETTINGS_ACCENT};
+        background-color: {ACCENT};
         color: {ACCENT_TEXT};
-        border: none;
-        border-radius: 6px;
+        border: 1px solid {ACCENT};
+        border-radius: 8px;
         font-size: 11px;
-        font-weight: bold;
+        font-weight: 700;
         padding: 5px 10px;
     }}
-    QPushButton:hover {{ background-color: {SETTINGS_ACCENT_DARK}; }}
-    QPushButton:disabled {{ opacity: 0.5; }}
+    QPushButton:hover {{ background-color: {ACCENT_DARK}; }}
+    QPushButton:disabled {{ background-color: {BORDER_MID}; color: {TEXT_MUTED}; }}
 """
 
 STYLE_SETTING_BTN_DANGER = f"""
     QPushButton {{
-        background-color: {MAC_SURFACE_SOLID};
+        background-color: transparent;
         color: {DANGER};
         border: 1px solid {DANGER};
-        border-radius: 6px;
+        border-radius: 8px;
         font-size: 11px;
-        font-weight: bold;
+        font-weight: 700;
         padding: 5px 10px;
     }}
-    QPushButton:hover {{ background-color: {DANGER}; color: {BG_WHITE}; }}
+    QPushButton:hover {{ background-color: {DANGER}; color: {ACCENT_TEXT}; }}
     QPushButton:disabled {{ opacity: 0.5; }}
 """
 
@@ -601,69 +667,77 @@ STYLE_STATISTICS_BTN_BACK = f"""
 # List widget (used in multiple pages)
 STYLE_LIST = f"""
     QListWidget {{
-        background-color: {MAC_SURFACE_SOLID};
-        border: 1px solid {MAC_BORDER};
+        background-color: {BG_WHITE};
+        border: 1px solid {BORDER};
         border-radius: 12px;
         outline: 0;
         color: {TEXT_BODY};
     }}
     QListWidget::item {{
         border-bottom: 1px solid {BORDER};
-        min-height: 52px;
+        min-height: 48px;
+        padding: 0 12px;
         color: {TEXT_BODY};
     }}
-    QListWidget::item:hover {{ background-color: {HOVER_BG}; }}
+    QListWidget::item:selected {{
+        background-color: {BG_WHITE};
+        border-left: 3px solid {ACCENT};
+        padding-left: 9px;
+    }}
+    QListWidget::item:hover:!selected {{ background-color: {BG_LIGHT}; }}
 """
 
 # PageRecord list
 STYLE_RECORD_LIST = f"""
     QListWidget {{
-        background-color: {MAC_SURFACE_SOLID};
-        border: 1px solid {MAC_BORDER};
-        border-radius: 8px;
+        background-color: {BG_WHITE};
+        border: 1px solid {BORDER};
+        border-radius: 12px;
         outline: 0;
         color: {TEXT_BODY};
     }}
     QListWidget::item {{
-        padding: 12px;
         border-bottom: 1px solid {BORDER};
+        min-height: 48px;
+        padding: 0 12px;
         color: {TEXT_BODY};
         font-weight: 500;
     }}
     QListWidget::item:selected {{
-        background-color: {ACCENT};
-        color: {ACCENT_TEXT};
-        border-radius: 6px;
+        background-color: {BG_WHITE};
+        color: {TEXT_BODY};
+        border-left: 3px solid {ACCENT};
+        padding-left: 9px;
     }}
     QListWidget::item:hover:!selected {{
-        background-color: {HOVER_BG};
-        border-radius: 6px;
+        background-color: {BG_LIGHT};
     }}
 """
 
 # PageStatistics list
 STYLE_STATISTICS_LIST = f"""
     QListWidget {{
-        background-color: {MAC_SURFACE_SOLID};
-        border: 1px solid {MAC_BORDER};
-        border-radius: 8px;
+        background-color: {BG_WHITE};
+        border: 1px solid {BORDER};
+        border-radius: 12px;
         outline: 0;
         color: {TEXT_BODY};
     }}
     QListWidget::item {{
-        padding: 12px;
         border-bottom: 1px solid {BORDER};
+        min-height: 48px;
+        padding: 0 12px;
         color: {TEXT_BODY};
         font-weight: 500;
     }}
     QListWidget::item:selected {{
-        background-color: {TEXT_BODY};
-        color: {BG_WHITE};
-        border-radius: 6px;
+        background-color: {BG_WHITE};
+        color: {TEXT_BODY};
+        border-left: 3px solid {ACCENT};
+        padding-left: 9px;
     }}
     QListWidget::item:hover:!selected {{
-        background-color: {HOVER_BG};
-        border-radius: 6px;
+        background-color: {BG_LIGHT};
     }}
 """
 
@@ -802,28 +876,29 @@ STYLE_SETTING_INPUT = f"""
 # Progress bar (generic, used in multiple pages)
 STYLE_PROGRESS = f"""
     QProgressBar {{
-        border: 1px solid {MAC_BORDER};
+        border: none;
         border-radius: 4px;
-        text-align: center;
-        color: {TEXT_BODY};
-        font-weight: 600;
-        font-size: 10px;
-        background-color: {MAC_SURFACE_SOLID};
+        min-height: 6px;
+        max-height: 6px;
+        background-color: {BORDER};
     }}
-    QProgressBar::chunk {{ background-color: {SUCCESS}; border-radius: 3px; }}
+    QProgressBar::chunk {{ background-color: {ACCENT}; border-radius: 4px; }}
 """
 
 # PageSetting progress bar
 STYLE_SETTING_PROGRESS = f"""
     QProgressBar {{
-        border: 1px solid {MAC_BORDER};
+        border: none;
         border-radius: 4px;
         text-align: center;
-        background-color: {MAC_SURFACE_SOLID};
+        background-color: {BORDER};
+        min-height: 6px;
+        max-height: 6px;
+        color: {TEXT_BODY};
     }}
     QProgressBar::chunk {{
-        background-color: {SUCCESS};
-        border-radius: 3px;
+        background-color: {ACCENT};
+        border-radius: 4px;
     }}
 """
 
@@ -836,24 +911,27 @@ STYLE_TERMINAL = f"""
     QTextEdit, QPlainTextEdit, QTextBrowser {{
         background-color: {TERM_BG};
         color: {TERM_FG};
-        border: 1px solid #2a2a2a;
+        border: 1px solid {BORDER};
+        border-left: 3px solid {TERM_FG};
         border-radius: 8px;
         padding: 12px;
+        font-family: Consolas, 'Courier New', monospace;
         font-size: 11px;
     }}
 """
 
 # PageSetting console
-STYLE_CONSOLE = """
-    QTextEdit, QPlainTextEdit, QTextBrowser {
-        background-color: #0d0d0d;
-        color: #00ff88;
-        border: 1px solid #2a2a2a;
-        border-radius: 4px;
-        font-family: 'Courier New', monospace;
-        font-size: 10px;
-        padding: 8px;
-    }
+STYLE_CONSOLE = f"""
+    QTextEdit, QPlainTextEdit, QTextBrowser {{
+        background-color: {TERM_BG};
+        color: {TERM_FG};
+        border: 1px solid {BORDER};
+        border-left: 3px solid {TERM_FG};
+        border-radius: 8px;
+        font-family: Consolas, 'Courier New', monospace;
+        font-size: 11px;
+        padding: 12px;
+    }}
 """
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -880,14 +958,14 @@ STYLE_TRANSPARENT_WIDGET = "background: transparent;"
 # RARITY BADGE STYLES
 # ────────────────────────────────────────────────────────────────────────────
 
-# PageWand rarity badge (colored background)
-STYLE_RARITY_BADGE_WAND = f"""
+# PageWand rarity badge (border-only, aligned with statistics)
+STYLE_RARITY_BADGE_WAND = """
     QLabel {{{{
-        background-color: {{color}};
-        color: {TEXT_BODY};
-        border: none;
-        border-radius: 8px;
-        padding: 4px 10px;
+        background-color: transparent;
+        color: {{color}};
+        border: 2px solid {{color}};
+        border-radius: 6px;
+        padding: 4px 8px;
         font-weight: 900;
         font-size: 10px;
         letter-spacing: 1px;
@@ -913,4 +991,32 @@ STYLE_RARITY_BADGE_STATISTICS = """
 
 # Used in PageWand for connection status labels (serial, bluetooth)
 # Format with .format(color=SUCCESS) or .format(color=DANGER)
-STATUS_LABEL_STYLE_TEMPLATE = "color: {color}; font-weight: 800; font-size: 11px;"
+STATUS_LABEL_STYLE_TEMPLATE = (
+    "background: transparent; border: none; "
+    "color: {color}; font-weight: 800; font-size: 11px; letter-spacing: 0.8px;"
+)
+STYLE_RECORD_STATUS_TEMPLATE = "color: {color}; font-weight: 800; font-size: 12px;"
+STYLE_RECORD_FIELD_LABEL = f"color: {TEXT_BODY}; font-weight: 700; font-size: 11px;"
+STYLE_RECORD_METRIC_VALUE = f"color: {TEXT_BODY}; font-weight: 800; font-size: 16px;"
+STYLE_RECORD_CURRENT_SPELL = f"color: {ACCENT}; font-weight: 700; font-size: 11px;"
+STYLE_SETTINGS_FORM_LABEL = f"color: {TEXT_BODY}; font-weight: 700; font-size: 11px;"
+STYLE_SETTINGS_HINT_TEMPLATE = "color: {color}; font-size: 11px;"
+STYLE_SETTINGS_SECTION_LABEL_TEMPLATE = "color: {color}; font-weight: 900; font-size: 12px; letter-spacing: 1px;"
+STYLE_SETTINGS_INPUT_INVALID = (
+    f"border: 2px solid {DANGER}; border-radius: 6px;"
+    f" background-color: rgba(239, 68, 68, 0.06);"
+)
+STYLE_STATISTICS_INFO_LABEL = f"color: {TEXT_BODY}; font-weight: 500; font-size: 11px;"
+STYLE_STATISTICS_META_LABEL = f"color: {TEXT_MUTED}; font-size: 10px;"
+STYLE_STATISTICS_CURRENT_SPELL = f"color: {WAND_ACCENT}; font-weight: 700; font-size: 11px;"
+STYLE_SECTION_LABEL_TEMPLATE = "color: {color}; font-weight: 900; font-size: 12px; letter-spacing: 1px;"
+STYLE_STAT_LABEL = f"color: {TEXT_MUTED}; font-size: 11px; font-weight: 700;"
+STYLE_HINT_LABEL_TEMPLATE = "color: {color}; font-size: 11px; font-weight: 500;"
+STYLE_CARD_NAME_LABEL = f"color: {TEXT_BODY}; font-weight: 700; font-size: 12px;"
+STYLE_CARD_COUNT_LABEL = f"color: {TEXT_MUTED}; font-size: 10px; font-weight: 700;"
+STYLE_GRAPH_PLACEHOLDER = f"background-color: {BG_DARK}; color: {TEXT_MUTED}; border-radius: 6px;"
+STYLE_FORM_ROW_LABEL = STYLE_SETTINGS_FORM_LABEL
+STYLE_WAND_LIST_TITLE = f"color: {TEXT_BODY}; font-size: 10px; font-weight: 800; letter-spacing: 1px;"
+STYLE_WAND_SPELL_NAME = f"color: {TEXT_BODY}; font-size: 12px; font-weight: 700;"
+STYLE_WAND_EMPTY_ROW_TEMPLATE = "color: {color}; font-size: 11px; font-style: italic; padding: 8px 12px;"
+STYLE_WAND_FLASH_STATUS = f"color: {TEXT_MUTED}; font-size: 11px; font-weight: 700;"

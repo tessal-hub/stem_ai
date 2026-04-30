@@ -6,12 +6,15 @@ from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QProgressBar, QVBoxLayout, QWidget
 
 from ui.tokens import (
+    BTN_H,
     PROGRESS_H,
+    STYLE_HOME_SECTION_SUBTITLE,
     STYLE_BTN_OUTLINE,
     STYLE_BTN_PRIMARY,
     STYLE_PROGRESS,
-    TEXT_MUTED,
+    STYLE_WAND_FLASH_STATUS,
 )
+from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_MD, SPACING_XS
 from ui.wand_panels.shared import make_button, make_card, make_section_label
 
 
@@ -35,20 +38,26 @@ class WandFlashPanel(QWidget):
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+        layout.setSpacing(SPACING_XS)
 
         title = make_section_label("MODEL BUILDING")
-        title.setStyleSheet(
-            f"color: {TEXT_MUTED}; font-weight: 900; font-size: 11px; letter-spacing: 1px;"
-        )
+        title.setStyleSheet(STYLE_HOME_SECTION_SUBTITLE)
         layout.addWidget(title)
 
-        card, card_layout = make_card(margins=(16, 14, 16, 14), spacing=14)
+        card, card_layout = make_card(
+            margins=(
+                MARGIN_COMFORTABLE,
+                MARGIN_COMFORTABLE,
+                MARGIN_COMFORTABLE,
+                MARGIN_COMFORTABLE,
+            ),
+            spacing=SPACING_MD,
+        )
 
         btn_row = QHBoxLayout()
-        btn_row.setSpacing(10)
-        self.btn_build_tflite = make_button("BUILD .TFLITE", STYLE_BTN_OUTLINE, height=38)
-        self.btn_build_cc = make_button("BUILD .CC", STYLE_BTN_PRIMARY, height=38)
+        btn_row.setSpacing(SPACING_MD)
+        self.btn_build_tflite = make_button("BUILD .TFLITE", STYLE_BTN_OUTLINE, height=BTN_H)
+        self.btn_build_cc = make_button("BUILD .CC", STYLE_BTN_PRIMARY, height=BTN_H)
         # Legacy aliases kept for existing access paths.
         self.btn_compile = self.btn_build_cc
         self.btn_flash = self.btn_build_tflite
@@ -57,13 +66,11 @@ class WandFlashPanel(QWidget):
         card_layout.addLayout(btn_row)
 
         self.lbl_flash_status = QLabel("● Ready to build model")
-        self.lbl_flash_status.setStyleSheet(
-            f"color: {TEXT_MUTED}; font-size: 12px; font-weight: 800;"
-        )
+        self.lbl_flash_status.setStyleSheet(STYLE_WAND_FLASH_STATUS)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setStyleSheet(STYLE_PROGRESS)
-        self.progress_bar.setFixedHeight(max(PROGRESS_H, 14))
+        self.progress_bar.setFixedHeight(PROGRESS_H)
         self.progress_bar.setValue(0)
 
         card_layout.addWidget(self.lbl_flash_status)

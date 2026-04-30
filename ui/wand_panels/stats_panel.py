@@ -8,7 +8,16 @@ from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QGridLayout, QLabel, QVBoxLayout, QWidget
 
 from ui.layout_utils import clear_layout
-from ui.tokens import ACCENT, BG_WHITE, BORDER_MID, TEXT_BODY, TEXT_MUTED
+from ui.modern_layout import SPACING_LG, SPACING_SM, SPACING_XS
+from ui.tokens import (
+    ACCENT,
+    BG_WHITE,
+    BORDER_MID,
+    STYLE_SETTINGS_HINT_TEMPLATE,
+    STYLE_STATISTICS_INFO_LABEL,
+    TEXT_BODY,
+    TEXT_MUTED,
+)
 from ui.wand_panels.shared import make_card, make_section_label
 
 
@@ -23,15 +32,13 @@ class WandStatsPanel(QWidget):
         clear_layout(self.layout_stats)
         if not stats:
             lbl = QLabel("Awaiting connection...")
-            lbl.setStyleSheet(
-                f"color: {TEXT_MUTED}; font-size: 11px; font-style: italic;"
-            )
+            lbl.setStyleSheet(STYLE_SETTINGS_HINT_TEMPLATE.format(color=TEXT_MUTED))
             self.layout_stats.addWidget(lbl, 0, 0)
             return
 
         for idx, (key, val) in enumerate(stats.items()):
             lbl = QLabel(f"■  {key}: {val}")
-            lbl.setStyleSheet(f"color: {TEXT_BODY}; font-size: 11px; font-weight: 600;")
+            lbl.setStyleSheet(STYLE_STATISTICS_INFO_LABEL)
             lbl.setWordWrap(True)
             row = idx // 2
             col = idx % 2
@@ -70,15 +77,15 @@ class WandStatsPanel(QWidget):
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(SPACING_SM)
 
         layout.addWidget(make_section_label("DATASET STATISTICS"))
 
         card, card_layout = make_card()
 
         self.layout_stats = QGridLayout()
-        self.layout_stats.setHorizontalSpacing(16)
-        self.layout_stats.setVerticalSpacing(6)
+        self.layout_stats.setHorizontalSpacing(SPACING_LG)
+        self.layout_stats.setVerticalSpacing(SPACING_XS)
         card_layout.addLayout(self.layout_stats)
 
         self.stats_plot = pg.PlotWidget()

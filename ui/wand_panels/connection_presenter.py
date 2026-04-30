@@ -26,7 +26,8 @@ class ConnectionStatusPresenter:
         device_label: str,
     ) -> None:
         if connected:
-            status_label.setText(f"● CONNECTED: {device_label}")
+            label = str(device_label).strip().upper()
+            status_label.setText(f"● CONNECTED {label}" if label else "● CONNECTED")
             status_label.setStyleSheet(
                 STATUS_LABEL_STYLE_TEMPLATE.format(color=self.connected_color)
             )

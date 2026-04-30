@@ -11,10 +11,11 @@ from PyQt6.QtWidgets import QHBoxLayout, QLabel, QToolButton, QVBoxLayout, QWidg
 
 from ui.tokens import (
     APP_FONT_STACK,
+    HOVER_BG,
     MAC_TEXT_PRIMARY,
     PRIMARY_COLOR,
     SURFACE_PRIMARY,
-    SURFACE_SECONDARY,
+    SURFACE_2,
     TEXT_SECONDARY,
     BORDER_COLOR,
     BORDER_LIGHT,
@@ -77,7 +78,7 @@ class MacShell(QWidget):
         body_layout.setSpacing(0)
 
         self.content_host = QWidget()
-        self.content_host.setStyleSheet(f"background-color: {SURFACE_SECONDARY};")
+        self.content_host.setStyleSheet(f"background-color: {SURFACE_PRIMARY};")
         self.content_layout = QVBoxLayout(self.content_host)
         self.content_layout.setContentsMargins(0, 0, 0, 0)
         self.content_layout.setSpacing(0)
@@ -169,7 +170,7 @@ class MacShell(QWidget):
         self.sidebar = QWidget()
         self.sidebar.setFixedWidth(SHELL_SIDEBAR_W)
         self.sidebar.setStyleSheet(
-            f"background-color: {SURFACE_SECONDARY}; border-right: 1px solid {BORDER_LIGHT};"
+            f"background-color: {SURFACE_2}; border-right: 1px solid {BORDER_LIGHT};"
         )
         sidebar_layout = QVBoxLayout(self.sidebar)
         sidebar_layout.setContentsMargins(SPACING_MD, MARGIN_COMFORTABLE, SPACING_MD, MARGIN_COMFORTABLE)
@@ -207,7 +208,7 @@ class MacShell(QWidget):
                 color: {TEXT_SECONDARY};
                 background-color: transparent;
                 border: none;
-                border-radius: 8px;
+                border-radius: 10px;
                 padding: 6px 4px;
                 font-size: 10px;
                 font-weight: 700;
@@ -216,12 +217,12 @@ class MacShell(QWidget):
             QToolButton[active="true"] {{
                 background-color: {PRIMARY_COLOR};
                 color: white;
-                border-radius: 8px;
+                border-radius: 10px;
             }}
             QToolButton:hover {{
-                background-color: rgba(59, 130, 246, 0.08);
+                background-color: {HOVER_BG};
                 color: {PRIMARY_COLOR};
-                border-radius: 8px;
+                border-radius: 10px;
             }}
             """
         )

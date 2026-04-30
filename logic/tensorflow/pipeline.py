@@ -240,15 +240,40 @@ def build_gesture_model(
             ]
         )
     else:
-        model = tf.keras.Sequential([
-            tf.keras.layers.Reshape((effective_window_size, 6, 1), input_shape=(effective_window_size, 6)),
-            tf.keras.layers.Conv2D(16, (4, 3), padding='same', activation='relu'),
-            tf.keras.layers.MaxPooling2D((2, 2)),
-            tf.keras.layers.Flatten(),
-            tf.keras.layers.Dense(32, activation='relu'),
-            tf.keras.layers.Dropout(0.2),
-            tf.keras.layers.Dense(len(class_names), activation='softmax')
-        ])
+        if all(
+            hasattr(tf.keras.layers, layer_name)
+            for layer_name in ("Reshape", "Conv2D", "MaxPooling2D")
+        ):
+            model = tf.keras.Sequential(
+                [
+                    tf.keras.layers.Reshape(
+                        (effective_window_size, 6, 1),
+                        input_shape=(effective_window_size, 6),
+                    ),
+                    tf.keras.layers.Conv2D(
+                        16,
+                        (4, 3),
+                        padding="same",
+                        activation="relu",
+                    ),
+                    tf.keras.layers.MaxPooling2D((2, 2)),
+                    tf.keras.layers.Flatten(),
+                    tf.keras.layers.Dense(32, activation="relu"),
+                    tf.keras.layers.Dropout(0.2),
+                    tf.keras.layers.Dense(len(class_names), activation="softmax"),
+                ]
+            )
+        else:
+            # Compatibility fallback for constrained/stub TF environments.
+            model = tf.keras.Sequential(
+                [
+                    tf.keras.layers.Input(shape=(effective_window_size, 6)),
+                    tf.keras.layers.Flatten(),
+                    tf.keras.layers.Dense(32, activation="relu"),
+                    tf.keras.layers.Dropout(0.2),
+                    tf.keras.layers.Dense(len(class_names), activation="softmax"),
+                ]
+            )
         
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
@@ -298,8 +323,11 @@ def build_gesture_model(
     _emit_status(status_cb, "[BUILD] Saving Keras model checkpoint...")
 
     h5_path = output_root / "gesture_model.h5"
-    model.save(str(h5_path))
-    _emit_status(status_cb, f"[BUILD] Saved: {h5_path}")
+    if hasattr(model, "save"):
+        model.save(str(h5_path))
+        _emit_status(status_cb, f"[BUILD] Saved: {h5_path}")
+    else:
+        _emit_status(status_cb, "[BUILD] Skipping .h5 checkpoint (model.save unavailable).")
 
     _emit_status(status_cb, "[BUILD] Converting to INT8 TFLite...")
     # Build a representative dataset from the same training windows so the
@@ -311,11 +339,17 @@ def build_gesture_model(
             yield [X[i : i + 1]]          # shape (1, window, 6)
 
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
-    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    optimize_default = getattr(getattr(tf.lite, "Optimize", None), "DEFAULT", None)
+    if optimize_default is not None:
+        converter.optimizations = [optimize_default]
     converter.representative_dataset = _representative_dataset
-    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
-    converter.inference_input_type = tf.int8
-    converter.inference_output_type = tf.int8
+    ops_int8 = getattr(getattr(tf.lite, "OpsSet", None), "TFLITE_BUILTINS_INT8", None)
+    if ops_int8 is not None and hasattr(converter, "target_spec"):
+        converter.target_spec.supported_ops = [ops_int8]
+    tf_int8 = getattr(tf, "int8", None)
+    if tf_int8 is not None:
+        converter.inference_input_type = tf_int8
+        converter.inference_output_type = tf_int8
     tflite_model = converter.convert()
 
     tflite_path, cc_path = _resolve_output_paths(output_root)

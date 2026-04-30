@@ -22,8 +22,6 @@ from PyQt6.QtWidgets import (
 
 from ui.tokens import (
     # Colors
-    BG_DARK,
-    TEXT_BODY,
     TEXT_MUTED,
     SETTINGS_ACCENT,
     # Sizes
@@ -49,11 +47,18 @@ from ui.tokens import (
     STYLE_RECORD_COMBO,
     STYLE_WAND_COMBO,
     STYLE_SETTING_INPUT,
-    STYLE_RARITY_BADGE_WAND,
     STYLE_RARITY_BADGE_STATISTICS,
+    STYLE_SECTION_LABEL_TEMPLATE,
+    STYLE_STAT_LABEL,
+    STYLE_HINT_LABEL_TEMPLATE,
+    STYLE_CARD_NAME_LABEL,
+    STYLE_CARD_COUNT_LABEL,
+    STYLE_GRAPH_PLACEHOLDER,
+    STYLE_FORM_ROW_LABEL,
     # Status/template styles
     STATUS_LABEL_STYLE_TEMPLATE,
 )
+from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_MD
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -61,8 +66,13 @@ from ui.tokens import (
 # ────────────────────────────────────────────────────────────────────────────
 
 def make_card(
-    margins: tuple[int, int, int, int] = (16, 16, 16, 16),
-    spacing: int = 12,
+    margins: tuple[int, int, int, int] = (
+        MARGIN_COMFORTABLE,
+        MARGIN_COMFORTABLE,
+        MARGIN_COMFORTABLE,
+        MARGIN_COMFORTABLE,
+    ),
+    spacing: int = SPACING_MD,
 ) -> tuple[QFrame, QVBoxLayout]:
     """
     Create a styled card frame with a vertical layout.
@@ -225,9 +235,7 @@ def make_section_label(
         QLabel: Bold, larger section label.
     """
     lbl = QLabel(text)
-    lbl.setStyleSheet(
-        f"color: {accent_color}; font-weight: 900; font-size: 12px; letter-spacing: 1px;"
-    )
+    lbl.setStyleSheet(STYLE_SECTION_LABEL_TEMPLATE.format(color=accent_color))
     return lbl
 
 
@@ -242,7 +250,7 @@ def make_stat_label(text: str) -> QLabel:
         QLabel: Small, muted info label.
     """
     lbl = QLabel(text)
-    lbl.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px; font-weight: 600;")
+    lbl.setStyleSheet(STYLE_STAT_LABEL)
     return lbl
 
 
@@ -258,7 +266,7 @@ def make_hint(text: str, color: str = TEXT_MUTED) -> QLabel:
         QLabel: Small, wrapped hint label.
     """
     lbl = QLabel(text)
-    lbl.setStyleSheet(f"color: {color}; font-size: 10px;")
+    lbl.setStyleSheet(STYLE_HINT_LABEL_TEMPLATE.format(color=color))
     lbl.setWordWrap(True)
     return lbl
 
@@ -266,14 +274,14 @@ def make_hint(text: str, color: str = TEXT_MUTED) -> QLabel:
 def make_card_name_label(name: str) -> QLabel:
     """Create a card name label (bold, main text color)."""
     lbl = QLabel(name)
-    lbl.setStyleSheet(f"color: {TEXT_BODY}; font-weight: bold; font-size: 12px;")
+    lbl.setStyleSheet(STYLE_CARD_NAME_LABEL)
     return lbl
 
 
 def make_card_count_label(count: int) -> QLabel:
     """Create a card count label (muted, smaller)."""
     lbl = QLabel(f"Samples: {count}")
-    lbl.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 10px; font-weight: bold;")
+    lbl.setStyleSheet(STYLE_CARD_COUNT_LABEL)
     return lbl
 
 
@@ -286,9 +294,7 @@ def make_graph_placeholder() -> QLabel:
     """
     lbl = QLabel("DATA GRAPH")
     lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    lbl.setStyleSheet(
-        f"background-color: {BG_DARK}; color: {TEXT_MUTED}; border-radius: 6px;"
-    )
+    lbl.setStyleSheet(STYLE_GRAPH_PLACEHOLDER)
     lbl.setMinimumHeight(GRAPH_MIN_H)
     return lbl
 
@@ -322,7 +328,7 @@ def make_rarity_badge_wand(label: str, color: str) -> QLabel:
     """
     lbl = QLabel(label)
     lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    lbl.setStyleSheet(STYLE_RARITY_BADGE_WAND.format(color=color))
+    lbl.setStyleSheet(STYLE_RARITY_BADGE_STATISTICS.format(color=color))
     return lbl
 
 
@@ -487,7 +493,7 @@ def make_form_row(
     """
     row = QHBoxLayout()
     lbl = QLabel(label_text)
-    lbl.setStyleSheet(f"color: {TEXT_BODY}; font-weight: bold; font-size: 11px;")
+    lbl.setStyleSheet(STYLE_FORM_ROW_LABEL)
     lbl.setMinimumWidth(label_width)
     lbl.setWordWrap(True)
     row.addWidget(lbl)

@@ -8,8 +8,15 @@ from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
+from ui.modern_layout import SPACING_SM
 from ui.terminal_widget import TerminalWidget
-from ui.tokens import STYLE_BTN_SMALL, STYLE_TERMINAL, TERM_MIN_H
+from ui.tokens import (
+    BTN_SMALL_H,
+    STYLE_BTN_SMALL,
+    STYLE_TERMINAL,
+    TERM_MIN_H,
+    WAND_TERMINAL_MIN_H,
+)
 from ui.wand_panels.shared import make_section_label
 
 # Flush buffered terminal lines at most this often (ms).
@@ -54,7 +61,7 @@ class WandTerminalPanel(QWidget):
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(SPACING_SM)
 
         header = QHBoxLayout()
         header.addWidget(make_section_label("UART TERMINAL"))
@@ -62,7 +69,7 @@ class WandTerminalPanel(QWidget):
 
         self.btn_term_clear = QPushButton("CLEAR")
         self.btn_term_clear.setStyleSheet(STYLE_BTN_SMALL)
-        self.btn_term_clear.setMinimumHeight(30)
+        self.btn_term_clear.setMinimumHeight(BTN_SMALL_H)
         self.btn_term_clear.setCursor(Qt.CursorShape.PointingHandCursor)
         header.addWidget(self.btn_term_clear)
 
@@ -70,9 +77,9 @@ class WandTerminalPanel(QWidget):
 
         self.terminal_output = TerminalWidget(max_lines=1000, read_only=True)
         self.terminal_output.setStyleSheet(STYLE_TERMINAL)
-        self.terminal_output.setMinimumHeight(max(TERM_MIN_H, 210))
+        self.terminal_output.setMinimumHeight(max(TERM_MIN_H, WAND_TERMINAL_MIN_H))
 
-        font = QFont("Consolas", 10)
+        font = QFont("Consolas", 11)
         font.setStyleHint(QFont.StyleHint.Monospace)
         self.terminal_output.setFont(font)
         self.terminal_output.setPlainText(
