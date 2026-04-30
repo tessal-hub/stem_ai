@@ -224,17 +224,19 @@ def build_gesture_model(
         model = tf.keras.Sequential(
             [
                 tf.keras.layers.Input(shape=(effective_window_size, 6)),
-                tf.keras.layers.Conv1D(64, 5, padding="same", activation="relu"),
+                # Lighter depthwise-friendly Conv stack — same receptive field,
+                # ~4× fewer parameters than the original 64/64/96 design.
+                tf.keras.layers.Conv1D(16, 5, padding="same", activation="relu"),
                 tf.keras.layers.BatchNormalization(),
-                tf.keras.layers.Conv1D(64, 3, padding="same", activation="relu"),
+                tf.keras.layers.Conv1D(16, 3, padding="same", activation="relu"),
                 tf.keras.layers.MaxPooling1D(2),
                 tf.keras.layers.Dropout(0.20),
-                tf.keras.layers.Conv1D(96, 3, padding="same", activation="relu"),
+                tf.keras.layers.Conv1D(24, 3, padding="same", activation="relu"),
                 tf.keras.layers.MaxPooling1D(2),
                 tf.keras.layers.Flatten(),
-                tf.keras.layers.Dense(128, activation="relu"),
+                tf.keras.layers.Dense(48, activation="relu"),
                 tf.keras.layers.Dropout(0.30),
-                tf.keras.layers.Dense(64, activation="relu"),
+                tf.keras.layers.Dense(24, activation="relu"),
                 tf.keras.layers.Dense(len(class_names), activation="softmax"),
             ]
         )
@@ -243,9 +245,9 @@ def build_gesture_model(
             [
                 tf.keras.layers.Input(shape=(effective_window_size, 6)),
                 tf.keras.layers.Flatten(),
-                tf.keras.layers.Dense(96, activation="relu"),
-                tf.keras.layers.Dropout(0.20),
                 tf.keras.layers.Dense(48, activation="relu"),
+                tf.keras.layers.Dropout(0.20),
+                tf.keras.layers.Dense(24, activation="relu"),
                 tf.keras.layers.Dense(len(class_names), activation="softmax"),
             ]
         )
@@ -294,9 +296,22 @@ def build_gesture_model(
     )
 
     _emit_progress(progress_cb, 85)
-    _emit_status(status_cb, "[BUILD] Converting to float32 TFLite (accuracy-first)...")
+    _emit_status(status_cb, "[BUILD] Converting to INT8 TFLite (size-optimized)...")
+
+    # Build a representative dataset from the same training windows so the
+    # INT8 calibration uses real gesture data — no synthetic samples needed.
+    def _representative_dataset():
+        # Use up to 200 evenly-spaced windows for calibration.
+        step = max(1, len(X) // 200)
+        for i in range(0, len(X), step):
+            yield [X[i : i + 1]]          # shape (1, window, 6)
 
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    converter.representative_dataset = _representative_dataset
+    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+    converter.inference_input_type = tf.int8
+    converter.inference_output_type = tf.int8
     tflite_model = converter.convert()
 
     tflite_path, cc_path = _resolve_output_paths(output_root)
