@@ -110,9 +110,9 @@ def build_gesture_model(
     dataset_dir: str,
     status_cb: StatusCallback | None = None,
     progress_cb: ProgressCallback | None = None,
-    epochs: int = 80,
-    window_size: int = 64,
-    step: int = 4,
+    epochs: int = 100,     # INCREASED: Give the larger model more time to learn
+    window_size: int = 40, # DECREASED: Tighter slice of data (0.8 seconds)
+    step: int = 2,         # DECREASED: More overlapping training samples
     selected_spells: list[str] | None = None,
     output_mode: Literal["tflite", "cc", "both"] = "both",
     output_dir: str | Path | None = None,
@@ -224,33 +224,32 @@ def build_gesture_model(
         model = tf.keras.Sequential(
             [
                 tf.keras.layers.Input(shape=(effective_window_size, 6)),
-                # Lighter depthwise-friendly Conv stack — same receptive field,
-                # ~4× fewer parameters than the original 64/64/96 design.
-                tf.keras.layers.Conv1D(16, 5, padding="same", activation="relu"),
+                # UPSCALED MODEL: Doubled filters and neurons for higher precision
+                tf.keras.layers.Conv1D(32, 5, padding="same", activation="relu"),
                 tf.keras.layers.BatchNormalization(),
-                tf.keras.layers.Conv1D(16, 3, padding="same", activation="relu"),
+                tf.keras.layers.Conv1D(32, 3, padding="same", activation="relu"),
                 tf.keras.layers.MaxPooling1D(2),
                 tf.keras.layers.Dropout(0.20),
-                tf.keras.layers.Conv1D(24, 3, padding="same", activation="relu"),
+                tf.keras.layers.Conv1D(48, 3, padding="same", activation="relu"),
                 tf.keras.layers.MaxPooling1D(2),
                 tf.keras.layers.Flatten(),
-                tf.keras.layers.Dense(48, activation="relu"),
+                tf.keras.layers.Dense(96, activation="relu"),
                 tf.keras.layers.Dropout(0.30),
-                tf.keras.layers.Dense(24, activation="relu"),
+                tf.keras.layers.Dense(48, activation="relu"),
                 tf.keras.layers.Dense(len(class_names), activation="softmax"),
             ]
         )
     else:
-        model = tf.keras.Sequential(
-            [
-                tf.keras.layers.Input(shape=(effective_window_size, 6)),
-                tf.keras.layers.Flatten(),
-                tf.keras.layers.Dense(48, activation="relu"),
-                tf.keras.layers.Dropout(0.20),
-                tf.keras.layers.Dense(24, activation="relu"),
-                tf.keras.layers.Dense(len(class_names), activation="softmax"),
-            ]
-        )
+        model = tf.keras.Sequential([
+            tf.keras.layers.Reshape((effective_window_size, 6, 1), input_shape=(effective_window_size, 6)),
+            tf.keras.layers.Conv2D(16, (4, 3), padding='same', activation='relu'),
+            tf.keras.layers.MaxPooling2D((2, 2)),
+            tf.keras.layers.Flatten(),
+            tf.keras.layers.Dense(32, activation='relu'),
+            tf.keras.layers.Dropout(0.2),
+            tf.keras.layers.Dense(len(class_names), activation='softmax')
+        ])
+        
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
         loss="categorical_crossentropy",
