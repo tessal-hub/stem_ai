@@ -296,8 +296,13 @@ def build_gesture_model(
     )
 
     _emit_progress(progress_cb, 85)
-    _emit_status(status_cb, "[BUILD] Converting to INT8 TFLite (size-optimized)...")
+    _emit_status(status_cb, "[BUILD] Saving Keras model checkpoint...")
 
+    h5_path = output_root / "gesture_model.h5"
+    model.save(str(h5_path))
+    _emit_status(status_cb, f"[BUILD] Saved: {h5_path}")
+
+    _emit_status(status_cb, "[BUILD] Converting to INT8 TFLite...")
     # Build a representative dataset from the same training windows so the
     # INT8 calibration uses real gesture data — no synthetic samples needed.
     def _representative_dataset():
