@@ -96,6 +96,15 @@ def _write_c_array(tflite_path: Path, cc_path: Path) -> None:
         handle.write(f"const int g_model_len = {len(bytes_data)};\n")
 
 
+def _resolve_output_paths(output_dir: str | Path | None) -> tuple[Path, Path]:
+    if output_dir is None:
+        output_root = APP_DATA_DIR
+    else:
+        output_root = Path(output_dir)
+    output_root.mkdir(parents=True, exist_ok=True)
+    return output_root / "gesture_model.tflite", output_root / "gesture_model.cc"
+
+
 def build_gesture_model(
     *,
     dataset_dir: str,
@@ -106,6 +115,8 @@ def build_gesture_model(
     step: int = 4,
     selected_spells: list[str] | None = None,
     output_mode: Literal["tflite", "cc", "both"] = "both",
+    output_dir: str | Path | None = None,
+    sync_default_model: bool = True,
 ) -> BuildResult:
     dataset_root = Path(dataset_dir)
     if not dataset_root.exists():
@@ -117,6 +128,7 @@ def build_gesture_model(
 
     _emit_status(status_cb, f"[TRAIN] Scanning dataset at {dataset_root}")
     _emit_progress(progress_cb, 5)
+    output_root = Path(output_dir) if output_dir is not None else APP_DATA_DIR
 
     label_dirs = sorted([d for d in dataset_root.iterdir() if d.is_dir()])
     requested_spells = {s.strip() for s in (selected_spells or []) if s.strip()}
@@ -188,17 +200,21 @@ def build_gesture_model(
             ) from exc
 
         _emit_status(status_cb, "[WARN] TensorFlow unavailable; using existing model.tflite.")
-        APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        tflite_path = output_root / "gesture_model.tflite"
+        cc_path = output_root / "gesture_model.cc"
+        output_root.mkdir(parents=True, exist_ok=True)
+        if output_mode in {"tflite", "both"}:
+            shutil.copyfile(DEFAULT_MODEL_PATH, tflite_path)
         if output_mode in {"cc", "both"}:
-            _write_c_array(DEFAULT_MODEL_PATH, GESTURE_MODEL_CC_OUTPUT)
+            _write_c_array(DEFAULT_MODEL_PATH, cc_path)
         _emit_progress(progress_cb, 100)
         _emit_status(status_cb, "[DONE] Export completed from existing model.tflite.")
         return BuildResult(
             classes=class_names,
             sample_windows=len(X),
             accuracy=0.0,
-            tflite_path=str(DEFAULT_MODEL_PATH),
-            cc_path=str(GESTURE_MODEL_CC_OUTPUT),
+            tflite_path=str(tflite_path if output_mode in {"tflite", "both"} else DEFAULT_MODEL_PATH),
+            cc_path=str(cc_path if output_mode in {"cc", "both"} else (output_root / "gesture_model.cc")),
             output_mode=output_mode,
         )
 
@@ -283,16 +299,16 @@ def build_gesture_model(
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
     tflite_model = converter.convert()
 
-    APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    tflite_path = APP_DATA_DIR / "gesture_model.tflite"
+    tflite_path, cc_path = _resolve_output_paths(output_root)
     tflite_path.write_bytes(tflite_model)
 
-    # Keep uploader default path synced with latest built model.
-    shutil.copyfile(tflite_path, DEFAULT_MODEL_PATH)
+    if sync_default_model:
+        # Keep uploader default path synced with latest built model.
+        shutil.copyfile(tflite_path, DEFAULT_MODEL_PATH)
 
     if output_mode in {"cc", "both"}:
-        _emit_status(status_cb, f"[BUILD] Writing C-array to {GESTURE_MODEL_CC_OUTPUT}")
-        _write_c_array(tflite_path, GESTURE_MODEL_CC_OUTPUT)
+        _emit_status(status_cb, f"[BUILD] Writing C-array to {cc_path}")
+        _write_c_array(tflite_path, cc_path)
     _emit_progress(progress_cb, 100)
 
     val_acc_history = history.history.get("val_accuracy", [0.0])
@@ -309,7 +325,7 @@ def build_gesture_model(
         sample_windows=len(X),
         accuracy=final_acc,
         tflite_path=str(tflite_path),
-        cc_path=str(GESTURE_MODEL_CC_OUTPUT),
+        cc_path=str(cc_path),
         output_mode=output_mode,
     )
 

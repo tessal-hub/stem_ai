@@ -1,7 +1,7 @@
 """
 PageRecord — Timeline and recording view with LIVE Plotting, 3D Wand, & Snipping.
 
-Architecture compliance (SKILL.md §2A):
+Architecture compliance (docs/01_ARCHITECTURE/OVERVIEW.md and docs/06_CONTRACTS/UI_CONTRACTS.md):
     - This file is PURE VIEW. No data processing, no direct DataStore calls.
     - Receives plot data via update_plot_data(buffer_snapshot) called by Handler.
     - Emits sig_data_cropped(list, str) with 6D data + spell name for Handler to save.

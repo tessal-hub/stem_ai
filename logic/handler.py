@@ -57,6 +57,7 @@ class Handler(QObject):
         "IDLE": "IDLE",
         "INFER": "IDLE",
         "RECORD": "RECORD",
+        "UPDATE": "UPDATE",
     }
 
     def __init__(
