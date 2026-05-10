@@ -92,6 +92,12 @@ MODULES: list[ModuleEntry] = [
 
 
 class PageHome(QWidget):
+    """
+    Trang Dashboard chính của ứng dụng.
+    Hiển thị trạng thái kết nối wand, mô phỏng hướng 3D,
+    và thống kê manager (spell counts, RAM, v.v.).
+    """
+
     sig_simulation_replay_requested = pyqtSignal()
     sig_simulation_stop_requested = pyqtSignal()
     sig_calibrate_requested = pyqtSignal()
@@ -102,11 +108,16 @@ class PageHome(QWidget):
         self.data_store = data_store
         self._stat_rows: dict[str, tuple[QLabel, QLabel, QProgressBar]] = {}
         self._manager_keys: tuple[str, ...] = ()
-        self._build_ui()
+        self._init_ui()
         self._configure_accessibility()
-        self.set_connection_status(False)
+        self._load_data()
 
     def set_connection_status(self, connected: bool) -> None:
+        """Cập nhật giao diện trạng thái kết nối wand.
+
+        Args:
+            connected: True nếu wand đã kết nối.
+        """
         if connected:
             self.status_bar.setText("▶ WAND CONNECTED - READY")
             self.status_bar.setStyleSheet(self._status_style(ACCENT, ACCENT_TEXT))
@@ -115,12 +126,15 @@ class PageHome(QWidget):
             self.status_bar.setStyleSheet(self._status_style(DANGER, ACCENT_TEXT))
 
     def set_mode(self, mode: str) -> None:
+        """Cập nhật nhãn chế độ hoạt động hiện tại."""
         self.mode_label.setText(f"MODE:  {mode.upper()}")
 
     def set_sensor_readout(self, values: list[float] | tuple[float, ...]) -> None:
+        """No-op: sensor readout đã chuyển sang 3D viewer."""
         return
 
     def set_simulation_running(self, active: bool) -> None:
+        """No-op: đã hủy bỏ chức năng simulation toggle."""
         return
 
     def set_inference_active(self, active: bool) -> None:
@@ -151,7 +165,8 @@ class PageHome(QWidget):
             value_label.setText(value)
             progress_bar.setValue(self._stat_value_to_percent(value))
 
-    def _build_ui(self) -> None:
+    def _init_ui(self) -> None:
+        """Trang chính (Dashboard) — hiển thị trạng thái kết nối, mô phỏng 3D, và thống kê hệ thống."""
         outer = QVBoxLayout(self)
         outer.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
         outer.setSpacing(SPACING_LG)
@@ -486,7 +501,12 @@ class PageHome(QWidget):
         btn.setIconSize(ICON)
         return btn
 
+    def _load_data(self) -> None:
+        """Nạp trạng thái ban đầu cho Dashboard."""
+        self.set_connection_status(False)
+
     def _configure_accessibility(self) -> None:
+        """Đặt accessible names và thứ tự tab cho các control."""
         self.status_bar.setAccessibleName("Home status banner")
         self.status_bar.setAccessibleDescription(
             "Dynamic banner showing wand connection state"

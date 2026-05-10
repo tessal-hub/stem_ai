@@ -1,5 +1,5 @@
 """
-PageStatistics — Data distribution and spell mastery view.
+Trang thống kê — phân bố dữ liệu spell, chỉ số mastery, và FFT features.
 """
 
 from __future__ import annotations
@@ -57,6 +57,8 @@ from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_LG, SPACING_MD, SPACING
 
 
 class ClickableFrame(QFrame):
+    """QFrame hỗ trợ click — phát signal clicked khi người dùng nhấp chuột."""
+
     clicked = pyqtSignal()
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -68,6 +70,12 @@ class ClickableFrame(QFrame):
 
 
 class PageStatistics(QWidget):
+    """
+    Trang thống kê dữ liệu.
+    Hiển thị phân bố spell, chỉ số mastery, live FFT features,
+    và danh sách sample cho mỗi spell.
+    """
+
     sig_spell_selected = pyqtSignal(str)
     sig_sample_opened = pyqtSignal(str)
     sig_train_build_requested = pyqtSignal()
@@ -77,11 +85,10 @@ class PageStatistics(QWidget):
         self.data_store = data_store
         self._spell_cards_layout: QVBoxLayout | None = None
 
-        self._build_ui()
-        self._connect_internal_signals()
+        self._init_ui()
+        self._init_signals()
         self._configure_accessibility()
-        self.update_spell_stats(self.data_store.spell_counts)
-        self.update_live_features({})
+        self._load_data()
 
     def update_live_features(self, features: dict) -> None:
         if not features:
@@ -157,7 +164,8 @@ class PageStatistics(QWidget):
             self.sample_list.addItem("No samples for this spell yet. Record one from the Record screen.")
         self.stacked_spells.setCurrentIndex(1)
 
-    def _build_ui(self) -> None:
+    def _init_ui(self) -> None:
+        """Xây dựng layout chính gồm 2 cột: spell cards và features."""
         outer = QVBoxLayout(self)
         outer.setContentsMargins(
             MARGIN_COMFORTABLE,
@@ -395,7 +403,8 @@ class PageStatistics(QWidget):
     def _make_rarity_badge(label: str, color: str) -> QLabel:
         return make_rarity_badge_statistics(label, color)
 
-    def _connect_internal_signals(self) -> None:
+    def _init_signals(self) -> None:
+        """Kết nối toàn bộ signal và slot của trang thống kê."""
         self.btn_back_spells.clicked.connect(lambda checked: self.stacked_spells.setCurrentIndex(0))
         self.sample_list.itemDoubleClicked.connect(lambda item: self.sig_sample_opened.emit(item.text()))
         self.btn_train_build.clicked.connect(self.sig_train_build_requested.emit)
@@ -439,8 +448,13 @@ class PageStatistics(QWidget):
             self.lbl_build_status.setText(f"Build: failed - {summary}")
             self.model_error_state.setVisible(True)
 
+    def _load_data(self) -> None:
+        """Nạp dữ liệu ban đầu từ DataStore vào trang thống kê."""
+        self.update_spell_stats(self.data_store.spell_counts)
+        self.update_live_features({})
+
     def _configure_accessibility(self) -> None:
-        """Apply basic screen-reader names and tab traversal for keyboard use."""
+        """Đặt accessible names và thứ tự tab traversal cho các control."""
         self.lbl_total_samples.setAccessibleName("Total samples metric")
         self.lbl_total_spells.setAccessibleName("Active spells metric")
         self.lbl_train_status.setAccessibleName("Model training status")

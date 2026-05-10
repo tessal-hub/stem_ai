@@ -1,10 +1,10 @@
 """
-Unified UI component factories.
+Factory tạo widget UI thống nhất.
 
-Consolidates widget creation patterns from all 5 UI pages into a single,
-consistent module. Ensures consistent styling and behavior across the application.
+Gộp các pattern tạo widget từ tất cả các trang UI vào một module duy nhất,
+đảm bảo style và hành vi nhất quán trên toàn bộ ứng dụng.
 
-Factories return bare widgets; signal connections happen in parent components.
+Factory trả về widget trần; việc kết nối signal xảy ra ở component cha.
 """
 
 from PyQt6.QtCore import Qt

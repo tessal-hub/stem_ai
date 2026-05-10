@@ -1,4 +1,4 @@
-"""Shared presenter for serial/bluetooth connection status widgets."""
+"""Presenter dùng chung cho trạng thái kết nối serial/bluetooth."""
 
 from __future__ import annotations
 

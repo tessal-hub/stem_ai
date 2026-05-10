@@ -1,4 +1,4 @@
-"""Shared terminal widget with append, autoscroll, and line capping."""
+"""Widget terminal tái sử dụng với append, autoscroll, và giới hạn số dòng."""
 from __future__ import annotations
 
 from PyQt6.QtGui import QTextCursor
@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import QFrame, QTextEdit
 
 
 class TerminalWidget(QTextEdit):
-    """Reusable terminal-style text output widget."""
+    """Widget hiển thị output kiểu terminal, tái sử dụng được."""
 
     def __init__(self, *, max_lines: int = 1000, read_only: bool = True) -> None:
         super().__init__()

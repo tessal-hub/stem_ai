@@ -1,11 +1,11 @@
 """
-Modern layout utilities for card-based design system.
+Tiện ích layout hiện đại cho hệ thống thiết kế card-based.
 
-Provides helpers for:
-  - Creating modern panels/cards with proper spacing
-  - Adding shadow effects for visual depth
-  - Configuring consistent margins and spacing
-  - Building spacer items
+Cung cấp helpers cho:
+  - Tạo panel/card hiện đại với spacing chuẩn
+  - Thêm hiệu ứng shadow tạo chiều sâu
+  - Cấu hình margins và spacing nhất quán
+  - Xây dựng spacer items
 """
 
 from PyQt6.QtWidgets import (

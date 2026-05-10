@@ -1,4 +1,4 @@
-"""Reusable confirmation dialog for destructive actions."""
+"""Dialog xác nhận tái sử dụng cho các thao tác phá hủy dữ liệu."""
 
 from __future__ import annotations
 

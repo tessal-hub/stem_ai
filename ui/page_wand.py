@@ -1,4 +1,9 @@
-"""PageWand compositor for hardware configuration, flashing, and terminal view."""
+"""
+Trang cấu hình phần cứng, flash firmware, và terminal view cho wand.
+
+Tổng hợp các panel con (connection, flash, terminal, stats, payload)
+thành một trang quản lý toàn diện cho thiết bị Magic Wand.
+"""
 
 from __future__ import annotations
 
@@ -14,12 +19,18 @@ from ui.wand_panels.terminal_panel import WandTerminalPanel
 
 
 class PageWand(QWidget):
-    # Serial signals
+    """
+    Trang quản lý thiết bị Wand.
+    Cung cấp giao diện kết nối serial, build model, terminal UART,
+    thống kê dataset, và chọn spell cho firmware.
+    """
+
+    # Signal kết nối serial
     sig_serial_scan = pyqtSignal()
     sig_serial_connect = pyqtSignal(str)
     sig_serial_disconnect = pyqtSignal()
 
-    # Tool signals
+    # Signal công cụ build/flash
     sig_flash_compile = pyqtSignal(list)
     sig_flash_upload = pyqtSignal()
     sig_term_clear = pyqtSignal()
@@ -29,53 +40,23 @@ class PageWand(QWidget):
 
     def __init__(self, data_store) -> None:
         super().__init__()
-        self._build_ui()
+        self._init_ui()
         self._expose_legacy_attributes()
-        self._connect_internal_signals()
+        self._init_signals()
         self._configure_accessibility()
-
-        # Populate from DataStore snapshot at startup.
-        self.load_spell_payload_list(data_store.spell_counts)
-        self.update_esp_stats(data_store.esp32_stats)
+        self._load_data(data_store)
 
     # ------------------------------------------------------------------
-    # Public API (preserved)
+    # Khởi tạo giao diện
     # ------------------------------------------------------------------
 
-    def append_terminal_text(self, text: str) -> None:
-        self.terminal_panel.append_terminal_text(text)
-
-    def update_flash_progress(self, percentage: int, status_text: str = "") -> None:
-        self.flash_panel.update_flash_progress(percentage, status_text)
-
-    def set_serial_status(self, connected: bool, port_name: str = "") -> None:
-        self.connection_panel.set_serial_status(connected, port_name)
-
-    def update_serial_port_list(self, ports: list[str]) -> None:
-        self.connection_panel.update_serial_port_list(ports)
-
-    def set_bluetooth_status(self, connected: bool, device_name: str = "") -> None:
-        """Deprecated no-op: bluetooth feature removed from UI."""
-        _ = (connected, device_name)
-
-    def update_bt_device_list(self, devices: list[str]) -> None:
-        """Deprecated no-op: bluetooth feature removed from UI."""
-        _ = devices
-
-    def update_esp_stats(self, stats: dict[str, str]) -> None:
-        self.stats_panel.update_esp_stats(stats)
-
-    def load_spell_payload_list(self, spell_counts: dict[str, int]) -> None:
-        self.stats_panel.update_spell_chart(spell_counts)
-        self.payload_panel.load_spell_list(spell_counts)
-
-    # ------------------------------------------------------------------
-    # UI construction
-    # ------------------------------------------------------------------
-
-    def _build_ui(self) -> None:
+    def _init_ui(self) -> None:
+        """Xây dựng layout 2 cột với các panel con."""
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
+        outer.setContentsMargins(
+            MARGIN_COMFORTABLE, MARGIN_COMFORTABLE,
+            MARGIN_COMFORTABLE, MARGIN_COMFORTABLE,
+        )
         outer.setSpacing(SPACING_LG)
 
         content = QHBoxLayout()
@@ -112,8 +93,110 @@ class PageWand(QWidget):
 
         outer.addLayout(content, stretch=1)
 
+    # ------------------------------------------------------------------
+    # Kết nối signal/slot
+    # ------------------------------------------------------------------
+
+    def _init_signals(self) -> None:
+        """Kết nối toàn bộ signal từ các panel con tới signal cấp trang."""
+        # Serial panel → page-level signals
+        self.connection_panel.sig_serial_scan.connect(self.sig_serial_scan.emit)
+        self.connection_panel.sig_serial_connect.connect(self.sig_serial_connect.emit)
+        self.connection_panel.sig_serial_disconnect.connect(self.sig_serial_disconnect.emit)
+
+        # Flash panel → slot nội bộ → page-level signals
+        self.flash_panel.sig_build_tflite_clicked.connect(self._on_btn_build_tflite_clicked)
+        self.flash_panel.sig_build_cc_clicked.connect(self._on_btn_build_cc_clicked)
+
+        # Terminal panel
+        self.terminal_panel.sig_clear_requested.connect(self.sig_term_clear.emit)
+
+    # ------------------------------------------------------------------
+    # Nạp dữ liệu ban đầu
+    # ------------------------------------------------------------------
+
+    def _load_data(self, data_store) -> None:
+        """Nạp dữ liệu ban đầu từ DataStore snapshot.
+
+        Args:
+            data_store: Đối tượng DataStore chứa spell counts và ESP stats.
+        """
+        self.load_spell_payload_list(data_store.spell_counts)
+        self.update_esp_stats(data_store.esp32_stats)
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def append_terminal_text(self, text: str) -> None:
+        """Thêm dòng text vào terminal output.
+
+        Args:
+            text: Nội dung cần hiển thị trong terminal.
+        """
+        self.terminal_panel.append_terminal_text(text)
+
+    def update_flash_progress(self, percentage: int, status_text: str = "") -> None:
+        """Cập nhật thanh tiến trình flash.
+
+        Args:
+            percentage: Phần trăm hoàn thành (0-100).
+            status_text: Thông báo trạng thái kèm theo.
+        """
+        self.flash_panel.update_flash_progress(percentage, status_text)
+
+    def set_serial_status(self, connected: bool, port_name: str = "") -> None:
+        """Cập nhật trạng thái kết nối serial trên giao diện.
+
+        Args:
+            connected: True nếu đã kết nối.
+            port_name: Tên cổng serial đang kết nối.
+        """
+        self.connection_panel.set_serial_status(connected, port_name)
+
+    def update_serial_port_list(self, ports: list[str]) -> None:
+        """Cập nhật danh sách cổng serial khả dụng.
+
+        Args:
+            ports: Danh sách tên cổng serial.
+        """
+        self.connection_panel.update_serial_port_list(ports)
+
+    def set_bluetooth_status(self, connected: bool, device_name: str = "") -> None:
+        """No-op: tính năng bluetooth đã bị loại bỏ khỏi UI."""
+        _ = (connected, device_name)
+
+    def update_bt_device_list(self, devices: list[str]) -> None:
+        """No-op: tính năng bluetooth đã bị loại bỏ khỏi UI."""
+        _ = devices
+
+    def update_esp_stats(self, stats: dict[str, str]) -> None:
+        """Cập nhật thống kê phần cứng ESP32.
+
+        Args:
+            stats: Dict chứa các thông số (Battery, RAM Free, RSSI...).
+        """
+        self.stats_panel.update_esp_stats(stats)
+
+    def load_spell_payload_list(self, spell_counts: dict[str, int]) -> None:
+        """Nạp danh sách spell vào cả chart thống kê và panel payload.
+
+        Args:
+            spell_counts: Dict spell_name → số lượng mẫu.
+        """
+        self.stats_panel.update_spell_chart(spell_counts)
+        self.payload_panel.load_spell_list(spell_counts)
+
+    # ------------------------------------------------------------------
+    # Private methods
+    # ------------------------------------------------------------------
+
     def _expose_legacy_attributes(self) -> None:
-        """Keep historical field access paths stable for handlers/tests."""
+        """Giữ ổn định đường dẫn truy cập cũ cho handlers/tests.
+
+        Các alias này đảm bảo code ngoài (Handler, tests) truy cập
+        trực tiếp widget con qua tên cũ vẫn hoạt động bình thường.
+        """
         # Serial controls
         self.combo_serial_ports = self.connection_panel.combo_serial_ports
         self.btn_serial_scan = self.connection_panel.btn_serial_scan
@@ -139,22 +222,8 @@ class PageWand(QWidget):
         self.list_selected_spells = self.payload_panel.list_selected_spells
         self.list_available_spells = self.payload_panel.list_available_spells
 
-    # ------------------------------------------------------------------
-    # Signal wiring
-    # ------------------------------------------------------------------
-
-    def _connect_internal_signals(self) -> None:
-        self.connection_panel.sig_serial_scan.connect(self.sig_serial_scan.emit)
-        self.connection_panel.sig_serial_connect.connect(self.sig_serial_connect.emit)
-        self.connection_panel.sig_serial_disconnect.connect(self.sig_serial_disconnect.emit)
-
-        self.flash_panel.sig_build_tflite_clicked.connect(self._on_build_tflite_clicked)
-        self.flash_panel.sig_build_cc_clicked.connect(self._on_build_cc_clicked)
-
-        self.terminal_panel.sig_clear_requested.connect(self.sig_term_clear.emit)
-
     def _configure_accessibility(self) -> None:
-        """Set accessible names and keyboard tab traversal across wand controls."""
+        """Đặt accessible names và thứ tự tab traversal cho các control."""
         self.combo_serial_ports.setAccessibleName("Serial port list")
         self.btn_serial_scan.setAccessibleName("Scan serial ports")
         self.btn_serial_connect.setAccessibleName("Connect serial")
@@ -173,16 +242,19 @@ class PageWand(QWidget):
         self.setTabOrder(self.list_selected_spells, self.list_available_spells)
 
     # ------------------------------------------------------------------
-    # Slot implementations
+    # Slots
     # ------------------------------------------------------------------
 
-    def _on_compile_clicked(self) -> None:
+    def _on_btn_compile_clicked(self) -> None:
+        """Xử lý khi người dùng nhấn nút Compile firmware."""
         self.sig_flash_compile.emit(self.payload_panel.get_checked_spells())
 
-    def _on_build_tflite_clicked(self) -> None:
+    def _on_btn_build_tflite_clicked(self) -> None:
+        """Xử lý khi người dùng nhấn nút Build .tflite."""
         selected_spells = self.payload_panel.get_checked_spells()
         self.sig_train_build_tflite_requested.emit(selected_spells)
 
-    def _on_build_cc_clicked(self) -> None:
+    def _on_btn_build_cc_clicked(self) -> None:
+        """Xử lý khi người dùng nhấn nút Build .cc."""
         selected_spells = self.payload_panel.get_checked_spells()
         self.sig_train_build_cc_requested.emit(selected_spells)

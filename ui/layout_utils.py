@@ -1,6 +1,6 @@
 """
-Shared layout utility functions.
-Consolidates common layout operations used across multiple UI pages.
+Hàm tiện ích layout dùng chung.
+Gom các thao tác layout phổ biến dùng trên nhiều trang UI.
 """
 
 from PyQt6.QtWidgets import QLayout

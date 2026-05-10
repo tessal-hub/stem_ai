@@ -1,18 +1,18 @@
 """
-ui/wand_3d_widget.py — 3D Wand orientation visualizer.
+Widget mô phỏng 3D hướng wand (OpenGL).
 
-Physical layout:
-    - MPU6050 at top, ESP32 at bottom, ~25 cm total length.
-    - The wand's long axis = Z axis in the GL scene (points up when wand points up).
+Layout vật lý:
+    - MPU6050 ở đầu, ESP32 ở đáy, tổng chiều dài ~25 cm.
+    - Trục dài của wand = trục Z trong scene GL (hướng lên khi wand chỉ lên).
 
-Orientation logic:
-    - Uses absolute setTransform() each frame → NO DRIFT, NO GLITCHING.
-    - Complementary filter: 96 % gyro (smooth) + 4 % accel (drift correction).
-    - Yaw is gyro-only (no magnetometer reference).
+Logic định hướng:
+    - Dùng setTransform() tuyệt đối mỗi frame → KHÔNG DRIFT, KHÔNG GLITCH.
+    - Bộ lọc bổ sung: 96% gyro (mượt) + 4% accel (chống drift).
+    - Yaw chỉ dùng gyro (không có magnetometer).
 
-Architecture:
-    - Pure VIEW widget. No data processing.
-    - Receives orientation data via update_orientation() from Handler signal.
+Kiến trúc:
+    - Pure VIEW widget. Không xử lý dữ liệu.
+    - Nhận dữ liệu orientation qua update_orientation() từ Handler signal.
 """
 
 from __future__ import annotations
@@ -178,7 +178,7 @@ def _euler_to_transform(
 # ---------------------------------------------------------------------------
 
 class Wand3DWidget(QWidget):
-    """3D wand visualization using OpenGL."""
+    """Widget mô phỏng 3D hướng wand bằng OpenGL."""
 
     # ── Camera home ─────────────────────────────────────────────────────
     _HOME_DIST: float = 9.0

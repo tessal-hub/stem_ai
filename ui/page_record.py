@@ -68,7 +68,7 @@ log = logging.getLogger(__name__)
 # ════════════════════════════════════════════════════════════════════════
 
 class PageRecord(QWidget):
-    """Recording page: live plots, 3D wand, snip tool, spell library."""
+    """Trang thu thập mẫu cử chỉ — vẽ đồ thị IMU reаl-time, snip và lưu mẫu."""
 
     # ── Outbound signals (consumed by Handler) ──────────────────────────
     sig_start_record   = pyqtSignal(str)
@@ -104,18 +104,16 @@ class PageRecord(QWidget):
         self.recording_timer.timeout.connect(self._update_recording_duration)
         self.recording_start_time = QTime()
 
-        self._build_ui()
+        self._init_ui()
         self._setup_plots()
-        self._connect_internal_signals()
+        self._init_signals()
         self._configure_accessibility()
-        
-        log.debug("[PageRecord] Initialized - is_live=True, QTimer started for plot rendering")
+        self._load_data()
 
-        # Populate spell combo and list
-        self.load_spell_list(self._initial_spell_counts)
+        log.debug("[PageRecord] Khởi tạo xong - is_live=True, QTimer render plot đang chạy")
 
     def keyPressEvent(self, event) -> None:
-        """Handle keyboard shortcuts for recording actions."""
+        """Xử lý phím tắt bàn phím cho các thao tác recording."""
         if event.key() == Qt.Key.Key_S and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             if self.btn_start.isEnabled():
                 self._on_start()
@@ -632,7 +630,8 @@ class PageRecord(QWidget):
 
     # ── UI Construction ─────────────────────────────────────────────────
 
-    def _build_ui(self) -> None:
+    def _init_ui(self) -> None:
+        """Xây dựng layout chính gồm 2 cột: plot bên trái, controls bên phải."""
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
@@ -900,7 +899,8 @@ class PageRecord(QWidget):
 
     # ── Internal Signal Wiring ──────────────────────────────────────────
 
-    def _connect_internal_signals(self) -> None:
+    def _init_signals(self) -> None:
+        """Kết nối toàn bộ signal và slot của trang recording."""
         # Toolbar buttons
         self.btn_start.clicked.connect(lambda: self._on_start())
         self.btn_stop.clicked.connect(lambda: self._on_stop())
@@ -933,7 +933,7 @@ class PageRecord(QWidget):
         self._plot_timer.start(33)  # ~30 FPS
 
     def _configure_accessibility(self) -> None:
-        """Set keyboard traversal and accessibility names for core controls."""
+        """Đặt accessible names và thứ tự tab traversal cho các control."""
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         self.graph1.setAccessibleName("Accelerometer live plot (aX, aY, aZ)")
@@ -970,6 +970,12 @@ class PageRecord(QWidget):
         self.setTabOrder(self.spell_list, self.btn_delete_spell)
         self.setTabOrder(self.btn_delete_spell, self.btn_back_spells)
         self.setTabOrder(self.btn_back_spells, self.sample_list)
+
+    # ── Load initial data ────────────────────────────────────────────────
+
+    def _load_data(self) -> None:
+        """Nạp danh sách spell ban đầu vào combo và list."""
+        self.load_spell_list(self._initial_spell_counts)
 
     # ── Static helpers ──────────────────────────────────────────────────
 

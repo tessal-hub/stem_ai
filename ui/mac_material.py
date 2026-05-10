@@ -1,4 +1,4 @@
-"""Shared macOS-style material helpers for soft depth."""
+"""Hàm tiện ích macOS-style material tạo hiệu ứng chiều sâu mềm."""
 
 from __future__ import annotations
 

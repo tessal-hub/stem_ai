@@ -1,4 +1,4 @@
-"""Helpers for resolving asset file paths reliably."""
+"""Hàm tiện ích phân giải đường dẫn asset file."""
 
 from __future__ import annotations
 

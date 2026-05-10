@@ -130,6 +130,10 @@ STYLE_GROUP_DONE = (
 
 
 class PagePrimitiveCollect(QWidget):
+    """
+    Trang thu thập cử chỉ nguyên thủy — tạo training data cho encoder model.
+    """
+
     sig_start_collection = pyqtSignal(str, str)  # (gesture_name, group_name)
     sig_stop_collection = pyqtSignal()
     sig_capture_collection = pyqtSignal(str, str)  # (gesture_name, group_name)
@@ -145,12 +149,12 @@ class PagePrimitiveCollect(QWidget):
         self._stats = {name: 0 for name in PRIMITIVE_GESTURES}
         self._card_widgets: dict[str, dict] = {}
 
-        self._build_ui()
+        self._init_ui()
         self._setup_plot()
-        self.update_collection_stats(self._stats)
-        self._refresh_action_buttons()
+        self._load_data()
 
-    def _build_ui(self) -> None:
+    def _init_ui(self) -> None:
+        """Xây dựng layout chính gồm 2 cột: gesture cards và controls/plot."""
         outer = QVBoxLayout(self)
         outer.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
         outer.setSpacing(SPACING_LG)
@@ -337,7 +341,13 @@ class PagePrimitiveCollect(QWidget):
         self._rebuild_cards()
         return widget
 
+    def _load_data(self) -> None:
+        """Nạp dữ liệu ban đầu và làm mới trạng thái nút."""
+        self.update_collection_stats(self._stats)
+        self._refresh_action_buttons()
+
     def _setup_plot(self) -> None:
+        """Cấu hình PyQtGraph plot cho signal preview."""
         self.preview_plot.setBackground(BG_DARK)
         self.preview_plot.showGrid(x=True, y=True, alpha=0.15)
         self.preview_plot.setMenuEnabled(False)

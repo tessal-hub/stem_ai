@@ -1,4 +1,4 @@
-"""Connection panel for serial controls."""
+"""Panel điều khiển kết nối serial cho trang Wand."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from ui.wand_panels.shared import make_button, make_card, make_section_label
 
 
 class WandConnectionPanel(QWidget):
-    """Serial connection control panel."""
+    """Panel điều khiển kết nối serial — quét cổng, kết nối, và ngắt."""
 
     sig_serial_scan = pyqtSignal()
     sig_serial_connect = pyqtSignal(str)
@@ -31,10 +31,16 @@ class WandConnectionPanel(QWidget):
         self._serial_connected = False
         self._status_presenter = ConnectionStatusPresenter()
 
-        self._build_ui()
-        self._connect_internal_signals()
+        self._init_ui()
+        self._init_signals()
 
     def set_serial_status(self, connected: bool, port_name: str = "") -> None:
+        """Cập nhật trạng thái kết nối serial trên giao diện.
+
+        Args:
+            connected: True nếu đã kết nối.
+            port_name: Tên cổng serial đang kết nối.
+        """
         self._serial_connected = connected
         self._status_presenter.apply(
             status_label=self.lbl_serial_status,
@@ -45,6 +51,11 @@ class WandConnectionPanel(QWidget):
         )
 
     def update_serial_port_list(self, ports: list[str]) -> None:
+        """Cập nhật danh sách cổng serial khả dụng trong dropdown.
+
+        Args:
+            ports: Danh sách tên cổng serial.
+        """
         self.combo_serial_ports.clear()
         if ports:
             self.combo_serial_ports.addItems(ports)
@@ -62,7 +73,8 @@ class WandConnectionPanel(QWidget):
         """Deprecated no-op: bluetooth feature removed from UI."""
         _ = devices
 
-    def _build_ui(self) -> None:
+    def _init_ui(self) -> None:
+        """Xây dựng layout panel gồm status, dropdown, và các nút."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_SM)
@@ -71,7 +83,8 @@ class WandConnectionPanel(QWidget):
         layout.addWidget(self._build_serial_card())
         layout.addStretch()
 
-    def _build_serial_card(self):
+    def _build_serial_card(self) -> QFrame:
+        """Tạo card chứa controls kết nối serial."""
         card, layout = make_card(
             margins=(
                 MARGIN_COMFORTABLE,
@@ -109,11 +122,13 @@ class WandConnectionPanel(QWidget):
         layout.addLayout(btn_row)
         return card
 
-    def _connect_internal_signals(self) -> None:
+    def _init_signals(self) -> None:
+        """Kết nối toàn bộ signal và slot nội bộ."""
         self.btn_serial_scan.clicked.connect(self.sig_serial_scan.emit)
-        self.btn_serial_connect.clicked.connect(self._on_serial_connect_clicked)
+        self.btn_serial_connect.clicked.connect(self._on_btn_serial_connect_clicked)
 
-    def _on_serial_connect_clicked(self) -> None:
+    def _on_btn_serial_connect_clicked(self) -> None:
+        """Xử lý khi người dùng nhấn nút Connect/Disconnect."""
         if self._serial_connected:
             self.sig_serial_disconnect.emit()
             return

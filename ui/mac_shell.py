@@ -1,4 +1,9 @@
-"""iOS-inspired app shell with sidebar navigation and swipe gestures."""
+"""
+Shell điều hướng kiểu iOS với sidebar và hỗ trợ vuốt (swipe gesture).
+
+Cung cấp giao diện navigation sidebar với brand section, toolbar tiêu đề,
+và hỗ trợ swipe trái/phải để chuyển trang.
+"""
 
 from __future__ import annotations
 
@@ -39,6 +44,7 @@ from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_MD, SPACING_SM
 
 @dataclass(frozen=True)
 class NavItem:
+    """Mục điều hướng trong sidebar."""
     label: str
     icon: str
     subtitle: str
@@ -55,6 +61,11 @@ NAV_ITEMS: tuple[NavItem, ...] = (
 
 
 class MacShell(QWidget):
+    """
+    Shell ứng dụng kiểu macOS/iOS với sidebar navigation.
+    Phát signal nav_requested(int) khi người dùng chọn trang mới.
+    """
+
     nav_requested = pyqtSignal(int)
 
     def __init__(self, title: str = "Reboot") -> None:
@@ -62,44 +73,15 @@ class MacShell(QWidget):
         self._buttons: list[QToolButton] = []
         self._active_index = 0
         self._fallback_title = title
-        self._build_ui(title)
-        self.grabGesture(Qt.GestureType.SwipeGesture)
-        self.content_host.grabGesture(Qt.GestureType.SwipeGesture)
 
-    def set_active_index(self, index: int) -> None:
-        if not NAV_ITEMS:
-            return
-        self._active_index = max(0, min(len(NAV_ITEMS) - 1, index))
-        item = NAV_ITEMS[self._active_index]
+        self._init_ui(title)
 
-        self.title_label.setText(item.label or self._fallback_title)
-        self.subtitle_label.setText(item.subtitle)
+    # ------------------------------------------------------------------
+    # Khởi tạo giao diện
+    # ------------------------------------------------------------------
 
-        for button_index, button in enumerate(self._buttons):
-            is_active = button_index == self._active_index
-            button.setProperty("active", is_active)
-            icon_path = button.property("nav_icon_path")
-            if isinstance(icon_path, str) and icon_path:
-                icon = self._tint_svg(
-                    icon_path,
-                    QColor("white") if is_active else QColor(TEXT_SECONDARY),
-                    SHELL_BRAND_ICON,
-                )
-                if icon.isNull():
-                    icon = QIcon(icon_path)
-                button.setIcon(icon)
-            button_style = button.style()
-            if button_style is not None:
-                button_style.unpolish(button)
-                button_style.polish(button)
-
-    def event(self, event: QEvent) -> bool:
-        if event.type() == QEvent.Type.Gesture:
-            if isinstance(event, QGestureEvent):
-                return self._handle_gesture_event(event)
-        return super().event(event)
-
-    def _build_ui(self, title: str) -> None:
+    def _init_ui(self, title: str) -> None:
+        """Xây dựng layout chính gồm toolbar, sidebar và vùng nội dung."""
         outer = QVBoxLayout(self)
         outer.setContentsMargins(1, 1, 1, 1)
         outer.setSpacing(0)
@@ -133,9 +115,62 @@ class MacShell(QWidget):
         self.setStyleSheet(
             f"* {{ font-family: {APP_FONT_STACK}; }} QPushButton {{ text-align: left; }}"
         )
+
+        # Đăng ký gesture vuốt cho cả shell và vùng nội dung
+        self.grabGesture(Qt.GestureType.SwipeGesture)
+        self.content_host.grabGesture(Qt.GestureType.SwipeGesture)
+
         self.set_active_index(0)
 
+    # ------------------------------------------------------------------
+    # Public methods
+    # ------------------------------------------------------------------
+
+    def set_active_index(self, index: int) -> None:
+        """Đặt trang active trong sidebar và cập nhật tiêu đề toolbar.
+
+        Args:
+            index: Chỉ số trang cần active.
+        """
+        if not NAV_ITEMS:
+            return
+        self._active_index = max(0, min(len(NAV_ITEMS) - 1, index))
+        item = NAV_ITEMS[self._active_index]
+
+        self.title_label.setText(item.label or self._fallback_title)
+        self.subtitle_label.setText(item.subtitle)
+
+        for button_index, button in enumerate(self._buttons):
+            is_active = button_index == self._active_index
+            button.setProperty("active", is_active)
+            icon_path = button.property("nav_icon_path")
+            if isinstance(icon_path, str) and icon_path:
+                icon = self._tint_svg(
+                    icon_path,
+                    QColor("white") if is_active else QColor(TEXT_SECONDARY),
+                    SHELL_BRAND_ICON,
+                )
+                if icon.isNull():
+                    icon = QIcon(icon_path)
+                button.setIcon(icon)
+            button_style = button.style()
+            if button_style is not None:
+                button_style.unpolish(button)
+                button_style.polish(button)
+
+    def event(self, event: QEvent) -> bool:
+        """Xử lý gesture event cho swipe navigation."""
+        if event.type() == QEvent.Type.Gesture:
+            if isinstance(event, QGestureEvent):
+                return self._handle_gesture_event(event)
+        return super().event(event)
+
+    # ------------------------------------------------------------------
+    # Private methods — UI builders
+    # ------------------------------------------------------------------
+
     def _build_toolbar(self, title: str) -> QWidget:
+        """Tạo thanh toolbar phía trên với tiêu đề và gợi ý điều hướng."""
         toolbar = QWidget()
         toolbar.setFixedHeight(60)
         toolbar.setStyleSheet(
@@ -174,6 +209,7 @@ class MacShell(QWidget):
         return toolbar
 
     def _build_brand_widget(self) -> QWidget:
+        """Tạo widget brand (logo + tên app) cho phần đầu sidebar."""
         brand = QWidget()
         brand.setFixedHeight(SHELL_BRAND_H)
         brand_layout = QVBoxLayout(brand)
@@ -213,6 +249,7 @@ class MacShell(QWidget):
         return brand
 
     def _build_sidebar(self) -> QWidget:
+        """Tạo sidebar với brand, danh sách nút điều hướng."""
         self.sidebar = QWidget()
         self.sidebar.setFixedWidth(SHELL_SIDEBAR_W)
         self.sidebar.setStyleSheet(
@@ -241,6 +278,16 @@ class MacShell(QWidget):
         return self.sidebar
 
     def _make_nav_button(self, label: str, icon_path: str, index: int) -> QToolButton:
+        """Tạo nút điều hướng trong sidebar.
+
+        Args:
+            label: Nhãn hiển thị trên nút.
+            icon_path: Đường dẫn tới icon SVG.
+            index: Chỉ số trang tương ứng.
+
+        Returns:
+            QToolButton đã được style và kết nối signal.
+        """
         button = QToolButton()
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setFixedHeight(SHELL_NAV_H)
@@ -289,22 +336,32 @@ class MacShell(QWidget):
                 icon = QIcon(resolved_icon)
             button.setIcon(icon)
             button.setIconSize(SHELL_BRAND_ICON)
-        button.clicked.connect(lambda _, idx=index: self._on_nav(idx))
+        # Lambda đơn giản — chỉ forward index, không chứa logic phức tạp
+        button.clicked.connect(lambda _, idx=index: self._on_nav_button_clicked(idx))
         return button
 
-    def _on_nav(self, index: int) -> None:
-        self.set_active_index(index)
-        self.nav_requested.emit(index)
-
     def _navigate_by_delta(self, delta: int) -> None:
+        """Điều hướng tương đối theo delta (+1 hoặc -1).
+
+        Args:
+            delta: Số trang cần dịch chuyển (dương = tiến, âm = lùi).
+        """
         if not NAV_ITEMS:
             return
         next_index = max(0, min(len(NAV_ITEMS) - 1, self._active_index + delta))
         if next_index == self._active_index:
             return
-        self._on_nav(next_index)
+        self._on_nav_button_clicked(next_index)
 
     def _handle_gesture_event(self, event: QGestureEvent) -> bool:
+        """Xử lý swipe gesture để chuyển trang.
+
+        Args:
+            event: Sự kiện gesture từ Qt.
+
+        Returns:
+            True nếu gesture đã được xử lý.
+        """
         gesture = event.gesture(Qt.GestureType.SwipeGesture)
         if not isinstance(gesture, QSwipeGesture):
             return False
@@ -322,6 +379,16 @@ class MacShell(QWidget):
 
     @staticmethod
     def _tint_svg(path: str, color: QColor, size: QSize | None = None) -> QIcon:
+        """Tô màu icon SVG bằng composition mode.
+
+        Args:
+            path: Đường dẫn file SVG.
+            color: Màu cần tô.
+            size: Kích thước render (mặc định 16x16).
+
+        Returns:
+            QIcon đã được tô màu.
+        """
         renderer = QSvgRenderer(path)
         if not renderer.isValid():
             return QIcon(path)
@@ -334,3 +401,16 @@ class MacShell(QWidget):
         painter.fillRect(pixmap.rect(), color)
         painter.end()
         return QIcon(pixmap)
+
+    # ------------------------------------------------------------------
+    # Slots
+    # ------------------------------------------------------------------
+
+    def _on_nav_button_clicked(self, index: int) -> None:
+        """Xử lý khi người dùng click nút điều hướng trong sidebar.
+
+        Args:
+            index: Chỉ số trang được chọn.
+        """
+        self.set_active_index(index)
+        self.nav_requested.emit(index)

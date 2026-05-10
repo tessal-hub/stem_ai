@@ -1,4 +1,4 @@
-"""Shared UI helpers for PageWand panel widgets."""
+"""Hàm UI helper dùng chung cho các panel widget trang Wand."""
 
 from __future__ import annotations
 

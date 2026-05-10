@@ -1,4 +1,4 @@
-"""Hardware stats and dataset chart panel."""
+"""Panel thống kê phần cứng ESP32 và biểu đồ phân bố spell."""
 
 from __future__ import annotations
 
@@ -22,13 +22,18 @@ from ui.wand_panels.shared import make_card, make_section_label
 
 
 class WandStatsPanel(QWidget):
-    """Panel for ESP telemetry labels and spell-count bar chart."""
+    """Panel hiển thị telemetry ESP32 và biểu đồ bar chart số lượng mẫu spell."""
 
     def __init__(self) -> None:
         super().__init__()
-        self._build_ui()
+        self._init_ui()
 
     def update_esp_stats(self, stats: dict[str, str]) -> None:
+        """Cập nhật nhãn thống kê phần cứng ESP32.
+
+        Args:
+            stats: Dict chứa các thông số (Battery, RAM Free, RSSI...).
+        """
         clear_layout(self.layout_stats)
         if not stats:
             lbl = QLabel("Awaiting connection...")
@@ -48,6 +53,11 @@ class WandStatsPanel(QWidget):
         self.layout_stats.setColumnStretch(1, 1)
 
     def update_spell_chart(self, spell_counts: dict[str, int]) -> None:
+        """Vẽ lại biểu đồ bar chart phân bố spell.
+
+        Args:
+            spell_counts: Dict spell_name → số lượng mẫu.
+        """
         self.stats_plot.clear()
 
         ax_bottom = self.stats_plot.getAxis("bottom")
@@ -74,7 +84,8 @@ class WandStatsPanel(QWidget):
         self.stats_plot.setYRange(0, 10)
         ax_bottom.setTicks([[(0, "No data yet")]])
 
-    def _build_ui(self) -> None:
+    def _init_ui(self) -> None:
+        """Xây dựng layout gồm grid thống kê và biểu đồ plot."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_SM)

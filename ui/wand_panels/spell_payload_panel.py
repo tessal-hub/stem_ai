@@ -1,4 +1,4 @@
-"""Spell payload selection panel used for firmware compile selection."""
+"""Panel chọn spell cho firmware — danh sách đã chọn và còn trống."""
 
 from __future__ import annotations
 
@@ -31,16 +31,22 @@ from ui.wand_panels.shared import make_section_label
 
 
 class WandSpellPayloadPanel(QWidget):
-    """Panel that renders selectable spell payload entries."""
+    """Panel render danh sách spell chọn được để đưa vào firmware payload."""
 
     def __init__(self) -> None:
         super().__init__()
         self._spell_order: list[str] = []
         self._selected_spells: set[str] = set()
         self._spell_counts: dict[str, int] = {}
-        self._build_ui()
+        self._init_ui()
+        self._init_signals()
 
     def load_spell_list(self, spell_counts: dict[str, int]) -> None:
+        """Nạp danh sách spell vào panel, giữ lại spell đã chọn nếu vẫn hợp lệ.
+
+        Args:
+            spell_counts: Dict spell_name → số lượng mẫu.
+        """
         self._spell_counts = dict(spell_counts)
         self._spell_order = [name for name in spell_counts.keys() if str(name).strip()]
 
@@ -49,12 +55,15 @@ class WandSpellPayloadPanel(QWidget):
         self._refresh_lists()
 
     def get_checked_spells(self) -> list[str]:
+        """Trả về danh sách spell đã được chọn."""
         return [name for name in self._spell_order if name in self._selected_spells]
 
     def get_available_spell_names(self) -> list[str]:
+        """Trả về danh sách spell chưa được chọn."""
         return [name for name in self._spell_order if name not in self._selected_spells]
 
-    def _build_ui(self) -> None:
+    def _init_ui(self) -> None:
+        """Xây dựng layout gồm 2 danh sách (selected/available) trong QSplitter."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_SM)
@@ -99,13 +108,16 @@ class WandSpellPayloadPanel(QWidget):
         split.setSizes([1, 1])
         layout.addWidget(split, stretch=1)
 
-        # Backward-compat alias for old references.
+        # Backward-compat alias
         self.list_firmware = self.list_selected_spells
 
+    def _init_signals(self) -> None:
+        """Kết nối toàn bộ signal và slot nội bộ."""
         self.list_selected_spells.itemClicked.connect(self._on_selected_item_clicked)
         self.list_available_spells.itemClicked.connect(self._on_available_item_clicked)
 
     def _refresh_lists(self) -> None:
+        """Xóa và vẽ lại cả hai danh sách spell từ dữ liệu nội bộ."""
         self.list_selected_spells.clear()
         self.list_available_spells.clear()
 
@@ -122,6 +134,13 @@ class WandSpellPayloadPanel(QWidget):
                 self._add_spell_row(self.list_available_spells, name, count)
 
     def _add_spell_row(self, list_widget: QListWidget, spell_name: str, count: int) -> None:
+        """Thêm một hàng spell vào list widget.
+
+        Args:
+            list_widget: QListWidget đích.
+            spell_name: Tên spell.
+            count: Số lượng mẫu.
+        """
         item = QListWidgetItem(list_widget)
         item.setData(Qt.ItemDataRole.UserRole, spell_name)
 
@@ -157,6 +176,7 @@ class WandSpellPayloadPanel(QWidget):
         list_widget.setItemWidget(item, widget)
 
     def _toggle_spell(self, spell_name: str) -> None:
+        """Chuyển trạng thái selected/available của spell và vẽ lại."""
         if spell_name not in self._spell_order:
             return
         if spell_name in self._selected_spells:
@@ -166,11 +186,13 @@ class WandSpellPayloadPanel(QWidget):
         self._refresh_lists()
 
     def _on_selected_item_clicked(self, item: QListWidgetItem) -> None:
+        """Xử lý khi người dùng click vào spell đã chọn — bỏ chọn nó."""
         spell_name = str(item.data(Qt.ItemDataRole.UserRole) or "")
         if spell_name:
             self._toggle_spell(spell_name)
 
     def _on_available_item_clicked(self, item: QListWidgetItem) -> None:
+        """Xử lý khi người dùng click vào spell chưa chọn — thêm vào danh sách chọn."""
         spell_name = str(item.data(Qt.ItemDataRole.UserRole) or "")
         if spell_name:
             self._toggle_spell(spell_name)

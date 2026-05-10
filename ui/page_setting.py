@@ -1,4 +1,4 @@
-"""PageSettings — Application, sensor, and machine-learning configuration view."""
+"""Trang cài đặt ứng dụng — cấu hình cảm biến, ML pipeline, và flash firmware."""
 from __future__ import annotations
 
 import os
@@ -63,7 +63,11 @@ from config import WORKSPACE_ROOT
 # ---------------------------------------------------------------------------
 
 class PageSetting(QWidget):
-    """Settings page: sensor, ML pipeline, project options, firmware flashing."""
+    """
+    Trang cài đặt ứng dụng.
+    Cho phép cấu hình cảm biến IMU, ML pipeline, thông số dự án,
+    đường dẫn ESP-IDF, và flash firmware lên thiết bị.
+    """
 
     sig_settings_saved = pyqtSignal(dict)
     sig_clear_database = pyqtSignal()
@@ -73,20 +77,21 @@ class PageSetting(QWidget):
     def __init__(self, data_store) -> None:
         super().__init__()
         self.data_store = data_store
-        self._build_ui()
-        self._connect_internal_signals()
+        self._init_ui()
+        self._init_signals()
         self._configure_accessibility()
-
-        # Snapshot the store's current settings and populate the form.
-        self._last_saved: dict[str, Any] = self.data_store.get_settings_snapshot()
-        self.load_settings(self._last_saved)
+        self._load_data()
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
     def load_settings(self, config: dict[str, Any]) -> None:
-        """Populate all form widgets from *config*, suppressing change signals."""
+        """Nạp giá trị từ *config* vào tất cả widget form, tắt signal trong lúc set.
+
+        Args:
+            config: Dict chứa các cặp key-value tương ứng với từng widget.
+        """
         widgets = {
             "sample_rate":    self.combo_sample_rate,
             "accel_scale":    self.combo_accel_scale,
@@ -117,17 +122,29 @@ class PageSetting(QWidget):
                 widget.blockSignals(False)
 
     def append_console_text(self, message: str) -> None:
-        """Append *message* to the console log and auto-scroll to the bottom."""
+        """Thêm *message* vào console log và tự cuộn xuống cuối.
+
+        Args:
+            message: Nội dung cần ghi vào console.
+        """
         if self.console_log is None:
             return
         self.console_log.append_line(message, strip_right=True)
 
     def update_flash_progress(self, value: int) -> None:
-        """Set the progress bar to *value* (clamped to 0–100)."""
+        """Đặt thanh tiến trình flash về *value* (giới hạn 0–100).
+
+        Args:
+            value: Phần trăm hoàn thành.
+        """
         self.progress_bar.setValue(max(0, min(100, value)))
 
     def set_flash_buttons_enabled(self, enabled: bool) -> None:
-        """Enable or disable both firmware flash buttons together."""
+        """Bật hoặc tắt cả hai nút flash firmware cùng lúc.
+
+        Args:
+            enabled: True để bật, False để tắt.
+        """
         self.btn_flash_collect.setEnabled(enabled)
         self.btn_flash_ai.setEnabled(enabled)
 
@@ -135,7 +152,8 @@ class PageSetting(QWidget):
     # UI construction
     # ------------------------------------------------------------------
 
-    def _build_ui(self) -> None:
+    def _init_ui(self) -> None:
+        """Xây dựng layout chính gồm 2 cột cấu hình, paths, firmware, và control bar."""
         outer = QVBoxLayout(self)
         outer.setContentsMargins(
             MARGIN_COMFORTABLE,
@@ -337,18 +355,19 @@ class PageSetting(QWidget):
     # Signal wiring
     # ------------------------------------------------------------------
 
-    def _connect_internal_signals(self) -> None:
-        self.btn_save.clicked.connect(self._on_save_clicked)
-        self.btn_revert.clicked.connect(self._on_revert_clicked)
-        self.btn_clear_db.clicked.connect(self._on_clear_db_clicked)
-        self.btn_flash_collect.clicked.connect(self._on_flash_collect_clicked)
-        self.btn_flash_ai.clicked.connect(self._on_flash_ai_clicked)
-        self.btn_open_idf_main.clicked.connect(self._on_open_idf_main_clicked)
-        self.btn_browse_idf_main.clicked.connect(self._on_browse_idf_main)
-        self.btn_reset_idf_main.clicked.connect(self._on_reset_idf_main)
+    def _init_signals(self) -> None:
+        """Kết nối toàn bộ signal và slot của trang cài đặt."""
+        self.btn_save.clicked.connect(self._on_btn_save_clicked)
+        self.btn_revert.clicked.connect(self._on_btn_revert_clicked)
+        self.btn_clear_db.clicked.connect(self._on_btn_clear_db_clicked)
+        self.btn_flash_collect.clicked.connect(self._on_btn_flash_collect_clicked)
+        self.btn_flash_ai.clicked.connect(self._on_btn_flash_ai_clicked)
+        self.btn_open_idf_main.clicked.connect(self._on_btn_open_idf_main_clicked)
+        self.btn_browse_idf_main.clicked.connect(self._on_btn_browse_idf_main_clicked)
+        self.btn_reset_idf_main.clicked.connect(self._on_btn_reset_idf_main_clicked)
 
     def _configure_accessibility(self) -> None:
-        """Configure accessible names and deterministic keyboard traversal."""
+        """Đặt accessible names và thứ tự tab traversal cho các control."""
         self.combo_sample_rate.setAccessibleName("Sample rate")
         self.combo_accel_scale.setAccessibleName("Accelerometer full scale")
         self.combo_gyro_scale.setAccessibleName("Gyroscope full scale")
@@ -389,7 +408,17 @@ class PageSetting(QWidget):
     # Slot implementations
     # ------------------------------------------------------------------
 
+    def _load_data(self) -> None:
+        """Nạp settings ban đầu từ DataStore snapshot vào form."""
+        self._last_saved: dict[str, Any] = self.data_store.get_settings_snapshot()
+        self.load_settings(self._last_saved)
+
     def _collect_config(self) -> dict[str, Any]:
+        """Thu thập giá trị hiện tại từ tất cả widget form.
+
+        Returns:
+            Dict chứa toàn bộ cấu hình đã nhập.
+        """
         return {
             "sample_rate":       self.combo_sample_rate.currentText(),
             "accel_scale":       self.combo_accel_scale.currentText(),
@@ -402,7 +431,8 @@ class PageSetting(QWidget):
             "idf_main_dir":      self.txt_idf_main_dir.text().strip(),
         }
 
-    def _on_save_clicked(self) -> None:
+    def _on_btn_save_clicked(self) -> None:
+        """Xử lý khi người dùng nhấn nút Save Settings."""
         config = self._collect_config()
         if not config.get("project_name"):
             QMessageBox.warning(self, "Missing Field", "Project name cannot be empty.")
@@ -413,10 +443,12 @@ class PageSetting(QWidget):
         self._last_saved = config
         self.sig_settings_saved.emit(config)
 
-    def _on_revert_clicked(self) -> None:
+    def _on_btn_revert_clicked(self) -> None:
+        """Xử lý khi người dùng nhấn nút Revert Changes."""
         self.load_settings(self._last_saved)
 
-    def _on_clear_db_clicked(self) -> None:
+    def _on_btn_clear_db_clicked(self) -> None:
+        """Xử lý khi người dùng nhấn nút Erase All Data — yêu cầu xác nhận."""
         if confirm_destructive(
             self,
             title="Erase All Data",
@@ -428,23 +460,29 @@ class PageSetting(QWidget):
         ):
             self.sig_clear_database.emit()
 
-    def _on_flash_collect_clicked(self) -> None:
+    def _on_btn_flash_collect_clicked(self) -> None:
+        """Xử lý khi người dùng nhấn nút Install Data Firmware."""
         self._begin_flash("[INFO] Starting DATA FIRMWARE flash…")
         self.sig_flash_data_firmware.emit()
 
-    def _on_flash_ai_clicked(self) -> None:
+    def _on_btn_flash_ai_clicked(self) -> None:
+        """Xử lý khi người dùng nhấn nút Install AI Engine."""
         self._begin_flash("[INFO] Starting AI ENGINE flash…")
         self.sig_flash_inference_firmware.emit()
 
     def _begin_flash(self, initial_message: str) -> None:
-        """Shared setup before any flash operation."""
+        """Thiết lập chung trước mỗi thao tác flash firmware.
+
+        Args:
+            initial_message: Thông báo khởi đầu hiển thị trong console.
+        """
         self.set_flash_buttons_enabled(False)
         self.console_log.clear()
         self.progress_bar.setValue(0)
         self.append_console_text(initial_message)
 
-    def _on_open_idf_main_clicked(self) -> None:
-        """Open the currently selected ESP-IDF project root in VS Code."""
+    def _on_btn_open_idf_main_clicked(self) -> None:
+        """Mở thư mục gốc ESP-IDF project đang chọn trong VS Code."""
         raw_main = self.txt_idf_main_dir.text().strip()
         if not raw_main:
             QMessageBox.warning(self, "Missing Path", "Please select the ESP-IDF main directory first.")
@@ -476,7 +514,8 @@ class PageSetting(QWidget):
             "Could not open ESP-IDF folder. Ensure the 'code' command is available in PATH.",
         )
 
-    def _on_browse_idf_main(self) -> None:
+    def _on_btn_browse_idf_main_clicked(self) -> None:
+        """Mở dialog chọn thư mục ESP-IDF main."""
         path = QFileDialog.getExistingDirectory(
             self,
             "Select ESP-IDF main Directory",
@@ -486,14 +525,22 @@ class PageSetting(QWidget):
             self.txt_idf_main_dir.setText(path)
             self.txt_idf_main_dir.setStyleSheet(STYLE_SETTING_INPUT)
 
-    def _on_reset_idf_main(self) -> None:
+    def _on_btn_reset_idf_main_clicked(self) -> None:
+        """Xóa đường dẫn ESP-IDF main và reset style."""
         self.txt_idf_main_dir.setText("")
         self.txt_idf_main_dir.setStyleSheet(STYLE_SETTING_INPUT)
 
     # Path validation
 
     def _validate_paths(self, config: dict[str, Any]) -> bool:
-        """Validate path fields; highlight invalid ones with a red border. Returns True if all valid."""
+        """Kiểm tra tính hợp lệ của các trường đường dẫn, đánh dấu đỏ nếu sai.
+
+        Args:
+            config: Dict chứa cấu hình cần validate.
+
+        Returns:
+            True nếu tất cả đường dẫn hợp lệ.
+        """
         idf_main_str = str(config.get("idf_main_dir", "")).strip()
         if not idf_main_str:
             self.txt_idf_main_dir.setStyleSheet(STYLE_SETTING_INPUT)
@@ -529,7 +576,7 @@ class PageSetting(QWidget):
     # ------------------------------------------------------------------
 
     def _build_paths_card(self) -> QWidget:
-        """Build the PATH CONFIGURATION card with one IDF main directory field."""
+        """Tạo card PATH CONFIGURATION với trường chọn thư mục IDF main."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -608,7 +655,11 @@ class PageSetting(QWidget):
 
     @staticmethod
     def _make_card() -> tuple[QFrame, QVBoxLayout]:
-        """Return a styled card frame together with its ready-to-use layout."""
+        """Tạo card frame có style và layout sẵn sàng sử dụng.
+
+        Returns:
+            Tuple gồm (frame, layout).        
+        """
         frame = QFrame()
         frame.setObjectName("CardFrame")
         frame.setStyleSheet(STYLE_SETTING_CARD)

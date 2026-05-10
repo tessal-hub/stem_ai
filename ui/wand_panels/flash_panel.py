@@ -1,4 +1,4 @@
-"""Model building control panel for .tflite and .cc outputs."""
+"""Panel điều khiển build model .tflite và .cc cho firmware."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from ui.wand_panels.shared import make_button, make_card, make_section_label
 
 
 class WandFlashPanel(QWidget):
-    """Panel that owns build/upload controls and flash progress state."""
+    """Panel chứa các nút build model và thanh tiến trình flash."""
 
     sig_build_tflite_clicked = pyqtSignal()
     sig_build_cc_clicked = pyqtSignal()
@@ -27,15 +27,22 @@ class WandFlashPanel(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        self._build_ui()
-        self._connect_internal_signals()
+        self._init_ui()
+        self._init_signals()
 
     def update_flash_progress(self, percentage: int, status_text: str = "") -> None:
+        """Cập nhật thanh tiến trình và nhãn trạng thái.
+
+        Args:
+            percentage: Phần trăm hoàn thành (0–100).
+            status_text: Thông báo trạng thái kèm theo.
+        """
         self.progress_bar.setValue(max(0, min(100, percentage)))
         if status_text:
             self.lbl_flash_status.setText(f"● {status_text}")
 
-    def _build_ui(self) -> None:
+    def _init_ui(self) -> None:
+        """Xây dựng layout gồm nút build và thanh tiến trình."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_XS)
@@ -78,6 +85,7 @@ class WandFlashPanel(QWidget):
 
         layout.addWidget(card)
 
-    def _connect_internal_signals(self) -> None:
+    def _init_signals(self) -> None:
+        """Kết nối toàn bộ signal và slot nội bộ."""
         self.btn_build_tflite.clicked.connect(self.sig_build_tflite_clicked.emit)
         self.btn_build_cc.clicked.connect(self.sig_build_cc_clicked.emit)
