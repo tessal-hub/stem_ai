@@ -7,7 +7,7 @@ from config import DATASET_DIR, ensure_data_dir
 from ui.main_window import MainWindow
 from logic.data_store import DataStore
 from logic.handler import Handler
-from theme import apply_modern_theme
+from theme import apply_flat_widget_chrome, apply_modern_theme
 
 
 def _remove_legacy_demo_spell_folders(data_store: DataStore) -> None:
@@ -46,6 +46,7 @@ def main():
     
     # 3. Khởi tạo MainWindow và truyền DataStore vào để vẽ giao diện ban đầu
     window = MainWindow(data_store)
+    apply_flat_widget_chrome(window)
     
     # 4. Khởi tạo Handler (Bộ não điều phối)
     # Lưu ý: Truyền các trang giao diện tương ứng từ MainWindow vào Handler.
@@ -54,6 +55,7 @@ def main():
                       ui_page_record=window.page_record,
                       ui_page_home=window.page_home,
                       ui_page_statistics=window.page_statistics,
+                      ui_primitive_collect=window.page_primitive_collect,
                       ui_page_setting=window.page_setting,
                       data_store=data_store)
     window.handler = handler

@@ -11,6 +11,7 @@ Jobs are pushed onto an internal ``queue.Queue`` as plain tuples:
 
     ("save",   spell_name: str, data: list[list[float]])
     ("delete", spell_name: str)
+    ("delete_latest_sample", spell_name: str)
     ("export", buf: list[list[float]], path: str)
     ("refresh",)                   # trigger a database rescan only
 
@@ -45,6 +46,7 @@ class DataIOWorker(QThread):
     #    thread via Qt's automatic QueuedConnection cross-thread dispatch) ──
     sig_save_done    = pyqtSignal(bool, str)   # (success, message)
     sig_delete_done  = pyqtSignal(bool, str)   # (success, message)
+    sig_delete_sample_done = pyqtSignal(bool, str)  # (success, message)
     sig_export_done  = pyqtSignal(bool, str)   # (success, message)
     sig_queue_warning = pyqtSignal(str)        # queue drop/backpressure warnings
     # Emitted after any operation that changes the dataset directory layout.
@@ -90,6 +92,19 @@ class DataIOWorker(QThread):
             self._warn_if_queue_pressure()
         except queue.Full:
             msg = f"DataIOWorker queue full: delete job dropped for spell '{spell_name}'"
+            log.warning(msg)
+            self.sig_queue_warning.emit(msg)
+
+    def enqueue_delete_latest_sample(self, spell_name: str) -> None:
+        """Schedule deletion of the newest CSV sample for a spell."""
+        try:
+            self._job_queue.put_nowait(("delete_latest_sample", spell_name))
+            self._warn_if_queue_pressure()
+        except queue.Full:
+            msg = (
+                "DataIOWorker queue full: latest-sample delete job dropped "
+                f"for spell '{spell_name}'"
+            )
             log.warning(msg)
             self.sig_queue_warning.emit(msg)
 
@@ -145,6 +160,9 @@ class DataIOWorker(QThread):
             elif kind == "delete":
                 _, spell_name = job
                 self._do_delete(spell_name)
+            elif kind == "delete_latest_sample":
+                _, spell_name = job
+                self._do_delete_latest_sample(spell_name)
             elif kind == "export":
                 _, buf, path = job
                 self._do_export(buf, path)
@@ -204,6 +222,35 @@ class DataIOWorker(QThread):
             msg = f"Delete failed: {type(exc).__name__}: {exc}"
             log.exception("DataIOWorker._do_delete")
             self.sig_delete_done.emit(False, msg)
+
+    def _do_delete_latest_sample(self, spell_name: str) -> None:
+        """Delete the most recently named sample CSV under one spell folder."""
+        try:
+            normalized_name = normalize_spell_name(spell_name)
+            folder_name = canonical_system_spell(normalized_name)
+            spell_path = Path(self._dataset_dir) / folder_name
+            if not spell_path.exists() or not spell_path.is_dir():
+                self.sig_delete_sample_done.emit(False, f"Spell not found: {folder_name}")
+                return
+
+            csv_files = sorted(spell_path.glob("*.csv"))
+            if not csv_files:
+                self.sig_delete_sample_done.emit(False, f"No samples found in {folder_name}")
+                return
+
+            latest_file = csv_files[-1]
+            latest_file.unlink(missing_ok=False)
+
+            counts = self._scan_database()
+            self.sig_db_refreshed.emit(counts)
+            self.sig_delete_sample_done.emit(
+                True,
+                f"Deleted latest sample: {folder_name}/{latest_file.name}",
+            )
+        except Exception as exc:
+            msg = f"Delete latest sample failed: {type(exc).__name__}: {exc}"
+            log.exception("DataIOWorker._do_delete_latest_sample")
+            self.sig_delete_sample_done.emit(False, msg)
 
     def _do_export(self, buf: list[list[float]], path: str) -> None:
         try:

@@ -15,42 +15,48 @@ APP_FONT_STACK = "SF Pro Text, SF Pro Display, -apple-system, BlinkMacSystemFont
 # MODERN PROFESSIONAL COLOR PALETTE (for modern theme)
 # ════════════════════════════════════════════════════════════════════════════
 
-# Primary brand colors
-PRIMARY_COLOR = "#6366f1"        # Indigo primary action
-PRIMARY_LIGHT = "#eef2ff"        # Light indigo hover background
-PRIMARY_DARK = "#4f46e5"         # Indigo hover/active
+# Primary monochrome color
+PRIMARY_COLOR = "#2f3137"
+PRIMARY_LIGHT = "#ececef"
+PRIMARY_DARK = "#1f2024"
 
-# Secondary accent colors
-SECONDARY_COLOR = "#10b981"      # Emerald green
-SECONDARY_LIGHT = "#ecfdf5"      # Light emerald background
-SECONDARY_DARK = "#047857"       # Dark emerald
+# Secondary accent colors (kept aligned to monochrome palette)
+SECONDARY_COLOR = PRIMARY_COLOR
+SECONDARY_LIGHT = PRIMARY_LIGHT
+SECONDARY_DARK = PRIMARY_DARK
 
-# Surface colors (for layered depth)
-SURFACE_0 = "#f8f9fb"            # Page background
-SURFACE_1 = "#ffffff"            # Card/content surface
-SURFACE_2 = "#f1f3f7"            # Sidebar/panel surface
+# Surface colors (single-color minimal look)
+SURFACE_0 = "#f5f5f7"
+SURFACE_1 = "#f5f5f7"
+SURFACE_2 = "#f5f5f7"
 SURFACE_PRIMARY = SURFACE_1
 SURFACE_SECONDARY = SURFACE_0
 SURFACE_TERTIARY = SURFACE_2
 
 # Text colors
-TEXT_PRIMARY = "#111827"         # Primary text (dark)
-TEXT_SECONDARY = "#6b7280"       # Secondary text (muted)
-TEXT_TERTIARY = "#9ca3af"        # Tertiary text (very muted)
+TEXT_PRIMARY = "#1c1c1e"
+TEXT_SECONDARY = "#636366"
+TEXT_TERTIARY = "#8e8e93"
 
 # Border colors
-BORDER_COLOR = "#e4e7ec"         # Standard borders
-BORDER_LIGHT = "#eceff4"         # Light borders (for subtle separations)
+BORDER_COLOR = "transparent"
+BORDER_LIGHT = "transparent"
 
 # Status/semantic colors
 STATUS_SUCCESS = "#10b981"       # Green for success
 STATUS_WARNING = "#f59e0b"       # Amber for warnings
 STATUS_ERROR = "#ef4444"         # Red for errors
 
-# Shadow colors for depth
-SHADOW_LIGHT = "rgba(0, 0, 0, 0.05)"      # Light shadow (hover effects)
-SHADOW_MEDIUM = "rgba(0, 0, 0, 0.10)"     # Medium shadow (cards)
-SHADOW_DARK = "rgba(0, 0, 0, 0.15)"       # Dark shadow (modals)
+# Shadow colors for depth (disabled in flat mode)
+SHADOW_LIGHT = "transparent"
+SHADOW_MEDIUM = "transparent"
+SHADOW_DARK = "transparent"
+
+# Flat surfaces
+GLASS_BG = SURFACE_1
+GLASS_BG_STRONG = SURFACE_1
+GLASS_BORDER = "transparent"
+GLASS_EDGE = "transparent"
 
 # ════════════════════════════════════════════════════════════════════════════
 
@@ -66,16 +72,16 @@ MAC_ACCENT = PRIMARY_COLOR
 MAC_ACCENT_DARK = PRIMARY_DARK
 
 # Shell layout tokens
-SHELL_SIDEBAR_W = 110
-SHELL_NAV_H = 58
-SHELL_BRAND_H = 72
-SHELL_BRAND_ICON = QSize(34, 34)
+SHELL_SIDEBAR_W = 178
+SHELL_NAV_H = 54
+SHELL_BRAND_H = 80
+SHELL_BRAND_ICON = QSize(30, 30)
 
 # Home layout tokens
 HOME_STATUS_H = 32
 HOME_VIEWER_MIN_H = 360
 HOME_ATTACH_H = 36
-HOME_RIGHT_W = 280
+HOME_RIGHT_W = 320
 HOME_MANAGER_DOT = 8
 HOME_MODE_H = 48
 HOME_VIEWER_INNER_MARGIN = 0
@@ -100,11 +106,11 @@ ACCENT_TEXT  = "#ffffff"
 SUCCESS      = "#10b981"
 DANGER       = "#ef4444"
 WARNING      = "#f59e0b"
-HOVER_BG     = "rgba(99, 102, 241, 0.08)"
+HOVER_BG     = "#ececef"
 
 # Terminal colors (used in wand page)
-TERM_FG      = "#22c55e"
-TERM_BG      = "#0d1117"
+TERM_FG      = TEXT_BODY
+TERM_BG      = SURFACE_1
 
 # Graph colors (used in plotting)
 CROP_REGION  = "#ff336644"
@@ -132,19 +138,19 @@ SETTINGS_HOVER_BG     = PRIMARY_LIGHT   # Light indigo hover for settings
 WAND_ACCENT       = ACCENT
 
 # Home page typography tokens
-STYLE_HOME_SECTION_TITLE = f"color: {TEXT_BODY}; font-size: 14px; font-weight: 900; letter-spacing: 1px;"
-STYLE_HOME_SECTION_SUBTITLE = f"color: {TEXT_MUTED}; font-weight: 700; font-size: 11px; letter-spacing: 0.8px;"
-STYLE_HOME_MODE_LABEL = f"color: {ACCENT}; font-size: 12px; font-weight: 900; letter-spacing: 1px;"
-STYLE_HOME_STAT_NAME = f"color: {TEXT_BODY}; font-size: 11px; font-weight: 700;"
-STYLE_HOME_STAT_VALUE = f"color: {TEXT_MUTED}; font-size: 11px; font-weight: 600;"
+STYLE_HOME_SECTION_TITLE = f"color: {TEXT_BODY}; font-size: 17px; font-weight: 700;"
+STYLE_HOME_SECTION_SUBTITLE = f"color: {TEXT_MUTED}; font-weight: 500; font-size: 12px;"
+STYLE_HOME_MODE_LABEL = f"color: {ACCENT}; font-size: 13px; font-weight: 700;"
+STYLE_HOME_STAT_NAME = f"color: {TEXT_BODY}; font-size: 12px; font-weight: 600;"
+STYLE_HOME_STAT_VALUE = f"color: {TEXT_MUTED}; font-size: 12px; font-weight: 600;"
 STYLE_HOME_EMPTY_SPELL_TEXT = f"color: {TEXT_MUTED}; font-size: 12px; font-style: italic; padding: 4px 0;"
 STYLE_HOME_OVERFLOW_TEXT = f"color: {TEXT_MUTED}; font-size: 10px; font-style: italic; padding: 2px 0;"
 STYLE_HOME_MANAGER_INDICATOR = f"background-color: {ACCENT}; border-radius: 4px;"
 STYLE_HOME_STATUS_TEMPLATE = (
     "QLabel {{ "
     "background-color: {bg_color}; "
-    f"color: {{fg_color}}; padding: 6px 16px; font-size: 12px; "
-    "font-weight: 900; border-radius: 8px; letter-spacing: 1px; }}"
+    f"color: {{fg_color}}; padding: 8px 16px; font-size: 12px; "
+    "font-weight: 700; border-radius: 12px; }}"
 )
 STYLE_HOME_STATUS_BAR = f"""
     #HomeStatusBar {{
@@ -159,14 +165,14 @@ STYLE_HOME_STATUS_BAR = f"""
 """
 STYLE_HOME_VIEWER_CARD = f"""
     #HomeViewerCard {{
-        background-color: {BG_WHITE};
-        border: 1px solid {BORDER};
-        border-radius: 14px;
+        background-color: {GLASS_BG};
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        border-radius: 20px;
     }}
     #HomeViewerSurface {{
-        background-color: {BG_WHITE};
-        border: 1px solid {BORDER};
-        border-radius: 14px;
+        background-color: {GLASS_BG_STRONG};
+        border: none;
+        border-radius: 18px;
     }}
 """
 STYLE_HOME_ATTACHMENT_BAR = """
@@ -177,17 +183,16 @@ STYLE_HOME_ATTACHMENT_BAR = """
 """
 STYLE_HOME_ATTACHMENT_PILL = f"""
     QPushButton {{
-        background-color: {MAC_SURFACE_SOLID};
+        background-color: {GLASS_BG_STRONG};
         color: {TEXT_BODY};
-        border: 1px solid {MAC_BORDER};
-        border-radius: 10px;
+        border: 1px solid {GLASS_EDGE};
+        border-radius: 12px;
         font-size: 10px;
-        font-weight: 800;
+        font-weight: 600;
         padding: 4px 10px;
     }}
     QPushButton:hover {{
         background-color: {HOVER_BG};
-        border-color: {ACCENT};
         color: {ACCENT};
     }}
 """
@@ -199,9 +204,9 @@ STYLE_HOME_RIGHT_PANEL = """
 """
 STYLE_HOME_RIGHT_SECTION = f"""
     #HomeRightSection {{
-        background-color: {BG_WHITE};
-        border: 1px solid {BORDER};
-        border-radius: 14px;
+        background-color: {GLASS_BG};
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        border-radius: 20px;
     }}
 """
 STYLE_HOME_MANAGER_ROW = f"""
@@ -229,26 +234,25 @@ STYLE_HOME_MANAGER_BAR = f"""
 """
 STYLE_HOME_SPELL_BTN = f"""
     QPushButton {{
-        background-color: {MAC_SURFACE_SOLID};
+        background-color: {GLASS_BG_STRONG};
         color: {TEXT_BODY};
-        border: 1px solid {MAC_BORDER};
-        border-radius: 10px;
+        border: 1px solid {GLASS_EDGE};
+        border-radius: 12px;
         font-size: 12px;
-        font-weight: 700;
+        font-weight: 600;
         text-align: left;
         padding-left: 10px;
     }}
     QPushButton:hover {{
         background-color: {HOVER_BG};
         color: {ACCENT};
-        border-color: {ACCENT};
     }}
 """
 STYLE_HOME_MODULE_BTN = f"""
     QPushButton {{
         background-color: {MAC_SURFACE_SOLID};
         color: {TEXT_BODY};
-        border: 1px solid {MAC_BORDER};
+        border: none;
         border-radius: 8px;
         font-size: 11px;
         font-weight: 800;
@@ -257,37 +261,33 @@ STYLE_HOME_MODULE_BTN = f"""
     QPushButton:hover {{
         color: {ACCENT};
         background-color: {HOVER_BG};
-        border-color: {ACCENT};
     }}
 """
 STYLE_HOME_ACTION_BTN = f"""
     QPushButton {{
         background-color: {ACCENT};
         color: {ACCENT_TEXT};
-        border: 1px solid {ACCENT};
-        border-radius: 8px;
-        font-size: 11px;
-        font-weight: 700;
-        padding: 5px 10px;
-        letter-spacing: 0.8px;
+        border: none;
+        border-radius: 14px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 7px 12px;
     }}
     QPushButton:hover {{ background-color: {ACCENT_DARK}; }}
     QPushButton:disabled {{ background-color: {BORDER_MID}; color: {TEXT_MUTED}; }}
 """
 STYLE_HOME_ACTION_BTN_SECONDARY = f"""
     QPushButton {{
-        background-color: transparent;
+        background-color: {GLASS_BG_STRONG};
         color: {TEXT_SECONDARY};
-        border: 1px solid {ACCENT};
-        border-radius: 8px;
-        font-size: 11px;
-        font-weight: 700;
-        padding: 5px 10px;
-        letter-spacing: 0.8px;
+        border: 1px solid {GLASS_EDGE};
+        border-radius: 14px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 7px 12px;
     }}
     QPushButton:hover {{
         background-color: {HOVER_BG};
-        border-color: {ACCENT};
         color: {ACCENT};
     }}
     QPushButton:disabled {{ background-color: {BG_LIGHT}; color: {TEXT_MUTED}; }}
@@ -304,12 +304,12 @@ MODULE_BTN_H  = 28
 GRAPH_MIN_H   = 360
 TERM_MIN_H    = 140
 PROGRESS_H    = 6
-RIGHT_MAX_W   = 320
+RIGHT_MAX_W   = 380
 BTN_H         = 32
 BTN_SMALL_H   = 28
 SETTINGS_BTN_H    = 32
 SETTINGS_INPUT_H  = 32
-LABEL_W       = 144
+LABEL_W       = 170
 RECORD_GRAPH_MIN_H = 150
 RECORD_LIST_MIN_H = 180
 SETTING_CONSOLE_MIN_H = 180
@@ -381,9 +381,9 @@ STYLE_SETTING_MAIN_CONTAINER = f"""
 # Generic card frames
 STYLE_CARD = f"""
     #CardFrame {{
-        background-color: {BG_WHITE};
-        border: 1px solid {BORDER};
-        border-radius: 14px;
+        background-color: {GLASS_BG};
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        border-radius: 20px;
     }}
 """
 
@@ -397,40 +397,40 @@ STYLE_CARD_NO_BORDER = """
 # PageStatistics card style (also applies to ClickableFrame)
 STYLE_STATISTICS_CARD = f"""
     #CardFrame, ClickableFrame {{
-        background-color: {BG_WHITE};
-        border: 1px solid {BORDER};
-        border-radius: 14px;
+        background-color: {GLASS_BG};
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        border-radius: 20px;
     }}
     ClickableFrame:hover {{
-        background-color: {BG_LIGHT};
-        border: 1px solid {BORDER};
+        background-color: {GLASS_BG_STRONG};
+        border: 1px solid rgba(0, 0, 0, 0.10);
     }}
 """
 
 # PageSetting card style
 STYLE_SETTING_CARD = f"""
     #CardFrame {{
-        background-color: {BG_WHITE};
-        border: 1px solid {BORDER};
-        border-radius: 14px;
+        background-color: {GLASS_BG};
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        border-radius: 20px;
     }}
 """
 
 # PageRecord graph card style
 STYLE_RECORD_GRAPH_CARD = f"""
     #CardFrame {{
-        background-color: {BG_WHITE};
-        border: 1px solid {BORDER};
-        border-radius: 14px;
+        background-color: {GLASS_BG};
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        border-radius: 20px;
     }}
 """
 
 # PageWand card style
 STYLE_WAND_CARD = f"""
     #CardFrame {{
-        background-color: {BG_WHITE};
-        border: 1px solid {BORDER};
-        border-radius: 14px;
+        background-color: {GLASS_BG};
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        border-radius: 20px;
     }}
 """
 
@@ -441,13 +441,13 @@ STYLE_WAND_CARD = f"""
 # Base button (PageRecord)
 STYLE_BTN_BASE = f"""
     QPushButton {{
-        background-color: transparent;
-        border: 1px solid {BORDER};
-        border-radius: 8px;
+        background-color: {GLASS_BG_STRONG};
+        border: none;
+        border-radius: 14px;
         color: {TEXT_SECONDARY};
-        font-size: 11px;
-        font-weight: 700;
-        padding: 5px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 7px 12px;
         min-width: 64px;
     }}
     QPushButton:hover {{
@@ -462,38 +462,37 @@ STYLE_BTN_START = f"""
     QPushButton {{
         background-color: {ACCENT};
         color: {ACCENT_TEXT};
-        border: 1px solid {ACCENT};
-        border-radius: 8px;
-        font-size: 11px;
-        font-weight: 700;
-        padding: 5px 10px;
-        letter-spacing: 1px;
+        border: none;
+        border-radius: 14px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 7px 12px;
     }}
     QPushButton:hover {{ background-color: {ACCENT_DARK}; }}
     QPushButton:disabled {{ background-color: {BORDER_MID}; color: {TEXT_MUTED}; }}
 """
 STYLE_BTN_STOP = f"""
     QPushButton {{
-        background-color: transparent;
+        background-color: rgba(239, 68, 68, 31);
         color: {DANGER};
-        border: 1px solid {DANGER};
-        border-radius: 8px;
-        font-size: 11px;
-        font-weight: 700;
-        padding: 5px 10px;
+        border: 1px solid rgba(239, 68, 68, 71);
+        border-radius: 14px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 7px 12px;
     }}
     QPushButton:hover {{ background-color: {DANGER}; color: {ACCENT_TEXT}; }}
     QPushButton:disabled {{ opacity: 0.5; }}
 """
 STYLE_BTN_SNIP = f"""
     QPushButton {{
-        background-color: transparent;
+        background-color: {GLASS_BG_STRONG};
         color: {TEXT_SECONDARY};
-        border: 1px solid {ACCENT};
-        border-radius: 8px;
-        font-size: 10px;
-        font-weight: 700;
-        padding: 2px 8px;
+        border: 1px solid {GLASS_EDGE};
+        border-radius: 14px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 7px 12px;
     }}
     QPushButton:hover {{
         background-color: {HOVER_BG};
@@ -503,23 +502,36 @@ STYLE_BTN_SNIP = f"""
     QPushButton:disabled {{ opacity: 0.5; }}
 """
 STYLE_BTN_DANGER_OUTLINE = STYLE_BTN_STOP
-STYLE_BTN_BACK = STYLE_BTN_BASE + f" QPushButton {{ color: {TEXT_BODY}; }}"
+STYLE_BTN_BACK = f"""
+    QPushButton {{
+        background-color: {SURFACE_1};
+        border: none;
+        border-radius: 14px;
+        color: {TEXT_BODY};
+        font-size: 12px;
+        font-weight: 600;
+        padding: 7px 12px;
+        min-width: 64px;
+    }}
+    QPushButton:hover {{
+        background-color: {HOVER_BG};
+        color: {TEXT_BODY};
+    }}
+"""
 
 # Outline button (generic, used in PageWand, PageSetting)
 STYLE_BTN_OUTLINE = f"""
     QPushButton {{
-        background-color: transparent;
+        background-color: {GLASS_BG_STRONG};
         color: {TEXT_SECONDARY};
-        border: 1px solid {ACCENT};
-        border-radius: 8px;
-        font-size: 11px;
-        font-weight: 700;
-        padding: 5px 10px;
-        letter-spacing: 0.5px;
+        border: 1px solid {GLASS_EDGE};
+        border-radius: 14px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 7px 12px;
     }}
     QPushButton:hover {{
         background-color: {HOVER_BG};
-        border-color: {ACCENT};
         color: {ACCENT};
     }}
     QPushButton:disabled {{ opacity: 0.5; }}
@@ -530,12 +542,11 @@ STYLE_BTN_PRIMARY = f"""
     QPushButton {{
         background-color: {ACCENT};
         color: {ACCENT_TEXT};
-        border: 1px solid {ACCENT};
-        border-radius: 8px;
-        font-size: 11px;
-        font-weight: 700;
-        padding: 5px 10px;
-        letter-spacing: 1px;
+        border: none;
+        border-radius: 14px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 7px 12px;
     }}
     QPushButton:hover {{ background-color: {ACCENT_DARK}; }}
     QPushButton:disabled {{ background-color: {BORDER_MID}; color: {TEXT_MUTED}; }}
@@ -544,10 +555,10 @@ STYLE_BTN_PRIMARY = f"""
 # Small button (PageWand)
 STYLE_BTN_SMALL = f"""
     QPushButton {{
-        background-color: transparent;
+        background-color: {BG_LIGHT};
         color: {TEXT_SECONDARY};
-        border: 1px solid {ACCENT};
-        border-radius: 8px;
+        border: none;
+        border-radius: 12px;
         min-height: 28px;
         max-height: 28px;
         font-size: 10px;
@@ -556,7 +567,6 @@ STYLE_BTN_SMALL = f"""
     }}
     QPushButton:hover {{
         background-color: {HOVER_BG};
-        border-color: {ACCENT};
         color: {ACCENT};
     }}
 """
@@ -564,17 +574,16 @@ STYLE_BTN_SMALL = f"""
 # Settings-specific buttons
 STYLE_SETTING_BTN_OUTLINE = f"""
     QPushButton {{
-        background-color: transparent;
+        background-color: {BG_LIGHT};
         color: {TEXT_SECONDARY};
-        border: 1px solid {ACCENT};
-        border-radius: 8px;
+        border: none;
+        border-radius: 12px;
         font-size: 11px;
         font-weight: 700;
         padding: 5px 10px;
     }}
     QPushButton:hover {{
         background-color: {SETTINGS_HOVER_BG};
-        border-color: {SETTINGS_ACCENT};
         color: {SETTINGS_ACCENT};
     }}
     QPushButton:disabled {{
@@ -586,8 +595,8 @@ STYLE_SETTING_BTN_PRIMARY = f"""
     QPushButton {{
         background-color: {ACCENT};
         color: {ACCENT_TEXT};
-        border: 1px solid {ACCENT};
-        border-radius: 8px;
+        border: none;
+        border-radius: 12px;
         font-size: 11px;
         font-weight: 700;
         padding: 5px 10px;
@@ -598,10 +607,10 @@ STYLE_SETTING_BTN_PRIMARY = f"""
 
 STYLE_SETTING_BTN_DANGER = f"""
     QPushButton {{
-        background-color: transparent;
+        background-color: rgba(239, 68, 68, 31);
         color: {DANGER};
-        border: 1px solid {DANGER};
-        border-radius: 8px;
+        border: none;
+        border-radius: 12px;
         font-size: 11px;
         font-weight: 700;
         padding: 5px 10px;
@@ -615,7 +624,7 @@ STYLE_SPELL_BTN = f"""
     QPushButton {{
         background-color: {MAC_SURFACE_SOLID};
         color: {TEXT_BODY};
-        border: 1px solid {MAC_BORDER};
+        border: none;
         border-radius: 10px;
         font-size: 12px;
         font-weight: bold;
@@ -625,7 +634,6 @@ STYLE_SPELL_BTN = f"""
     QPushButton:hover {{
         background-color: {HOVER_BG};
         color: {ACCENT};
-        border-color: {ACCENT};
     }}
 """
 
@@ -633,7 +641,7 @@ STYLE_MODULE_BTN = f"""
     QPushButton {{
         background-color: {MAC_SURFACE_SOLID};
         color: {TEXT_BODY};
-        border: 1px solid {MAC_BORDER};
+        border: none;
         border-radius: 8px;
         font-size: 11px;
         font-weight: 800;
@@ -642,7 +650,6 @@ STYLE_MODULE_BTN = f"""
     QPushButton:hover {{
         color: {ACCENT};
         background-color: {HOVER_BG};
-        border-color: {ACCENT};
     }}
 """
 
@@ -651,8 +658,8 @@ STYLE_STATISTICS_BTN_BACK = f"""
     QPushButton {{
         background-color: {MAC_SURFACE_SOLID};
         color: {TEXT_BODY};
-        border: 1px solid {MAC_BORDER};
-        border-radius: 6px;
+        border: none;
+        border-radius: 12px;
         font-size: 12px;
         font-weight: bold;
         padding: 5px 10px;
@@ -667,20 +674,20 @@ STYLE_STATISTICS_BTN_BACK = f"""
 # List widget (used in multiple pages)
 STYLE_LIST = f"""
     QListWidget {{
-        background-color: {BG_WHITE};
-        border: 1px solid {BORDER};
-        border-radius: 12px;
+        background-color: {GLASS_BG_STRONG};
+        border: none;
+        border-radius: 16px;
         outline: 0;
         color: {TEXT_BODY};
     }}
     QListWidget::item {{
-        border-bottom: 1px solid {BORDER};
+        border-bottom: none;
         min-height: 48px;
         padding: 0 12px;
         color: {TEXT_BODY};
     }}
     QListWidget::item:selected {{
-        background-color: {BG_WHITE};
+        background-color: {PRIMARY_LIGHT};
         border-left: 3px solid {ACCENT};
         padding-left: 9px;
     }}
@@ -690,21 +697,21 @@ STYLE_LIST = f"""
 # PageRecord list
 STYLE_RECORD_LIST = f"""
     QListWidget {{
-        background-color: {BG_WHITE};
-        border: 1px solid {BORDER};
-        border-radius: 12px;
+        background-color: {GLASS_BG_STRONG};
+        border: none;
+        border-radius: 16px;
         outline: 0;
         color: {TEXT_BODY};
     }}
     QListWidget::item {{
-        border-bottom: 1px solid {BORDER};
+        border-bottom: none;
         min-height: 48px;
         padding: 0 12px;
         color: {TEXT_BODY};
         font-weight: 500;
     }}
     QListWidget::item:selected {{
-        background-color: {BG_WHITE};
+        background-color: {PRIMARY_LIGHT};
         color: {TEXT_BODY};
         border-left: 3px solid {ACCENT};
         padding-left: 9px;
@@ -717,21 +724,21 @@ STYLE_RECORD_LIST = f"""
 # PageStatistics list
 STYLE_STATISTICS_LIST = f"""
     QListWidget {{
-        background-color: {BG_WHITE};
-        border: 1px solid {BORDER};
-        border-radius: 12px;
+        background-color: {GLASS_BG_STRONG};
+        border: none;
+        border-radius: 16px;
         outline: 0;
         color: {TEXT_BODY};
     }}
     QListWidget::item {{
-        border-bottom: 1px solid {BORDER};
+        border-bottom: none;
         min-height: 48px;
         padding: 0 12px;
         color: {TEXT_BODY};
         font-weight: 500;
     }}
     QListWidget::item:selected {{
-        background-color: {BG_WHITE};
+        background-color: {PRIMARY_LIGHT};
         color: {TEXT_BODY};
         border-left: 3px solid {ACCENT};
         padding-left: 9px;
@@ -748,40 +755,42 @@ STYLE_CHECKBOX = f"""
         font-weight: 600;
         font-size: 12px;
     }}
-    QCheckBox::indicator {{ width: 16px; height: 16px; }}
+    QCheckBox::indicator {{ width: 18px; height: 18px; }}
     QCheckBox::indicator:checked {{
         background-color: {ACCENT};
         border: 1px solid {ACCENT};
-        border-radius: 4px;
+        border-radius: 6px;
     }}
     QCheckBox::indicator:unchecked {{
         background-color: {BG_WHITE};
         border: 1px solid {BORDER_MID};
-        border-radius: 4px;
+        border-radius: 6px;
     }}
 """
 
 # PageRecord checkbox
 STYLE_RECORD_CHECKBOX = f"""
     QCheckBox {{ color: {TEXT_BODY}; font-weight: 600; font-size: 11px; }}
+    QCheckBox::indicator {{ width: 18px; height: 18px; }}
     QCheckBox::indicator:checked {{
         background-color: {ACCENT};
         border: 1px solid {ACCENT};
-        border-radius: 3px;
+        border-radius: 6px;
     }}
 """
 
 # PageSetting checkbox
 STYLE_SETTING_CHECKBOX = f"""
     QCheckBox {{ color: {TEXT_BODY}; font-weight: 600; font-size: 11px; }}
+    QCheckBox::indicator {{ width: 18px; height: 18px; }}
     QCheckBox::indicator:checked {{
         background-color: {SETTINGS_ACCENT};
         border: 1px solid {SETTINGS_ACCENT};
-        border-radius: 3px;
+        border-radius: 6px;
     }}
     QCheckBox::indicator:unchecked {{
         border: 1px solid {BORDER_MID};
-        border-radius: 3px;
+        border-radius: 6px;
         background-color: {BG_WHITE};
     }}
 """
@@ -789,18 +798,18 @@ STYLE_SETTING_CHECKBOX = f"""
 # ComboBox (generic)
 STYLE_COMBO = f"""
     QComboBox {{
-        background-color: {MAC_SURFACE_SOLID};
-        border: 1px solid {MAC_BORDER};
-        border-radius: 8px;
-        padding: 4px 8px;
+        background-color: {GLASS_BG_STRONG};
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        border-radius: 12px;
+        padding: 6px 10px;
         color: {TEXT_BODY};
         font-weight: 600;
-        font-size: 11px;
+        font-size: 12px;
     }}
     QComboBox::drop-down {{ border: none; }}
     QComboBox QAbstractItemView {{
         background-color: {BG_WHITE};
-        border: 1px solid {BORDER_MID};
+        border: none;
         selection-background-color: {HOVER_BG};
         selection-color: {TEXT_BODY};
         color: {TEXT_BODY};
@@ -810,19 +819,19 @@ STYLE_COMBO = f"""
 # PageRecord combo
 STYLE_RECORD_COMBO = f"""
     QComboBox, QLineEdit {{
-        background-color: {MAC_SURFACE_SOLID};
-        border: 1px solid {MAC_BORDER};
-        border-radius: 6px;
-        padding: 4px 8px;
+        background-color: {GLASS_BG_STRONG};
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        border-radius: 12px;
+        padding: 6px 10px;
         color: {TEXT_BODY};
         font-weight: 600;
-        font-size: 11px;
+        font-size: 12px;
         min-height: 26px;
     }}
     QComboBox::drop-down {{ border: none; }}
     QComboBox QAbstractItemView {{
         background-color: {BG_WHITE};
-        border: 1px solid {BORDER_MID};
+        border: none;
         selection-background-color: {HOVER_BG};
         selection-color: {TEXT_BODY};
         color: {TEXT_BODY};
@@ -832,9 +841,9 @@ STYLE_RECORD_COMBO = f"""
 # PageWand combo
 STYLE_WAND_COMBO = f"""
     QComboBox {{
-        background-color: {MAC_SURFACE_SOLID};
-        border: 1px solid {MAC_BORDER};
-        border-radius: 8px;
+        background-color: {GLASS_BG_STRONG};
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        border-radius: 12px;
         padding: 6px 10px;
         color: {TEXT_BODY};
         font-weight: 600;
@@ -844,7 +853,7 @@ STYLE_WAND_COMBO = f"""
     QComboBox::drop-down {{ border: none; }}
     QComboBox QAbstractItemView {{
         background-color: {BG_WHITE};
-        border: 1px solid {BORDER_MID};
+        border: none;
         selection-background-color: {HOVER_BG};
         selection-color: {TEXT_BODY};
         color: {TEXT_BODY};
@@ -854,18 +863,18 @@ STYLE_WAND_COMBO = f"""
 # PageSetting input (combo, line edit, spinbox)
 STYLE_SETTING_INPUT = f"""
     QComboBox, QLineEdit, QSpinBox, QDoubleSpinBox {{
-        background-color: {MAC_SURFACE_SOLID};
-        border: 1px solid {MAC_BORDER};
-        border-radius: 6px;
-        padding: 4px 8px;
+        background-color: {GLASS_BG_STRONG};
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        border-radius: 12px;
+        padding: 6px 10px;
         color: {TEXT_BODY};
         font-weight: 600;
-        font-size: 11px;
+        font-size: 12px;
     }}
     QComboBox::drop-down {{ border: none; width: 20px; }}
     QComboBox QAbstractItemView {{
         background-color: {BG_WHITE};
-        border: 1px solid {BORDER_MID};
+        border: none;
         selection-background-color: {SETTINGS_HOVER_BG};
         color: {TEXT_BODY};
         selection-color: {TEXT_BODY};
@@ -911,9 +920,8 @@ STYLE_TERMINAL = f"""
     QTextEdit, QPlainTextEdit, QTextBrowser {{
         background-color: {TERM_BG};
         color: {TERM_FG};
-        border: 1px solid {BORDER};
-        border-left: 3px solid {TERM_FG};
-        border-radius: 8px;
+        border: none;
+        border-radius: 12px;
         padding: 12px;
         font-family: Consolas, 'Courier New', monospace;
         font-size: 11px;
@@ -925,9 +933,8 @@ STYLE_CONSOLE = f"""
     QTextEdit, QPlainTextEdit, QTextBrowser {{
         background-color: {TERM_BG};
         color: {TERM_FG};
-        border: 1px solid {BORDER};
-        border-left: 3px solid {TERM_FG};
-        border-radius: 8px;
+        border: none;
+        border-radius: 12px;
         font-family: Consolas, 'Courier New', monospace;
         font-size: 11px;
         padding: 12px;
@@ -943,11 +950,11 @@ STYLE_SCROLL_AREA = """
     QScrollArea { border: none; background-color: transparent; }
     QScrollArea > QWidget > QWidget { background: transparent; }
     QScrollBar:vertical { border: none; background: transparent; width: 10px; margin: 0px; }
-    QScrollBar::handle:vertical { background: rgba(128, 128, 128, 0.50); border-radius: 5px; min-height: 20px; }
+    QScrollBar::handle:vertical { background: rgba(128, 128, 128, 128); border-radius: 5px; min-height: 20px; }
     QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; background: transparent; border: none; }
     QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
     QScrollBar:horizontal { border: none; background: transparent; height: 10px; margin: 0px; }
-    QScrollBar::handle:horizontal { background: rgba(128, 128, 128, 0.50); border-radius: 5px; min-width: 20px; }
+    QScrollBar::handle:horizontal { background: rgba(128, 128, 128, 128); border-radius: 5px; min-width: 20px; }
     QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; background: transparent; border: none; }
     QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: transparent; }
 """
@@ -1004,7 +1011,7 @@ STYLE_SETTINGS_HINT_TEMPLATE = "color: {color}; font-size: 11px;"
 STYLE_SETTINGS_SECTION_LABEL_TEMPLATE = "color: {color}; font-weight: 900; font-size: 12px; letter-spacing: 1px;"
 STYLE_SETTINGS_INPUT_INVALID = (
     f"border: 2px solid {DANGER}; border-radius: 6px;"
-    f" background-color: rgba(239, 68, 68, 0.06);"
+    f" background-color: rgba(239, 68, 68, 15);"
 )
 STYLE_STATISTICS_INFO_LABEL = f"color: {TEXT_BODY}; font-weight: 500; font-size: 11px;"
 STYLE_STATISTICS_META_LABEL = f"color: {TEXT_MUTED}; font-size: 10px;"
@@ -1014,9 +1021,22 @@ STYLE_STAT_LABEL = f"color: {TEXT_MUTED}; font-size: 11px; font-weight: 700;"
 STYLE_HINT_LABEL_TEMPLATE = "color: {color}; font-size: 11px; font-weight: 500;"
 STYLE_CARD_NAME_LABEL = f"color: {TEXT_BODY}; font-weight: 700; font-size: 12px;"
 STYLE_CARD_COUNT_LABEL = f"color: {TEXT_MUTED}; font-size: 10px; font-weight: 700;"
-STYLE_GRAPH_PLACEHOLDER = f"background-color: {BG_DARK}; color: {TEXT_MUTED}; border-radius: 6px;"
+STYLE_GRAPH_PLACEHOLDER = (
+    f"background-color: {PRIMARY_LIGHT}; color: {TEXT_SECONDARY}; "
+    f"border: none; border-radius: 14px;"
+)
 STYLE_FORM_ROW_LABEL = STYLE_SETTINGS_FORM_LABEL
 STYLE_WAND_LIST_TITLE = f"color: {TEXT_BODY}; font-size: 10px; font-weight: 800; letter-spacing: 1px;"
 STYLE_WAND_SPELL_NAME = f"color: {TEXT_BODY}; font-size: 12px; font-weight: 700;"
 STYLE_WAND_EMPTY_ROW_TEMPLATE = "color: {color}; font-size: 11px; font-style: italic; padding: 8px 12px;"
 STYLE_WAND_FLASH_STATUS = f"color: {TEXT_MUTED}; font-size: 11px; font-weight: 700;"
+STYLE_STATE_EMPTY_CARD = (
+    f"background-color: {GLASS_BG}; border: none; border-radius: 18px;"
+)
+STYLE_STATE_EMPTY_TITLE = f"color: {TEXT_BODY}; font-size: 14px; font-weight: 700;"
+STYLE_STATE_EMPTY_BODY = f"color: {TEXT_SECONDARY}; font-size: 12px; font-weight: 500;"
+STYLE_STATE_ERROR_CARD = (
+    f"background-color: {SURFACE_1}; border: none; border-radius: 18px;"
+)
+STYLE_STATE_ERROR_TITLE = f"color: {TEXT_BODY}; font-size: 14px; font-weight: 700;"
+STYLE_STATE_ERROR_BODY = f"color: {TEXT_SECONDARY}; font-size: 12px; font-weight: 500;"

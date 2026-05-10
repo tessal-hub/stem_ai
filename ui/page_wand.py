@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QFrame, QHBoxLayout, QScrollArea, QVBoxLayout, QWidget
+from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
-from ui.tokens import STYLE_SCROLL_AREA, STYLE_WAND_MAIN_CONTAINER
 from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_MD, SPACING_LG
 from ui.wand_panels.connection_panel import WandConnectionPanel
 from ui.wand_panels.flash_panel import WandFlashPanel
@@ -76,24 +75,8 @@ class PageWand(QWidget):
 
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll.setStyleSheet(STYLE_SCROLL_AREA)
-
-        self.main_container = QFrame()
-        self.main_container.setObjectName("MainBox")
-        self.main_container.setFrameShape(QFrame.Shape.NoFrame)
-        self.main_container.setFrameShadow(QFrame.Shadow.Plain)
-        self.main_container.setStyleSheet(STYLE_WAND_MAIN_CONTAINER)
-
-        inner = QVBoxLayout(self.main_container)
-        inner.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
-        inner.setSpacing(SPACING_LG)
+        outer.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
+        outer.setSpacing(SPACING_LG)
 
         content = QHBoxLayout()
         content.setSpacing(SPACING_LG)
@@ -127,9 +110,7 @@ class PageWand(QWidget):
         content.addWidget(left_column, stretch=12)
         content.addWidget(right_column, stretch=10)
 
-        inner.addLayout(content, stretch=1)
-        scroll.setWidget(self.main_container)
-        outer.addWidget(scroll)
+        outer.addLayout(content, stretch=1)
 
     def _expose_legacy_attributes(self) -> None:
         """Keep historical field access paths stable for handlers/tests."""

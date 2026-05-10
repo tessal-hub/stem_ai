@@ -5,6 +5,7 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QFrame, QLabel, QPushButton, QVBoxLayout
 
+from ui.mac_material import apply_soft_shadow
 from ui.tokens import BTN_H, STYLE_SECTION_LABEL_TEMPLATE, STYLE_WAND_CARD, TEXT_BODY
 
 
@@ -16,6 +17,7 @@ def make_card(
     frame = QFrame()
     frame.setObjectName("CardFrame")
     frame.setStyleSheet(STYLE_WAND_CARD)
+    apply_soft_shadow(frame, blur_radius=20, y_offset=4, color="rgba(15, 23, 42, 0.16)")
 
     layout = QVBoxLayout(frame)
     layout.setContentsMargins(*margins)

@@ -51,6 +51,7 @@ from ui.component_factory import (
     make_checkbox,
     make_hint,
 )
+from ui.mac_material import apply_soft_shadow
 from ui.confirm_dialog import confirm_destructive
 from ui.modern_layout import (
     MARGIN_COMFORTABLE,
@@ -75,6 +76,7 @@ class PageRecord(QWidget):
     sig_snip_record    = pyqtSignal()
     sig_sample_opened  = pyqtSignal(str)
     sig_sample_deleted = pyqtSignal(str)
+    sig_delete_latest_sample = pyqtSignal(str)  # spell name
     sig_data_cropped   = pyqtSignal(list, str)  # (6D data, spell_name)
     sig_spell_selected = pyqtSignal(str)        # spell name when user clicks
     sig_spell_deleted  = pyqtSignal(str)        # spell name when user deletes
@@ -154,6 +156,8 @@ class PageRecord(QWidget):
         self.btn_start.setEnabled(not recording)
         self.btn_stop.setEnabled(recording)
         self.combo_spell.setEnabled(not recording)
+        if hasattr(self, "btn_delete_latest_sample"):
+            self.btn_delete_latest_sample.setEnabled(not recording)
 
         status = "● RECORDING" if recording else "● WAND IS READY"
         color = ACCENT if recording else SUCCESS
@@ -362,6 +366,7 @@ class PageRecord(QWidget):
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
         self.btn_snip.setEnabled(False)
+        self.btn_delete_latest_sample.setEnabled(False)
         self.combo_spell.setEnabled(False)
         self.lbl_wand_status.setText("● RECORDING DATA")
         self.lbl_wand_status.setStyleSheet(
@@ -389,6 +394,7 @@ class PageRecord(QWidget):
         self.btn_start.setEnabled(True)
         self.btn_stop.setEnabled(False)
         self.btn_snip.setEnabled(True)
+        self.btn_delete_latest_sample.setEnabled(True)
         self.combo_spell.setEnabled(True)
 
         self.lbl_wand_status.setText("● RECORDING STOPPED - Select region to snip")
@@ -518,6 +524,43 @@ class PageRecord(QWidget):
             STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
         )
 
+    def _on_delete_latest_sample(self) -> None:
+        """Quick-delete the newest recorded CSV sample for the active spell."""
+        spell_name = self.current_spell_name.strip() or self.combo_spell.currentText().strip()
+        if not spell_name:
+            self.lbl_wand_status.setText("⚠ Select a spell to delete its latest sample")
+            self.lbl_wand_status.setStyleSheet(
+                STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
+            )
+            return
+
+        samples = self.store.get_samples_for_spell(spell_name)
+        if not samples:
+            self.lbl_wand_status.setText(f"⚠ No saved samples found for {spell_name}")
+            self.lbl_wand_status.setStyleSheet(
+                STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
+            )
+            return
+
+        self.sig_delete_latest_sample.emit(spell_name)
+        self.lbl_wand_status.setText(f"🗑 Deleting latest sample from {spell_name}...")
+        self.lbl_wand_status.setStyleSheet(
+            STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
+        )
+
+    def set_quick_delete_feedback(self, success: bool, message: str) -> None:
+        """Display status feedback after quick sample deletion."""
+        if success:
+            self.lbl_wand_status.setText("✔ Latest sample deleted")
+            self.lbl_wand_status.setStyleSheet(
+                STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
+            )
+            return
+        self.lbl_wand_status.setText(f"⚠ {message}")
+        self.lbl_wand_status.setStyleSheet(
+            STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
+        )
+
     def _on_spell_list_clicked(self, item) -> None:
         """Handle spell list item click: auto-select spell in combo and emit signal."""
         spell_name = str(item.data(Qt.ItemDataRole.UserRole) or item.text())
@@ -640,6 +683,7 @@ class PageRecord(QWidget):
         graph_card = QFrame()
         graph_card.setObjectName("CardFrame")
         graph_card.setStyleSheet(STYLE_RECORD_GRAPH_CARD)
+        apply_soft_shadow(graph_card, blur_radius=22, y_offset=4, color="rgba(15, 23, 42, 0.14)")
         graph_layout = QVBoxLayout(graph_card)
         graph_layout.setContentsMargins(
             MARGIN_COMFORTABLE,
@@ -671,8 +715,8 @@ class PageRecord(QWidget):
         self.btn_zoom_out.setToolTip("Zoom out on plots")
         self.btn_zoom_fit.setToolTip("Fit plots to data")
         
-        bottom_row.addWidget(self.chk_graph1)
-        bottom_row.addWidget(self.chk_graph2)
+        bottom_row.addWidget(self.chk_graph1, stretch=1)
+        bottom_row.addWidget(self.chk_graph2, stretch=1)
         bottom_row.addStretch()
         bottom_row.addWidget(self.btn_zoom_in)
         bottom_row.addWidget(self.btn_zoom_out)
@@ -764,7 +808,13 @@ class PageRecord(QWidget):
 
         layout.addWidget(controls_card)
 
-        # ── Batch operations card with modern shadow ───────────────────
+        # ── Spell list stack ───────────────────────────────────────
+        self.stacked_spells = QStackedWidget()
+        self.stacked_spells.addWidget(self._build_spell_list_page())
+        self.stacked_spells.addWidget(self._build_sample_list_page())
+        layout.addWidget(self.stacked_spells, stretch=1)
+
+        # ── Batch operations card (moved to bottom) ───────────────────
         batch_card = make_card_frame()
         batch_layout = QVBoxLayout(batch_card)
         batch_layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
@@ -786,17 +836,21 @@ class PageRecord(QWidget):
         self.btn_export_csv = make_button("💾 EXPORT", STYLE_BTN_BASE, BTN_H)
         self.btn_export_csv.setToolTip("Export recorded samples as CSV")
 
-        batch_btn_row.addWidget(self.btn_clear_samples, 0, 0)
-        batch_btn_row.addWidget(self.btn_export_csv, 0, 1)
+        self.btn_delete_latest_sample = make_button(
+            "🗑 DELETE LATEST",
+            STYLE_BTN_DANGER_OUTLINE,
+            BTN_H,
+        )
+        self.btn_delete_latest_sample.setToolTip(
+            "Quick delete the most recently saved sample for current spell"
+        )
+
+        batch_btn_row.addWidget(self.btn_delete_latest_sample, 0, 0)
+        batch_btn_row.addWidget(self.btn_clear_samples, 0, 1)
+        batch_btn_row.addWidget(self.btn_export_csv, 0, 2)
         batch_layout.addLayout(batch_btn_row)
 
         layout.addWidget(batch_card)
-
-        # ── Spell list stack ───────────────────────────────────────
-        self.stacked_spells = QStackedWidget()
-        self.stacked_spells.addWidget(self._build_spell_list_page())
-        self.stacked_spells.addWidget(self._build_sample_list_page())
-        layout.addWidget(self.stacked_spells, stretch=1)
 
         return widget
 
@@ -862,6 +916,7 @@ class PageRecord(QWidget):
         self.btn_zoom_fit.clicked.connect(self._zoom_fit)
 
         # Batch operations
+        self.btn_delete_latest_sample.clicked.connect(self._on_delete_latest_sample)
         self.btn_clear_samples.clicked.connect(self._on_clear_samples)
         self.btn_export_csv.clicked.connect(self._on_export_csv)
 
@@ -898,6 +953,7 @@ class PageRecord(QWidget):
         self.btn_delete_spell.setAccessibleName("Delete spell")
         self.btn_back_spells.setAccessibleName("Back to spell list")
         self.sample_list.setAccessibleName("Sample list")
+        self.btn_delete_latest_sample.setAccessibleName("Quick delete latest sample")
         self.btn_clear_samples.setAccessibleName("Clear recorded samples")
         self.btn_export_csv.setAccessibleName("Export samples to CSV file")
 
@@ -907,7 +963,8 @@ class PageRecord(QWidget):
         self.setTabOrder(self.btn_snip, self.btn_zoom_in)
         self.setTabOrder(self.btn_zoom_in, self.btn_zoom_out)
         self.setTabOrder(self.btn_zoom_out, self.btn_zoom_fit)
-        self.setTabOrder(self.btn_zoom_fit, self.btn_clear_samples)
+        self.setTabOrder(self.btn_zoom_fit, self.btn_delete_latest_sample)
+        self.setTabOrder(self.btn_delete_latest_sample, self.btn_clear_samples)
         self.setTabOrder(self.btn_clear_samples, self.btn_export_csv)
         self.setTabOrder(self.btn_export_csv, self.spell_list)
         self.setTabOrder(self.spell_list, self.btn_delete_spell)

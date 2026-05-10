@@ -13,6 +13,5 @@ def apply_soft_shadow(
     y_offset: int = 7,
     color: str = "rgba(0, 0, 0, 0.18)",
 ) -> None:
-    # Global no-shadow mode: keep API stable while disabling elevation effects.
     _ = (blur_radius, x_offset, y_offset, color)
     widget.setGraphicsEffect(None)

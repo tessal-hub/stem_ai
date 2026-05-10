@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from ui.mac_material import apply_soft_shadow
 
 # Modern spacing values (in pixels)
 SPACING_XS = 4       # Minimal spacing between tightly grouped items
@@ -72,21 +73,14 @@ def add_card_shadow(
     offset_y: float = 4,
     color: str = "rgba(0, 0, 0, 0.12)",
 ) -> None:
-    """
-    Shadow hook kept for API compatibility. No-op in global no-shadow mode.
-
-    Args:
-        widget: Widget to apply shadow to
-        blur_radius: Shadow blur radius (0-20 typically)
-        offset_x: Horizontal offset
-        offset_y: Vertical offset
-        color: Shadow color (QColor-compatible string)
-
-    Returns:
-        None
-    """
-    _ = (blur_radius, offset_x, offset_y, color)
-    widget.setGraphicsEffect(None)
+    """Apply a subtle shadow to improve card depth."""
+    apply_soft_shadow(
+        widget,
+        blur_radius=int(max(0, blur_radius)),
+        x_offset=int(offset_x),
+        y_offset=int(offset_y),
+        color=color,
+    )
 
 
 def create_spacer(

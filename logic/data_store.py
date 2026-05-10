@@ -227,6 +227,7 @@ class DataStore(QObject):
 
     # ── Signals ─────────────────────────────────────────────────────────
     sig_db_updated            = pyqtSignal(dict)   # spell_counts changed
+    sig_primitive_stats_updated = pyqtSignal(dict)
     sig_sensor_data_updated   = pyqtSignal(dict)   # Granular dict of deques for UI
     sig_stats_updated         = pyqtSignal(dict)
     sig_prediction_updated    = pyqtSignal(str, float)
@@ -604,6 +605,7 @@ class DataStore(QObject):
 
         log.debug("Legacy .meta.json remaining: %d", self._count_legacy_meta_files())
         self.sig_db_updated.emit(self.spell_counts)
+        self.sig_primitive_stats_updated.emit(self.get_primitive_collection_stats())
 
     def apply_db_refresh(self, counts: dict) -> None:
         """Apply a pre-computed spell-count dict produced by DataIOWorker.
@@ -617,6 +619,30 @@ class DataStore(QObject):
             merged.setdefault(spell_name, 0)
         self.spell_counts = merged
         self.sig_db_updated.emit(self.spell_counts)
+        self.sig_primitive_stats_updated.emit(self.get_primitive_collection_stats())
+
+    def get_primitive_collection_stats(self) -> dict[str, int]:
+        """
+        Trả về {primitive_name: total_csv_count}
+        chỉ cho 8 primitive gestures.
+        """
+        primitive_names = [
+            "SWIPE_RIGHT",
+            "SWIPE_UP",
+            "THRUST",
+            "CIRCLE_CW",
+            "CIRCLE_CCW",
+            "WRIST_FLICK",
+            "ZIGZAG",
+            "STAND_BY",
+        ]
+        stats = {
+            name: self.spell_counts.get(name, 0)
+            for name in primitive_names
+            if name != "STAND_BY"
+        }
+        stats["STAND_BY"] = self.spell_counts.get("STAND BY", self.spell_counts.get("STAND_BY", 0))
+        return stats
 
     def get_spell_list(self) -> list[str]:
         return list(self.spell_counts.keys())

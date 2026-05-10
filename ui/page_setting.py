@@ -20,7 +20,6 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
-    QScrollArea,
     QSizePolicy,
     QSpinBox,
     QProgressBar,
@@ -40,7 +39,6 @@ from ui.tokens import (
     SETTING_CONSOLE_MIN_H,
     TEXT_MUTED,
     # Styles
-    STYLE_SETTING_MAIN_CONTAINER,
     STYLE_SETTING_CARD,
     STYLE_SETTING_BTN_OUTLINE,
     STYLE_SETTING_BTN_PRIMARY,
@@ -53,9 +51,9 @@ from ui.tokens import (
     STYLE_SETTINGS_INPUT_INVALID,
     STYLE_SETTINGS_SECTION_LABEL_TEMPLATE,
     STYLE_CONSOLE,
-    STYLE_SCROLL_AREA,
 )
 from ui.confirm_dialog import confirm_destructive
+from ui.mac_material import apply_soft_shadow
 from ui.terminal_widget import TerminalWidget
 from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_LG, SPACING_MD, SPACING_SM
 from config import WORKSPACE_ROOT
@@ -139,41 +137,22 @@ class PageSetting(QWidget):
 
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll.setStyleSheet(STYLE_SCROLL_AREA)
-
-        self.main_container = QFrame()
-        self.main_container.setObjectName("MainBox")
-        self.main_container.setFrameShape(QFrame.Shape.NoFrame)
-        self.main_container.setFrameShadow(QFrame.Shadow.Plain)
-        self.main_container.setStyleSheet(STYLE_SETTING_MAIN_CONTAINER)
-
-        inner = QVBoxLayout(self.main_container)
-        inner.setContentsMargins(
+        outer.setContentsMargins(
             MARGIN_COMFORTABLE,
             MARGIN_COMFORTABLE,
             MARGIN_COMFORTABLE,
             MARGIN_COMFORTABLE,
         )
-        inner.setSpacing(SPACING_LG)
+        outer.setSpacing(SPACING_LG)
 
         cols = QHBoxLayout()
         cols.setSpacing(SPACING_LG)
         cols.addWidget(self._build_hardware_column(), stretch=1)
         cols.addWidget(self._build_software_column(), stretch=1)
-        inner.addLayout(cols, stretch=1)
-        inner.addWidget(self._build_paths_card())
-        inner.addWidget(self._build_firmware_section())
-        inner.addLayout(self._build_control_bar())
-
-        scroll.setWidget(self.main_container)
-        outer.addWidget(scroll)
+        outer.addLayout(cols, stretch=1)
+        outer.addWidget(self._build_paths_card())
+        outer.addWidget(self._build_firmware_section())
+        outer.addLayout(self._build_control_bar())
 
     def _build_hardware_column(self) -> QWidget:
         widget = QWidget()
@@ -633,6 +612,7 @@ class PageSetting(QWidget):
         frame = QFrame()
         frame.setObjectName("CardFrame")
         frame.setStyleSheet(STYLE_SETTING_CARD)
+        apply_soft_shadow(frame, blur_radius=20, y_offset=4, color="rgba(15, 23, 42, 0.16)")
         layout = QVBoxLayout(frame)
         layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
         layout.setSpacing(SPACING_MD)
@@ -652,6 +632,7 @@ class PageSetting(QWidget):
     def _add_form_row(form: QFormLayout, label_text: str, widget: QWidget) -> None:
         label = QLabel(label_text)
         label.setStyleSheet(STYLE_SETTINGS_FORM_LABEL)
+        label.setWordWrap(True)
         widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         form.addRow(label, widget)
 
@@ -699,7 +680,7 @@ class PageSetting(QWidget):
         lbl = QLabel(label_text)
         lbl.setStyleSheet(STYLE_SETTINGS_FORM_LABEL)
         lbl.setMinimumWidth(LABEL_W)
-        lbl.setMaximumWidth(LABEL_W)
+        lbl.setWordWrap(True)
         row.addWidget(lbl)
         row.addWidget(widget, stretch=1)
         return row

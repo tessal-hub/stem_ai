@@ -1,8 +1,6 @@
 """PageHome — main dashboard view."""
 
 from __future__ import annotations
-
-import os
 from dataclasses import dataclass
 
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -19,6 +17,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 from ui.wand_3d_widget import Wand3DWidget
+from ui.asset_utils import resolve_asset_path
+from ui.component_factory import make_empty_state_card
+from ui.mac_material import apply_soft_shadow
 from ui.tokens import (
     ACCENT,
     ACCENT_TEXT,
@@ -38,8 +39,6 @@ from ui.tokens import (
     STYLE_HOME_ACTION_BTN_SECONDARY,
     STYLE_HOME_ATTACHMENT_BAR,
     STYLE_HOME_ATTACHMENT_PILL,
-    STYLE_HOME_EMPTY_SPELL_TEXT,
-    STYLE_HOME_MAIN_CONTAINER as STYLE_MAIN_CONTAINER,
     STYLE_HOME_MANAGER_BAR,
     STYLE_HOME_MANAGER_INDICATOR,
     STYLE_HOME_MANAGER_ROW,
@@ -154,38 +153,17 @@ class PageHome(QWidget):
 
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
+        outer.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
+        outer.setSpacing(SPACING_LG)
 
-        page_scroll = QScrollArea()
-        page_scroll.setWidgetResizable(True)
-        page_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        page_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        page_scroll.setStyleSheet(STYLE_SCROLL_AREA)
-
-        self.main_container = QFrame()
-        self.main_container.setObjectName("MainBox")
-        self.main_container.setFrameShape(QFrame.Shape.NoFrame)
-        self.main_container.setFrameShadow(QFrame.Shadow.Plain)
-        self.main_container.setStyleSheet(STYLE_MAIN_CONTAINER)
-
-        inner = QVBoxLayout(self.main_container)
-        # Use modern breathing room: 24px margins and 16px spacing
-        inner.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
-        inner.setSpacing(SPACING_LG)
-
-        inner.addWidget(self._build_status_bar())
+        outer.addWidget(self._build_status_bar())
 
         content = QHBoxLayout()
-        # Increased spacing between major columns
         content.setSpacing(SPACING_LG)
         content.setContentsMargins(0, 0, 0, 0)
         content.addWidget(self._build_center_column(), stretch=1)
         content.addWidget(self._build_right_column(), stretch=0)
-        inner.addLayout(content, stretch=1)
-
-        page_scroll.setWidget(self.main_container)
-        outer.addWidget(page_scroll)
+        outer.addLayout(content, stretch=1)
 
     def _build_status_bar(self) -> QLabel:
         self.status_bar = QLabel("● WAND DISCONNECTED - WAITING FOR DEVICE")
@@ -212,6 +190,7 @@ class PageHome(QWidget):
         box = QFrame()
         box.setObjectName("HomeViewerCard")
         box.setStyleSheet(STYLE_HOME_VIEWER_CARD)
+        apply_soft_shadow(box, blur_radius=22, y_offset=4, color="rgba(15, 23, 42, 0.14)")
         
         layout = QVBoxLayout(box)
         layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
@@ -239,6 +218,7 @@ class PageHome(QWidget):
         self.sim_view.setFrameShadow(QFrame.Shadow.Plain)
         self.sim_view.setStyleSheet(STYLE_HOME_VIEWER_CARD)
         self.sim_view.setMinimumHeight(HOME_VIEWER_MIN_H)
+        apply_soft_shadow(self.sim_view, blur_radius=16, y_offset=3, color="rgba(15, 23, 42, 0.10)")
 
         sim_inner = QVBoxLayout(self.sim_view)
         sim_inner.setContentsMargins(
@@ -321,6 +301,7 @@ class PageHome(QWidget):
         box.setObjectName("HomeRightSection")
         box.setStyleSheet(STYLE_HOME_RIGHT_SECTION)
         box.setFixedHeight(HOME_MODE_H)
+        apply_soft_shadow(box, blur_radius=18, y_offset=3, color="rgba(15, 23, 42, 0.12)")
 
         layout = QHBoxLayout(box)
         layout.setContentsMargins(MARGIN_COMFORTABLE, 0, MARGIN_COMFORTABLE, 0)
@@ -336,6 +317,7 @@ class PageHome(QWidget):
         box = QFrame()
         box.setObjectName("HomeRightSection")
         box.setStyleSheet(STYLE_HOME_RIGHT_SECTION)
+        apply_soft_shadow(box, blur_radius=18, y_offset=3, color="rgba(15, 23, 42, 0.12)")
 
         layout = QVBoxLayout(box)
         layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
@@ -354,11 +336,12 @@ class PageHome(QWidget):
         spells = self.data_store.get_spell_list()
         max_display = 3
         if not spells:
-            no_spell = QLabel("No spells recorded yet.")
-            no_spell.setWordWrap(True)
-            no_spell.setStyleSheet(STYLE_HOME_EMPTY_SPELL_TEXT)
-            no_spell.setAccessibleName("No spells recorded yet")
-            spell_layout.addWidget(no_spell)
+            empty_card, _ = make_empty_state_card(
+                "No spells yet",
+                "Record your first spell from the Record screen to populate this list.",
+            )
+            empty_card.setAccessibleName("No spells recorded yet")
+            spell_layout.addWidget(empty_card)
         else:
             for spell in spells[:max_display]:
                 spell_layout.addWidget(self._make_spell_button(f"✨ {spell}"))
@@ -377,6 +360,7 @@ class PageHome(QWidget):
         box.setObjectName("HomeRightSection")
         box.setStyleSheet(STYLE_HOME_RIGHT_SECTION)
         box.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        apply_soft_shadow(box, blur_radius=18, y_offset=3, color="rgba(15, 23, 42, 0.12)")
 
         layout = QVBoxLayout(box)
         layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
@@ -400,10 +384,29 @@ class PageHome(QWidget):
         scroll.setWidget(self._manager_container)
         layout.addWidget(scroll, stretch=1)
 
+        self._manager_empty_state, _ = make_empty_state_card(
+            "Waiting for telemetry",
+            "Connect your wand to start receiving CPU, RAM, and UDP runtime statistics.",
+        )
+        self._manager_empty_state.setVisible(False)
+        layout.addWidget(self._manager_empty_state)
+
         self._rebuild_manager_rows(self.data_store.system_stats)
         return box
 
     def _rebuild_manager_rows(self, stats: dict[str, str]) -> None:
+        if not stats:
+            self._manager_keys = ()
+            self._stat_rows = {}
+            while self._manager_layout.count():
+                item = self._manager_layout.takeAt(0)
+                widget = item.widget() if item is not None else None
+                if widget is not None:
+                    widget.deleteLater()
+            self._manager_empty_state.setVisible(True)
+            return
+
+        self._manager_empty_state.setVisible(False)
         self._manager_keys = tuple(stats.keys())
         self._stat_rows = {}
 
@@ -476,9 +479,11 @@ class PageHome(QWidget):
         btn.setStyleSheet(STYLE_HOME_ATTACHMENT_PILL)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.setAccessibleName(f"Attachment toggle {mod.label}")
-        if os.path.exists(mod.icon):
-            btn.setIcon(QIcon(mod.icon))
-            btn.setIconSize(ICON)
+        icon_path = resolve_asset_path(mod.icon)
+        if QIcon(icon_path).isNull():
+            return btn
+        btn.setIcon(QIcon(icon_path))
+        btn.setIconSize(ICON)
         return btn
 
     def _configure_accessibility(self) -> None:

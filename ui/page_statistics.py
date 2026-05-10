@@ -30,7 +30,6 @@ from ui.tokens import (
     STATISTICS_FFT_MIN_H,
     STATISTICS_SAMPLE_LIST_MIN_H,
     # Styles
-    STYLE_STATISTICS_MAIN_CONTAINER,
     STYLE_STATISTICS_CARD,
     STYLE_SCROLL_AREA,
     STYLE_STATISTICS_BTN_BACK,
@@ -41,9 +40,12 @@ from ui.tokens import (
     STYLE_TRANSPARENT_WIDGET,
 )
 from logic.rarity_utils import resolve_rarity
+from ui.mac_material import apply_soft_shadow
 from ui.component_factory import (
     make_card_count_label,
     make_card_name_label,
+    make_empty_state_card,
+    make_error_state_card,
     make_graph_placeholder,
     make_outline_button,
     make_primary_button,
@@ -116,6 +118,10 @@ class PageStatistics(QWidget):
             except (ValueError, IndexError):
                 self.lbl_dominant_freq.setText("Dominant: -- Hz")
             self.fft_stack.setCurrentWidget(self.fft_plot)
+            return
+
+        self.lbl_dominant_freq.setText("Dominant: spectrum unavailable")
+        self.fft_stack.setCurrentWidget(self.fft_placeholder)
 
     def update_spell_stats(self, spell_counts: dict[str, int]) -> None:
         # FIX: Gán vào biến local để Pylance xác nhận không bị đổi thành None giữa chừng
@@ -125,6 +131,13 @@ class PageStatistics(QWidget):
         clear_layout(target_layout)
 
         sorted_spells = sorted(spell_counts.items(), key=lambda x: x[1], reverse=True)
+        if not sorted_spells:
+            self.mastery_stack.setCurrentWidget(self.mastery_empty_state)
+            self.lbl_total_samples.setText("TOTAL SAMPLES: 0")
+            self.lbl_total_spells.setText("ACTIVE SPELLS: 0")
+            return
+
+        self.mastery_stack.setCurrentWidget(self.mastery_scroll)
         for spell_name, count in sorted_spells:
             card = self._make_spell_card(spell_name, count)
             card.clicked.connect(lambda checked=False, s=spell_name: self.sig_spell_selected.emit(s))
@@ -138,40 +151,26 @@ class PageStatistics(QWidget):
     def load_samples_for_spell(self, spell_name: str, samples: list[str]) -> None:
         self.lbl_current_spell.setText(f"SAMPLES: {spell_name}")
         self.sample_list.clear()
-        self.sample_list.addItems(samples)
+        if samples:
+            self.sample_list.addItems(samples)
+        else:
+            self.sample_list.addItem("No samples for this spell yet. Record one from the Record screen.")
         self.stacked_spells.setCurrentIndex(1)
 
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
-
-        page_scroll = QScrollArea()
-        page_scroll.setWidgetResizable(True)
-        page_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        page_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        page_scroll.setStyleSheet(STYLE_SCROLL_AREA)
-
-        self.main_container = QFrame()
-        self.main_container.setObjectName("MainBox")
-        self.main_container.setFrameShape(QFrame.Shape.NoFrame)
-        self.main_container.setFrameShadow(QFrame.Shadow.Plain)
-        self.main_container.setStyleSheet(STYLE_STATISTICS_MAIN_CONTAINER)
-        inner = QVBoxLayout(self.main_container)
-        inner.setContentsMargins(
+        outer.setContentsMargins(
             MARGIN_COMFORTABLE,
             MARGIN_COMFORTABLE,
             MARGIN_COMFORTABLE,
             MARGIN_COMFORTABLE,
         )
-        inner.setSpacing(SPACING_LG)
+        outer.setSpacing(SPACING_LG)
         content = QHBoxLayout()
         content.setSpacing(SPACING_LG)
         content.addWidget(self._build_left_column(), stretch=5)
         content.addWidget(self._build_right_column(), stretch=3)
-        inner.addLayout(content)
-        page_scroll.setWidget(self.main_container)
-        outer.addWidget(page_scroll)
+        outer.addLayout(content)
 
     def _build_left_column(self) -> QWidget:
         widget = QWidget()
@@ -238,6 +237,12 @@ class PageStatistics(QWidget):
         model_layout.addWidget(self.lbl_build_status)
         model_layout.addWidget(self.model_progress)
         model_layout.addWidget(self.btn_train_build)
+        self.model_error_state, _ = make_error_state_card(
+            "Model build error",
+            "Training or build failed. Check the status details and retry after fixing data or environment issues.",
+        )
+        self.model_error_state.setVisible(False)
+        model_layout.addWidget(self.model_error_state)
         layout.addWidget(model_card)
 
         graph_card = self._make_standard_frame()
@@ -297,16 +302,27 @@ class PageStatistics(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_LG)
         layout.addWidget(self._make_section_label("SPELL MASTERY"))
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet(STYLE_SCROLL_AREA)
+        self.mastery_stack = QStackedWidget()
+
+        self.mastery_scroll = QScrollArea()
+        self.mastery_scroll.setWidgetResizable(True)
+        self.mastery_scroll.setStyleSheet(STYLE_SCROLL_AREA)
         scroll_content = QWidget()
         scroll_content.setStyleSheet(STYLE_TRANSPARENT_WIDGET)
         self._spell_cards_layout = QVBoxLayout(scroll_content)
         self._spell_cards_layout.setContentsMargins(0, 0, 0, 0)
         self._spell_cards_layout.setSpacing(SPACING_SM)
-        scroll.setWidget(scroll_content)
-        layout.addWidget(scroll)
+        self.mastery_scroll.setWidget(scroll_content)
+        self.mastery_stack.addWidget(self.mastery_scroll)
+
+        empty_card, _ = make_empty_state_card(
+            "No spell data yet",
+            "Capture your first samples in Record, then return here to inspect distribution and rarity tiers.",
+        )
+        self.mastery_empty_state = empty_card
+        self.mastery_stack.addWidget(self.mastery_empty_state)
+
+        layout.addWidget(self.mastery_stack)
         return page
 
     def _build_sample_list_page(self) -> QWidget:
@@ -355,6 +371,7 @@ class PageStatistics(QWidget):
         frame = QFrame()
         frame.setObjectName("CardFrame")
         frame.setStyleSheet(STYLE_STATISTICS_CARD)
+        apply_soft_shadow(frame, blur_radius=20, y_offset=4, color="rgba(15, 23, 42, 0.14)")
         return frame
 
     @staticmethod
@@ -395,6 +412,7 @@ class PageStatistics(QWidget):
             self.model_progress.setValue(0)
             self.lbl_train_status.setText("Train: running...")
             self.lbl_build_status.setText("Build: waiting...")
+            self.model_error_state.setVisible(False)
 
     def update_training_status(self, text: str) -> None:
         msg = text.strip()
@@ -416,8 +434,10 @@ class PageStatistics(QWidget):
             self.model_progress.setValue(100)
             self.lbl_train_status.setText("Train: completed")
             self.lbl_build_status.setText(f"Build: {summary}")
+            self.model_error_state.setVisible(False)
         else:
             self.lbl_build_status.setText(f"Build: failed - {summary}")
+            self.model_error_state.setVisible(True)
 
     def _configure_accessibility(self) -> None:
         """Apply basic screen-reader names and tab traversal for keyboard use."""

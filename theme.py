@@ -21,6 +21,8 @@ Usage:
   ```
 """
 
+from PyQt6.QtWidgets import QFrame, QWidget
+
 from ui.tokens import (
     # Modern color palette
     PRIMARY_COLOR,
@@ -54,10 +56,29 @@ def get_modern_stylesheet() -> str:
 QWidget {{
     font-family: {APP_FONT_STACK};
     font-size: 13px;
+    background-color: {SURFACE_PRIMARY};
+    border: none;
 }}
 
 QMainWindow {{
     background-color: {SURFACE_PRIMARY};
+    border: none;
+}}
+
+QGroupBox {{
+    border: none;
+    background: transparent;
+    margin-top: 14px;
+    padding-top: 8px;
+    font-weight: 600;
+}}
+
+QGroupBox::title {{
+    subcontrol-origin: margin;
+    left: 2px;
+    padding: 0 2px;
+    border: none;
+    background: transparent;
 }}
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -94,7 +115,7 @@ QPushButton#btn_primary:disabled, QPushButton#btn_start:disabled, QPushButton#bt
 QPushButton#btn_secondary, QPushButton#btn_simulate {{
     background-color: {SURFACE_SECONDARY};
     color: {TEXT_PRIMARY};
-    border: 1px solid {BORDER_COLOR};
+    border: none;
     border-radius: 8px;
     padding: 8px 16px;
     font-weight: 500;
@@ -105,13 +126,11 @@ QPushButton#btn_secondary, QPushButton#btn_simulate {{
 
 QPushButton#btn_secondary:hover, QPushButton#btn_simulate:hover {{
     background-color: {SURFACE_TERTIARY};
-    border-color: {PRIMARY_COLOR};
     color: {PRIMARY_COLOR};
 }}
 
 QPushButton#btn_secondary:pressed, QPushButton#btn_simulate:pressed {{
     background-color: #f3f4f6;
-    border-color: {PRIMARY_DARK};
 }}
 
 /* DANGER BUTTON - Destructive actions */
@@ -137,10 +156,10 @@ QPushButton#btn_stop:pressed, QPushButton#btn_danger:pressed {{
 
 /* OUTLINE BUTTON - Secondary importance */
 QPushButton#btn_outline {{
-    background-color: transparent;
+    background-color: {SURFACE_SECONDARY};
     color: {PRIMARY_COLOR};
-    border: 1.5px solid {PRIMARY_COLOR};
-    border-radius: 8px;
+    border: none;
+    border-radius: 12px;
     padding: 8px 16px;
     font-weight: 500;
     font-size: 13px;
@@ -149,12 +168,11 @@ QPushButton#btn_outline {{
 }}
 
 QPushButton#btn_outline:hover {{
-    background-color: rgba(59, 130, 246, 0.08);
-    border-color: {PRIMARY_DARK};
+    background-color: {PRIMARY_LIGHT};
 }}
 
 QPushButton#btn_outline:pressed {{
-    background-color: rgba(59, 130, 246, 0.12);
+    background-color: {PRIMARY_LIGHT};
 }}
 
 /* SMALL/COMPACT BUTTONS */
@@ -168,7 +186,7 @@ QPushButton#btn_small {{
 /* FOCUS RINGS - Visible keyboard focus for all interactive controls */
 QPushButton:focus {{
     outline: none;
-    border: 2px solid {PRIMARY_COLOR};
+    border: none;
 }}
 
 /* ICON BUTTON - Navigation, utilities */
@@ -181,22 +199,22 @@ QToolButton {{
 }}
 
 QToolButton:hover {{
-    background-color: rgba(59, 130, 246, 0.08);
+    background-color: {PRIMARY_LIGHT};
 }}
 
 QToolButton:pressed {{
-    background-color: rgba(59, 130, 246, 0.12);
+    background-color: {PRIMARY_LIGHT};
 }}
 
 QToolButton:checked {{
     background-color: {PRIMARY_LIGHT};
     color: {PRIMARY_COLOR};
-    border: 1px solid {PRIMARY_COLOR};
+    border: none;
 }}
 
 QToolButton:focus {{
     outline: none;
-    border: 2px solid {PRIMARY_COLOR};
+    border: none;
 }}
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -206,7 +224,8 @@ QToolButton:focus {{
 QLineEdit, QPlainTextEdit {{
     background-color: {SURFACE_SECONDARY};
     color: {TEXT_PRIMARY};
-    border: 1px solid {BORDER_COLOR};
+    border: none;
+    border-bottom: 1px solid {BORDER_COLOR};
     border-radius: 6px;
     padding: 8px 12px;
     font-size: 13px;
@@ -214,8 +233,9 @@ QLineEdit, QPlainTextEdit {{
 }}
 
 QLineEdit:focus, QPlainTextEdit:focus {{
-    border: 2px solid {PRIMARY_COLOR};
-    padding: 7px 11px;
+    border: none;
+    border-bottom: 1px solid {PRIMARY_COLOR};
+    padding: 8px 12px;
     background-color: {SURFACE_PRIMARY};
 }}
 
@@ -228,7 +248,8 @@ QLineEdit:disabled, QPlainTextEdit:disabled {{
 QComboBox {{
     background-color: {SURFACE_SECONDARY};
     color: {TEXT_PRIMARY};
-    border: 1px solid {BORDER_COLOR};
+    border: none;
+    border-bottom: 1px solid {BORDER_COLOR};
     border-radius: 6px;
     padding: 6px 12px;
     min-height: 32px;
@@ -236,12 +257,14 @@ QComboBox {{
 }}
 
 QComboBox:hover {{
-    border-color: {PRIMARY_COLOR};
+    border: none;
+    border-bottom: 1px solid {PRIMARY_COLOR};
 }}
 
 QComboBox:focus {{
-    border: 2px solid {PRIMARY_COLOR};
-    padding: 5px 11px;
+    border: none;
+    border-bottom: 1px solid {PRIMARY_COLOR};
+    padding: 6px 12px;
 }}
 
 QComboBox::drop-down {{
@@ -257,8 +280,8 @@ QComboBox::down-arrow {{
 QComboBox QAbstractItemView {{
     background-color: {SURFACE_PRIMARY};
     color: {TEXT_PRIMARY};
-    border: 1px solid {BORDER_COLOR};
-    border-radius: 6px;
+    border: none;
+    border-radius: 10px;
     padding: 0px;
     margin: 0px;
     selection-background-color: {PRIMARY_LIGHT};
@@ -283,14 +306,16 @@ QComboBox QAbstractItemView::item:selected {{
 QSpinBox {{
     background-color: {SURFACE_SECONDARY};
     color: {TEXT_PRIMARY};
-    border: 1px solid {BORDER_COLOR};
+    border: none;
+    border-bottom: 1px solid {BORDER_COLOR};
     border-radius: 6px;
     padding: 6px 4px;
     min-height: 32px;
 }}
 
 QSpinBox:focus {{
-    border: 2px solid {PRIMARY_COLOR};
+    border: none;
+    border-bottom: 1px solid {PRIMARY_COLOR};
 }}
 
 QSpinBox::up-button, QSpinBox::down-button {{
@@ -363,35 +388,40 @@ QRadioButton::indicator:checked {{
     border: 3px solid {PRIMARY_COLOR};
 }}
 
+QFrame {{
+    border: none;
+    background: transparent;
+}}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    CARDS & FRAMES - Container Styling
    ═══════════════════════════════════════════════════════════════════════════ */
 
 QFrame#CardFrame, QWidget#Card {{
     background-color: {SURFACE_PRIMARY};
-    border: 1px solid {BORDER_COLOR};
-    border-radius: 10px;
+    border: none;
+    border-radius: 16px;
 }}
 
 QFrame#CardFrame:hover {{
-    border-color: {BORDER_LIGHT};
+    border: none;
 }}
 
 /* Elevated card for emphasis */
 QFrame#CardFrameElevated {{
     background-color: {SURFACE_PRIMARY};
-    border: 1px solid {BORDER_COLOR};
+    border: none;
     border-radius: 10px;
 }}
 
 QFrame#CardFrameElevated:hover {{
-    border-color: {PRIMARY_COLOR};
+    border: none;
 }}
 
 /* Graph/Plot card - darker background */
 QFrame#GraphCard {{
     background-color: #1a1a1f;
-    border: 1px solid #3a3a40;
+    border: none;
     border-radius: 10px;
 }}
 
@@ -526,6 +556,23 @@ QProgressBar:disabled::chunk {{
    SCROLLBARS - Modern style
    ═══════════════════════════════════════════════════════════════════════════ */
 
+QScrollArea, QAbstractScrollArea, QDockWidget {{
+    border: none;
+    background: transparent;
+}}
+
+QDockWidget::title {{
+    border: none;
+    background: {SURFACE_SECONDARY};
+    padding: 6px 10px;
+}}
+
+QMainWindow::separator {{
+    width: 0px;
+    height: 0px;
+    background: transparent;
+}}
+
 QScrollBar:vertical {{
     background-color: transparent;
     width: 8px;
@@ -581,7 +628,7 @@ QScrollBar::sub-line:horizontal, QScrollBar::add-line:horizontal {{
 
 QDialog {{
     background-color: {SURFACE_PRIMARY};
-    border: 1px solid {BORDER_COLOR};
+    border: none;
     border-radius: 12px;
 }}
 
@@ -611,7 +658,7 @@ QToolTip {{
    ═══════════════════════════════════════════════════════════════════════════ */
 
 QTabWidget::pane {{
-    border: 1px solid {BORDER_COLOR};
+    border: none;
     border-radius: 8px;
 }}
 
@@ -619,7 +666,6 @@ QTabBar::tab {{
     background-color: {SURFACE_SECONDARY};
     color: {TEXT_SECONDARY};
     border: none;
-    border-bottom: 2px solid transparent;
     padding: 8px 16px;
     margin-right: 2px;
     font-weight: 500;
@@ -634,7 +680,7 @@ QTabBar::tab:hover {{
 QTabBar::tab:selected {{
     background-color: {PRIMARY_COLOR};
     color: white;
-    border-bottom: 2px solid {PRIMARY_DARK};
+    border: none;
 }}
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -660,3 +706,17 @@ def apply_modern_theme(widget_or_app) -> None:
         widget_or_app: QWidget, QMainWindow, or QApplication instance
     """
     widget_or_app.setStyleSheet(get_modern_stylesheet())
+
+
+def apply_flat_widget_chrome(root_widget: QWidget) -> None:
+    """
+    Remove native frame decorations that can leak default platform borders.
+
+    Args:
+        root_widget: Root widget/window to normalize.
+    """
+    for frame in root_widget.findChildren(QFrame):
+        frame.setFrameShape(QFrame.Shape.NoFrame)
+        frame.setFrameShadow(QFrame.Shadow.Plain)
+        frame.setLineWidth(0)
+        frame.setMidLineWidth(0)

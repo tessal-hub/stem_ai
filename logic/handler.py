@@ -36,6 +36,8 @@ from .flash_worker import FlashWorker
 from .data_io_worker import DataIOWorker
 from .feature_worker import FeatureWorker
 from .tensorflow.pipeline import GestureModelBuildWorker
+from .encoder_trainer import EncoderTrainerWorker
+from .prototypical_recognizer import PrototypicalRecognizer
 
 
 class Handler(QObject):
@@ -68,6 +70,7 @@ class Handler(QObject):
         data_store: DataStore,
         ui_page_setting=None,
         ui_page_statistics=None,
+        ui_primitive_collect=None,
     ) -> None:
         super().__init__()
         self.ui_wand = ui_page_wand          # Hardware config, stats, terminal
@@ -75,6 +78,7 @@ class Handler(QObject):
         self.ui_home = ui_page_home          # Dashboard with 3D wand
         self.ui_setting = ui_page_setting    # Firmware flashing UI
         self.ui_statistics = ui_page_statistics
+        self.ui_primitive_collect = ui_primitive_collect
         self.store = data_store
 
         # ── Background Workers ──────────────────────────────────────────
@@ -90,6 +94,7 @@ class Handler(QObject):
         # ── State Management ────────────────────────────────────────────
         self.current_selected_spell: str = ""
         self._pending_save_spell: str = ""
+        self._pending_save_context: str = ""
         self._pending_flash_bin_type: str = ""
         self._pending_flash_port: str = ""
         self._pending_flash_bin_path = None
@@ -114,12 +119,50 @@ class Handler(QObject):
         self._model_build_worker: GestureModelBuildWorker | None = None
         self._model_build_mode: str = "both"
         self._shutdown_done: bool = False
+        self.encoder_trainer: EncoderTrainerWorker | None = None
+        self.spell_recognizer: PrototypicalRecognizer | None = None
+        self._primitive_collect_gesture: str = ""
+        self._primitive_collect_group: str = ""
+        self._primitive_collect_active: bool = False
 
         # ── Initialize connections ──────────────────────────────────────
         self._connect_signals()
+        self._try_load_existing_encoder()
         self.on_serial_scan()
         self.ui_home.set_mode(self._mode)
         self._feature_timer.start()
+
+    @staticmethod
+    def _primitive_folder_name(gesture_name: str) -> str:
+        normalized = str(gesture_name).strip().upper()
+        if normalized == "STAND_BY":
+            return "STAND BY"
+        return normalized
+
+    def _try_load_existing_encoder(self) -> None:
+        encoder_path = APP_DATA_DIR / "gesture_encoder.keras"
+        prototypes_path = APP_DATA_DIR / "spell_prototypes.json"
+        if not encoder_path.exists():
+            self.ui_wand.append_terminal_text("[ENCODER] No existing gesture encoder found.")
+            return
+
+        try:
+            import tensorflow as tf
+
+            encoder = tf.keras.models.load_model(str(encoder_path), compile=False)
+            self.spell_recognizer = PrototypicalRecognizer(encoder=encoder)
+            self.ui_wand.append_terminal_text(f"[ENCODER] Loaded encoder: {encoder_path}")
+
+            if prototypes_path.exists():
+                self.spell_recognizer.load(str(prototypes_path))
+                self.ui_wand.append_terminal_text(
+                    f"[ENCODER] Loaded spell prototypes: {prototypes_path}"
+                )
+        except Exception as exc:
+            self.spell_recognizer = None
+            self.ui_wand.append_terminal_text(
+                f"[ENCODER] Failed to load encoder/prototypes: {type(exc).__name__}: {exc}"
+            )
 
     def _can_use_port(self, requester: str, *, allow_owner: str | None = None) -> bool:
         """Atomically claim serial-port ownership for *requester*.
@@ -290,6 +333,9 @@ class Handler(QObject):
         self.ui_record.sig_data_cropped.connect(self.on_data_cropped)
         self.ui_record.sig_spell_selected.connect(self.on_spell_selected)
         self.ui_record.sig_spell_deleted.connect(self.on_spell_deleted)
+        delete_latest_signal = getattr(self.ui_record, "sig_delete_latest_sample", None)
+        if delete_latest_signal is not None:
+            delete_latest_signal.connect(self.on_delete_latest_sample)
         self.ui_record.sig_start_record.connect(self.on_record_start)
         self.ui_record.sig_stop_record.connect(self.on_record_stop)
         self.ui_record.sig_clear_buffer.connect(self.on_clear_buffer)
@@ -299,6 +345,20 @@ class Handler(QObject):
         if self.ui_statistics:
             self.ui_statistics.sig_train_build_requested.connect(self.on_train_build_model_requested)
 
+        if self.ui_primitive_collect:
+            self.ui_primitive_collect.sig_start_collection.connect(
+                self.on_primitive_collection_start
+            )
+            self.ui_primitive_collect.sig_stop_collection.connect(
+                self.on_primitive_collection_stop
+            )
+            self.ui_primitive_collect.sig_capture_collection.connect(
+                self.on_primitive_collection_capture
+            )
+            self.ui_primitive_collect.sig_train_encoder_requested.connect(
+                self.on_train_encoder_requested
+            )
+
     def _connect_store_and_home_signals(self) -> None:
         """Wire DataStore state-update signals and Home page interaction signals."""
         # DataStore → UI (state updates)
@@ -306,6 +366,10 @@ class Handler(QObject):
         self.store.sig_stats_updated.connect(self.ui_wand.update_esp_stats)
         self.store.sig_prediction_updated.connect(self._on_prediction_received)
         self.store.sig_live_buffer_updated.connect(self.ui_record.update_plot_data)
+        if self.ui_primitive_collect:
+            self.store.sig_primitive_stats_updated.connect(
+                self.ui_primitive_collect.update_collection_stats
+            )
 
         # Home → Handler (simulation playback controls)
         self.ui_home.sig_simulation_replay_requested.connect(self._on_simulation_replay_requested)
@@ -349,12 +413,12 @@ class Handler(QObject):
                 (self.recorder.sig_recording_state, self._on_recorder_state_changed),
             ]
         )
-
         # DataIOWorker → Handler/UI (off-thread file I/O results)
         self._connect_many_queued(
             [
                 (self.data_io_worker.sig_save_done, self._on_io_save_done),
                 (self.data_io_worker.sig_delete_done, self._on_io_delete_done),
+                (self.data_io_worker.sig_delete_sample_done, self._on_io_delete_sample_done),
                 (self.data_io_worker.sig_export_done, self._on_io_export_done),
                 (self.data_io_worker.sig_db_refreshed, self.store.apply_db_refresh),
                 (self.data_io_worker.sig_queue_warning, self._on_io_queue_warning),
@@ -618,6 +682,13 @@ class Handler(QObject):
                 )
             return
         
+        if self._primitive_collect_active:
+            self._primitive_collect_active = False
+            self.ui_record.is_live = False
+            if self.ui_primitive_collect:
+                self.ui_primitive_collect.set_collection_state(False)
+                self.ui_primitive_collect.set_capture_ready(False)
+
         # Clear buffer on disconnect
         self.store.clear_live_buffer()
         if self._get_port_owner() == "serial":
@@ -629,6 +700,12 @@ class Handler(QObject):
 
     def on_record_start(self, label_name: str) -> None:
         """Start recording with the given spell/action label."""
+        if self._primitive_collect_active:
+            self.ui_wand.append_terminal_text(
+                "[WARN] Stop primitive collection before starting regular recording."
+            )
+            return
+
         if self.store.get_recording_state():
             self.ui_wand.append_terminal_text(">> Already recording")
             return
@@ -667,6 +744,161 @@ class Handler(QObject):
                 reason="record start failed",
                 push_to_device=True,
             )
+
+    def on_primitive_collection_start(self, gesture_name: str, group_name: str) -> None:
+        connected, _ = self.store.get_connection_state()
+        if not connected:
+            self.ui_wand.append_terminal_text(
+                "[ERROR] Serial connection is required before primitive collection."
+            )
+            if self.ui_primitive_collect:
+                self.ui_primitive_collect.set_collection_state(False)
+            return
+
+        if self.store.get_recording_state():
+            self.ui_wand.append_terminal_text("[WARN] Recorder is already running.")
+            return
+
+        if self._mode == self._MODE_UPDATE:
+            self.ui_wand.append_terminal_text(
+                "[ERROR] Cannot start primitive collection while update mode is active."
+            )
+            return
+
+        if not self._transition_mode(
+            self._MODE_RECORD,
+            reason="primitive collect start",
+            push_to_device=True,
+        ):
+            return
+
+        self._primitive_collect_gesture = str(gesture_name).strip().upper()
+        self._primitive_collect_group = str(group_name).strip()
+        self._primitive_collect_active = True
+        self.store.clear_live_buffer()
+        self.ui_record.is_live = True
+        if self.ui_primitive_collect:
+            self.ui_primitive_collect.set_collection_state(True)
+            self.ui_primitive_collect.set_capture_ready(False)
+            if hasattr(self.ui_primitive_collect, "reset_quality_evaluation"):
+                self.ui_primitive_collect.reset_quality_evaluation(collecting=True)
+        self.ui_wand.append_terminal_text(
+            f">> PRIMITIVE COLLECT STARTED: {self._primitive_collect_gesture} / {self._primitive_collect_group}"
+        )
+
+    def on_primitive_collection_stop(self) -> None:
+        if not self._primitive_collect_active:
+            if self.ui_primitive_collect:
+                self.ui_primitive_collect.set_collection_state(False)
+                self.ui_primitive_collect.set_capture_ready(False)
+            return
+
+        snapshot = self.store.get_live_buffer_snapshot()
+        self.ui_record.is_live = False
+        self._primitive_collect_active = False
+        if self.ui_primitive_collect:
+            self.ui_primitive_collect.set_collection_state(False)
+            if hasattr(self.ui_primitive_collect, "update_quality_assessment"):
+                self.ui_primitive_collect.update_quality_assessment(snapshot)
+            self.ui_primitive_collect.set_capture_ready(bool(snapshot))
+
+        if not snapshot:
+            self.ui_wand.append_terminal_text("[WARN] Primitive buffer is empty after STOP. Capture is disabled.")
+
+        next_mode = self._MODE_INFER if self.serial_worker.isRunning() else self._MODE_IDLE
+        self._transition_mode(
+            next_mode,
+            reason="primitive collect stop",
+            push_to_device=True,
+        )
+        self.ui_wand.append_terminal_text(">> PRIMITIVE COLLECT STOPPED - Ready to capture")
+
+    def on_primitive_collection_capture(self, gesture_name: str, group_name: str) -> None:
+        if self._primitive_collect_active:
+            self.ui_wand.append_terminal_text("[WARN] Stop primitive collection before capturing.")
+            return
+
+        if self.store.get_recording_state():
+            self.ui_wand.append_terminal_text("[WARN] Recorder is busy. Stop current recording first.")
+            return
+
+        snapshot = self.store.get_live_buffer_snapshot()
+        if not snapshot:
+            self.ui_wand.append_terminal_text("[WARN] No buffered primitive data to capture.")
+            if self.ui_primitive_collect:
+                self.ui_primitive_collect.set_capture_ready(False)
+            return
+
+        folder_name = self._primitive_folder_name(gesture_name)
+        self._pending_save_spell = folder_name
+        self._pending_save_context = "primitive"
+        self.data_io_worker.enqueue_save(folder_name, snapshot)
+        self.ui_wand.append_terminal_text(
+            f">> Capturing primitive sample: {folder_name}/{group_name} ({len(snapshot)} frames)"
+        )
+
+    def on_train_encoder_requested(self) -> None:
+        if self.store.get_recording_state():
+            self.ui_wand.append_terminal_text(
+                "[ERROR] Stop recording before training encoder."
+            )
+            return
+
+        if self.encoder_trainer and self.encoder_trainer.isRunning():
+            self.ui_wand.append_terminal_text("[WARN] Encoder training is already running.")
+            return
+
+        primitive_names = [
+            "SWIPE_RIGHT",
+            "SWIPE_UP",
+            "THRUST",
+            "CIRCLE_CW",
+            "CIRCLE_CCW",
+            "WRIST_FLICK",
+            "ZIGZAG",
+            "STAND BY",
+        ]
+        self.encoder_trainer = EncoderTrainerWorker(
+            dataset_dir=self.store.dataset_dir,
+            primitive_names=primitive_names,
+            window_size=64,
+            epochs=50,
+            embedding_dim=32,
+            n_triplets=10_000,
+        )
+        connections = [
+            (self.encoder_trainer.sig_status, self.ui_wand.append_terminal_text),
+            (self.encoder_trainer.sig_error, self.ui_wand.append_terminal_text),
+            (self.encoder_trainer.sig_finished, self._on_encoder_training_finished),
+        ]
+        if self.ui_primitive_collect:
+            connections.extend(
+                [
+                    (
+                        self.encoder_trainer.sig_status,
+                        self.ui_primitive_collect.on_encoder_training_status,
+                    ),
+                    (
+                        self.encoder_trainer.sig_progress,
+                        self.ui_primitive_collect.on_encoder_training_progress,
+                    ),
+                    (
+                        self.encoder_trainer.sig_finished,
+                        self.ui_primitive_collect.on_encoder_training_finished,
+                    ),
+                ]
+            )
+        self._connect_many_queued(connections)
+        self.ui_wand.append_terminal_text(">> Starting encoder training...")
+        self.encoder_trainer.start()
+
+    def _on_encoder_training_finished(self, success: bool, message: str) -> None:
+        self.ui_wand.append_terminal_text(
+            f"[ENCODER] Training {'SUCCESS' if success else 'FAILED'}: {message}"
+        )
+        if success:
+            self._try_load_existing_encoder()
+        self.encoder_trainer = None
 
     def on_record_stop(self) -> None:
         """Stop recording and finalize CSV file."""
@@ -707,14 +939,21 @@ class Handler(QObject):
             f">> Saving {len(cropped_data)} samples → {display_spell}..."
         )
         self._pending_save_spell = display_spell
+        self._pending_save_context = "record"
         self.data_io_worker.enqueue_save(display_spell, cropped_data)
 
     def _on_io_save_done(self, success: bool, message: str) -> None:
         """Called in the main thread when DataIOWorker finishes a save job."""
         if success:
-            self.ui_record.set_save_status(self._pending_save_spell)
+            if self._pending_save_context == "record":
+                self.ui_record.set_save_status(self._pending_save_spell)
+            elif self._pending_save_context == "primitive" and self.ui_primitive_collect:
+                self.ui_primitive_collect.on_capture_saved(True, message)
+        elif self._pending_save_context == "primitive" and self.ui_primitive_collect:
+            self.ui_primitive_collect.on_capture_saved(False, message)
         self._log_io_result("SAVED", success, message)
         self._pending_save_spell = ""
+        self._pending_save_context = ""
 
     def on_spell_deleted(self, spell_name: str) -> None:
         """Enqueue spell deletion to background DataIOWorker."""
@@ -734,9 +973,27 @@ class Handler(QObject):
 
         self.data_io_worker.enqueue_delete(spell_name)
 
+    def on_delete_latest_sample(self, spell_name: str) -> None:
+        """Enqueue quick deletion of the latest sample for the given spell."""
+        normalized = canonical_system_spell(spell_name)
+        if not normalized.strip():
+            self.ui_wand.append_terminal_text("[ERROR] Select a spell before deleting a sample.")
+            if hasattr(self.ui_record, "set_quick_delete_feedback"):
+                self.ui_record.set_quick_delete_feedback(False, "Select a spell first")
+            return
+
+        self.current_selected_spell = normalized
+        self.data_io_worker.enqueue_delete_latest_sample(normalized)
+
     def _on_io_delete_done(self, success: bool, message: str) -> None:
         """Called in the main thread when DataIOWorker finishes a delete job."""
         self._log_io_result("DELETED", success, message)
+
+    def _on_io_delete_sample_done(self, success: bool, message: str) -> None:
+        """Called in the main thread when DataIOWorker deletes one latest sample."""
+        self._log_io_result("SAMPLE DELETE", success, message)
+        if hasattr(self.ui_record, "set_quick_delete_feedback"):
+            self.ui_record.set_quick_delete_feedback(success, message)
 
     def _on_io_export_done(self, success: bool, message: str) -> None:
         """Called in the main thread when DataIOWorker finishes an export job."""

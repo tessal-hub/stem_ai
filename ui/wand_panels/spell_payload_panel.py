@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QSizePolicy,
     QSplitter,
     QVBoxLayout,
     QWidget,
@@ -132,6 +133,8 @@ class WandSpellPayloadPanel(QWidget):
 
         name_label = QLabel(spell_name)
         name_label.setStyleSheet(STYLE_WAND_SPELL_NAME)
+        name_label.setWordWrap(True)
+        name_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         font = QFont()
         font.setBold(True)
         name_label.setFont(font)
@@ -139,8 +142,7 @@ class WandSpellPayloadPanel(QWidget):
         rarity = self._resolve_rarity(count)
         badge = self._make_rarity_badge(rarity.label, rarity.color)
 
-        row.addWidget(name_label)
-        row.addStretch()
+        row.addWidget(name_label, stretch=1)
         row.addWidget(badge)
 
         item.setSizeHint(widget.sizeHint())

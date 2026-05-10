@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from ui.mac_material import apply_soft_shadow
 
 from ui.tokens import (
     # Colors
@@ -55,6 +56,12 @@ from ui.tokens import (
     STYLE_CARD_COUNT_LABEL,
     STYLE_GRAPH_PLACEHOLDER,
     STYLE_FORM_ROW_LABEL,
+    STYLE_STATE_EMPTY_CARD,
+    STYLE_STATE_EMPTY_TITLE,
+    STYLE_STATE_EMPTY_BODY,
+    STYLE_STATE_ERROR_CARD,
+    STYLE_STATE_ERROR_TITLE,
+    STYLE_STATE_ERROR_BODY,
     # Status/template styles
     STATUS_LABEL_STYLE_TEMPLATE,
 )
@@ -91,6 +98,7 @@ def make_card(
     frame.setFrameShape(QFrame.Shape.NoFrame)
     frame.setFrameShadow(QFrame.Shadow.Plain)
     frame.setStyleSheet(STYLE_CARD)
+    apply_soft_shadow(frame, blur_radius=20, y_offset=4, color="rgba(15, 23, 42, 0.16)")
     layout = QVBoxLayout(frame)
     layout.setContentsMargins(*margins)
     layout.setSpacing(spacing)
@@ -111,6 +119,7 @@ def make_card_frame() -> QFrame:
     frame.setFrameShape(QFrame.Shape.NoFrame)
     frame.setFrameShadow(QFrame.Shadow.Plain)
     frame.setStyleSheet(STYLE_CARD)
+    apply_soft_shadow(frame, blur_radius=20, y_offset=4, color="rgba(15, 23, 42, 0.16)")
     return frame
 
 
@@ -126,6 +135,7 @@ def make_section_frame() -> QFrame:
     frame.setFrameShape(QFrame.Shape.NoFrame)
     frame.setFrameShadow(QFrame.Shadow.Plain)
     frame.setStyleSheet(STYLE_CARD)
+    apply_soft_shadow(frame, blur_radius=20, y_offset=4, color="rgba(15, 23, 42, 0.16)")
     return frame
 
 
@@ -499,3 +509,47 @@ def make_form_row(
     row.addWidget(lbl)
     row.addWidget(widget, stretch=1)
     return row
+
+
+def make_empty_state_card(title: str, message: str) -> tuple[QFrame, QVBoxLayout]:
+    """Create a reusable empty-state card with iOS-style hierarchy."""
+    frame = QFrame()
+    frame.setObjectName("CardFrame")
+    frame.setStyleSheet(STYLE_STATE_EMPTY_CARD)
+    apply_soft_shadow(frame, blur_radius=18, y_offset=3, color="rgba(15, 23, 42, 0.12)")
+
+    layout = QVBoxLayout(frame)
+    layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
+    layout.setSpacing(SPACING_MD)
+
+    title_label = QLabel(title)
+    title_label.setStyleSheet(STYLE_STATE_EMPTY_TITLE)
+    body_label = QLabel(message)
+    body_label.setWordWrap(True)
+    body_label.setStyleSheet(STYLE_STATE_EMPTY_BODY)
+
+    layout.addWidget(title_label)
+    layout.addWidget(body_label)
+    return frame, layout
+
+
+def make_error_state_card(title: str, message: str) -> tuple[QFrame, QVBoxLayout]:
+    """Create a reusable error-state card with actionable messaging style."""
+    frame = QFrame()
+    frame.setObjectName("CardFrame")
+    frame.setStyleSheet(STYLE_STATE_ERROR_CARD)
+    apply_soft_shadow(frame, blur_radius=18, y_offset=3, color="rgba(127, 29, 29, 0.16)")
+
+    layout = QVBoxLayout(frame)
+    layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
+    layout.setSpacing(SPACING_MD)
+
+    title_label = QLabel(title)
+    title_label.setStyleSheet(STYLE_STATE_ERROR_TITLE)
+    body_label = QLabel(message)
+    body_label.setWordWrap(True)
+    body_label.setStyleSheet(STYLE_STATE_ERROR_BODY)
+
+    layout.addWidget(title_label)
+    layout.addWidget(body_label)
+    return frame, layout

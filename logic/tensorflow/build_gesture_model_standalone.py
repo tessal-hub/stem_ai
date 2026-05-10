@@ -4,7 +4,17 @@ from __future__ import annotations
 
 import argparse
 import sys
+import os
+import logging
 from pathlib import Path
+
+# --- NUCLEAR LOGGING SUPPRESSION ---
+# Must happen before any TensorFlow-related modules are imported!
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # 3 = FATAL only
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+os.environ["KMP_WARNINGS"] = "0"
+logging.getLogger("tensorflow").setLevel(logging.ERROR)
+logging.getLogger("absl").setLevel(logging.ERROR)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:

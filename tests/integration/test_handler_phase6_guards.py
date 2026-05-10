@@ -195,6 +195,56 @@ class SettingStub(QObject):
         self.flash_progress_values.append(value)
 
 
+class PrimitiveCollectStub(QObject):
+    sig_start_collection = pyqtSignal(str, str)
+    sig_stop_collection = pyqtSignal()
+    sig_capture_collection = pyqtSignal(str, str)
+    sig_train_encoder_requested = pyqtSignal()
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.collection_state_events: list[bool] = []
+        self.capture_ready_events: list[bool] = []
+        self.capture_saved_events: list[tuple[bool, str]] = []
+        self.collection_stats_events: list[dict] = []
+        self.quality_reset_events: list[bool] = []
+        self.quality_assessment_events: list[int] = []
+
+    def set_collection_state(self, collecting: bool) -> None:
+        self.collection_state_events.append(bool(collecting))
+
+    def set_capture_ready(self, ready: bool) -> None:
+        self.capture_ready_events.append(bool(ready))
+
+    def on_capture_saved(self, success: bool, message: str) -> None:
+        self.capture_saved_events.append((bool(success), str(message)))
+
+    def update_collection_stats(self, stats: dict) -> None:
+        self.collection_stats_events.append(dict(stats))
+
+    def reset_quality_evaluation(self, *, collecting: bool = False) -> None:
+        self.quality_reset_events.append(bool(collecting))
+
+    def update_quality_assessment(self, buffer_snapshot: list) -> None:
+        self.quality_assessment_events.append(len(buffer_snapshot))
+
+    def update_signal_preview(self, _buffer_snapshot: list) -> None:
+        # No-op for tests.
+        pass
+
+    def on_encoder_training_status(self, _message: str) -> None:
+        # No-op for tests.
+        pass
+
+    def on_encoder_training_progress(self, _value: int) -> None:
+        # No-op for tests.
+        pass
+
+    def on_encoder_training_finished(self, _success: bool, _message: str) -> None:
+        # No-op for tests.
+        pass
+
+
 @dataclass
 class HandlerHarness:
     handler: Handler
@@ -203,6 +253,7 @@ class HandlerHarness:
     record: RecordStub
     home: HomeStub
     setting: SettingStub
+    primitive: PrimitiveCollectStub | None = None
 
 
 @pytest.fixture
@@ -226,6 +277,36 @@ def handler_harness(qapp, tmp_path, monkeypatch):
         record=record,
         home=home,
         setting=setting,
+        primitive=None,
+    )
+
+    yield harness
+    handler.shutdown()
+
+
+@pytest.fixture
+def handler_harness_with_primitive(qapp, tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "logic.handler.SerialWorker.get_available_ports",
+        staticmethod(lambda: ["COM9"]),
+    )
+
+    store = DataStore(dataset_dir=str(tmp_path / "dataset"))
+    wand = WandStub()
+    record = RecordStub()
+    home = HomeStub()
+    setting = SettingStub()
+    primitive = PrimitiveCollectStub()
+
+    handler = Handler(wand, record, home, store, setting, ui_primitive_collect=primitive)
+    harness = HandlerHarness(
+        handler=handler,
+        store=store,
+        wand=wand,
+        record=record,
+        home=home,
+        setting=setting,
+        primitive=primitive,
     )
 
     yield harness
@@ -414,6 +495,96 @@ def test_record_stop_transitions_to_idle_when_serial_disconnected(
     assert harness.record.is_live is False
     assert harness.handler._mode == harness.handler._MODE_IDLE
     assert any("RECORD STOPPED - Ready to snip" in msg for msg in harness.wand.logs)
+
+
+def test_primitive_stop_sets_capture_ready_and_mode(
+    handler_harness_with_primitive: HandlerHarness,
+) -> None:
+    harness = handler_harness_with_primitive
+    primitive = harness.primitive
+    assert primitive is not None
+    harness.store.set_connection_status(True, "COM9")
+    harness.handler.serial_worker = _SerialRuntimeStub(running=True)
+
+    harness.handler.on_primitive_collection_start("SWIPE_RIGHT", "A_standard")
+    harness.store.add_live_sample([0.1, 0.2, 0.3, 1.0, 1.1, 1.2], emit=False)
+    harness.handler.on_primitive_collection_stop()
+
+    assert harness.handler._mode == harness.handler._MODE_INFER
+    assert harness.record.is_live is False
+    assert primitive.collection_state_events[-1] is False
+    assert primitive.capture_ready_events[-1] is True
+    assert primitive.quality_reset_events and primitive.quality_reset_events[-1] is True
+    assert primitive.quality_assessment_events and primitive.quality_assessment_events[-1] == 1
+    assert any("PRIMITIVE COLLECT STOPPED - Ready to capture" in msg for msg in harness.wand.logs)
+
+
+def test_primitive_stop_without_samples_disables_capture(
+    handler_harness_with_primitive: HandlerHarness,
+) -> None:
+    harness = handler_harness_with_primitive
+    primitive = harness.primitive
+    assert primitive is not None
+    harness.store.set_connection_status(True, "COM9")
+    harness.handler.serial_worker = _SerialRuntimeStub(running=True)
+
+    harness.handler.on_primitive_collection_start("SWIPE_RIGHT", "A_standard")
+    harness.handler.on_primitive_collection_stop()
+
+    assert primitive.capture_ready_events[-1] is False
+    assert any("Primitive buffer is empty after STOP" in msg for msg in harness.wand.logs)
+
+
+def test_primitive_capture_enqueues_save_and_notifies_ui(
+    handler_harness_with_primitive: HandlerHarness,
+    monkeypatch,
+) -> None:
+    harness = handler_harness_with_primitive
+    primitive = harness.primitive
+    assert primitive is not None
+    harness.store.set_connection_status(True, "COM9")
+    harness.handler.serial_worker = _SerialRuntimeStub(running=True)
+
+    harness.handler.on_primitive_collection_start("SWIPE_RIGHT", "A_standard")
+    harness.store.add_live_sample([0.1, 0.2, 0.3, 1.0, 1.1, 1.2], emit=False)
+    harness.store.add_live_sample([0.4, 0.5, 0.6, 2.0, 2.1, 2.2], emit=False)
+    harness.handler.on_primitive_collection_stop()
+
+    enqueued: list[tuple[str, list[list[float]]]] = []
+    monkeypatch.setattr(
+        harness.handler.data_io_worker,
+        "enqueue_save",
+        lambda spell, data: enqueued.append((spell, data)),
+    )
+
+    harness.handler.on_primitive_collection_capture("SWIPE_RIGHT", "A_standard")
+
+    assert enqueued
+    spell, data = enqueued[-1]
+    assert spell == "SWIPE_RIGHT"
+    assert len(data) == 2
+    assert harness.handler._pending_save_context == "primitive"
+
+    harness.handler._on_io_save_done(True, "Saved 2 samples → SWIPE_RIGHT")
+    assert primitive.capture_saved_events[-1][0] is True
+    assert harness.handler._pending_save_context == ""
+
+
+def test_primitive_capture_rejects_empty_buffer(
+    handler_harness_with_primitive: HandlerHarness,
+) -> None:
+    harness = handler_harness_with_primitive
+    primitive = harness.primitive
+    assert primitive is not None
+    harness.store.set_connection_status(True, "COM9")
+    harness.handler.serial_worker = _SerialRuntimeStub(running=True)
+
+    harness.handler.on_primitive_collection_start("SWIPE_RIGHT", "A_standard")
+    harness.handler.on_primitive_collection_stop()
+    harness.handler.on_primitive_collection_capture("SWIPE_RIGHT", "A_standard")
+
+    assert primitive.capture_ready_events[-1] is False
+    assert any("No buffered primitive data to capture" in msg for msg in harness.wand.logs)
 
 
 def test_upload_finish_releases_owner_resets_mode_and_reports_status(

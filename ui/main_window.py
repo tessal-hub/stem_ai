@@ -16,9 +16,11 @@ from PyQt6.QtGui import QCloseEvent, QIcon
 from PyQt6.QtWidgets import QMainWindow, QStackedWidget, QWidget
 
 from ui.mac_shell        import MacShell
+from ui.asset_utils      import resolve_asset_path
 from ui.page_home        import PageHome
 from ui.page_record      import PageRecord
 from ui.page_statistics  import PageStatistics
+from ui.page_primitive_collect import PagePrimitiveCollect
 from ui.page_wand        import PageWand
 from ui.page_setting     import PageSetting
 from logic.udp_worker    import UdpWorker
@@ -36,7 +38,7 @@ class MainWindow(QMainWindow):
         self.handler: object | None = None
 
         self.setWindowTitle("STEM Spell Book")
-        self.setWindowIcon(QIcon("assets/icon/wand.svg"))
+        self.setWindowIcon(QIcon(resolve_asset_path("assets/icon/wand.svg")))
         self.resize(1024, 800)
         self.setMinimumSize(1000, 700)
         self.setStyleSheet("QMainWindow { background-color: transparent; }")
@@ -49,6 +51,7 @@ class MainWindow(QMainWindow):
         self.page_home       = PageHome(self.data_store)
         self.page_record     = PageRecord(self.data_store)
         self.page_statistics = PageStatistics(self.data_store)
+        self.page_primitive_collect = PagePrimitiveCollect(self.data_store)
         self.page_wand       = PageWand(self.data_store)
         self.page_setting    = PageSetting(self.data_store)
 
@@ -56,6 +59,7 @@ class MainWindow(QMainWindow):
             self.page_home,
             self.page_record,
             self.page_statistics,
+            self.page_primitive_collect,
             self.page_wand,
             self.page_setting,
         ]
@@ -81,9 +85,16 @@ class MainWindow(QMainWindow):
         self.data_store.sig_connection_state_updated.connect(self.page_home.set_connection_status)
         self.data_store.sig_stats_updated.connect(self.page_home.update_manager_stats)
         self.data_store.sig_live_features_updated.connect(self.page_statistics.update_live_features)
+        self.data_store.sig_live_buffer_updated.connect(self.page_primitive_collect.update_signal_preview)
+        # ── 3D wand simulation: feed live sensor data to home page viewer ──
+        self.data_store.sig_sensor_data_updated.connect(self._on_sensor_data_for_3d)
         connected, _ = self.data_store.get_connection_state()
         self.page_home.set_connection_status(connected)
         self.page_home.update_manager_stats(self.data_store.system_stats)
+        if hasattr(self.data_store, "get_primitive_collection_stats"):
+            self.page_primitive_collect.update_collection_stats(
+                self.data_store.get_primitive_collection_stats()
+            )
         self._udp_log_count = 0
 
     # ------------------------------------------------------------------
@@ -131,6 +142,19 @@ class MainWindow(QMainWindow):
 
     def _on_udp_health_update(self, health: dict) -> None:
         self.data_store.update_udp_health(health)
+
+    def _on_sensor_data_for_3d(self, buffers: dict) -> None:
+        """Feed the latest IMU sample to the home page 3D wand visualizer."""
+        try:
+            ax = buffers["ax"][-1] if buffers.get("ax") else 0.0
+            ay = buffers["ay"][-1] if buffers.get("ay") else 0.0
+            az = buffers["az"][-1] if buffers.get("az") else 1.0
+            gx = buffers["gx"][-1] if buffers.get("gx") else 0.0
+            gy = buffers["gy"][-1] if buffers.get("gy") else 0.0
+            gz = buffers["gz"][-1] if buffers.get("gz") else 0.0
+            self.page_home.wand_3d.update_orientation(ax, ay, az, gx, gy, gz)
+        except Exception:
+            log.debug("3D orientation update skipped", exc_info=True)
 
     def _on_settings_saved(self, config: dict) -> None:
         """Persist settings through DataStore-owned settings store."""

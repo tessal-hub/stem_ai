@@ -23,6 +23,7 @@ import time
 
 import numpy as np
 import pyqtgraph.opengl as gl
+from pyqtgraph import Transform3D
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
@@ -143,7 +144,7 @@ def _make_cylinder(
 
 def _euler_to_transform(
     roll_deg: float, pitch_deg: float, yaw_deg: float
-) -> gl.Transform3D:
+) -> Transform3D:
     """
     Convert ZYX Euler angles (degrees) → pyqtgraph Transform3D.
 
@@ -169,7 +170,7 @@ def _euler_to_transform(
 
     M = np.eye(4, dtype=np.float32)
     M[:3, :3] = rot
-    return gl.Transform3D(M)
+    return Transform3D(M)
 
 
 # ---------------------------------------------------------------------------
@@ -181,8 +182,8 @@ class Wand3DWidget(QWidget):
 
     # ── Camera home ─────────────────────────────────────────────────────
     _HOME_DIST: float = 9.0
-    _HOME_ELEV: float = 20.0
-    _HOME_AZIM: float = 130.0
+    _HOME_ELEV: float = 30.0
+    _HOME_AZIM: float = 45.0
 
     # ── Complementary-filter tuning ──────────────────────────────────────
     # 96 % gyro (smooth, real-time) + 4 % accel (long-term drift correction).
@@ -283,15 +284,15 @@ class Wand3DWidget(QWidget):
             dt = max(self._MIN_DT, min(now - self._last_update_ts, self._MAX_DT))
         self._last_update_ts = now
 
-        # ── 1. Gyro integration ────────────────────────────────────────
-        self._roll += gx * dt
+        # ── 1. Gyro integration  (gx ↔ gz swapped: Z now drives roll, X drives yaw)
+        self._roll  += gz * dt
         self._pitch += gy * dt
-        self._yaw += gz * dt
+        self._yaw   += gx * dt
 
-        # ── 2. Accel-derived roll & pitch ──────────────────────────────
-        accel_roll  = math.degrees(math.atan2(ay, az))
+        # ── 2. Accel-derived roll & pitch  (ax ↔ az swapped)
+        accel_roll  = math.degrees(math.atan2(ay, ax))
         accel_pitch = math.degrees(
-            math.atan2(-ax, math.hypot(ay, az) + 1e-6)
+            math.atan2(-az, math.hypot(ay, ax) + 1e-6)
         )
 
         # ── 3. Complementary blend ─────────────────────────────────────
@@ -302,7 +303,10 @@ class Wand3DWidget(QWidget):
 
         # ── 4. Apply to all mesh parts ─────────────────────────────────
         try:
-            M = _euler_to_transform(self._roll, self._pitch, self._yaw)
+            # Subtract 90° from pitch so that sensor pitch=0 (wand flat on table)
+            # maps to horizontal model, and sensor pitch=+90 (wand pointing up)
+            # maps to model pointing up along +Z.
+            M = _euler_to_transform(self._roll, self._pitch - 90.0, self._yaw)
             for part in self._parts:
                 part.setTransform(M)
         except Exception:
