@@ -11,6 +11,7 @@ __pycache__/
 
 # Test/cache outputs
 .pytest_cache/
+.worktrees/
 
 app_data/
 
