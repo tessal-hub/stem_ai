@@ -1,10 +1,8 @@
 """PageHome — main dashboard view."""
 
 from __future__ import annotations
-from dataclasses import dataclass
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QIcon
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -17,28 +15,20 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 from ui.wand_3d_widget import Wand3DWidget
-from ui.asset_utils import resolve_asset_path
 from ui.component_factory import make_empty_state_card
 from ui.mac_material import apply_soft_shadow
 from ui.tokens import (
     ACCENT,
     ACCENT_TEXT,
     BTN_H,
-    BTN_SMALL_H,
     DANGER,
-    HOME_ATTACH_H,
     HOME_MANAGER_DOT,
     HOME_MODE_H,
     HOME_RIGHT_W,
     HOME_STATUS_H,
     HOME_VIEWER_INNER_MARGIN,
     HOME_VIEWER_MIN_H,
-    ICON,
     PROGRESS_H,
-    STYLE_HOME_ACTION_BTN,
-    STYLE_HOME_ACTION_BTN_SECONDARY,
-    STYLE_HOME_ATTACHMENT_BAR,
-    STYLE_HOME_ATTACHMENT_PILL,
     STYLE_HOME_MANAGER_BAR,
     STYLE_HOME_MANAGER_INDICATOR,
     STYLE_HOME_MANAGER_ROW,
@@ -76,32 +66,12 @@ _HOME_SYSTEM_STAT_KEYS = (
 )
 
 
-@dataclass(frozen=True)
-class ModuleEntry:
-    icon: str
-    label: str
-
-
-MODULES: list[ModuleEntry] = [
-    ModuleEntry("assets/icon/fan.svg", "FAN"),
-    ModuleEntry("assets/icon/led.svg", "LED"),
-    ModuleEntry("assets/icon/speaker.svg", "SPEAKER"),
-    ModuleEntry("assets/icon/mouse.svg", "MOUSE"),
-    ModuleEntry("assets/icon/keyboard.svg", "KEY"),
-]
-
-
 class PageHome(QWidget):
     """
     Trang Dashboard chính của ứng dụng.
     Hiển thị trạng thái kết nối wand, mô phỏng hướng 3D,
     và thống kê manager (spell counts, RAM, v.v.).
     """
-
-    sig_simulation_replay_requested = pyqtSignal()
-    sig_simulation_stop_requested = pyqtSignal()
-    sig_calibrate_requested = pyqtSignal()
-    sig_quick_test_requested = pyqtSignal()
 
     def __init__(self, data_store) -> None:
         super().__init__()
@@ -132,18 +102,6 @@ class PageHome(QWidget):
     def set_sensor_readout(self, values: list[float] | tuple[float, ...]) -> None:
         """No-op: sensor readout đã chuyển sang 3D viewer."""
         return
-
-    def set_simulation_running(self, active: bool) -> None:
-        """No-op: đã hủy bỏ chức năng simulation toggle."""
-        return
-
-    def set_inference_active(self, active: bool) -> None:
-        """Set inference mode visual state for quick test."""
-        self.btn_quick_test.setEnabled(not active)
-        if active:
-            self.btn_quick_test.setText("▶ TESTING...")
-        else:
-            self.btn_quick_test.setText("▶ QUICK TEST")
 
     def update_manager_stats(self, stats: dict[str, str]) -> None:
         if stats is None:
@@ -198,7 +156,6 @@ class PageHome(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_LG)  # Modern 16px spacing between major sections
         layout.addWidget(self._build_viewer_box(), stretch=1)
-        layout.addWidget(self._build_attachment_bar())
         return widget
 
     def _build_viewer_box(self) -> QFrame:
@@ -247,54 +204,6 @@ class PageHome(QWidget):
 
         layout.addWidget(self.sim_view, stretch=1)
         return box
-
-    def _build_attachment_bar(self) -> QFrame:
-        bar = QFrame()
-        bar.setObjectName("HomeAttachmentBar")
-        bar.setFixedHeight(HOME_ATTACH_H)
-        bar.setStyleSheet(STYLE_HOME_ATTACHMENT_BAR)
-
-        layout = QHBoxLayout(bar)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(SPACING_MD)
-
-        label = QLabel("ATTACHMENTS")
-        label.setStyleSheet(STYLE_HOME_SECTION_SUBTITLE)
-        layout.addWidget(label)
-
-        for mod in MODULES:
-            layout.addWidget(self._make_module_button(mod))
-
-        layout.addStretch()
-
-        self.btn_simulate = QPushButton("REPLAY LAST INPUT")
-        self.btn_simulate.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_simulate.setStyleSheet(STYLE_HOME_ACTION_BTN)
-        self.btn_simulate.clicked.connect(self.sig_simulation_replay_requested.emit)
-
-        self.btn_sim_stop = QPushButton("STOP SIM")
-        self.btn_sim_stop.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_sim_stop.setStyleSheet(STYLE_HOME_ACTION_BTN_SECONDARY)
-        self.btn_sim_stop.clicked.connect(self.sig_simulation_stop_requested.emit)
-        self.btn_sim_stop.setEnabled(False)
-
-        self.btn_calibrate = QPushButton("⚙ CALIBRATE WAND")
-        self.btn_calibrate.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_calibrate.setStyleSheet(STYLE_HOME_ACTION_BTN)
-        self.btn_calibrate.setToolTip("Calibrate wand sensor offsets and scales")
-        self.btn_calibrate.clicked.connect(self.sig_calibrate_requested.emit)
-
-        self.btn_quick_test = QPushButton("▶ QUICK TEST")
-        self.btn_quick_test.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_quick_test.setStyleSheet(STYLE_HOME_ACTION_BTN)
-        self.btn_quick_test.setToolTip("Perform quick gesture recognition test")
-        self.btn_quick_test.clicked.connect(self.sig_quick_test_requested.emit)
-
-        layout.addWidget(self.btn_simulate)
-        layout.addWidget(self.btn_sim_stop)
-        layout.addWidget(self.btn_calibrate)
-        layout.addWidget(self.btn_quick_test)
-        return bar
 
     def _build_right_column(self) -> QWidget:
         widget = QWidget()
@@ -487,20 +396,6 @@ class PageHome(QWidget):
         btn.setAccessibleName(f"Spell button {label}")
         return btn
 
-    @staticmethod
-    def _make_module_button(mod: ModuleEntry) -> QPushButton:
-        btn = QPushButton(mod.label)
-        btn.setFixedHeight(BTN_SMALL_H)
-        btn.setStyleSheet(STYLE_HOME_ATTACHMENT_PILL)
-        btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn.setAccessibleName(f"Attachment toggle {mod.label}")
-        icon_path = resolve_asset_path(mod.icon)
-        if QIcon(icon_path).isNull():
-            return btn
-        btn.setIcon(QIcon(icon_path))
-        btn.setIconSize(ICON)
-        return btn
-
     def _load_data(self) -> None:
         """Nạp trạng thái ban đầu cho Dashboard."""
         self.set_connection_status(False)
@@ -513,10 +408,6 @@ class PageHome(QWidget):
         )
         self.mode_label.setAccessibleName("Current wand mode")
         self.wand_3d.setAccessibleName("3D wand orientation viewer")
-        self.btn_simulate.setAccessibleName("Replay last input data")
-        self.btn_sim_stop.setAccessibleName("Stop simulation playback")
-        self.btn_calibrate.setAccessibleName("Calibrate wand sensor")
-        self.btn_quick_test.setAccessibleName("Perform quick gesture test")
 
     @staticmethod
     def _stat_value_to_percent(value: str) -> int:

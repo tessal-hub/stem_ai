@@ -33,7 +33,6 @@ OUTPUT_DIR = Path("e:/00.Project/05.STEM_AI/02.stem_app/stem_ai/app_data/standal
 # --- 3. CẤU HÌNH THÔNG SỐ AI ---
 WINDOW_SIZE = 40
 STEP = 2
-IMU_SCALE = 32768.0
 EPOCHS = 100
 VAL_FRACTION = 0.15
 
@@ -158,7 +157,7 @@ def main():
     perm = np.random.default_rng(42).permutation(len(X_train))
     X_train, y_train = X_train[perm], y_train[perm]
 
-    X_train = np.clip(X_train / IMU_SCALE, -2.0, 2.0)
+    X_train = np.clip(X_train, -2.0, 2.0)
     y_train_cat = tf.keras.utils.to_categorical(y_train, num_classes=len(class_names))
 
     # Windowing cho tập Val
@@ -169,7 +168,7 @@ def main():
             val_labels.append(class_index)
 
     if val_features:
-         X_val = np.clip(np.stack(val_features, axis=0) / IMU_SCALE, -2.0, 2.0)
+         X_val = np.clip(np.stack(val_features, axis=0), -2.0, 2.0)
          y_val_cat = tf.keras.utils.to_categorical(np.asarray(val_labels, dtype=np.int32), num_classes=len(class_names))
          print(f"  -> Cửa sổ Train: {len(X_train)} | Cửa sổ Validation: {len(X_val)}")
     else:

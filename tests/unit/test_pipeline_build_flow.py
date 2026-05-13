@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
+import numpy as np
 
 from logic.tensorflow import pipeline
 
@@ -151,3 +152,47 @@ def test_build_flow_handles_standby_with_zero_samples(monkeypatch, tmp_path) -> 
     assert set(result.classes) == {"PULSE", "ORBIT"}
     assert Path(result.tflite_path).exists()
     assert model_path.exists()
+
+
+def test_build_flow_keeps_pre_normalized_csv_scale(monkeypatch, tmp_path) -> None:
+    dataset = tmp_path / "dataset"
+    _write_csv(dataset / "PULSE" / "sample_1.csv", [[1, 2, 3, 4, 5, 6]] * 8)
+    _write_csv(dataset / "ORBIT" / "sample_1.csv", [[2, 3, 4, 5, 6, 7]] * 8)
+
+    app_data = tmp_path / "app_data"
+    model_path = app_data / "model.tflite"
+    cc_path = app_data / "gesture_model.cc"
+
+    monkeypatch.setattr(pipeline, "APP_DATA_DIR", app_data)
+    monkeypatch.setattr(pipeline, "DEFAULT_MODEL_PATH", model_path)
+    monkeypatch.setattr(pipeline, "GESTURE_MODEL_CC_OUTPUT", cc_path)
+
+    import sys
+
+    captured_max_abs = {"value": 0.0}
+
+    class _CaptureModel(_FakeModel):
+        def fit(self, x, y, **kwargs):
+            captured_max_abs["value"] = float(np.max(np.abs(np.asarray(x, dtype=np.float32))))
+            return super().fit(x, y, **kwargs)
+
+    class _CaptureKeras(_FakeKeras):
+        @staticmethod
+        def Sequential(layers):
+            return _CaptureModel(layers)
+
+    class _CaptureTF(_FakeTF):
+        keras = _CaptureKeras
+
+    monkeypatch.setitem(sys.modules, "tensorflow", _CaptureTF())
+
+    pipeline.build_gesture_model(
+        dataset_dir=str(dataset),
+        output_mode="tflite",
+        selected_spells=["PULSE", "ORBIT"],
+        epochs=1,
+        window_size=4,
+        step=2,
+    )
+
+    assert captured_max_abs["value"] >= 1.0

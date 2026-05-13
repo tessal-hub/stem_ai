@@ -294,7 +294,7 @@ def build_gesture_model(
     X_train = X_train[perm]
     y_train = y_train[perm]
 
-    X_train = np.clip(X_train / 32768.0, -2.0, 2.0)
+    X_train = np.clip(X_train, -2.0, 2.0)
 
     validation_data: tuple[np.ndarray, np.ndarray | None] | None = None
     val_labels: list[int] = []
@@ -313,7 +313,7 @@ def build_gesture_model(
 
         if val_features:
             X_val = np.clip(
-                np.stack(val_features, axis=0) / 32768.0, -2.0, 2.0
+                np.stack(val_features, axis=0), -2.0, 2.0
             )
             validation_data = (X_val, None)
             _emit_status(

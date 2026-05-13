@@ -15,7 +15,7 @@ MAX_SIZE_KB = 1024
 # 2. TẢI DỮ LIỆU (pipeline gọn)
 # ==========================================
 def load_data(file_name, label, is_idle=False):
-    df = pd.read_csv(file_name) / 32768.0
+    df = pd.read_csv(file_name)
     data = df.values
     X, y = [], []
     for i in range(0, len(data) - WINDOW_SIZE, 5):

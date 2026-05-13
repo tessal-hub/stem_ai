@@ -144,26 +144,17 @@ class RecordStub(QObject):
 
 
 class HomeStub(QObject):
-    sig_simulation_replay_requested = pyqtSignal()
-    sig_simulation_stop_requested = pyqtSignal()
-    sig_calibrate_requested = pyqtSignal()
-    sig_quick_test_requested = pyqtSignal()
-
     def __init__(self) -> None:
         super().__init__()
         self.wand_3d = _Wand3DStub()
         self.mode_events: list[str] = []
         self.sensor_readouts: list[list[float]] = []
-        self.simulation_events: list[bool] = []
 
     def set_mode(self, mode: str) -> None:
         self.mode_events.append(mode)
 
     def set_sensor_readout(self, values: list[float]) -> None:
         self.sensor_readouts.append(list(values))
-
-    def set_simulation_running(self, active: bool) -> None:
-        self.simulation_events.append(active)
 
     def _on_sensor_data_updated(self, sensor_buffers: dict) -> None:
         latest = []
@@ -378,24 +369,6 @@ def test_raw_uart_lines_are_forwarded_to_terminal(handler_harness: HandlerHarnes
     assert any("RAW:1,2,3,4,5,6" in msg for msg in harness.wand.logs)
 
 
-def test_simulation_replays_recent_input_frames(handler_harness: HandlerHarness) -> None:
-    harness = handler_harness
-
-    harness.store.update_sensor_data({"ax": 0.1, "ay": 0.2, "az": 0.3, "gx": 1.0, "gy": 2.0, "gz": 3.0})
-    harness.store.update_sensor_data({"ax": 0.4, "ay": 0.5, "az": 0.6, "gx": 4.0, "gy": 5.0, "gz": 6.0})
-
-    harness.handler._on_simulation_replay_requested()
-    harness.handler._step_simulation_playback()
-
-    assert harness.home.simulation_events[0] is True
-    assert harness.home.wand_3d.updates[0] == (0.1, 0.2, 0.3, 1.0, 2.0, 3.0)
-    assert harness.home.wand_3d.updates[1] == (0.4, 0.5, 0.6, 4.0, 5.0, 6.0)
-
-    harness.handler._step_simulation_playback()
-
-    assert harness.home.simulation_events[-1] is False
-
-
 def test_handler_shutdown_is_idempotent(handler_harness: HandlerHarness) -> None:
     harness = handler_harness
 
@@ -600,6 +573,63 @@ def test_upload_finish_releases_owner_resets_mode_and_reports_status(
     assert harness.handler._mode == harness.handler._MODE_IDLE
     assert harness.wand.flash_progress and harness.wand.flash_progress[-1][0] == 100
     assert any("Model upload COMPLETE" in msg for msg in harness.wand.logs)
+
+
+def test_flash_handoff_rejects_missing_pending_context(
+    handler_harness: HandlerHarness,
+    monkeypatch,
+) -> None:
+    harness = handler_harness
+    flash_calls: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(
+        harness.handler.flash_worker,
+        "flash_firmware",
+        lambda port, path: flash_calls.append((port, path)),
+    )
+
+    harness.handler._set_port_owner("flash")
+    harness.handler._pending_flash_bin_type = ""
+    harness.handler._pending_flash_port = ""
+    harness.handler._pending_flash_bin_path = None
+
+    harness.handler._on_serial_stopped_start_flash()
+
+    assert flash_calls == []
+    assert harness.handler._get_port_owner() is None
+    assert any(
+        "Flash handoff failed: missing pending flash context." in msg
+        for msg in harness.setting.console_messages
+    )
+    assert harness.setting.flash_button_states and harness.setting.flash_button_states[-1] is True
+
+
+def test_upload_handoff_rejects_missing_pending_context(
+    handler_harness: HandlerHarness,
+    monkeypatch,
+) -> None:
+    harness = handler_harness
+    upload_calls: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(
+        harness.handler.uploader,
+        "upload_file",
+        lambda port, path: upload_calls.append((port, path)),
+    )
+
+    harness.handler._set_port_owner("upload")
+    harness.handler._pending_upload_port = ""
+    harness.handler._pending_upload_model_path = None
+
+    harness.handler._on_serial_stopped_start_upload()
+
+    assert upload_calls == []
+    assert harness.handler._get_port_owner() is None
+    assert harness.wand.flash_progress and harness.wand.flash_progress[-1][0] == 0
+    assert any(
+        "Upload handoff failed: missing pending upload context." in msg
+        for msg in harness.wand.logs
+    )
 
 
 def test_delete_system_spell_is_blocked_with_feedback(handler_harness: HandlerHarness) -> None:

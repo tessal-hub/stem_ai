@@ -111,11 +111,6 @@ class Handler(QObject):
         self._feature_timer = QTimer(self)
         self._feature_timer.setInterval(200)
         self._feature_timer.timeout.connect(self._emit_live_features)
-        self._simulation_timer = QTimer(self)
-        self._simulation_timer.setInterval(20)
-        self._simulation_timer.timeout.connect(self._step_simulation_playback)
-        self._simulation_frames: list[list[float]] = []
-        self._simulation_index = 0
         self._model_build_worker: GestureModelBuildWorker | None = None
         self._model_build_mode: str = "both"
         self._shutdown_done: bool = False
@@ -204,6 +199,24 @@ class Handler(QObject):
         """Connect multiple signal-slot pairs using queued semantics."""
         for signal, slot in bindings:
             self._connect_queued(signal, slot)
+
+    def _disconnect_serial_finished(self, slot) -> None:
+        """Best-effort disconnect for temporary serial finished callbacks."""
+        try:
+            self.serial_worker.finished.disconnect(slot)
+        except (RuntimeError, TypeError) as exc:
+            logging.getLogger(__name__).debug(
+                "serial finished callback already disconnected (%s)", exc
+            )
+
+    def _clear_pending_flash_context(self) -> None:
+        self._pending_flash_bin_type = ""
+        self._pending_flash_port = ""
+        self._pending_flash_bin_path = None
+
+    def _clear_pending_upload_context(self) -> None:
+        self._pending_upload_port = ""
+        self._pending_upload_model_path = None
 
     def _configure_serial_scale_profile(self) -> None:
         """Apply accel/gyro normalization profile from persisted settings."""
@@ -370,14 +383,6 @@ class Handler(QObject):
             self.store.sig_primitive_stats_updated.connect(
                 self.ui_primitive_collect.update_collection_stats
             )
-
-        # Home → Handler (simulation playback controls)
-        self.ui_home.sig_simulation_replay_requested.connect(self._on_simulation_replay_requested)
-        self.ui_home.sig_simulation_stop_requested.connect(self._stop_simulation_playback)
-
-        # Home → Handler (calibration & quick test)
-        self.ui_home.sig_calibrate_requested.connect(self.on_calibrate_wand)
-        self.ui_home.sig_quick_test_requested.connect(self.on_quick_test)
 
     def _connect_worker_output_signals(self) -> None:
         """Wire background-worker output signals to UI/handler slots (all queued for thread safety)."""
@@ -612,58 +617,6 @@ class Handler(QObject):
         """Log AI inference result to terminal."""
         text = f"[PREDICT] {label} ({confidence*100:.1f}%)"
         self.ui_wand.append_terminal_text(text)
-
-    def _on_simulation_replay_requested(self) -> None:
-        """Replay the most recent input frames through the 3D wand."""
-        if self.serial_worker.isRunning():
-            self.ui_wand.append_terminal_text("[WARN] Stop the serial connection before replaying input data.")
-            return
-
-        frames = self.store.get_recent_sensor_frames_snapshot()
-        if not frames:
-            self.ui_wand.append_terminal_text("[WARN] No recent input frames available for replay.")
-            return
-
-        self._simulation_frames = [list(frame[:6]) for frame in frames if len(frame) >= 6]
-        if not self._simulation_frames:
-            self.ui_wand.append_terminal_text("[WARN] Recent input frames were incomplete.")
-            return
-
-        self._simulation_index = 0
-        self.ui_home.set_simulation_running(True)
-        self.ui_wand.append_terminal_text(f">> Replaying {len(self._simulation_frames)} input frame(s) on the 3D model.")
-        self._step_simulation_playback()
-        self._simulation_timer.start()
-
-    def _stop_simulation_playback(self) -> None:
-        """Stop any active replay and restore the live-input controls."""
-        if self._simulation_timer.isActive():
-            self._simulation_timer.stop()
-        self._simulation_frames = []
-        self._simulation_index = 0
-        self.ui_home.set_simulation_running(False)
-
-    def _step_simulation_playback(self) -> None:
-        """Advance one simulation frame and feed it to the 3D wand."""
-        if self._simulation_index >= len(self._simulation_frames):
-            self._stop_simulation_playback()
-            return
-
-        frame = self._simulation_frames[self._simulation_index]
-        self._simulation_index += 1
-        self._apply_sensor_frame_to_home(frame)
-
-    def _apply_sensor_frame_to_home(self, norm_values: list[float]) -> None:
-        """Send one 6-axis sensor frame to the Home 3D viewer."""
-        frame = self._parse_sensor_frame_6d(norm_values)
-        if frame is None:
-            return
-        ax, ay, az, gx, gy, gz = frame
-        try:
-            self.ui_home.wand_3d.update_orientation(ax, ay, az, gx, gy, gz)
-        except Exception as e:
-            self.ui_wand.append_terminal_text(f"[ERROR] Simulation playback failed: {e}")
-            self._stop_simulation_playback()
 
     def _on_connection_status_changed(self, connected: bool, message: str) -> None:
         """Update UI components on serial connection status change."""
@@ -1077,14 +1030,26 @@ class Handler(QObject):
 
     def _on_serial_stopped_start_flash(self) -> None:
         """Callback: serial worker has exited — now safe to open COM port for flashing."""
-        self.serial_worker.finished.disconnect(self._on_serial_stopped_start_flash)
+        self._disconnect_serial_finished(self._on_serial_stopped_start_flash)
+        pending_bin_type = str(self._pending_flash_bin_type).strip()
+        pending_port = str(self._pending_flash_port).strip()
+        pending_bin_path = self._pending_flash_bin_path
+        self._clear_pending_flash_context()
+
+        if not pending_bin_type or not pending_port or pending_bin_path is None:
+            self._set_port_owner(None)
+            self._flash_log_to_console("[ERROR] Flash handoff failed: missing pending flash context.")
+            if self.ui_setting:
+                self.ui_setting.set_flash_buttons_enabled(True)
+            return
+
         if self._get_port_owner() == "serial":
             self._set_port_owner(None)
         self._flash_log_to_console(">> COM port released, ready to flash\n")
         self._start_flash_immediately(
-            self._pending_flash_bin_type,
-            self._pending_flash_port,
-            self._pending_flash_bin_path,
+            pending_bin_type,
+            pending_port,
+            pending_bin_path,
         )
 
     def _start_flash_immediately(self, bin_type: str, port: str, bin_path) -> None:
@@ -1160,12 +1125,22 @@ class Handler(QObject):
 
     def _on_serial_stopped_start_upload(self) -> None:
         """Callback: serial worker has exited — now safe to open COM port for upload."""
-        self.serial_worker.finished.disconnect(self._on_serial_stopped_start_upload)
+        self._disconnect_serial_finished(self._on_serial_stopped_start_upload)
+        pending_port = str(self._pending_upload_port).strip()
+        pending_model_path = self._pending_upload_model_path
+        self._clear_pending_upload_context()
+
+        if not pending_port or pending_model_path is None:
+            self._set_port_owner(None)
+            self.ui_wand.append_terminal_text("[ERROR] Upload handoff failed: missing pending upload context.")
+            self.ui_wand.update_flash_progress(0)
+            return
+
         if self._get_port_owner() == "serial":
             self._set_port_owner(None)
         self._start_upload_immediately(
-            self._pending_upload_port,
-            self._pending_upload_model_path,
+            pending_port,
+            pending_model_path,
         )
 
     def _start_upload_immediately(self, port: str, model_path) -> None:
@@ -1239,7 +1214,6 @@ class Handler(QObject):
         # Stop periodic timers first to prevent new work from being enqueued.
         if self._feature_timer.isActive():
             self._feature_timer.stop()
-        self._stop_simulation_playback()
 
         # Stop serial stream and recorder ingestion before stopping workers.
         try:
@@ -1438,55 +1412,6 @@ class Handler(QObject):
         except OSError as exc:
             self.ui_wand.append_terminal_text(f"[MODEL] Failed to save .cc: {exc}")
 
-    # ── Wand Calibration & Testing ─────────────────────────────────────
-
-    def on_calibrate_wand(self) -> None:
-        """
-        Initiate wand sensor calibration.
-        Sends calibration command to device and instructs user on procedure.
-        """
-        if not self.serial_worker.isRunning():
-            self.ui_wand.append_terminal_text("[ERROR] Serial connection required for calibration")
-            return
-        
-        self.ui_wand.append_terminal_text("[CAL] Starting wand calibration procedure...")
-        self.ui_wand.append_terminal_text("[CAL] Please place wand on flat surface and hold still for 3 seconds...")
-        
-        # Send calibration command to device
-        if self.serial_worker.send_command("CMD:CALIBRATE"):
-            self.ui_wand.append_terminal_text("[CAL] Calibration command sent to device")
-        else:
-            self.ui_wand.append_terminal_text("[ERROR] Failed to send calibration command")
-
-    def on_quick_test(self) -> None:
-        """
-        Perform a quick gesture recognition test.
-        Records a brief sample and runs inference to show predictions.
-        """
-        if not self.serial_worker.isRunning():
-            self.ui_wand.append_terminal_text("[ERROR] Serial connection required for quick test")
-            return
-        
-        if self._mode != self._MODE_IDLE:
-            self.ui_wand.append_terminal_text(f"[TEST] Cannot run test in {self._mode} mode")
-            return
-        
-        # Transition to inference mode for quick test
-        if not self._transition_mode(self._MODE_INFER, reason="Quick test gesture recognition", push_to_device=True):
-            return
-        
-        self.ui_wand.append_terminal_text("[TEST] Quick test started - perform a gesture...")
-        self.ui_home.set_inference_active(True)
-        
-        # Schedule return to idle after a brief period
-        QTimer.singleShot(3000, lambda: self._end_quick_test())
-
-    def _end_quick_test(self) -> None:
-        """End quick test and return to idle mode."""
-        self._transition_mode(self._MODE_IDLE, reason="Quick test completed", push_to_device=True)
-        self.ui_home.set_inference_active(False)
-        self.ui_wand.append_terminal_text("[TEST] Quick test completed")
-
     # ── Data Export & Clearing ─────────────────────────────────────────
 
     def on_clear_buffer(self) -> None:
@@ -1508,4 +1433,3 @@ class Handler(QObject):
 
         self.ui_wand.append_terminal_text(f"[EXPORT] Exporting {len(buf)} samples to {csv_filename}...")
         self.data_io_worker.enqueue_export(buf, csv_path)
-

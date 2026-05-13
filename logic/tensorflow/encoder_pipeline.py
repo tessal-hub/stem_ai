@@ -239,7 +239,7 @@ def load_primitive_dataset(
             windows = _windowize(rows, window_size=window_size, step=4)
             for window in windows:
                 data = np.asarray(window, dtype=np.float32)
-                data = np.clip(data / 32768.0, -2.0, 2.0)
+                data = np.clip(data, -2.0, 2.0)
                 class_windows.append(data)
 
         if class_windows:
