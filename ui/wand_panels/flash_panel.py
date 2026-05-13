@@ -16,6 +16,7 @@ from ui.tokens import (
 )
 from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_MD, SPACING_XS
 from ui.wand_panels.shared import make_button, make_card, make_section_label
+from ui.i18n_bridge import tr_ui
 
 
 class WandFlashPanel(QWidget):
@@ -29,6 +30,11 @@ class WandFlashPanel(QWidget):
         super().__init__()
         self._init_ui()
         self._init_signals()
+
+    def apply_ui_language(self) -> None:
+        self._title_lbl.setText(tr_ui("wand_section_model"))
+        self.btn_build_tflite.setText(tr_ui("wand_build_tflite"))
+        self.btn_build_cc.setText(tr_ui("wand_build_cc"))
 
     def update_flash_progress(self, percentage: int, status_text: str = "") -> None:
         """Cập nhật thanh tiến trình và nhãn trạng thái.
@@ -47,7 +53,8 @@ class WandFlashPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_XS)
 
-        title = make_section_label("MODEL BUILDING")
+        title = make_section_label(tr_ui("wand_section_model"))
+        self._title_lbl = title
         title.setStyleSheet(STYLE_HOME_SECTION_SUBTITLE)
         layout.addWidget(title)
 
@@ -63,8 +70,8 @@ class WandFlashPanel(QWidget):
 
         btn_row = QHBoxLayout()
         btn_row.setSpacing(SPACING_MD)
-        self.btn_build_tflite = make_button("BUILD .TFLITE", STYLE_BTN_OUTLINE, height=BTN_H)
-        self.btn_build_cc = make_button("BUILD .CC", STYLE_BTN_PRIMARY, height=BTN_H)
+        self.btn_build_tflite = make_button(tr_ui("wand_build_tflite"), STYLE_BTN_OUTLINE, height=BTN_H)
+        self.btn_build_cc = make_button(tr_ui("wand_build_cc"), STYLE_BTN_PRIMARY, height=BTN_H)
         # Legacy aliases kept for existing access paths.
         self.btn_compile = self.btn_build_cc
         self.btn_flash = self.btn_build_tflite
@@ -72,7 +79,7 @@ class WandFlashPanel(QWidget):
         btn_row.addWidget(self.btn_build_cc)
         card_layout.addLayout(btn_row)
 
-        self.lbl_flash_status = QLabel("● Ready to build model")
+        self.lbl_flash_status = QLabel(tr_ui("wand_flash_ready"))
         self.lbl_flash_status.setStyleSheet(STYLE_WAND_FLASH_STATUS)
 
         self.progress_bar = QProgressBar()

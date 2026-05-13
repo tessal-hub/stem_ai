@@ -28,7 +28,10 @@ def _detect_workspace_file() -> Path:
 
 
 APP_DATA_DIR = WORKSPACE_ROOT / "app_data"
-DATASET_DIR = APP_DATA_DIR / "dataset"
+DATASET_DIR = WORKSPACE_ROOT / "dataset"
+SPELL_DIR = DATASET_DIR / "spells"
+PRIMITIVE_DIR = DATASET_DIR / "primitives"
+FIRMWARE_PROJECT_ROOT = WORKSPACE_ROOT / "mpu6050"
 DEFAULT_MODEL_PATH = APP_DATA_DIR / "model.tflite"
 VSCODE_WORKSPACE_FILE = _detect_workspace_file()
 GESTURE_MODEL_CC_OUTPUT = APP_DATA_DIR / "gesture_model.cc"
@@ -42,4 +45,6 @@ def ensure_data_dir() -> Path:
     """
     APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
     DATASET_DIR.mkdir(parents=True, exist_ok=True)
+    SPELL_DIR.mkdir(parents=True, exist_ok=True)
+    PRIMITIVE_DIR.mkdir(parents=True, exist_ok=True)
     return APP_DATA_DIR

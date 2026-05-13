@@ -18,6 +18,7 @@ Do not treat files under worktree snapshots as source of truth.
 - 05 Testing: test strategy and data pipeline test scenarios.
 - 06 Contracts: frozen UI and handler-facing interfaces.
 - 07 For AI Agents: AI operating guidance.
+- 08 ESP-IDF project: constructing and integrating the firmware tree with the app.
 - Archive: historical reports and superseded implementation notes.
 
 ## Canonical Rules
@@ -37,4 +38,5 @@ Do not treat files under worktree snapshots as source of truth.
 - 05_TESTING/TESTING_GUIDE.md
 - 06_CONTRACTS/UI_CONTRACTS.md
 - 07_FOR_AI_AGENTS/AGENT_GUIDE.md
+- 08_ESP_IDF_PROJECT/README.md
 - ARCHIVE/README.md

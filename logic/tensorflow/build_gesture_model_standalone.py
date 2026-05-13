@@ -64,7 +64,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dataset-dir",
         default=str(DATASET_DIR),
-        help="Dataset root used by the main app (default: app_data/dataset).",
+        help="Dataset root (default: <workspace>/dataset; scans spells/ and primitives/).",
     )
     # INCREASED EPOCHS slightly to give the bigger model more time to learn
     parser.add_argument("--epochs", type=int, default=100) 

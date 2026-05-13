@@ -28,6 +28,7 @@ from ui.tokens import (
 )
 from ui.component_factory import make_rarity_badge_wand
 from ui.wand_panels.shared import make_section_label
+from ui.i18n_bridge import tr_ui
 
 
 class WandSpellPayloadPanel(QWidget):
@@ -68,7 +69,8 @@ class WandSpellPayloadPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_SM)
 
-        layout.addWidget(make_section_label("FIRMWARE PAYLOAD"))
+        self._hdr_payload = make_section_label(tr_ui("wand_section_payload"))
+        layout.addWidget(self._hdr_payload)
 
         split = QSplitter(Qt.Orientation.Horizontal)
 
@@ -76,9 +78,9 @@ class WandSpellPayloadPanel(QWidget):
         left_layout = QVBoxLayout(left_col)
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(SPACING_SM)
-        left_title = QLabel("SELECTED FOR TRAINING")
-        left_title.setStyleSheet(STYLE_WAND_LIST_TITLE)
-        left_layout.addWidget(left_title)
+        self._left_title = QLabel(tr_ui("wand_selected_title"))
+        self._left_title.setStyleSheet(STYLE_WAND_LIST_TITLE)
+        left_layout.addWidget(self._left_title)
 
         self.list_selected_spells = QListWidget()
         self.list_selected_spells.setStyleSheet(STYLE_LIST)
@@ -91,9 +93,9 @@ class WandSpellPayloadPanel(QWidget):
         right_layout = QVBoxLayout(right_col)
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(SPACING_SM)
-        right_title = QLabel("AVAILABLE SPELLS")
-        right_title.setStyleSheet(STYLE_WAND_LIST_TITLE)
-        right_layout.addWidget(right_title)
+        self._right_title = QLabel(tr_ui("wand_available_title"))
+        self._right_title.setStyleSheet(STYLE_WAND_LIST_TITLE)
+        right_layout.addWidget(self._right_title)
 
         self.list_available_spells = QListWidget()
         self.list_available_spells.setStyleSheet(STYLE_LIST)
@@ -111,6 +113,12 @@ class WandSpellPayloadPanel(QWidget):
         # Backward-compat alias
         self.list_firmware = self.list_selected_spells
 
+    def apply_ui_language(self) -> None:
+        self._hdr_payload.setText(tr_ui("wand_section_payload"))
+        self._left_title.setText(tr_ui("wand_selected_title"))
+        self._right_title.setText(tr_ui("wand_available_title"))
+        self._refresh_lists()
+
     def _init_signals(self) -> None:
         """Kết nối toàn bộ signal và slot nội bộ."""
         self.list_selected_spells.itemClicked.connect(self._on_selected_item_clicked)
@@ -122,8 +130,8 @@ class WandSpellPayloadPanel(QWidget):
         self.list_available_spells.clear()
 
         if not self._spell_order:
-            self._add_empty_row(self.list_selected_spells, "Waiting for recorded spells")
-            self._add_empty_row(self.list_available_spells, "Waiting for available spells")
+            self._add_empty_row(self.list_selected_spells, tr_ui("wand_wait_sel"))
+            self._add_empty_row(self.list_available_spells, tr_ui("wand_wait_avail"))
             return
 
         for name in self._spell_order:

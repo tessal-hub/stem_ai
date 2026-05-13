@@ -21,6 +21,7 @@ from pathlib import Path
 from PyQt6.QtCore import QThread, pyqtSignal
 from config import DATASET_DIR, ensure_data_dir
 from constants import canonical_system_spell, is_system_spell, normalize_spell_name
+from .dataset_layout import spell_write_dir
 
 
 class DataRecorder(QThread):
@@ -224,11 +225,11 @@ class DataRecorder(QThread):
             return
 
         try:
-            label_folder = os.path.join(self.dataset_dir, label)
-            Path(label_folder).mkdir(parents=True, exist_ok=True)
+            folder = spell_write_dir(Path(self.dataset_dir), label)
+            folder.mkdir(parents=True, exist_ok=True)
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-            file_path = os.path.join(label_folder, f"sample_{timestamp}.csv")
+            file_path = folder / f"sample_{timestamp}.csv"
 
             self._file = open(file_path, mode="w", newline="", encoding="utf-8")
             self._writer = csv.writer(self._file)

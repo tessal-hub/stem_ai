@@ -23,10 +23,14 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QSpinBox,
     QProgressBar,
+    QScrollArea,
     QToolButton,
     QVBoxLayout,
     QWidget,
 )
+
+from logic.locale_manager import locale_manager
+from logic.ui_i18n import normalize_ui_language, tr
 
 from ui.tokens import (
     # Colors
@@ -77,6 +81,9 @@ class PageSetting(QWidget):
     def __init__(self, data_store) -> None:
         super().__init__()
         self.data_store = data_store
+        self._i18n_text: list[tuple[QWidget, str, str]] = []
+        self._i18n_tooltips: list[tuple[QWidget, str]] = []
+        self._lang = "en"
         self._init_ui()
         self._init_signals()
         self._configure_accessibility()
@@ -121,6 +128,26 @@ class PageSetting(QWidget):
             finally:
                 widget.blockSignals(False)
 
+        theme_val = str(config.get("theme", "light")).strip().lower()
+        if theme_val not in ("light", "dark"):
+            theme_val = "light"
+        self.combo_theme.blockSignals(True)
+        try:
+            idx = self.combo_theme.findData(theme_val)
+            if idx >= 0:
+                self.combo_theme.setCurrentIndex(idx)
+        finally:
+            self.combo_theme.blockSignals(False)
+
+        lang_val = normalize_ui_language(config.get("ui_language"))
+        self.combo_ui_language.blockSignals(True)
+        try:
+            li = self.combo_ui_language.findData(lang_val)
+            if li >= 0:
+                self.combo_ui_language.setCurrentIndex(li)
+        finally:
+            self.combo_ui_language.blockSignals(False)
+
     def append_console_text(self, message: str) -> None:
         """Thêm *message* vào console log và tự cuộn xuống cuối.
 
@@ -153,7 +180,7 @@ class PageSetting(QWidget):
     # ------------------------------------------------------------------
 
     def _init_ui(self) -> None:
-        """Xây dựng layout chính gồm 2 cột cấu hình, paths, firmware, và control bar."""
+        """Main layout: scrollable 3-column top row, paths, firmware; fixed control bar."""
         outer = QVBoxLayout(self)
         outer.setContentsMargins(
             MARGIN_COMFORTABLE,
@@ -163,13 +190,28 @@ class PageSetting(QWidget):
         )
         outer.setSpacing(SPACING_LG)
 
-        cols = QHBoxLayout()
-        cols.setSpacing(SPACING_LG)
-        cols.addWidget(self._build_hardware_column(), stretch=1)
-        cols.addWidget(self._build_software_column(), stretch=1)
-        outer.addLayout(cols, stretch=1)
-        outer.addWidget(self._build_paths_card())
-        outer.addWidget(self._build_firmware_section())
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+
+        inner = QWidget()
+        inner_l = QVBoxLayout(inner)
+        inner_l.setContentsMargins(0, 0, 0, 0)
+        inner_l.setSpacing(SPACING_LG)
+
+        top_row = QHBoxLayout()
+        top_row.setSpacing(SPACING_LG)
+        top_row.addWidget(self._build_hardware_column(), stretch=1)
+        top_row.addWidget(self._build_software_column(), stretch=1)
+        top_row.addWidget(self._build_danger_column(), stretch=1)
+        inner_l.addLayout(top_row)
+        inner_l.addWidget(self._build_paths_card())
+        inner_l.addWidget(self._build_firmware_section(), stretch=1)
+
+        scroll.setWidget(inner)
+        outer.addWidget(scroll, stretch=1)
         outer.addLayout(self._build_control_bar())
 
     def _build_hardware_column(self) -> QWidget:
@@ -178,8 +220,7 @@ class PageSetting(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_MD)
 
-        # ── Sensor card ─────────────────────────────────────────────────
-        layout.addWidget(self._make_section_label("IMU SENSOR CONFIGURATION"))
+        layout.addWidget(self._make_section_label_i18n("section_imu"))
         sensor_card, sensor_layout = self._make_card()
 
         self.combo_sample_rate = self._make_combo(["50 Hz", "100 Hz", "200 Hz", "400 Hz"])
@@ -187,26 +228,23 @@ class PageSetting(QWidget):
         self.combo_gyro_scale  = self._make_combo(["±250 dps", "±500 dps", "±1000 dps", "±2000 dps"])
 
         sensor_form = self._make_form_layout()
-        self._add_form_row(sensor_form, "Sampling Rate:", self.combo_sample_rate)
-        self._add_form_row(sensor_form, "Accelerometer FSR:", self.combo_accel_scale)
-        self._add_form_row(sensor_form, "Gyroscope FSR:", self.combo_gyro_scale)
+        self._add_i18n_form_row(sensor_form, "label_sample_rate", self.combo_sample_rate)
+        self._add_i18n_form_row(sensor_form, "label_accel", self.combo_accel_scale)
+        self._add_i18n_form_row(sensor_form, "label_gyro", self.combo_gyro_scale)
         sensor_layout.addLayout(sensor_form)
         layout.addWidget(sensor_card)
 
-        # ── Windowing card ──────────────────────────────────────────────
-        layout.addWidget(self._make_section_label("DATA WINDOWING (TIME-SERIES)"))
+        layout.addWidget(self._make_section_label_i18n("section_windowing"))
         window_card, window_layout = self._make_card()
 
         self.spin_window_size    = self._make_spinbox(10,  2000, step=10, suffix=" ms")
         self.spin_window_overlap = self._make_spinbox(0,   90,   step=10, suffix=" %")
 
         window_form = self._make_form_layout()
-        self._add_form_row(window_form, "Window Size:", self.spin_window_size)
-        self._add_form_row(window_form, "Overlap:", self.spin_window_overlap)
+        self._add_i18n_form_row(window_form, "label_window_size", self.spin_window_size)
+        self._add_i18n_form_row(window_form, "label_overlap", self.spin_window_overlap)
         window_layout.addLayout(window_form)
-        window_layout.addWidget(
-            self._make_hint("Adjust window size based on typical spell cast duration.")
-        )
+        window_layout.addWidget(self._make_hint_i18n("hint_windowing"))
         layout.addWidget(window_card)
 
         layout.addStretch()
@@ -218,8 +256,7 @@ class PageSetting(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_MD)
 
-        # ── ML pipeline card ────────────────────────────────────────────
-        layout.addWidget(self._make_section_label("MACHINE LEARNING PIPELINE"))
+        layout.addWidget(self._make_section_label_i18n("section_ml"))
         ml_card, ml_layout = self._make_card()
 
         self.combo_ml_pipeline = self._make_combo([
@@ -227,16 +264,41 @@ class PageSetting(QWidget):
             "Support Vector Machine",
             "Tiny Neural Network (TFLite)",
         ])
+
         ml_form = self._make_form_layout()
-        self._add_form_row(ml_form, "Algorithm:", self.combo_ml_pipeline)
+        self._add_i18n_form_row(ml_form, "label_algorithm", self.combo_ml_pipeline)
         ml_layout.addLayout(ml_form)
-        ml_layout.addWidget(
-            self._make_hint("Select the target inference engine for the ESP32.")
-        )
+        ml_layout.addWidget(self._make_hint_i18n("hint_ml"))
         layout.addWidget(ml_card)
 
-        # ── Project settings card ───────────────────────────────────────
-        layout.addWidget(self._make_section_label("PROJECT SETTINGS"))
+        layout.addWidget(self._make_section_label_i18n("section_appearance"))
+        appearance_card, appearance_layout = self._make_card()
+
+        self.combo_theme = QComboBox()
+        self.combo_theme.setStyleSheet(STYLE_SETTING_INPUT)
+        self.combo_theme.setMinimumHeight(SETTINGS_INPUT_H)
+        self.combo_theme.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed,
+        )
+        self.combo_theme.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        self.combo_ui_language = QComboBox()
+        self.combo_ui_language.setStyleSheet(STYLE_SETTING_INPUT)
+        self.combo_ui_language.setMinimumHeight(SETTINGS_INPUT_H)
+        self.combo_ui_language.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed,
+        )
+        self.combo_ui_language.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        appearance_form = self._make_form_layout()
+        self._add_i18n_form_row(appearance_form, "label_theme", self.combo_theme)
+        self._add_i18n_form_row(appearance_form, "label_ui_language", self.combo_ui_language)
+        appearance_layout.addLayout(appearance_form)
+        layout.addWidget(appearance_card)
+
+        layout.addWidget(self._make_section_label_i18n("section_project"))
         sys_card, sys_layout = self._make_card()
 
         self.txt_project_name = QLineEdit()
@@ -246,35 +308,38 @@ class PageSetting(QWidget):
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Fixed,
         )
-        self.txt_project_name.setPlaceholderText("Enter project name…")
 
-        self.chk_auto_save = QCheckBox("Auto-save recording samples")
+        self.chk_auto_save = QCheckBox("")
         self.chk_auto_save.setStyleSheet(STYLE_SETTING_CHECKBOX)
+        self._tx(self.chk_auto_save, "chk_auto_save")
 
         sys_form = self._make_form_layout()
-        self._add_form_row(sys_form, "Project Name:", self.txt_project_name)
+        self._add_i18n_form_row(sys_form, "label_project_name", self.txt_project_name)
         sys_layout.addLayout(sys_form)
         sys_layout.addWidget(self.chk_auto_save)
         layout.addWidget(sys_card)
 
-        # ── Danger zone card ────────────────────────────────────────────
-        layout.addWidget(self._make_section_label("DANGER ZONE", color=DANGER))
+        layout.addStretch()
+        return widget
+
+    def _build_danger_column(self) -> QWidget:
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(SPACING_MD)
+
+        layout.addWidget(self._make_section_label_i18n("section_danger", color=DANGER))
         danger_card, danger_layout = self._make_card()
 
-        self.btn_clear_db = QPushButton("ERASE ALL COLLECTED DATA")
+        self.btn_clear_db = QPushButton("")
         self.btn_clear_db.setStyleSheet(STYLE_SETTING_BTN_DANGER)
         self.btn_clear_db.setFixedHeight(SETTINGS_BTN_H)
         self.btn_clear_db.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._tx(self.btn_clear_db, "btn_clear_db")
 
         danger_layout.addWidget(self.btn_clear_db)
-        danger_layout.addWidget(
-            self._make_hint(
-                "This will permanently delete every recorded sample. Cannot be undone.",
-                color=DANGER,
-            )
-        )
+        danger_layout.addWidget(self._make_hint_i18n("hint_danger", color=DANGER))
         layout.addWidget(danger_card)
-
         layout.addStretch()
         return widget
 
@@ -284,7 +349,7 @@ class PageSetting(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_MD)
 
-        layout.addWidget(self._make_section_label("FIRMWARE MANAGEMENT"))
+        layout.addWidget(self._make_section_label_i18n("section_firmware"))
 
         firmware_card, fw_layout = self._make_card()
 
@@ -293,8 +358,17 @@ class PageSetting(QWidget):
         button_grid.setHorizontalSpacing(SPACING_MD)
         button_grid.setVerticalSpacing(SPACING_SM)
 
-        self.btn_flash_collect = self._make_primary_button("⬆  INSTALL DATA FIRMWARE")
-        self.btn_flash_ai      = self._make_primary_button("⬆  INSTALL AI ENGINE")
+        self.btn_flash_collect = QPushButton("")
+        self.btn_flash_collect.setStyleSheet(STYLE_SETTING_BTN_PRIMARY)
+        self.btn_flash_collect.setMinimumHeight(SETTINGS_BTN_H)
+        self.btn_flash_collect.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._tx(self.btn_flash_collect, "btn_flash_data", "⬆  ")
+
+        self.btn_flash_ai = QPushButton("")
+        self.btn_flash_ai.setStyleSheet(STYLE_SETTING_BTN_PRIMARY)
+        self.btn_flash_ai.setMinimumHeight(SETTINGS_BTN_H)
+        self.btn_flash_ai.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._tx(self.btn_flash_ai, "btn_flash_ai", "⬆  ")
 
         button_grid.addWidget(self.btn_flash_collect, 0, 0)
         button_grid.addWidget(self.btn_flash_ai, 0, 1)
@@ -313,9 +387,7 @@ class PageSetting(QWidget):
         fw_layout.addWidget(self.progress_bar)
 
         # Console log
-        fw_layout.addWidget(
-            self._make_section_label("Console Output", color=TEXT_MUTED)
-        )
+        fw_layout.addWidget(self._make_section_label_i18n("sub_console", color=TEXT_MUTED))
         self.console_log = TerminalWidget(max_lines=1000, read_only=True)
         self.console_log.setMinimumHeight(SETTING_CONSOLE_MIN_H)
         self.console_log.setSizePolicy(
@@ -326,9 +398,7 @@ class PageSetting(QWidget):
         fw_layout.addWidget(self.console_log)
 
         layout.addWidget(firmware_card)
-        layout.addWidget(
-            self._make_hint("Flash operation requires serial port selection and an active connection.")
-        )
+        layout.addWidget(self._make_hint_i18n("hint_firmware"))
         return widget
 
     def _build_control_bar(self) -> QHBoxLayout:
@@ -337,15 +407,17 @@ class PageSetting(QWidget):
         row.setSpacing(SPACING_SM)
         row.addStretch()
 
-        self.btn_revert = QPushButton("REVERT CHANGES")
+        self.btn_revert = QPushButton("")
         self.btn_revert.setStyleSheet(STYLE_SETTING_BTN_OUTLINE)
         self.btn_revert.setFixedHeight(SETTINGS_BTN_H)
         self.btn_revert.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._tx(self.btn_revert, "btn_revert")
 
-        self.btn_save = QPushButton("SAVE SETTINGS")
+        self.btn_save = QPushButton("")
         self.btn_save.setStyleSheet(STYLE_SETTING_BTN_PRIMARY)
         self.btn_save.setFixedHeight(SETTINGS_BTN_H)
         self.btn_save.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._tx(self.btn_save, "btn_save")
 
         row.addWidget(self.btn_revert)
         row.addWidget(self.btn_save)
@@ -365,6 +437,15 @@ class PageSetting(QWidget):
         self.btn_open_idf_main.clicked.connect(self._on_btn_open_idf_main_clicked)
         self.btn_browse_idf_main.clicked.connect(self._on_btn_browse_idf_main_clicked)
         self.btn_reset_idf_main.clicked.connect(self._on_btn_reset_idf_main_clicked)
+        self.combo_theme.currentIndexChanged.connect(self._on_theme_changed)
+        self.combo_ui_language.currentIndexChanged.connect(self._on_ui_language_changed)
+
+    def _on_theme_changed(self, _index: int = 0) -> None:
+        from logic.theme_manager import theme_manager
+
+        raw = self.combo_theme.currentData()
+        name = str(raw) if raw in ("light", "dark") else "light"
+        theme_manager.current_theme = name
 
     def _configure_accessibility(self) -> None:
         """Đặt accessible names và thứ tự tab traversal cho các control."""
@@ -374,6 +455,8 @@ class PageSetting(QWidget):
         self.spin_window_size.setAccessibleName("Window size")
         self.spin_window_overlap.setAccessibleName("Window overlap")
         self.combo_ml_pipeline.setAccessibleName("Machine learning pipeline")
+        self.combo_theme.setAccessibleName("App theme")
+        self.combo_ui_language.setAccessibleName("Interface language")
         self.txt_project_name.setAccessibleName("Project name")
         self.chk_auto_save.setAccessibleName("Auto save recording samples")
         self.txt_idf_main_dir.setAccessibleName("ESP-IDF main directory path")
@@ -392,7 +475,9 @@ class PageSetting(QWidget):
         self.setTabOrder(self.combo_gyro_scale, self.spin_window_size)
         self.setTabOrder(self.spin_window_size, self.spin_window_overlap)
         self.setTabOrder(self.spin_window_overlap, self.combo_ml_pipeline)
-        self.setTabOrder(self.combo_ml_pipeline, self.txt_project_name)
+        self.setTabOrder(self.combo_ml_pipeline, self.combo_theme)
+        self.setTabOrder(self.combo_theme, self.combo_ui_language)
+        self.setTabOrder(self.combo_ui_language, self.txt_project_name)
         self.setTabOrder(self.txt_project_name, self.chk_auto_save)
         self.setTabOrder(self.chk_auto_save, self.txt_idf_main_dir)
         self.setTabOrder(self.txt_idf_main_dir, self.btn_browse_idf_main)
@@ -410,8 +495,14 @@ class PageSetting(QWidget):
 
     def _load_data(self) -> None:
         """Nạp settings ban đầu từ DataStore snapshot vào form."""
+        from logic.theme_manager import theme_manager
+
         self._last_saved: dict[str, Any] = self.data_store.get_settings_snapshot()
+        lang = normalize_ui_language(self._last_saved.get("ui_language"))
+        self._refresh_ui_texts(lang)
         self.load_settings(self._last_saved)
+        theme_manager.current_theme = str(self.combo_theme.currentData() or "light")
+        locale_manager.current_language = lang
 
     def _collect_config(self) -> dict[str, Any]:
         """Thu thập giá trị hiện tại từ tất cả widget form.
@@ -426,6 +517,8 @@ class PageSetting(QWidget):
             "window_size":       self.spin_window_size.value(),
             "window_overlap":    self.spin_window_overlap.value(),
             "ml_pipeline":       self.combo_ml_pipeline.currentText(),
+            "theme":             str(self.combo_theme.currentData() or "light"),
+            "ui_language":       str(self.combo_ui_language.currentData() or "en"),
             "project_name":      self.txt_project_name.text().strip(),
             "auto_save":         self.chk_auto_save.isChecked(),
             "idf_main_dir":      self.txt_idf_main_dir.text().strip(),
@@ -435,7 +528,11 @@ class PageSetting(QWidget):
         """Xử lý khi người dùng nhấn nút Save Settings."""
         config = self._collect_config()
         if not config.get("project_name"):
-            QMessageBox.warning(self, "Missing Field", "Project name cannot be empty.")
+            QMessageBox.warning(
+                self,
+                tr(self._lang, "msg_missing_project_title"),
+                tr(self._lang, "msg_missing_project"),
+            )
             self.txt_project_name.setFocus()
             return
         if not self._validate_paths(config):
@@ -445,18 +542,22 @@ class PageSetting(QWidget):
 
     def _on_btn_revert_clicked(self) -> None:
         """Xử lý khi người dùng nhấn nút Revert Changes."""
+        from logic.theme_manager import theme_manager
+
+        lang = normalize_ui_language(self._last_saved.get("ui_language"))
+        self._refresh_ui_texts(lang)
         self.load_settings(self._last_saved)
+        theme_manager.current_theme = str(self.combo_theme.currentData() or "light")
+        locale_manager.current_language = lang
 
     def _on_btn_clear_db_clicked(self) -> None:
         """Xử lý khi người dùng nhấn nút Erase All Data — yêu cầu xác nhận."""
         if confirm_destructive(
             self,
-            title="Erase All Data",
-            message=(
-                "This will permanently delete every collected spell sample.\n\n"
-                "Use this only when you are certain the dataset can be rebuilt."
-            ),
-            confirm_text="Erase Data",
+            title=tr(self._lang, "erase_title"),
+            message=tr(self._lang, "erase_message"),
+            confirm_text=tr(self._lang, "erase_confirm"),
+            cancel_text=tr(self._lang, "erase_cancel"),
         ):
             self.sig_clear_database.emit()
 
@@ -485,7 +586,11 @@ class PageSetting(QWidget):
         """Mở thư mục gốc ESP-IDF project đang chọn trong VS Code."""
         raw_main = self.txt_idf_main_dir.text().strip()
         if not raw_main:
-            QMessageBox.warning(self, "Missing Path", "Please select the ESP-IDF main directory first.")
+            QMessageBox.warning(
+                self,
+                tr(self._lang, "msg_missing_path_title"),
+                tr(self._lang, "msg_missing_path"),
+            )
             return
 
         main_dir = Path(raw_main).expanduser()
@@ -510,15 +615,15 @@ class PageSetting(QWidget):
 
         QMessageBox.warning(
             self,
-            "Open Folder Failed",
-            "Could not open ESP-IDF folder. Ensure the 'code' command is available in PATH.",
+            tr(self._lang, "msg_open_failed_title"),
+            tr(self._lang, "msg_open_failed"),
         )
 
     def _on_btn_browse_idf_main_clicked(self) -> None:
         """Mở dialog chọn thư mục ESP-IDF main."""
         path = QFileDialog.getExistingDirectory(
             self,
-            "Select ESP-IDF main Directory",
+            tr(self._lang, "browse_idf_title"),
             self.txt_idf_main_dir.text() or str(WORKSPACE_ROOT),
         )
         if path:
@@ -549,13 +654,13 @@ class PageSetting(QWidget):
         idf_main_dir = Path(idf_main_str).expanduser().resolve()
         invalid_reasons: list[str] = []
         if not idf_main_dir.exists() or not idf_main_dir.is_dir():
-            invalid_reasons.append("IDF main directory does not exist")
+            invalid_reasons.append(tr(self._lang, "invalid_idf_missing"))
         if idf_main_dir.name.lower() != "main":
-            invalid_reasons.append("Selected path must point to the IDF 'main' folder")
+            invalid_reasons.append(tr(self._lang, "invalid_idf_not_main"))
 
         idf_root = idf_main_dir.parent
         if not (idf_root / "CMakeLists.txt").exists():
-            invalid_reasons.append("IDF project root is missing CMakeLists.txt")
+            invalid_reasons.append(tr(self._lang, "invalid_idf_no_cmake"))
 
         if invalid_reasons:
             self.txt_idf_main_dir.setStyleSheet(
@@ -563,8 +668,8 @@ class PageSetting(QWidget):
             )
             QMessageBox.warning(
                 self,
-                "Invalid Path",
-                "The ESP-IDF main directory is invalid:\n• " + "\n• ".join(invalid_reasons),
+                tr(self._lang, "msg_invalid_path_title"),
+                tr(self._lang, "msg_invalid_path_prefix") + "\n• " + "\n• ".join(invalid_reasons),
             )
             return False
 
@@ -575,6 +680,79 @@ class PageSetting(QWidget):
     # Factory helpers
     # ------------------------------------------------------------------
 
+    def _tx(self, widget: QWidget, key: str, prefix: str = "") -> None:
+        self._i18n_text.append((widget, key, prefix))
+
+    def _tip(self, widget: QWidget, key: str) -> None:
+        self._i18n_tooltips.append((widget, key))
+
+    def _make_section_label_i18n(self, key: str, color: str = SETTINGS_ACCENT) -> QLabel:
+        lbl = QLabel("")
+        lbl.setStyleSheet(STYLE_SETTINGS_SECTION_LABEL_TEMPLATE.format(color=color))
+        lbl.setWordWrap(True)
+        self._tx(lbl, key)
+        return lbl
+
+    def _make_hint_i18n(self, key: str, color: str = TEXT_MUTED) -> QLabel:
+        lbl = QLabel("")
+        lbl.setStyleSheet(STYLE_SETTINGS_HINT_TEMPLATE.format(color=color))
+        lbl.setWordWrap(True)
+        self._tx(lbl, key)
+        return lbl
+
+    def _add_i18n_form_row(self, form: QFormLayout, key: str, field: QWidget) -> None:
+        label = QLabel("")
+        label.setStyleSheet(STYLE_SETTINGS_FORM_LABEL)
+        label.setWordWrap(True)
+        field.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        form.addRow(label, field)
+        self._tx(label, key)
+
+    def _rebuild_theme_combo(self, selected: str) -> None:
+        sel = selected if selected in ("light", "dark") else "light"
+        self.combo_theme.blockSignals(True)
+        self.combo_theme.clear()
+        self.combo_theme.addItem(tr(self._lang, "theme_light"), "light")
+        self.combo_theme.addItem(tr(self._lang, "theme_dark"), "dark")
+        idx = self.combo_theme.findData(sel)
+        self.combo_theme.setCurrentIndex(max(0, idx))
+        self.combo_theme.blockSignals(False)
+
+    def _rebuild_lang_combo(self, selected: str) -> None:
+        sel = normalize_ui_language(selected)
+        self.combo_ui_language.blockSignals(True)
+        self.combo_ui_language.clear()
+        self.combo_ui_language.addItem(tr(self._lang, "lang_option_en"), "en")
+        self.combo_ui_language.addItem(tr(self._lang, "lang_option_vi"), "vi")
+        idx = self.combo_ui_language.findData(sel)
+        self.combo_ui_language.setCurrentIndex(max(0, idx))
+        self.combo_ui_language.blockSignals(False)
+
+    def _refresh_ui_texts(self, lang: str | None) -> None:
+        lang_norm = normalize_ui_language(lang)
+        theme_sel = self.combo_theme.currentData()
+        if theme_sel not in ("light", "dark"):
+            theme_sel = "light"
+        self._lang = lang_norm
+        for w, key, prefix in self._i18n_text:
+            w.setText(prefix + tr(self._lang, key))
+        for w, key in self._i18n_tooltips:
+            w.setToolTip(tr(self._lang, key))
+        self._rebuild_theme_combo(str(theme_sel))
+        self._rebuild_lang_combo(lang_norm)
+        self.txt_project_name.setPlaceholderText(tr(self._lang, "placeholder_project"))
+        self.txt_idf_main_dir.setPlaceholderText(tr(self._lang, "placeholder_idf"))
+
+    def apply_ui_language(self) -> None:
+        """Re-apply labels when language is changed from MainWindow (e.g. startup sync)."""
+        self._refresh_ui_texts(locale_manager.current_language)
+
+    def _on_ui_language_changed(self) -> None:
+        raw = self.combo_ui_language.currentData()
+        lang = normalize_ui_language(str(raw) if raw is not None else "en")
+        self._refresh_ui_texts(lang)
+        locale_manager.current_language = lang
+
     def _build_paths_card(self) -> QWidget:
         """Tạo card PATH CONFIGURATION với trường chọn thư mục IDF main."""
         widget = QWidget()
@@ -582,53 +760,42 @@ class PageSetting(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_MD)
 
-        layout.addWidget(self._make_section_label("PATH CONFIGURATION"))
+        layout.addWidget(self._make_section_label_i18n("section_paths"))
 
         card, card_layout = self._make_card()
 
-        def _make_path_row(
-            field: QLineEdit,
-            btn_browse: QPushButton,
-            btn_reset: QToolButton,
-        ) -> QHBoxLayout:
-            row = QHBoxLayout()
-            row.setContentsMargins(0, 0, 0, 0)
-            row.setSpacing(SPACING_SM)
-            row.addWidget(field, stretch=1)
-            row.addWidget(btn_browse)
-            row.addWidget(btn_reset)
-            return row
-
-        def _make_path_field(placeholder: str) -> QLineEdit:
+        def _make_path_field() -> QLineEdit:
             field = QLineEdit()
             field.setStyleSheet(STYLE_SETTING_INPUT)
             field.setMinimumHeight(SETTINGS_INPUT_H)
-            field.setPlaceholderText(placeholder)
+            field.setPlaceholderText("")
             field.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             return field
 
         def _make_browse_btn() -> QPushButton:
-            btn = QPushButton("Browse…")
+            btn = QPushButton("")
             btn.setStyleSheet(STYLE_SETTING_BTN_OUTLINE)
             btn.setFixedHeight(SETTINGS_INPUT_H)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            self._tx(btn, "btn_browse")
             return btn
 
         def _make_reset_btn() -> QToolButton:
             btn = QToolButton()
             btn.setText("↺")
-            btn.setToolTip("Reset to default")
             btn.setFixedSize(SETTINGS_INPUT_H, SETTINGS_INPUT_H)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            self._tip(btn, "tooltip_reset_path")
             return btn
 
-        self.txt_idf_main_dir = _make_path_field("Path to ESP-IDF main directory…")
+        self.txt_idf_main_dir = _make_path_field()
         self.btn_browse_idf_main = _make_browse_btn()
         self.btn_reset_idf_main = _make_reset_btn()
-        self.btn_open_idf_main = QPushButton("Open IDF Project")
+        self.btn_open_idf_main = QPushButton("")
         self.btn_open_idf_main.setStyleSheet(STYLE_SETTING_BTN_PRIMARY)
         self.btn_open_idf_main.setFixedHeight(SETTINGS_INPUT_H)
         self.btn_open_idf_main.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._tx(self.btn_open_idf_main, "btn_open_idf")
 
         idf_row = QHBoxLayout()
         idf_row.setContentsMargins(0, 0, 0, 0)
@@ -641,15 +808,10 @@ class PageSetting(QWidget):
         path_form = self._make_form_layout()
         idf_widget = QWidget()
         idf_widget.setLayout(idf_row)
-        self._add_form_row(path_form, "IDF main Directory:", idf_widget)
+        self._add_i18n_form_row(path_form, "label_idf_main", idf_widget)
 
         card_layout.addLayout(path_form)
-        card_layout.addWidget(
-            self._make_hint(
-                "Select the ESP-IDF 'main' directory for firmware synchronization. "
-                "After model build, gesture_model.cc and generated main.cpp are written there."
-            )
-        )
+        card_layout.addWidget(self._make_hint_i18n("hint_paths"))
         layout.addWidget(card)
         return widget
 

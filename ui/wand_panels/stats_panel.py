@@ -19,6 +19,7 @@ from ui.tokens import (
     TEXT_MUTED,
 )
 from ui.wand_panels.shared import make_card, make_section_label
+from ui.i18n_bridge import tr_ui
 
 
 class WandStatsPanel(QWidget):
@@ -36,7 +37,7 @@ class WandStatsPanel(QWidget):
         """
         clear_layout(self.layout_stats)
         if not stats:
-            lbl = QLabel("Awaiting connection...")
+            lbl = QLabel(tr_ui("wand_stats_waiting"))
             lbl.setStyleSheet(STYLE_SETTINGS_HINT_TEMPLATE.format(color=TEXT_MUTED))
             self.layout_stats.addWidget(lbl, 0, 0)
             return
@@ -82,7 +83,7 @@ class WandStatsPanel(QWidget):
         bar = pg.BarGraphItem(x=[0], height=[0], width=0.6, brush=pg.mkBrush(QColor(BORDER_MID)))
         self.stats_plot.addItem(bar)
         self.stats_plot.setYRange(0, 10)
-        ax_bottom.setTicks([[(0, "No data yet")]])
+        ax_bottom.setTicks([[(0, tr_ui("wand_no_data"))]])
 
     def _init_ui(self) -> None:
         """Xây dựng layout gồm grid thống kê và biểu đồ plot."""
@@ -90,7 +91,8 @@ class WandStatsPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_SM)
 
-        layout.addWidget(make_section_label("DATASET STATISTICS"))
+        self._stats_section = make_section_label(tr_ui("wand_section_stats"))
+        layout.addWidget(self._stats_section)
 
         card, card_layout = make_card()
 
@@ -116,3 +118,6 @@ class WandStatsPanel(QWidget):
 
         card_layout.addWidget(self.stats_plot, stretch=1)
         layout.addWidget(card, stretch=1)
+
+    def apply_ui_language(self) -> None:
+        self._stats_section.setText(tr_ui("wand_section_stats"))

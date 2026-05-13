@@ -1,722 +1,223 @@
 """
-Modern, professional theme system for the STEM Spell Book application.
-
-This module provides:
-  - Comprehensive QSS stylesheets for all components
-  - Modern color palette with professional accents
-  - Enhanced visual hierarchy and depth
-  - Smooth transitions and state interactions
-  - Component-specific styling (buttons, cards, inputs, etc.)
-
-The architecture pattern:
-  1. Define semantic color variables and component styles
-  2. Return complete QSS string ready for application via setStyleSheet()
-  3. Support theme switching (light/dark) at runtime if needed
-
-Usage:
-  In main_window.py or app initialization:
-  ```
-  from theme import get_modern_stylesheet
-  app.setStyleSheet(get_modern_stylesheet())
-  ```
+Modern, professional theme system with Light/Dark mode support.
 """
 
-from PyQt6.QtWidgets import QFrame, QWidget
+from PyQt6.QtWidgets import QFrame, QWidget, QApplication
+from ui.palettes import LIGHT_PALETTE, DARK_PALETTE, Palette
+from logic.theme_manager import theme_manager
 
-from ui.tokens import (
-    # Modern color palette
-    PRIMARY_COLOR,
-    PRIMARY_LIGHT,
-    PRIMARY_DARK,
-    SURFACE_PRIMARY,
-    SURFACE_SECONDARY,
-    SURFACE_TERTIARY,
-    TEXT_PRIMARY,
-    TEXT_SECONDARY,
-    BORDER_COLOR,
-    BORDER_LIGHT,
-    STATUS_SUCCESS,
-    STATUS_ERROR,
-    APP_FONT_STACK,
-)
-
-
-def get_modern_stylesheet() -> str:
+def get_modern_stylesheet(theme_name: str = "light") -> str:
     """
-    Generate comprehensive modern QSS stylesheet.
+    Generate comprehensive modern QSS stylesheet based on selected theme.
+    """
+    p = DARK_PALETTE if theme_name == "dark" else LIGHT_PALETTE
     
-    Returns:
-        str: Complete QSS stylesheet for the entire application.
-    """
-    return f"""
-/* ═══════════════════════════════════════════════════════════════════════════
-   GLOBAL & BASE STYLES
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-QWidget {{
-    font-family: {APP_FONT_STACK};
-    font-size: 13px;
-    background-color: {SURFACE_PRIMARY};
-    border: none;
+    # Base stylesheet
+    qss = f"""
+QWidget#MainBox {{
+    background-color: {p.SURFACE_PRIMARY};
+    color: {p.TEXT_PRIMARY};
 }}
 
 QMainWindow {{
-    background-color: {SURFACE_PRIMARY};
-    border: none;
-}}
-
-QGroupBox {{
-    border: none;
-    background: transparent;
-    margin-top: 14px;
-    padding-top: 8px;
-    font-weight: 600;
-}}
-
-QGroupBox::title {{
-    subcontrol-origin: margin;
-    left: 2px;
-    padding: 0 2px;
-    border: none;
-    background: transparent;
+    background-color: {p.SURFACE_PRIMARY};
 }}
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   BUTTONS - Modern Variants
+   CARDS & CONTAINERS (Using Object Names)
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* PRIMARY BUTTON - Bold action button */
-QPushButton#btn_primary, QPushButton#btn_start, QPushButton#btn_record {{
-    background-color: {PRIMARY_COLOR};
-    color: white;
+QFrame#CardFrame, QWidget#Card, #HomeViewerCard, #HomeRightSection, #CardFrameElevated, ClickableFrame {{
+    background-color: {p.GLASS_BG};
+    border: 1px solid {p.BORDER_LIGHT};
+    border-radius: 20px;
+}}
+
+#HomeViewerSurface {{
+    background-color: {p.GLASS_BG_STRONG};
     border: none;
-    border-radius: 8px;
-    padding: 8px 16px;
-    font-weight: 600;
-    font-size: 13px;
-    min-height: 32px;
-    max-height: 32px;
+    border-radius: 18px;
 }}
 
-QPushButton#btn_primary:hover, QPushButton#btn_start:hover, QPushButton#btn_record:hover {{
-    background-color: {PRIMARY_DARK};
-}}
+/* ═══════════════════════════════════════════════════════════════════════════
+   BUTTONS
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-QPushButton#btn_primary:pressed, QPushButton#btn_start:pressed, QPushButton#btn_record:pressed {{
-    background-color: {PRIMARY_DARK};
-}}
-
-QPushButton#btn_primary:disabled, QPushButton#btn_start:disabled, QPushButton#btn_record:disabled {{
-    background-color: #d1d5db;
-    color: #9ca3af;
-}}
-
-/* SECONDARY BUTTON - Default action button */
-QPushButton#btn_secondary, QPushButton#btn_simulate {{
-    background-color: {SURFACE_SECONDARY};
-    color: {TEXT_PRIMARY};
-    border: none;
-    border-radius: 8px;
-    padding: 8px 16px;
-    font-weight: 500;
-    font-size: 13px;
-    min-height: 32px;
-    max-height: 32px;
-}}
-
-QPushButton#btn_secondary:hover, QPushButton#btn_simulate:hover {{
-    background-color: {SURFACE_TERTIARY};
-    color: {PRIMARY_COLOR};
-}}
-
-QPushButton#btn_secondary:pressed, QPushButton#btn_simulate:pressed {{
-    background-color: #f3f4f6;
-}}
-
-/* DANGER BUTTON - Destructive actions */
-QPushButton#btn_stop, QPushButton#btn_danger {{
-    background-color: {STATUS_ERROR};
-    color: white;
-    border: none;
-    border-radius: 8px;
-    padding: 8px 16px;
-    font-weight: 600;
-    font-size: 13px;
-    min-height: 32px;
-    max-height: 32px;
-}}
-
-QPushButton#btn_stop:hover, QPushButton#btn_danger:hover {{
-    background-color: #dc2626;
-}}
-
-QPushButton#btn_stop:pressed, QPushButton#btn_danger:pressed {{
-    background-color: #991b1b;
-}}
-
-/* OUTLINE BUTTON - Secondary importance */
-QPushButton#btn_outline {{
-    background-color: {SURFACE_SECONDARY};
-    color: {PRIMARY_COLOR};
-    border: none;
+QPushButton {{
+    background-color: {p.GLASS_BG_STRONG};
+    color: {p.TEXT_SECONDARY};
+    border: 1px solid {p.GLASS_EDGE};
     border-radius: 12px;
-    padding: 8px 16px;
-    font-weight: 500;
-    font-size: 13px;
-    min-height: 32px;
-    max-height: 32px;
+    padding: 6px 16px;
+    font-weight: 600;
 }}
 
-QPushButton#btn_outline:hover {{
-    background-color: {PRIMARY_LIGHT};
+QPushButton:hover {{
+    background-color: {p.HOVER_BG};
+    color: {p.PRIMARY};
 }}
 
-QPushButton#btn_outline:pressed {{
-    background-color: {PRIMARY_LIGHT};
-}}
-
-/* SMALL/COMPACT BUTTONS */
-QPushButton#btn_small {{
-    min-height: 28px;
-    max-height: 28px;
-    padding: 4px 12px;
-    font-size: 12px;
-}}
-
-/* FOCUS RINGS - Visible keyboard focus for all interactive controls */
-QPushButton:focus {{
-    outline: none;
-    border: none;
-}}
-
-/* ICON BUTTON - Navigation, utilities */
-QToolButton {{
-    background-color: transparent;
-    border: none;
-    border-radius: 6px;
-    padding: 4px;
-    margin: 0px;
-}}
-
-QToolButton:hover {{
-    background-color: {PRIMARY_LIGHT};
-}}
-
-QToolButton:pressed {{
-    background-color: {PRIMARY_LIGHT};
-}}
-
-QToolButton:checked {{
-    background-color: {PRIMARY_LIGHT};
-    color: {PRIMARY_COLOR};
-    border: none;
-}}
-
-QToolButton:focus {{
-    outline: none;
-    border: none;
-}}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   INPUT FIELDS - Text, Combo, Spin
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-QLineEdit, QPlainTextEdit {{
-    background-color: {SURFACE_SECONDARY};
-    color: {TEXT_PRIMARY};
-    border: none;
-    border-bottom: 1px solid {BORDER_COLOR};
-    border-radius: 6px;
-    padding: 8px 12px;
-    font-size: 13px;
-    selection-background-color: {PRIMARY_COLOR};
-}}
-
-QLineEdit:focus, QPlainTextEdit:focus {{
-    border: none;
-    border-bottom: 1px solid {PRIMARY_COLOR};
-    padding: 8px 12px;
-    background-color: {SURFACE_PRIMARY};
-}}
-
-QLineEdit:disabled, QPlainTextEdit:disabled {{
-    background-color: #f3f4f6;
-    color: #9ca3af;
-    border-color: #e5e7eb;
-}}
-
-QComboBox {{
-    background-color: {SURFACE_SECONDARY};
-    color: {TEXT_PRIMARY};
-    border: none;
-    border-bottom: 1px solid {BORDER_COLOR};
-    border-radius: 6px;
-    padding: 6px 12px;
-    min-height: 32px;
-    font-size: 13px;
-}}
-
-QComboBox:hover {{
-    border: none;
-    border-bottom: 1px solid {PRIMARY_COLOR};
-}}
-
-QComboBox:focus {{
-    border: none;
-    border-bottom: 1px solid {PRIMARY_COLOR};
-    padding: 6px 12px;
-}}
-
-QComboBox::drop-down {{
-    border: none;
-    width: 32px;
-}}
-
-QComboBox::down-arrow {{
-    image: none;
-    width: 0px;
-}}
-
-QComboBox QAbstractItemView {{
-    background-color: {SURFACE_PRIMARY};
-    color: {TEXT_PRIMARY};
-    border: none;
-    border-radius: 10px;
-    padding: 0px;
-    margin: 0px;
-    selection-background-color: {PRIMARY_LIGHT};
-    outline: none;
-}}
-
-QComboBox QAbstractItemView::item {{
-    padding: 8px 12px;
-    height: 32px;
-    border: none;
-}}
-
-QComboBox QAbstractItemView::item:hover {{
-    background-color: {PRIMARY_LIGHT};
-}}
-
-QComboBox QAbstractItemView::item:selected {{
-    background-color: {PRIMARY_COLOR};
+QPushButton#btn_primary, QPushButton#btn_start, QPushButton#btn_record {{
+    background-color: {p.PRIMARY};
     color: white;
-}}
-
-QSpinBox {{
-    background-color: {SURFACE_SECONDARY};
-    color: {TEXT_PRIMARY};
     border: none;
-    border-bottom: 1px solid {BORDER_COLOR};
-    border-radius: 6px;
-    padding: 6px 4px;
-    min-height: 32px;
 }}
 
-QSpinBox:focus {{
-    border: none;
-    border-bottom: 1px solid {PRIMARY_COLOR};
-}}
-
-QSpinBox::up-button, QSpinBox::down-button {{
-    background-color: transparent;
+QPushButton#btn_stop, QPushButton#btn_danger {{
+    background-color: {p.STATUS_ERROR};
+    color: white;
     border: none;
 }}
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   CHECKBOXES & RADIO BUTTONS
+   INPUTS
    ═══════════════════════════════════════════════════════════════════════════ */
 
-QCheckBox {{
-    color: {TEXT_PRIMARY};
-    spacing: 8px;
-    background-color: transparent;
+QLineEdit, QComboBox, QSpinBox {{
+    background-color: {p.GLASS_BG_STRONG};
+    color: {p.TEXT_PRIMARY};
+    border: 1px solid {p.BORDER_LIGHT};
+    border-radius: 8px;
+    padding: 6px 12px;
 }}
 
-QCheckBox::indicator {{
-    width: 18px;
-    height: 18px;
-    background-color: {SURFACE_SECONDARY};
-    border: 1.5px solid {BORDER_COLOR};
-    border-radius: 4px;
-}}
+QComboBox::drop-down {{ border: none; }}
 
-QCheckBox::indicator:hover {{
-    border-color: {PRIMARY_COLOR};
-    background-color: {SURFACE_TERTIARY};
-}}
-
-QCheckBox::indicator:checked {{
-    background-color: {PRIMARY_COLOR};
-    border-color: {PRIMARY_COLOR};
-}}
-
-QCheckBox::indicator:checked:focus {{
-    border-color: {PRIMARY_DARK};
-}}
-
-QCheckBox::indicator:disabled {{
-    background-color: #f3f4f6;
-    border-color: #e5e7eb;
-}}
-
-QCheckBox::indicator:checked:disabled {{
-    background-color: #d1d5db;
-    border-color: #d1d5db;
-}}
-
-QRadioButton {{
-    color: {TEXT_PRIMARY};
-    spacing: 8px;
-}}
-
-QRadioButton::indicator {{
-    width: 18px;
-    height: 18px;
-    background-color: {SURFACE_SECONDARY};
-    border: 1.5px solid {BORDER_COLOR};
-    border-radius: 9px;
-}}
-
-QRadioButton::indicator:hover {{
-    border-color: {PRIMARY_COLOR};
-    background-color: {SURFACE_TERTIARY};
-}}
-
-QRadioButton::indicator:checked {{
-    background-color: {SURFACE_SECONDARY};
-    border: 3px solid {PRIMARY_COLOR};
-}}
-
-QFrame {{
-    border: none;
-    background: transparent;
-}}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   CARDS & FRAMES - Container Styling
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-QFrame#CardFrame, QWidget#Card {{
-    background-color: {SURFACE_PRIMARY};
+QListWidget {{
+    background-color: {p.GLASS_BG_STRONG};
     border: none;
     border-radius: 16px;
-}}
-
-QFrame#CardFrame:hover {{
-    border: none;
-}}
-
-/* Elevated card for emphasis */
-QFrame#CardFrameElevated {{
-    background-color: {SURFACE_PRIMARY};
-    border: none;
-    border-radius: 10px;
-}}
-
-QFrame#CardFrameElevated:hover {{
-    border: none;
-}}
-
-/* Graph/Plot card - darker background */
-QFrame#GraphCard {{
-    background-color: #1a1a1f;
-    border: none;
-    border-radius: 10px;
-}}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   LABELS & TEXT
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-QLabel {{
-    color: {TEXT_PRIMARY};
-    background-color: transparent;
-}}
-
-QLabel#TextMuted {{
-    color: {TEXT_SECONDARY};
-    font-size: 12px;
-}}
-
-QLabel#TextSmall {{
-    color: {TEXT_SECONDARY};
-    font-size: 11px;
-}}
-
-QLabel#SectionTitle {{
-    color: {TEXT_PRIMARY};
-    font-size: 14px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-}}
-
-QLabel#SectionSubtitle {{
-    color: {TEXT_SECONDARY};
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.3px;
-}}
-
-QLabel#StatusBadge {{
-    background-color: {PRIMARY_LIGHT};
-    color: {PRIMARY_COLOR};
-    border: 1px solid {PRIMARY_COLOR};
-    border-radius: 12px;
-    padding: 4px 12px;
-    font-weight: 600;
-    font-size: 12px;
-}}
-
-QLabel#StatusError {{
-    background-color: rgba(239, 68, 68, 0.1);
-    color: {STATUS_ERROR};
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    border-radius: 12px;
-    padding: 4px 12px;
-    font-weight: 600;
-    font-size: 12px;
-}}
-
-QLabel#StatusSuccess {{
-    background-color: rgba(16, 185, 129, 0.1);
-    color: {STATUS_SUCCESS};
-    border: 1px solid rgba(16, 185, 129, 0.3);
-    border-radius: 12px;
-    padding: 4px 12px;
-    font-weight: 600;
-    font-size: 12px;
-}}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   LISTS & TABLES
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-QListWidget, QTableWidget {{
-    background-color: {SURFACE_PRIMARY};
-    color: {TEXT_PRIMARY};
-    border: 1px solid {BORDER_COLOR};
-    border-radius: 8px;
-    gridline-color: {BORDER_LIGHT};
     outline: none;
 }}
 
-QListWidget::item, QTableWidget::item {{
-    padding: 4px 12px;
-    border-bottom: 1px solid {BORDER_LIGHT};
+QListWidget::item {{
+    padding: 10px;
+    border-radius: 8px;
+    margin: 2px 8px;
+    color: {p.TEXT_PRIMARY};
 }}
 
-QListWidget::item:hover, QTableWidget::item:hover {{
-    background-color: {PRIMARY_LIGHT};
+QListWidget::item:selected {{
+    background-color: {p.HOVER_BG};
+    color: {p.TEXT_PRIMARY};
+    border-left: 4px solid {p.PRIMARY};
 }}
 
-QListWidget::item:selected, QTableWidget::item:selected {{
-    background-color: {PRIMARY_COLOR};
-    color: white;
-}}
+/* ═══════════════════════════════════════════════════════════════════════════
+   MAC SHELL (sidebar / toolbar) — follows palette for dark mode
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-QHeaderView::section {{
-    background-color: {SURFACE_SECONDARY};
-    color: {TEXT_PRIMARY};
-    padding: 8px 12px;
+QWidget#StemChrome {{
+    background-color: {p.SURFACE_PRIMARY};
     border: none;
-    border-bottom: 1px solid {BORDER_COLOR};
-    font-weight: 600;
+    border-radius: 14px;
+}}
+
+QWidget#StemToolbar {{
+    background-color: {p.SURFACE_PRIMARY};
+    border-bottom: 1px solid {p.BORDER_LIGHT};
+}}
+
+QLabel#StemToolbarTitle {{
+    color: {p.TEXT_PRIMARY};
+    font-size: 20px;
+    font-weight: 700;
+}}
+
+QLabel#StemToolbarSubtitle {{
+    color: {p.TEXT_SECONDARY};
     font-size: 12px;
+    font-weight: 500;
+}}
+
+QLabel#StemNavHint {{
+    color: {p.TEXT_TERTIARY};
+    font-size: 11px;
+    font-weight: 500;
+}}
+
+QWidget#StemSidebar {{
+    background-color: {p.SURFACE_SECONDARY};
+    border-right: 1px solid {p.BORDER_LIGHT};
+}}
+
+QLabel#StemNavSectionLabel {{
+    color: {p.TEXT_TERTIARY};
+    font-size: 11px;
+    font-weight: 700;
+}}
+
+QLabel#StemBrandTitle {{
+    color: {p.TEXT_PRIMARY};
+    font-size: 12px;
+    font-weight: 800;
+}}
+
+QLabel#StemBrandSubtitle {{
+    color: {p.TEXT_TERTIARY};
+    font-size: 10px;
+    font-weight: 600;
+}}
+
+QToolButton#StemNavBtn {{
+    color: {p.TEXT_SECONDARY};
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 14px;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 600;
+}}
+
+QToolButton#StemNavBtn:hover {{
+    background-color: {p.HOVER_BG};
+    color: {p.PRIMARY};
+    border: 1px solid {p.BORDER};
+    border-radius: 14px;
+}}
+
+QToolButton#StemNavBtn[active="true"] {{
+    background-color: {p.PRIMARY};
+    color: #ffffff;
+    border: 1px solid {p.PRIMARY};
+    border-radius: 14px;
 }}
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   PROGRESS BARS
+   SCROLLBARS
    ═══════════════════════════════════════════════════════════════════════════ */
-
-QProgressBar {{
-    background-color: {SURFACE_SECONDARY};
-    color: transparent;
-    border: none;
-    border-radius: 2px;
-    min-height: 4px;
-    max-height: 4px;
-    text-align: right;
-}}
-
-QProgressBar::chunk {{
-    background-color: {PRIMARY_COLOR};
-    border-radius: 2px;
-}}
-
-QProgressBar:disabled {{
-    background-color: #e5e7eb;
-}}
-
-QProgressBar:disabled::chunk {{
-    background-color: #d1d5db;
-}}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   SCROLLBARS - Modern style
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-QScrollArea, QAbstractScrollArea, QDockWidget {{
-    border: none;
-    background: transparent;
-}}
-
-QDockWidget::title {{
-    border: none;
-    background: {SURFACE_SECONDARY};
-    padding: 6px 10px;
-}}
-
-QMainWindow::separator {{
-    width: 0px;
-    height: 0px;
-    background: transparent;
-}}
 
 QScrollBar:vertical {{
-    background-color: transparent;
+    background: transparent;
     width: 8px;
-    border: none;
 }}
 
 QScrollBar::handle:vertical {{
-    background-color: {BORDER_COLOR};
+    background: {p.TEXT_TERTIARY};
     border-radius: 4px;
     min-height: 20px;
-    margin: 0px 0px 0px 0px;
-}}
-
-QScrollBar::handle:vertical:hover {{
-    background-color: {TEXT_SECONDARY};
-}}
-
-QScrollBar::handle:vertical:pressed {{
-    background-color: {TEXT_PRIMARY};
-}}
-
-QScrollBar::sub-line:vertical, QScrollBar::add-line:vertical {{
-    height: 0px;
-}}
-
-QScrollBar:horizontal {{
-    background-color: transparent;
-    height: 8px;
-    border: none;
-}}
-
-QScrollBar::handle:horizontal {{
-    background-color: {BORDER_COLOR};
-    border-radius: 4px;
-    min-width: 20px;
-}}
-
-QScrollBar::handle:horizontal:hover {{
-    background-color: {TEXT_SECONDARY};
-}}
-
-QScrollBar::handle:horizontal:pressed {{
-    background-color: {TEXT_PRIMARY};
-}}
-
-QScrollBar::sub-line:horizontal, QScrollBar::add-line:horizontal {{
-    width: 0px;
 }}
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   DIALOGS & POPUPS
+   TERMINAL
    ═══════════════════════════════════════════════════════════════════════════ */
 
-QDialog {{
-    background-color: {SURFACE_PRIMARY};
-    border: none;
+QTextEdit, QPlainTextEdit {{
+    background-color: {p.TERM_BG};
+    color: {p.TERM_FG};
     border-radius: 12px;
-}}
-
-QMessageBox {{
-    background-color: {SURFACE_PRIMARY};
-}}
-
-QMessageBox QLabel {{
-    color: {TEXT_PRIMARY};
-}}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   TOOLTIPS
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-QToolTip {{
-    background-color: #1f2937;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    padding: 6px 12px;
+    font-family: "Consolas", monospace;
     font-size: 11px;
-}}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   TAB WIDGET
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-QTabWidget::pane {{
-    border: none;
-    border-radius: 8px;
-}}
-
-QTabBar::tab {{
-    background-color: {SURFACE_SECONDARY};
-    color: {TEXT_SECONDARY};
-    border: none;
-    padding: 8px 16px;
-    margin-right: 2px;
-    font-weight: 500;
-    font-size: 12px;
-}}
-
-QTabBar::tab:hover {{
-    background-color: {SURFACE_TERTIARY};
-    color: {TEXT_PRIMARY};
-}}
-
-QTabBar::tab:selected {{
-    background-color: {PRIMARY_COLOR};
-    color: white;
-    border: none;
-}}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   SPLITTERS
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-QSplitter::handle {{
-    background-color: {BORDER_LIGHT};
-    border: none;
-}}
-
-QSplitter::handle:hover {{
-    background-color: {BORDER_COLOR};
+    padding: 10px;
 }}
 """
+    return qss
 
-
-def apply_modern_theme(widget_or_app) -> None:
-    """
-    Apply modern theme to a widget or entire application.
-    
-    Args:
-        widget_or_app: QWidget, QMainWindow, or QApplication instance
-    """
-    widget_or_app.setStyleSheet(get_modern_stylesheet())
-
+def apply_modern_theme(widget_or_app, theme_name: str = "light") -> None:
+    widget_or_app.setStyleSheet(get_modern_stylesheet(theme_name))
 
 def apply_flat_widget_chrome(root_widget: QWidget) -> None:
-    """
-    Remove native frame decorations that can leak default platform borders.
-
-    Args:
-        root_widget: Root widget/window to normalize.
-    """
     for frame in root_widget.findChildren(QFrame):
         frame.setFrameShape(QFrame.Shape.NoFrame)
         frame.setFrameShadow(QFrame.Shadow.Plain)
         frame.setLineWidth(0)
-        frame.setMidLineWidth(0)

@@ -23,7 +23,7 @@ from datetime import datetime
 from threading import Lock
 
 from PyQt6.QtCore import QObject, Qt, QTimer
-from PyQt6.QtWidgets import QFileDialog
+from PyQt6.QtWidgets import QFileDialog, QMessageBox
 from config import APP_DATA_DIR, DEFAULT_MODEL_PATH, GESTURE_MODEL_CC_OUTPUT, WORKSPACE_ROOT
 from constants import canonical_system_spell, is_system_spell
 from .data_store import DataStore
@@ -357,6 +357,43 @@ class Handler(QObject):
         # UI Statistics → Handler (optional)
         if self.ui_statistics:
             self.ui_statistics.sig_train_build_requested.connect(self.on_train_build_model_requested)
+            self.ui_statistics.sig_health_audit_requested.connect(self._on_health_audit_requested)
+
+    def _on_health_audit_requested(self) -> None:
+        """Thực hiện audit sức khỏe dataset."""
+        from .dataset_auditor import DatasetAuditor
+        auditor = DatasetAuditor(self.store.dataset_dir)
+        report = auditor.run_audit()
+        self._show_audit_report(report)
+
+    def _show_audit_report(self, report) -> None:
+        msg = f"DATASET HEALTH REPORT\n"
+        msg += f"Score: {report.system_health_score:.1f}/100\n"
+        msg += f"Total Samples: {report.total_samples}\n\n"
+        
+        if report.imbalanced_classes:
+            msg += f"⚠ Imbalanced Classes:\n"
+            for c in report.imbalanced_classes[:5]:
+                audit = report.class_audits[c]
+                msg += f"  - {c}: {audit.sample_count} samples (ratio: {audit.imbalance_ratio:.2f})\n"
+            if len(report.imbalanced_classes) > 5:
+                msg += f"  ... and {len(report.imbalanced_classes) - 5} more\n"
+            msg += "\n"
+            
+        if report.outlier_samples:
+            msg += f"⚠ Quality Issues ({len(report.outlier_samples)} samples):\n"
+            for s in report.outlier_samples[:5]:
+                issue = "Short" if s.is_too_short else ("Flat" if s.is_flat else "Clipping")
+                msg += f"  - {s.spell_name}: {Path(s.file_path).name} ({issue})\n"
+            if len(report.outlier_samples) > 5:
+                msg += f"  ... and {len(report.outlier_samples) - 5} more\n"
+                
+        if report.system_health_score >= 80:
+            msg += "\n✅ Dataset looks healthy for training!"
+        else:
+            msg += "\n❌ Dataset needs improvement before training."
+            
+        QMessageBox.information(self.ui_statistics, "Dataset Health Audit", msg)
 
         if self.ui_primitive_collect:
             self.ui_primitive_collect.sig_start_collection.connect(

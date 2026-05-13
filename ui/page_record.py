@@ -53,6 +53,7 @@ from ui.component_factory import (
 )
 from ui.mac_material import apply_soft_shadow
 from ui.confirm_dialog import confirm_destructive
+from ui.i18n_bridge import tr_ui
 from ui.modern_layout import (
     MARGIN_COMFORTABLE,
     SPACING_MD,
@@ -61,6 +62,8 @@ from ui.modern_layout import (
 )
 
 log = logging.getLogger(__name__)
+
+_EMPTY_SPELL_LIST = "__STEM_EMPTY_SPELL_LIST__"
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -96,8 +99,7 @@ class PageRecord(QWidget):
 
         self.is_live: bool = True
         self.current_spell_name: str = ""
-        self._spell_list_empty_label = "No spells available yet. Record and save a sample to populate the library."
-        self._sample_list_empty_label = "No samples in this spell yet. Start recording and use SNIP to create one."
+        self._sample_list_empty_sentinel = "__STEM_EMPTY_SAMPLES__"
 
         # Recording timer for duration tracking
         self.recording_timer = QTimer()
@@ -140,12 +142,12 @@ class PageRecord(QWidget):
 
     def set_wand_ready(self, is_ready: bool) -> None:
         if is_ready:
-            self.lbl_wand_status.setText("● WAND IS READY")
+            self.lbl_wand_status.setText(f"● {tr_ui('record_ready')}")
             self.lbl_wand_status.setStyleSheet(
                 STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
             )
         else:
-            self.lbl_wand_status.setText("● WAND NOT READY")
+            self.lbl_wand_status.setText(f"● {tr_ui('record_not_ready')}")
             self.lbl_wand_status.setStyleSheet(
                 STYLE_RECORD_STATUS_TEMPLATE.format(color=DANGER)
             )
@@ -157,7 +159,7 @@ class PageRecord(QWidget):
         if hasattr(self, "btn_delete_latest_sample"):
             self.btn_delete_latest_sample.setEnabled(not recording)
 
-        status = "● RECORDING" if recording else "● WAND IS READY"
+        status = f"● {tr_ui('record_recording_short')}" if recording else f"● {tr_ui('record_ready')}"
         color = ACCENT if recording else SUCCESS
         self.lbl_wand_status.setText(status)
         self.lbl_wand_status.setStyleSheet(
@@ -180,7 +182,7 @@ class PageRecord(QWidget):
 
     def set_save_status(self, spell_name: str) -> None:
         """Visual feedback after a successful crop-save."""
-        self.lbl_wand_status.setText(f"✔ SAVED TO {spell_name}")
+        self.lbl_wand_status.setText(f"✔ {tr_ui('record_status_saved', name=spell_name)}")
         self.lbl_wand_status.setStyleSheet(
             STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
         )
@@ -209,7 +211,9 @@ class PageRecord(QWidget):
                 item.setData(Qt.ItemDataRole.UserRole, spell_name)
                 self.spell_list.addItem(item)
         else:
-            self.spell_list.addItem(self._spell_list_empty_label)
+            empty_item = QListWidgetItem(tr_ui("record_list_empty"))
+            empty_item.setData(Qt.ItemDataRole.UserRole, _EMPTY_SPELL_LIST)
+            self.spell_list.addItem(empty_item)
 
         # Also update the spell combo box
         current_text = self.combo_spell.currentText()
@@ -222,12 +226,14 @@ class PageRecord(QWidget):
 
     def load_samples_for_spell(self, spell_name: str, samples: list[str]) -> None:
         self.current_spell_name = spell_name
-        self.lbl_current_spell.setText(f"SAMPLES: {spell_name}")
+        self.lbl_current_spell.setText(tr_ui("record_spell_samples", name=spell_name))
         self.sample_list.clear()
         if samples:
             self.sample_list.addItems(samples)
         else:
-            self.sample_list.addItem(self._sample_list_empty_label)
+            empty_item = QListWidgetItem(tr_ui("record_sample_empty"))
+            empty_item.setData(Qt.ItemDataRole.UserRole, self._sample_list_empty_sentinel)
+            self.sample_list.addItem(empty_item)
         self.stacked_spells.setCurrentIndex(1)
 
     # ── Plot Setup & Rendering ──────────────────────────────────────────
@@ -270,10 +276,10 @@ class PageRecord(QWidget):
         self.graph2.addLegend()
         
         # Set Y-axis labels
-        self.graph1.setLabel('left', 'Acceleration (g)', color=TEXT_BODY)
-        self.graph1.setLabel('bottom', 'Time (samples)', color=TEXT_BODY)
-        self.graph2.setLabel('left', 'Gyroscope (rad/s)', color=TEXT_BODY)
-        self.graph2.setLabel('bottom', 'Time (samples)', color=TEXT_BODY)
+        self.graph1.setLabel("left", tr_ui("record_axis_accel_left"), color=TEXT_BODY)
+        self.graph1.setLabel("bottom", tr_ui("record_axis_bottom"), color=TEXT_BODY)
+        self.graph2.setLabel("left", tr_ui("record_axis_gyro_left"), color=TEXT_BODY)
+        self.graph2.setLabel("bottom", tr_ui("record_axis_bottom"), color=TEXT_BODY)
 
         # Crop region overlay on graph1 — LARGER handles for easier drag
         self.crop_region = pg.LinearRegionItem(
@@ -300,7 +306,7 @@ class PageRecord(QWidget):
         max_x = int(region[1])
         sample_count = max(0, max_x - min_x)
         
-        self.lbl_record_count.setText(f"Selected: {sample_count} samples")
+        self.lbl_record_count.setText(tr_ui("record_selected_samples", n=sample_count))
 
     def _render_plots(self) -> None:
         """Timer callback (~30 FPS). Pure display — no data processing.
@@ -353,7 +359,7 @@ class PageRecord(QWidget):
         """START: Begin recording and send command to device."""
         spell_name = self.combo_spell.currentText().strip()
         if not spell_name:
-            self.lbl_wand_status.setText("⚠ Select a spell first")
+            self.lbl_wand_status.setText(f"⚠ {tr_ui('record_select_spell')}")
             self.lbl_wand_status.setStyleSheet(
                 STYLE_RECORD_STATUS_TEMPLATE.format(color=DANGER)
             )
@@ -366,7 +372,7 @@ class PageRecord(QWidget):
         self.btn_snip.setEnabled(False)
         self.btn_delete_latest_sample.setEnabled(False)
         self.combo_spell.setEnabled(False)
-        self.lbl_wand_status.setText("● RECORDING DATA")
+        self.lbl_wand_status.setText(f"● {tr_ui('record_recording')}")
         self.lbl_wand_status.setStyleSheet(
             STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
         )
@@ -395,7 +401,7 @@ class PageRecord(QWidget):
         self.btn_delete_latest_sample.setEnabled(True)
         self.combo_spell.setEnabled(True)
 
-        self.lbl_wand_status.setText("● RECORDING STOPPED - Select region to snip")
+        self.lbl_wand_status.setText(f"● {tr_ui('record_stopped_snip')}")
         self.lbl_wand_status.setStyleSheet(
             STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
         )
@@ -414,7 +420,7 @@ class PageRecord(QWidget):
         # Get spell name from combo
         spell_name = self.combo_spell.currentText().strip()
         if not spell_name:
-            self.lbl_wand_status.setText("⚠ Enter a spell name first!")
+            self.lbl_wand_status.setText(f"⚠ {tr_ui('record_enter_spell')}")
             self.lbl_wand_status.setStyleSheet(
                 STYLE_RECORD_STATUS_TEMPLATE.format(color=DANGER)
             )
@@ -422,7 +428,7 @@ class PageRecord(QWidget):
 
         region = self.crop_region.getRegion()
         if len(region) < 2:
-            self.lbl_wand_status.setText("⚠ Invalid crop region")
+            self.lbl_wand_status.setText(f"⚠ {tr_ui('record_invalid_crop')}")
             self.lbl_wand_status.setStyleSheet(
                 STYLE_RECORD_STATUS_TEMPLATE.format(color=DANGER)
             )
@@ -452,13 +458,13 @@ class PageRecord(QWidget):
             cropped_6d = buf[min_idx:max_idx]
             self.sig_data_cropped.emit(cropped_6d, spell_name)
             self.lbl_wand_status.setText(
-                f"✂ Snipped {max_idx - min_idx} samples → {spell_name}"
+                tr_ui("record_snipped", n=max_idx - min_idx, name=spell_name)
             )
             self.lbl_wand_status.setStyleSheet(
                 STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
             )
         else:
-            self.lbl_wand_status.setText("⚠ Invalid selection range")
+            self.lbl_wand_status.setText(f"⚠ {tr_ui('record_invalid_range')}")
             self.lbl_wand_status.setStyleSheet(
                 STYLE_RECORD_STATUS_TEMPLATE.format(color=DANGER)
             )
@@ -487,10 +493,10 @@ class PageRecord(QWidget):
         """Clear all recorded samples from current buffer."""
         if not confirm_destructive(
             self,
-            title="Clear Recorded Samples",
-            message="Clear all currently recorded samples?\n\nThis action cannot be undone.",
-            confirm_text="Clear All",
-            cancel_text="Keep Samples",
+            title=tr_ui("record_clear_title"),
+            message=tr_ui("record_clear_msg"),
+            confirm_text=tr_ui("record_clear_confirm"),
+            cancel_text=tr_ui("record_clear_cancel"),
         ):
             return
         
@@ -501,7 +507,7 @@ class PageRecord(QWidget):
         self.crop_region.setRegion([30, 120])
         self.is_live = True
         self.crop_region.hide()
-        self.lbl_wand_status.setText("✔ Recording buffer cleared")
+        self.lbl_wand_status.setText(f"✔ {tr_ui('record_cleared')}")
         self.lbl_wand_status.setStyleSheet(
             STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
         )
@@ -510,14 +516,14 @@ class PageRecord(QWidget):
         """Export current recorded samples to CSV file."""
         buf = self.store.get_live_buffer_snapshot()
         if not buf:
-            self.lbl_wand_status.setText("⚠ No samples to export")
+            self.lbl_wand_status.setText(f"⚠ {tr_ui('record_no_export')}")
             self.lbl_wand_status.setStyleSheet(
                 STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
             )
             return
 
         self.sig_export_csv.emit()
-        self.lbl_wand_status.setText(f"💾 Exporting {len(buf)} samples...")
+        self.lbl_wand_status.setText(tr_ui("record_exporting", n=len(buf)))
         self.lbl_wand_status.setStyleSheet(
             STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
         )
@@ -526,7 +532,7 @@ class PageRecord(QWidget):
         """Quick-delete the newest recorded CSV sample for the active spell."""
         spell_name = self.current_spell_name.strip() or self.combo_spell.currentText().strip()
         if not spell_name:
-            self.lbl_wand_status.setText("⚠ Select a spell to delete its latest sample")
+            self.lbl_wand_status.setText(f"⚠ {tr_ui('record_select_delete_spell')}")
             self.lbl_wand_status.setStyleSheet(
                 STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
             )
@@ -534,14 +540,14 @@ class PageRecord(QWidget):
 
         samples = self.store.get_samples_for_spell(spell_name)
         if not samples:
-            self.lbl_wand_status.setText(f"⚠ No saved samples found for {spell_name}")
+            self.lbl_wand_status.setText(f"⚠ {tr_ui('record_no_samples_spell', name=spell_name)}")
             self.lbl_wand_status.setStyleSheet(
                 STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
             )
             return
 
         self.sig_delete_latest_sample.emit(spell_name)
-        self.lbl_wand_status.setText(f"🗑 Deleting latest sample from {spell_name}...")
+        self.lbl_wand_status.setText(tr_ui("record_deleting_latest", name=spell_name))
         self.lbl_wand_status.setStyleSheet(
             STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
         )
@@ -549,7 +555,7 @@ class PageRecord(QWidget):
     def set_quick_delete_feedback(self, success: bool, message: str) -> None:
         """Display status feedback after quick sample deletion."""
         if success:
-            self.lbl_wand_status.setText("✔ Latest sample deleted")
+            self.lbl_wand_status.setText(f"✔ {tr_ui('record_deleted_latest')}")
             self.lbl_wand_status.setStyleSheet(
                 STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
             )
@@ -561,13 +567,13 @@ class PageRecord(QWidget):
 
     def _on_spell_list_clicked(self, item) -> None:
         """Handle spell list item click: auto-select spell in combo and emit signal."""
-        spell_name = str(item.data(Qt.ItemDataRole.UserRole) or item.text())
-        if spell_name == self._spell_list_empty_label:
+        if item.data(Qt.ItemDataRole.UserRole) == _EMPTY_SPELL_LIST:
             return
+        spell_name = str(item.data(Qt.ItemDataRole.UserRole) or item.text())
         if is_system_spell(spell_name):
-            self.btn_delete_spell.setToolTip("STAND BY is protected and cannot be deleted")
+            self.btn_delete_spell.setToolTip(tr_ui("record_tt_standby"))
         else:
-            self.btn_delete_spell.setToolTip("Delete selected spell")
+            self.btn_delete_spell.setToolTip(tr_ui("record_tt_delete_spell"))
         # Auto-select in combo box
         idx = self.combo_spell.findText(spell_name)
         if idx >= 0:
@@ -580,12 +586,16 @@ class PageRecord(QWidget):
         # Get selected spell
         current_item = self.spell_list.currentItem()
         if not current_item:
-            QMessageBox.critical(self, "No Selection", "Please select a spell to delete from the list.")
+            QMessageBox.critical(
+                self,
+                tr_ui("record_no_selection_title"),
+                tr_ui("record_no_selection_msg"),
+            )
             return
 
-        spell_name = str(current_item.data(Qt.ItemDataRole.UserRole) or current_item.text())
-        if spell_name == self._spell_list_empty_label:
+        if current_item.data(Qt.ItemDataRole.UserRole) == _EMPTY_SPELL_LIST:
             return
+        spell_name = str(current_item.data(Qt.ItemDataRole.UserRole) or current_item.text())
         if is_system_spell(spell_name):
             self.show_protected_spell_warning(canonical_system_spell(spell_name))
             return
@@ -593,25 +603,19 @@ class PageRecord(QWidget):
         # First confirmation dialog
         if not confirm_destructive(
             self,
-            title="Delete Spell - Step 1",
-            message=(
-                f"Delete the spell '{spell_name}' and its training samples?\n\n"
-                "This removes the item from the visible library and prepares the final check."
-            ),
-            confirm_text="Continue",
-            cancel_text="Keep Spell",
+            title=tr_ui("record_del_step1_title"),
+            message=tr_ui("record_del_step1_msg", name=spell_name),
+            confirm_text=tr_ui("record_del_continue"),
+            cancel_text=tr_ui("record_del_keep"),
         ):
             return
 
         if confirm_destructive(
             self,
-            title="Delete Spell - Step 2",
-            message=(
-                f"Final check: delete '{spell_name}' and all training data?\n\n"
-                "This action cannot be recovered."
-            ),
-            confirm_text="Delete Spell",
-            cancel_text="Cancel",
+            title=tr_ui("record_del_step2_title"),
+            message=tr_ui("record_del_step2_msg", name=spell_name),
+            confirm_text=tr_ui("record_del_final"),
+            cancel_text=tr_ui("record_del_abort"),
         ):
             self.sig_spell_deleted.emit(spell_name)
 
@@ -620,10 +624,10 @@ class PageRecord(QWidget):
         canonical_name = canonical_system_spell(spell_name)
         QMessageBox.warning(
             self,
-            "Protected Spell",
-            f"{canonical_name} is a system spell and cannot be deleted.",
+            tr_ui("record_protected_title"),
+            tr_ui("record_protected_msg", name=canonical_name),
         )
-        self.lbl_wand_status.setText(f"⚠ {canonical_name} is protected")
+        self.lbl_wand_status.setText(f"⚠ {tr_ui('record_spell_protected', name=canonical_name)}")
         self.lbl_wand_status.setStyleSheet(
             STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
         )
@@ -666,16 +670,16 @@ class PageRecord(QWidget):
         top_row = QHBoxLayout()
         top_row.setContentsMargins(0, 0, 0, 0)
         top_row.setSpacing(SPACING_MD)
-        self.lbl_wand_status = QLabel("● WAITING FOR SERIAL")
+        self.lbl_wand_status = QLabel(f"● {tr_ui('record_wait_serial')}")
         self.lbl_wand_status.setStyleSheet(
             STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
         )
-        lbl_timeline = make_section_label("TIMELINE:", accent_color=ACCENT)
-        lbl_timeline.setAlignment(
+        self.lbl_timeline = make_section_label(tr_ui("record_timeline"), accent_color=ACCENT)
+        self.lbl_timeline.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
         top_row.addWidget(self.lbl_wand_status)
-        top_row.addWidget(lbl_timeline)
+        top_row.addWidget(self.lbl_timeline)
         layout.addLayout(top_row)
 
         # Graph card - modern card with shadow
@@ -703,16 +707,16 @@ class PageRecord(QWidget):
         bottom_row = QHBoxLayout()
         bottom_row.setContentsMargins(0, 0, 0, 0)
         bottom_row.setSpacing(SPACING_MD)
-        self.chk_graph1 = make_checkbox("SHOW ACCEL (aX, aY, aZ)", checked=True)
-        self.chk_graph2 = make_checkbox("SHOW GYRO (gX, gY, gZ)", checked=True)
+        self.chk_graph1 = make_checkbox(tr_ui("record_show_accel"), checked=True)
+        self.chk_graph2 = make_checkbox(tr_ui("record_show_gyro"), checked=True)
         
         # Add zoom controls
         self.btn_zoom_in = make_button("🔍+", STYLE_BTN_BASE, BTN_H)
         self.btn_zoom_out = make_button("🔍-", STYLE_BTN_BASE, BTN_H)
         self.btn_zoom_fit = make_button("🔍□", STYLE_BTN_BASE, BTN_H)
-        self.btn_zoom_in.setToolTip("Zoom in on plots")
-        self.btn_zoom_out.setToolTip("Zoom out on plots")
-        self.btn_zoom_fit.setToolTip("Fit plots to data")
+        self.btn_zoom_in.setToolTip(tr_ui("record_tt_zoom_in"))
+        self.btn_zoom_out.setToolTip(tr_ui("record_tt_zoom_out"))
+        self.btn_zoom_fit.setToolTip(tr_ui("record_tt_fit"))
         
         bottom_row.addWidget(self.chk_graph1, stretch=1)
         bottom_row.addWidget(self.chk_graph2, stretch=1)
@@ -732,7 +736,8 @@ class PageRecord(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_LG)
 
-        layout.addWidget(make_section_label("TOOLBAR", accent_color=ACCENT))
+        self._section_toolbar = make_section_label(tr_ui("record_toolbar"), accent_color=ACCENT)
+        layout.addWidget(self._section_toolbar)
 
         # Details card with modern shadow
         detail_card = make_card_frame()
@@ -750,20 +755,22 @@ class PageRecord(QWidget):
         self.combo_spell = QComboBox()
         self.combo_spell.setEditable(True)
         self.combo_spell.setStyleSheet(STYLE_RECORD_COMBO)
-        self.combo_spell.setPlaceholderText("Type or select spell name...")
+        self.combo_spell.setPlaceholderText(tr_ui("record_spell_placeholder"))
         self.combo_spell.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
-        lbl_spell = QLabel("Spell label:")
-        lbl_spell.setStyleSheet(STYLE_RECORD_FIELD_LABEL)
+        self._lbl_spell = QLabel(tr_ui("record_spell_label"))
+        self._lbl_spell.setStyleSheet(STYLE_RECORD_FIELD_LABEL)
 
-        detail_form.addRow(lbl_spell, self.combo_spell)
+        detail_form.addRow(self._lbl_spell, self.combo_spell)
         detail_layout.addLayout(detail_form)
 
         count_grid = QGridLayout()
         count_grid.setHorizontalSpacing(SPACING_MD)
         count_grid.setVerticalSpacing(SPACING_SM)
-        count_grid.addWidget(make_hint("Recorded", color=TEXT_MUTED), 0, 0)
-        count_grid.addWidget(make_hint("Duration", color=TEXT_MUTED), 0, 1)
+        self._hint_recorded = make_hint(tr_ui("record_hint_recorded"), color=TEXT_MUTED)
+        self._hint_duration = make_hint(tr_ui("record_hint_duration"), color=TEXT_MUTED)
+        count_grid.addWidget(self._hint_recorded, 0, 0)
+        count_grid.addWidget(self._hint_duration, 0, 1)
 
         self.lbl_record_count = QLabel("0")
         self.lbl_record_count.setStyleSheet(STYLE_RECORD_METRIC_VALUE)
@@ -785,16 +792,16 @@ class PageRecord(QWidget):
         btn_row = QGridLayout()
         btn_row.setHorizontalSpacing(SPACING_SM)
         btn_row.setVerticalSpacing(SPACING_SM)
-        self.btn_start = make_button("▶ START", STYLE_BTN_START, BTN_H)
-        self.btn_stop  = make_button("■ STOP",  STYLE_BTN_STOP,  BTN_H)
-        self.btn_snip  = make_button("✌ SNIP",  STYLE_BTN_SNIP,  BTN_H)
+        self.btn_start = make_button(tr_ui("record_btn_start"), STYLE_BTN_START, BTN_H)
+        self.btn_stop  = make_button(tr_ui("record_btn_stop"),  STYLE_BTN_STOP,  BTN_H)
+        self.btn_snip  = make_button(tr_ui("record_btn_snip"),  STYLE_BTN_SNIP,  BTN_H)
         self.btn_stop.setEnabled(False)
         self.btn_snip.setEnabled(False)
         
         # Add tooltips for better UX (include keyboard shortcuts)
-        self.btn_start.setToolTip("Start recording sensor data (Ctrl+S)")
-        self.btn_stop.setToolTip("Stop recording and enable snipping (Ctrl+T)")
-        self.btn_snip.setToolTip("Save selected region as a training sample (Ctrl+X)")
+        self.btn_start.setToolTip(tr_ui("record_tt_start"))
+        self.btn_stop.setToolTip(tr_ui("record_tt_stop"))
+        self.btn_snip.setToolTip(tr_ui("record_tt_snip"))
         
         btn_row.addWidget(self.btn_start, 0, 0)
         btn_row.addWidget(self.btn_stop, 0, 1)
@@ -802,8 +809,8 @@ class PageRecord(QWidget):
         ctrl_layout.addLayout(btn_row)
 
         # Hint
-        lbl_hint = make_hint("START -> plot live (Ctrl+S)  |  STOP -> freeze & drag (Ctrl+T)  |  SNIP -> save (Ctrl+X)")
-        ctrl_layout.addWidget(lbl_hint)
+        self._hint_controls = make_hint(tr_ui("record_hint_controls"))
+        ctrl_layout.addWidget(self._hint_controls)
 
         layout.addWidget(controls_card)
 
@@ -819,29 +826,30 @@ class PageRecord(QWidget):
         batch_layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
         batch_layout.setSpacing(SPACING_MD)
 
-        batch_layout.addWidget(make_section_label("BATCH OPERATIONS", accent_color=TEXT_BODY))
+        self._section_batch = make_section_label(tr_ui("record_batch"), accent_color=TEXT_BODY)
+        batch_layout.addWidget(self._section_batch)
 
         batch_btn_row = QGridLayout()
         batch_btn_row.setHorizontalSpacing(SPACING_SM)
         batch_btn_row.setVerticalSpacing(SPACING_SM)
 
         self.btn_clear_samples = make_button(
-            "🗑 CLEAR", 
-            STYLE_BTN_DANGER_OUTLINE, 
+            tr_ui("record_btn_clear"),
+            STYLE_BTN_DANGER_OUTLINE,
             BTN_H,
         )
-        self.btn_clear_samples.setToolTip("Clear all currently recorded samples")
+        self.btn_clear_samples.setToolTip(tr_ui("record_tt_clear"))
 
-        self.btn_export_csv = make_button("💾 EXPORT", STYLE_BTN_BASE, BTN_H)
-        self.btn_export_csv.setToolTip("Export recorded samples as CSV")
+        self.btn_export_csv = make_button(tr_ui("record_btn_export"), STYLE_BTN_BASE, BTN_H)
+        self.btn_export_csv.setToolTip(tr_ui("record_tt_export"))
 
         self.btn_delete_latest_sample = make_button(
-            "🗑 DELETE LATEST",
+            tr_ui("record_btn_delete_latest"),
             STYLE_BTN_DANGER_OUTLINE,
             BTN_H,
         )
         self.btn_delete_latest_sample.setToolTip(
-            "Quick delete the most recently saved sample for current spell"
+            tr_ui("record_tt_delete_latest")
         )
 
         batch_btn_row.addWidget(self.btn_delete_latest_sample, 0, 0)
@@ -858,7 +866,8 @@ class PageRecord(QWidget):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_MD)
-        layout.addWidget(make_section_label("SPELL LIBRARY", accent_color=TEXT_BODY))
+        self._section_spell_library = make_section_label(tr_ui("record_spell_list"), accent_color=TEXT_BODY)
+        layout.addWidget(self._section_spell_library)
         
         # Spell list
         self.spell_list = QListWidget()
@@ -868,9 +877,9 @@ class PageRecord(QWidget):
         
         # Delete button at bottom
         self.btn_delete_spell = make_button(
-            "DELETE SPELL", STYLE_BTN_DANGER_OUTLINE, SPELL_BTN_H
+            tr_ui("record_delete_spell_btn"), STYLE_BTN_DANGER_OUTLINE, SPELL_BTN_H
         )
-        self.btn_delete_spell.setToolTip("Delete selected spell")
+        self.btn_delete_spell.setToolTip(tr_ui("record_tt_delete_spell"))
         layout.addWidget(self.btn_delete_spell)
         return page
 
@@ -882,8 +891,8 @@ class PageRecord(QWidget):
         top_row = QHBoxLayout()
         top_row.setContentsMargins(0, 0, 0, 0)
         top_row.setSpacing(SPACING_SM)
-        self.btn_back_spells = make_button("◀ BACK", STYLE_BTN_BACK, SPELL_BTN_H)
-        self.lbl_current_spell = QLabel("SAMPLES: …")
+        self.btn_back_spells = make_button(tr_ui("record_btn_back"), STYLE_BTN_BACK, SPELL_BTN_H)
+        self.lbl_current_spell = QLabel(tr_ui("record_spell_samples", name="…"))
         self.lbl_current_spell.setStyleSheet(
             STYLE_RECORD_CURRENT_SPELL
         )
@@ -931,6 +940,54 @@ class PageRecord(QWidget):
         self._plot_timer = QTimer(self)
         self._plot_timer.timeout.connect(self._render_plots)
         self._plot_timer.start(33)  # ~30 FPS
+
+    def apply_ui_language(self) -> None:
+        """Refresh visible strings after app language change."""
+        self.lbl_timeline.setText(tr_ui("record_timeline"))
+        self._section_toolbar.setText(tr_ui("record_toolbar"))
+        self._lbl_spell.setText(tr_ui("record_spell_label"))
+        self.combo_spell.setPlaceholderText(tr_ui("record_spell_placeholder"))
+        self._hint_recorded.setText(tr_ui("record_hint_recorded"))
+        self._hint_duration.setText(tr_ui("record_hint_duration"))
+        self.chk_graph1.setText(tr_ui("record_show_accel"))
+        self.chk_graph2.setText(tr_ui("record_show_gyro"))
+        self.btn_zoom_in.setToolTip(tr_ui("record_tt_zoom_in"))
+        self.btn_zoom_out.setToolTip(tr_ui("record_tt_zoom_out"))
+        self.btn_zoom_fit.setToolTip(tr_ui("record_tt_fit"))
+        self.btn_start.setText(tr_ui("record_btn_start"))
+        self.btn_stop.setText(tr_ui("record_btn_stop"))
+        self.btn_snip.setText(tr_ui("record_btn_snip"))
+        self.btn_start.setToolTip(tr_ui("record_tt_start"))
+        self.btn_stop.setToolTip(tr_ui("record_tt_stop"))
+        self.btn_snip.setToolTip(tr_ui("record_tt_snip"))
+        self._hint_controls.setText(tr_ui("record_hint_controls"))
+        self._section_batch.setText(tr_ui("record_batch"))
+        self.btn_clear_samples.setText(tr_ui("record_btn_clear"))
+        self.btn_clear_samples.setToolTip(tr_ui("record_tt_clear"))
+        self.btn_export_csv.setText(tr_ui("record_btn_export"))
+        self.btn_export_csv.setToolTip(tr_ui("record_tt_export"))
+        self.btn_delete_latest_sample.setText(tr_ui("record_btn_delete_latest"))
+        self.btn_delete_latest_sample.setToolTip(tr_ui("record_tt_delete_latest"))
+        self._section_spell_library.setText(tr_ui("record_spell_list"))
+        self.btn_delete_spell.setText(tr_ui("record_delete_spell_btn"))
+        self.btn_delete_spell.setToolTip(tr_ui("record_tt_delete_spell"))
+        self.btn_back_spells.setText(tr_ui("record_btn_back"))
+        self.graph1.setLabel("left", tr_ui("record_axis_accel_left"), color=TEXT_BODY)
+        self.graph1.setLabel("bottom", tr_ui("record_axis_bottom"), color=TEXT_BODY)
+        self.graph2.setLabel("left", tr_ui("record_axis_gyro_left"), color=TEXT_BODY)
+        self.graph2.setLabel("bottom", tr_ui("record_axis_bottom"), color=TEXT_BODY)
+        for i in range(self.spell_list.count()):
+            it = self.spell_list.item(i)
+            if it is not None and it.data(Qt.ItemDataRole.UserRole) == _EMPTY_SPELL_LIST:
+                it.setText(tr_ui("record_list_empty"))
+                break
+        for i in range(self.sample_list.count()):
+            it = self.sample_list.item(i)
+            if it is not None and it.data(Qt.ItemDataRole.UserRole) == self._sample_list_empty_sentinel:
+                it.setText(tr_ui("record_sample_empty"))
+                break
+        if self.current_spell_name:
+            self.lbl_current_spell.setText(tr_ui("record_spell_samples", name=self.current_spell_name))
 
     def _configure_accessibility(self) -> None:
         """Đặt accessible names và thứ tự tab traversal cho các control."""

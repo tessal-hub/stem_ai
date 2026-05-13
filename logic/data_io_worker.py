@@ -23,7 +23,6 @@ connecting cross-thread).
 from __future__ import annotations
 
 import csv
-import glob as glob_module
 import logging
 import os
 import queue
@@ -31,7 +30,8 @@ from datetime import datetime
 from pathlib import Path
 
 from PyQt6.QtCore import QThread, pyqtSignal
-from constants import canonical_system_spell, is_system_spell, normalize_spell_name
+from constants import is_system_spell
+from .dataset_layout import discover_class_directories, spell_write_dir, storage_dirs_for_spell
 
 log = logging.getLogger(__name__)
 
@@ -177,15 +177,13 @@ class DataIOWorker(QThread):
 
     def _do_save(self, spell_name: str, data: list[list[float]]) -> None:
         try:
-            normalized_name = normalize_spell_name(spell_name)
-            folder_name = canonical_system_spell(normalized_name)
-            folder = os.path.join(self._dataset_dir, folder_name)
-            os.makedirs(folder, exist_ok=True)
+            folder = spell_write_dir(Path(self._dataset_dir), spell_name)
+            folder.mkdir(parents=True, exist_ok=True)
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-            file_path = os.path.join(folder, f"sample_{timestamp}.csv")
+            file_path = folder / f"sample_{timestamp}.csv"
 
-            with open(file_path, mode="w", newline="") as f:
+            with open(file_path, mode="w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
                 writer.writerow(["ax", "ay", "az", "gx", "gy", "gz"])
                 writer.writerows(data)
@@ -204,16 +202,17 @@ class DataIOWorker(QThread):
                 self.sig_delete_done.emit(False, f"Protected system spell cannot be deleted: {spell_name}")
                 return
 
-            spell_path = os.path.join(self._dataset_dir, normalize_spell_name(spell_name))
-            if not os.path.exists(spell_path):
+            dirs = storage_dirs_for_spell(Path(self._dataset_dir), spell_name)
+            if not dirs:
                 self.sig_delete_done.emit(False, f"Spell not found: {spell_name}")
                 return
 
-            for filename in os.listdir(spell_path):
-                file_path = os.path.join(spell_path, filename)
-                if os.path.isfile(file_path):
-                    os.remove(file_path)
-            os.rmdir(spell_path)
+            for spell_path in dirs:
+                for filename in os.listdir(spell_path):
+                    file_path = os.path.join(spell_path, filename)
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                os.rmdir(spell_path)
 
             counts = self._scan_database()
             self.sig_db_refreshed.emit(counts)
@@ -226,16 +225,17 @@ class DataIOWorker(QThread):
     def _do_delete_latest_sample(self, spell_name: str) -> None:
         """Delete the most recently named sample CSV under one spell folder."""
         try:
-            normalized_name = normalize_spell_name(spell_name)
-            folder_name = canonical_system_spell(normalized_name)
-            spell_path = Path(self._dataset_dir) / folder_name
-            if not spell_path.exists() or not spell_path.is_dir():
-                self.sig_delete_sample_done.emit(False, f"Spell not found: {folder_name}")
+            dirs = storage_dirs_for_spell(Path(self._dataset_dir), spell_name)
+            if not dirs:
+                self.sig_delete_sample_done.emit(False, f"Spell not found: {spell_name}")
                 return
 
-            csv_files = sorted(spell_path.glob("*.csv"))
+            csv_files: list[Path] = []
+            for d in dirs:
+                csv_files.extend(d.glob("*.csv"))
+            csv_files = sorted(csv_files, key=lambda p: p.name)
             if not csv_files:
-                self.sig_delete_sample_done.emit(False, f"No samples found in {folder_name}")
+                self.sig_delete_sample_done.emit(False, f"No samples found for {spell_name}")
                 return
 
             latest_file = csv_files[-1]
@@ -245,7 +245,7 @@ class DataIOWorker(QThread):
             self.sig_db_refreshed.emit(counts)
             self.sig_delete_sample_done.emit(
                 True,
-                f"Deleted latest sample: {folder_name}/{latest_file.name}",
+                f"Deleted latest sample: {latest_file.parent.name}/{latest_file.name}",
             )
         except Exception as exc:
             msg = f"Delete latest sample failed: {type(exc).__name__}: {exc}"
@@ -272,11 +272,13 @@ class DataIOWorker(QThread):
     def _scan_database(self) -> dict[str, int]:
         """Return {spell_name: csv_file_count} for the dataset directory."""
         counts: dict[str, int] = {}
-        if not os.path.exists(self._dataset_dir):
+        root = Path(self._dataset_dir)
+        if not root.exists():
             return counts
-        for item in os.listdir(self._dataset_dir):
-            spell_path = os.path.join(self._dataset_dir, item)
-            if os.path.isdir(spell_path):
-                csv_files = glob_module.glob(os.path.join(spell_path, "*.csv"))
-                counts[item] = len(csv_files)
+        class_map = discover_class_directories(root)
+        for name, paths in class_map.items():
+            total = 0
+            for p in paths:
+                total += len(list(p.glob("*.csv")))
+            counts[name] = total
         return counts

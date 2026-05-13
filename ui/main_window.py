@@ -23,7 +23,9 @@ from ui.page_statistics import PageStatistics
 from ui.page_primitive_collect import PagePrimitiveCollect
 from ui.page_wand import PageWand
 from ui.page_setting import PageSetting
+from ui.i18n_bridge import tr_ui
 from logic.udp_worker import UdpWorker
+from logic.locale_manager import locale_manager
 
 log = logging.getLogger(__name__)
 
@@ -47,6 +49,7 @@ class MainWindow(QMainWindow):
         self._init_ui()
         self._init_signals()
         self._load_data()
+        self._apply_ui_language()
 
     # ------------------------------------------------------------------
     # Khởi tạo giao diện
@@ -125,6 +128,8 @@ class MainWindow(QMainWindow):
         self.data_store.sig_sensor_data_updated.connect(
             self._on_sensor_data_for_3d
         )
+
+        locale_manager.language_changed.connect(self._apply_ui_language)
 
     # ------------------------------------------------------------------
     # Nạp dữ liệu ban đầu
@@ -256,3 +261,14 @@ class MainWindow(QMainWindow):
     def _on_settings_saved(self, config: dict) -> None:
         """Lưu settings qua DataStore khi người dùng bấm Save."""
         self.data_store.save_settings(config)
+
+    def _apply_ui_language(self, _lang: str | None = None) -> None:
+        """Refresh window chrome and all pages after locale change."""
+        self.setWindowTitle(tr_ui("win_title"))
+        self.shell.apply_ui_language()
+        self.page_home.apply_ui_language()
+        self.page_record.apply_ui_language()
+        self.page_statistics.apply_ui_language()
+        self.page_primitive_collect.apply_ui_language()
+        self.page_wand.apply_ui_language()
+        self.page_setting.apply_ui_language()

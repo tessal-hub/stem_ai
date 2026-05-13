@@ -13,34 +13,13 @@ __pycache__/
 .pytest_cache/
 .worktrees/
 
+# App local data (ignore everything except what we want to track)
 app_data/
+
+# Dataset (Tracked at root)
+!dataset/
 
 # Build artifacts
 build/
 dist/
 *.spec
-app_data/dataset/CHAT/sample_20260430_110853_823093.csv
-app_data/dataset/STAND BY/sample_20260430_110921_981208.csv
-app_data/dataset/STAND BY/sample_20260430_110948_885217.csv
-app_data/dataset/STAND BY/sample_20260430_111018_815367.csv
-app_data/dataset/STAND BY/sample_20260430_111037_538420.csv
-app_data/dataset/STAND BY/sample_20260430_111054_642362.csv
-app_data/dataset/STAND BY/sample_20260430_111056_115539.csv
-app_data/dataset/STAND BY/sample_20260430_111101_097219.csv
-app_data/dataset/STAND BY/sample_20260430_111119_131206.csv
-app_data/dataset/WAVE/sample_20260430_111155_351276.csv
-app_data/dataset/WAVE/sample_20260430_111230_265458.csv
-app_data/dataset/WAVE/sample_20260430_111241_415764.csv
-app_data/dataset/WAVE/sample_20260430_111252_926866.csv
-app_data/dataset/WAVE/sample_20260430_111301_925034.csv
-app_data/dataset/WAVE/sample_20260430_111317_499070.csv
-app_data/dataset/WAVE/sample_20260430_111324_855965.csv
-app_data/dataset/WAVE/sample_20260430_111332_069914.csv
-app_data/dataset/WAVE/sample_20260430_111340_015236.csv
-app_data/dataset/WAVE/sample_20260430_111348_357861.csv
-app_data/dataset/WAVE/sample_20260430_111354_106499.csv
-app_data/dataset/WAVE/sample_20260430_111401_117897.csv
-app_data/dataset/WAVE/sample_20260430_111510_442102.csv
-app_data/standalone_gesture_model/gesture_model.cc
-app_data/standalone_gesture_model/gesture_model.h5
-app_data/standalone_gesture_model/gesture_model.tflite

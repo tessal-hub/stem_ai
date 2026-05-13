@@ -5,6 +5,8 @@ from typing import Callable, Sequence
 
 import numpy as np
 
+from ..dataset_layout import discover_class_directories, folder_name_match_key
+
 from .pipeline import _read_csv_rows, _windowize
 
 
@@ -218,16 +220,25 @@ def load_primitive_dataset(
     if not root.exists():
         raise FileNotFoundError(f"Dataset path not found: {root}")
 
+    class_map = discover_class_directories(root)
+
     X_list: list[np.ndarray] = []
     y_list: list[int] = []
     class_names: list[str] = []
 
     for name in primitive_names:
-        class_dir = root / name
-        if not class_dir.exists() or not class_dir.is_dir():
+        want = folder_name_match_key(name)
+        dirs: list[Path] = []
+        for key, paths in class_map.items():
+            if folder_name_match_key(key) == want:
+                dirs.extend(paths)
+        if not dirs:
             continue
 
-        csv_files = sorted(class_dir.glob("*.csv"))
+        csv_files: list[Path] = []
+        for class_dir in dirs:
+            csv_files.extend(sorted(class_dir.glob("*.csv")))
+        csv_files.sort(key=lambda p: p.as_posix())
         if not csv_files:
             continue
 

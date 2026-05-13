@@ -54,6 +54,7 @@ from ui.component_factory import (
 )
 from ui.layout_utils import clear_layout
 from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_LG, SPACING_MD, SPACING_SM
+from ui.i18n_bridge import tr_ui
 
 
 class ClickableFrame(QFrame):
@@ -79,37 +80,49 @@ class PageStatistics(QWidget):
     sig_spell_selected = pyqtSignal(str)
     sig_sample_opened = pyqtSignal(str)
     sig_train_build_requested = pyqtSignal()
+    sig_health_audit_requested = pyqtSignal()
 
     def __init__(self, data_store) -> None:
         super().__init__()
         self.data_store = data_store
         self._spell_cards_layout: QVBoxLayout | None = None
+        self._last_features: dict = {}
 
         self._init_ui()
         self._init_signals()
         self._configure_accessibility()
         self._load_data()
 
+    def apply_ui_language(self) -> None:
+        """Re-apply FFT / feature strings after locale change."""
+        self.fft_placeholder.setText(tr_ui("stats_fft_wait_features"))
+        self.fft_plot.setLabel("left", tr_ui("stats_plot_fft_mag"), color=TEXT_MUTED)
+        self.fft_plot.setLabel("bottom", tr_ui("stats_plot_freq"), color=TEXT_MUTED)
+        self.update_live_features(self._last_features)
+
     def update_live_features(self, features: dict) -> None:
+        self._last_features = dict(features) if features else {}
         if not features:
-            self.lbl_accel_stats.setText("Accel: mean --  var --  rms --")
-            self.lbl_gyro_stats.setText("Gyro: mean --  var --  rms --")
-            self.lbl_dominant_freq.setText("Dominant: waiting for data")
+            self.lbl_accel_stats.setText(tr_ui("stats_placeholder_accel"))
+            self.lbl_gyro_stats.setText(tr_ui("stats_placeholder_gyro"))
+            self.lbl_dominant_freq.setText(tr_ui("stats_dominant_wait"))
             self.fft_stack.setCurrentWidget(self.fft_placeholder)
             return
 
         self.lbl_accel_stats.setText(
-            "Accel: mean {accel_mean:.3f}  var {accel_var:.3f}  rms {accel_rms:.3f}".format(
-                accel_mean=features.get("accel_mean", 0.0),
-                accel_var=features.get("accel_var", 0.0),
-                accel_rms=features.get("accel_rms", 0.0),
+            tr_ui(
+                "stats_accel_tpl",
+                m=features.get("accel_mean", 0.0),
+                v=features.get("accel_var", 0.0),
+                r=features.get("accel_rms", 0.0),
             )
         )
         self.lbl_gyro_stats.setText(
-            "Gyro: mean {gyro_mean:.3f}  var {gyro_var:.3f}  rms {gyro_rms:.3f}".format(
-                gyro_mean=features.get("gyro_mean", 0.0),
-                gyro_var=features.get("gyro_var", 0.0),
-                gyro_rms=features.get("gyro_rms", 0.0),
+            tr_ui(
+                "stats_gyro_tpl",
+                m=features.get("gyro_mean", 0.0),
+                v=features.get("gyro_var", 0.0),
+                r=features.get("gyro_rms", 0.0),
             )
         )
 
@@ -121,13 +134,13 @@ class PageStatistics(QWidget):
             try:
                 max_idx = mags.index(max(mags))
                 dominant_freq = freqs[max_idx]
-                self.lbl_dominant_freq.setText(f"Dominant: {dominant_freq:.1f} Hz")
+                self.lbl_dominant_freq.setText(tr_ui("stats_dominant_hz", f=dominant_freq))
             except (ValueError, IndexError):
-                self.lbl_dominant_freq.setText("Dominant: -- Hz")
+                self.lbl_dominant_freq.setText(tr_ui("stats_dominant_na"))
             self.fft_stack.setCurrentWidget(self.fft_plot)
             return
 
-        self.lbl_dominant_freq.setText("Dominant: spectrum unavailable")
+        self.lbl_dominant_freq.setText(tr_ui("stats_fft_unavailable"))
         self.fft_stack.setCurrentWidget(self.fft_placeholder)
 
     def update_spell_stats(self, spell_counts: dict[str, int]) -> None:
@@ -140,8 +153,8 @@ class PageStatistics(QWidget):
         sorted_spells = sorted(spell_counts.items(), key=lambda x: x[1], reverse=True)
         if not sorted_spells:
             self.mastery_stack.setCurrentWidget(self.mastery_empty_state)
-            self.lbl_total_samples.setText("TOTAL SAMPLES: 0")
-            self.lbl_total_spells.setText("ACTIVE SPELLS: 0")
+            self.lbl_total_samples.setText(tr_ui("stats_total_samples", n=0))
+            self.lbl_total_spells.setText(tr_ui("stats_active_spells", n=0))
             return
 
         self.mastery_stack.setCurrentWidget(self.mastery_scroll)
@@ -152,16 +165,16 @@ class PageStatistics(QWidget):
             
         target_layout.addStretch()
         total = sum(spell_counts.values())
-        self.lbl_total_samples.setText(f"TOTAL SAMPLES: {total}")
-        self.lbl_total_spells.setText(f"ACTIVE SPELLS: {len(spell_counts)}")
+        self.lbl_total_samples.setText(tr_ui("stats_total_samples", n=total))
+        self.lbl_total_spells.setText(tr_ui("stats_active_spells", n=len(spell_counts)))
 
     def load_samples_for_spell(self, spell_name: str, samples: list[str]) -> None:
-        self.lbl_current_spell.setText(f"SAMPLES: {spell_name}")
+        self.lbl_current_spell.setText(tr_ui("record_spell_samples", name=spell_name))
         self.sample_list.clear()
         if samples:
             self.sample_list.addItems(samples)
         else:
-            self.sample_list.addItem("No samples for this spell yet. Record one from the Record screen.")
+            self.sample_list.addItem(tr_ui("stats_no_samples_line"))
         self.stacked_spells.setCurrentIndex(1)
 
     def _init_ui(self) -> None:
@@ -240,11 +253,13 @@ class PageStatistics(QWidget):
         self.model_progress.setFormat("%p%")
 
         self.btn_train_build = make_primary_button("TRAIN + BUILD GESTURE MODEL")
+        self.btn_health_audit = make_outline_button("RUN DATASET HEALTH AUDIT")
 
         model_layout.addWidget(self.lbl_train_status)
         model_layout.addWidget(self.lbl_build_status)
         model_layout.addWidget(self.model_progress)
         model_layout.addWidget(self.btn_train_build)
+        model_layout.addWidget(self.btn_health_audit)
         self.model_error_state, _ = make_error_state_card(
             "Model build error",
             "Training or build failed. Check the status details and retry after fixing data or environment issues.",
@@ -258,7 +273,7 @@ class PageStatistics(QWidget):
         graph_layout.setContentsMargins(0, 0, 0, 0)
         self.fft_stack = QStackedWidget()
         self.fft_placeholder = self._make_graph_placeholder()
-        self.fft_placeholder.setText("Waiting for live features…")
+        self.fft_placeholder.setText(tr_ui("stats_fft_wait_features"))
         self.fft_placeholder.setMinimumHeight(STATISTICS_FFT_MIN_H)
         self.fft_stack.addWidget(self.fft_placeholder)
 
@@ -283,8 +298,8 @@ class PageStatistics(QWidget):
         self.fft_plot.showGrid(x=True, y=True, alpha=0.2)
         self.fft_plot.getAxis("left").setPen(TEXT_MUTED)
         self.fft_plot.getAxis("bottom").setPen(TEXT_MUTED)
-        self.fft_plot.setLabel("left", "FFT magnitude", color=TEXT_MUTED)
-        self.fft_plot.setLabel("bottom", "Frequency (Hz)", color=TEXT_MUTED)
+        self.fft_plot.setLabel("left", tr_ui("stats_plot_fft_mag"), color=TEXT_MUTED)
+        self.fft_plot.setLabel("bottom", tr_ui("stats_plot_freq"), color=TEXT_MUTED)
         self.fft_curve = self.fft_plot.plot(pen=pg.mkPen(WAND_ACCENT, width=2))
         self.fft_stack.addWidget(self.fft_plot)
         self.fft_stack.setCurrentWidget(self.fft_placeholder)
@@ -408,6 +423,7 @@ class PageStatistics(QWidget):
         self.btn_back_spells.clicked.connect(lambda checked: self.stacked_spells.setCurrentIndex(0))
         self.sample_list.itemDoubleClicked.connect(lambda item: self.sig_sample_opened.emit(item.text()))
         self.btn_train_build.clicked.connect(self.sig_train_build_requested.emit)
+        self.btn_health_audit.clicked.connect(self.sig_health_audit_requested.emit)
         self.sig_spell_selected.connect(
             lambda spell_name: self.load_samples_for_spell(
                 spell_name, 

@@ -57,6 +57,8 @@ else:
 
 from config import APP_DATA_DIR, DEFAULT_MODEL_PATH, GESTURE_MODEL_CC_OUTPUT, WORKSPACE_ROOT
 
+from ..dataset_layout import discover_class_directories, filter_selected_class_names
+
 
 StatusCallback = Callable[[str], None]
 ProgressCallback = Callable[[int], None]
@@ -201,27 +203,31 @@ def build_gesture_model(
     _emit_progress(progress_cb, 5)
     output_root = Path(output_dir) if output_dir is not None else APP_DATA_DIR
 
-    label_dirs = sorted([d for d in dataset_root.iterdir() if d.is_dir()])
+    class_dir_map = discover_class_directories(dataset_root)
     requested_spells = {s.strip() for s in (selected_spells or []) if s.strip()}
     if requested_spells:
-        label_dirs = [d for d in label_dirs if d.name.strip() in requested_spells]
         _emit_status(
             status_cb,
             f"[TRAIN] Applying spell filter: {', '.join(sorted(requested_spells))}",
         )
-    if len(label_dirs) < 2:
+    class_names_ordered = filter_selected_class_names(
+        list(class_dir_map.keys()),
+        requested_spells or None,
+    )
+    if len(class_names_ordered) < 2:
         raise RuntimeError("Need at least 2 label folders to train model.")
 
     class_names: list[str] = []
     class_file_rows: dict[int, list[list[list[float]]]] = {}
     min_rows = 10**9
 
-    for class_index, label_dir in enumerate(label_dirs):
-        class_name = label_dir.name.strip()
-        if not class_name:
-            continue
-
-        csv_files = sorted(label_dir.glob("*.csv"))
+    class_index = 0
+    for class_name in class_names_ordered:
+        label_paths = class_dir_map.get(class_name, [])
+        csv_files: list[Path] = []
+        for label_dir in label_paths:
+            csv_files.extend(sorted(label_dir.glob("*.csv")))
+        csv_files.sort(key=lambda p: p.as_posix())
         if not csv_files:
             continue
 
@@ -238,6 +244,7 @@ def build_gesture_model(
 
         if files_for_class:
             class_file_rows[class_index] = files_for_class
+            class_index += 1
 
     if len(class_names) < 2:
         raise RuntimeError("Need at least 2 valid classes with CSV samples.")

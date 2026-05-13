@@ -136,6 +136,13 @@ class PageWand(QWidget):
         """
         self.terminal_panel.append_terminal_text(text)
 
+    def apply_ui_language(self) -> None:
+        self.flash_panel.apply_ui_language()
+        self.connection_panel.apply_ui_language()
+        self.terminal_panel.apply_ui_language()
+        self.stats_panel.apply_ui_language()
+        self.payload_panel.apply_ui_language()
+
     def update_flash_progress(self, percentage: int, status_text: str = "") -> None:
         """Cập nhật thanh tiến trình flash.
 

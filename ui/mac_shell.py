@@ -23,20 +23,14 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.asset_utils import resolve_asset_path
+from ui.i18n_bridge import tr_ui
 from ui.tokens import (
     APP_FONT_STACK,
-    BORDER_COLOR,
-    BORDER_LIGHT,
-    HOVER_BG,
-    MAC_TEXT_PRIMARY,
     PRIMARY_COLOR,
     SHELL_BRAND_H,
     SHELL_BRAND_ICON,
     SHELL_NAV_H,
     SHELL_SIDEBAR_W,
-    SURFACE_2,
-    SURFACE_PRIMARY,
-    TEXT_MUTED,
     TEXT_SECONDARY,
 )
 from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_MD, SPACING_SM
@@ -44,19 +38,20 @@ from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_MD, SPACING_SM
 
 @dataclass(frozen=True)
 class NavItem:
-    """Mục điều hướng trong sidebar."""
-    label: str
+    """Sidebar navigation entry (i18n keys + icon)."""
+
+    label_key: str
     icon: str
-    subtitle: str
+    subtitle_key: str
 
 
 NAV_ITEMS: tuple[NavItem, ...] = (
-    NavItem("Home", "assets/icon/home.svg", "Overview and quick actions"),
-    NavItem("Record", "assets/icon/record.svg", "Capture and trim motion samples"),
-    NavItem("Statistics", "assets/icon/statistic.svg", "Live metrics and model progress"),
-    NavItem("Primitives", "assets/icon/record.svg", "Collect primitive gesture datasets"),
-    NavItem("Wand", "assets/icon/wand.svg", "Hardware tools and telemetry"),
-    NavItem("Setting", "assets/icon/setting.svg", "Configuration and firmware"),
+    NavItem("nav_home", "assets/icon/home.svg", "shell_subtitle_home"),
+    NavItem("nav_record", "assets/icon/record.svg", "shell_subtitle_record"),
+    NavItem("nav_statistics", "assets/icon/statistic.svg", "shell_subtitle_statistics"),
+    NavItem("nav_primitives", "assets/icon/record.svg", "shell_subtitle_primitives"),
+    NavItem("nav_wand", "assets/icon/wand.svg", "shell_subtitle_wand"),
+    NavItem("nav_settings", "assets/icon/setting.svg", "shell_subtitle_settings"),
 )
 
 
@@ -87,9 +82,8 @@ class MacShell(QWidget):
         outer.setSpacing(0)
 
         chrome = QWidget()
-        chrome.setStyleSheet(
-            f"background-color: {SURFACE_PRIMARY}; border: none; border-radius: 14px;"
-        )
+        chrome.setObjectName("StemChrome")
+        chrome.setStyleSheet("")
         chrome_layout = QVBoxLayout(chrome)
         chrome_layout.setContentsMargins(0, 0, 0, 0)
         chrome_layout.setSpacing(0)
@@ -100,7 +94,7 @@ class MacShell(QWidget):
         body_layout.setSpacing(0)
 
         self.content_host = QWidget()
-        self.content_host.setStyleSheet(f"background-color: {SURFACE_PRIMARY};")
+        self.content_host.setStyleSheet("")
         self.content_layout = QVBoxLayout(self.content_host)
         self.content_layout.setContentsMargins(0, 0, 0, 0)
         self.content_layout.setSpacing(0)
@@ -137,12 +131,15 @@ class MacShell(QWidget):
         self._active_index = max(0, min(len(NAV_ITEMS) - 1, index))
         item = NAV_ITEMS[self._active_index]
 
-        self.title_label.setText(item.label or self._fallback_title)
-        self.subtitle_label.setText(item.subtitle)
+        self.title_label.setText(tr_ui(item.label_key))
+        self.subtitle_label.setText(tr_ui(item.subtitle_key))
 
         for button_index, button in enumerate(self._buttons):
             is_active = button_index == self._active_index
             button.setProperty("active", is_active)
+            lk = button.property("nav_label_key")
+            if isinstance(lk, str) and lk:
+                button.setText(tr_ui(lk))
             icon_path = button.property("nav_icon_path")
             if isinstance(icon_path, str) and icon_path:
                 icon = self._tint_svg(
@@ -170,26 +167,23 @@ class MacShell(QWidget):
     # ------------------------------------------------------------------
 
     def _build_toolbar(self, title: str) -> QWidget:
-        """Tạo thanh toolbar phía trên với tiêu đề và gợi ý điều hướng."""
+        """Top toolbar with title and navigation hint."""
         toolbar = QWidget()
+        toolbar.setObjectName("StemToolbar")
         toolbar.setFixedHeight(60)
-        toolbar.setStyleSheet(
-            f"background-color: {SURFACE_PRIMARY}; border-bottom: 1px solid rgba(0, 0, 0, 0.06);"
-        )
+        toolbar.setStyleSheet("")
         toolbar_layout = QHBoxLayout(toolbar)
         toolbar_layout.setContentsMargins(
             MARGIN_COMFORTABLE, SPACING_SM, MARGIN_COMFORTABLE, SPACING_SM
         )
         toolbar_layout.setSpacing(SPACING_SM)
 
-        self.title_label = QLabel(title)
-        self.title_label.setStyleSheet(
-            f"color: {MAC_TEXT_PRIMARY}; font-size: 20px; font-weight: 700;"
-        )
-        self.subtitle_label = QLabel("App dashboard")
-        self.subtitle_label.setStyleSheet(
-            f"color: {TEXT_SECONDARY}; font-size: 12px; font-weight: 500;"
-        )
+        self.title_label = QLabel(tr_ui("nav_home"))
+        self.title_label.setObjectName("StemToolbarTitle")
+        self.title_label.setStyleSheet("")
+        self.subtitle_label = QLabel(tr_ui("shell_subtitle_home"))
+        self.subtitle_label.setObjectName("StemToolbarSubtitle")
+        self.subtitle_label.setStyleSheet("")
 
         title_block = QWidget()
         title_layout = QVBoxLayout(title_block)
@@ -198,15 +192,28 @@ class MacShell(QWidget):
         title_layout.addWidget(self.title_label)
         title_layout.addWidget(self.subtitle_label)
 
-        self.nav_hint_label = QLabel("Swipe left or right to navigate")
-        self.nav_hint_label.setStyleSheet(
-            f"color: {TEXT_MUTED}; font-size: 11px; font-weight: 500;"
-        )
+        self.nav_hint_label = QLabel(tr_ui("shell_nav_hint"))
+        self.nav_hint_label.setObjectName("StemNavHint")
+        self.nav_hint_label.setStyleSheet("")
 
         toolbar_layout.addWidget(title_block)
         toolbar_layout.addStretch()
         toolbar_layout.addWidget(self.nav_hint_label)
+        _ = title  # legacy param; shell uses i18n keys
         return toolbar
+
+    def apply_ui_language(self) -> None:
+        """Refresh shell chrome strings after locale change."""
+        self.nav_hint_label.setText(tr_ui("shell_nav_hint"))
+        self._brand_title_label.setText(tr_ui("shell_brand_stem"))
+        self._brand_subtitle_label.setText(tr_ui("shell_brand_book"))
+        self._nav_section_label.setText(tr_ui("shell_nav_title"))
+        for button in self._buttons:
+            lk = button.property("nav_label_key")
+            if isinstance(lk, str) and lk:
+                button.setText(tr_ui(lk))
+                button.setAccessibleName(tr_ui(lk))
+        self.set_active_index(self._active_index)
 
     def _build_brand_widget(self) -> QWidget:
         """Tạo widget brand (logo + tên app) cho phần đầu sidebar."""
@@ -232,16 +239,16 @@ class MacShell(QWidget):
         icon_layout.addWidget(brand_icon)
         icon_layout.addStretch()
 
-        brand_title = QLabel("STEM")
+        brand_title = QLabel(tr_ui("shell_brand_stem"))
+        brand_title.setObjectName("StemBrandTitle")
+        self._brand_title_label = brand_title
         brand_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        brand_title.setStyleSheet(
-            f"color: {MAC_TEXT_PRIMARY}; font-size: 12px; font-weight: 800;"
-        )
-        brand_subtitle = QLabel("Spell Book")
+        brand_title.setStyleSheet("")
+        brand_subtitle = QLabel(tr_ui("shell_brand_book"))
+        brand_subtitle.setObjectName("StemBrandSubtitle")
+        self._brand_subtitle_label = brand_subtitle
         brand_subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        brand_subtitle.setStyleSheet(
-            f"color: {TEXT_MUTED}; font-size: 10px; font-weight: 600;"
-        )
+        brand_subtitle.setStyleSheet("")
 
         brand_layout.addWidget(brand_icon_row)
         brand_layout.addWidget(brand_title)
@@ -251,10 +258,9 @@ class MacShell(QWidget):
     def _build_sidebar(self) -> QWidget:
         """Tạo sidebar với brand, danh sách nút điều hướng."""
         self.sidebar = QWidget()
+        self.sidebar.setObjectName("StemSidebar")
         self.sidebar.setFixedWidth(SHELL_SIDEBAR_W)
-        self.sidebar.setStyleSheet(
-            f"background-color: {SURFACE_2}; border-right: 1px solid rgba(0, 0, 0, 0.06);"
-        )
+        self.sidebar.setStyleSheet("")
         sidebar_layout = QVBoxLayout(self.sidebar)
         sidebar_layout.setContentsMargins(
             SPACING_MD, MARGIN_COMFORTABLE, SPACING_MD, MARGIN_COMFORTABLE
@@ -263,67 +269,34 @@ class MacShell(QWidget):
 
         sidebar_layout.addWidget(self._build_brand_widget())
 
-        nav_title = QLabel("Navigation")
-        nav_title.setStyleSheet(
-            f"color: {TEXT_MUTED}; font-size: 11px; font-weight: 700;"
-        )
+        nav_title = QLabel(tr_ui("shell_nav_title"))
+        nav_title.setObjectName("StemNavSectionLabel")
+        self._nav_section_label = nav_title
+        nav_title.setStyleSheet("")
         sidebar_layout.addWidget(nav_title)
 
         for index, item in enumerate(NAV_ITEMS):
-            button = self._make_nav_button(item.label, item.icon, index)
+            button = self._make_nav_button(item.label_key, item.icon, index)
             self._buttons.append(button)
             sidebar_layout.addWidget(button)
 
         sidebar_layout.addStretch()
         return self.sidebar
 
-    def _make_nav_button(self, label: str, icon_path: str, index: int) -> QToolButton:
-        """Tạo nút điều hướng trong sidebar.
-
-        Args:
-            label: Nhãn hiển thị trên nút.
-            icon_path: Đường dẫn tới icon SVG.
-            index: Chỉ số trang tương ứng.
-
-        Returns:
-            QToolButton đã được style và kết nối signal.
-        """
+    def _make_nav_button(self, label_key: str, icon_path: str, index: int) -> QToolButton:
+        """Create a sidebar navigation button."""
         button = QToolButton()
+        button.setObjectName("StemNavBtn")
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setFixedHeight(SHELL_NAV_H)
         button.setCheckable(True)
         button.setAutoRaise(False)
         button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         button.setIconSize(SHELL_BRAND_ICON)
-        button.setText(label)
-        button.setAccessibleName(f"Navigate to {label}")
-        button.setStyleSheet(
-            f"""
-            QToolButton {{
-                color: {TEXT_SECONDARY};
-                background-color: transparent;
-                border: 1px solid transparent;
-                border-radius: 14px;
-                padding: 8px 10px;
-                font-size: 12px;
-                font-weight: 600;
-                qproperty-iconSize: 30px 30px;
-                text-align: left;
-            }}
-            QToolButton[active="true"] {{
-                background-color: {PRIMARY_COLOR};
-                color: white;
-                border: 1px solid {PRIMARY_COLOR};
-                border-radius: 14px;
-            }}
-            QToolButton:hover {{
-                background-color: {HOVER_BG};
-                color: {PRIMARY_COLOR};
-                border: 1px solid rgba(10, 132, 255, 0.24);
-                border-radius: 14px;
-            }}
-            """
-        )
+        button.setProperty("nav_label_key", label_key)
+        button.setText(tr_ui(label_key))
+        button.setAccessibleName(tr_ui(label_key))
+        button.setStyleSheet("")
         if icon_path:
             resolved_icon = resolve_asset_path(icon_path)
             button.setProperty("nav_icon_path", resolved_icon)

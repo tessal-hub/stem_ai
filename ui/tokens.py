@@ -323,56 +323,11 @@ WAND_TERMINAL_MIN_H = 210
 # ────────────────────────────────────────────────────────────────────────────
 
 # PageHome
-STYLE_HOME_MAIN_CONTAINER = f"""
-    #MainBox {{
-        background-color: {MAC_BG};
-        border-top: none;
-        border-bottom-left-radius: 0px;
-        border-bottom-right-radius: 0px;
-    }}
-"""
-
-# PageRecord
-STYLE_RECORD_MAIN_CONTAINER = f"""
-    #MainBox {{
-        background-color: {MAC_BG};
-        border-top: none;
-        border-bottom-left-radius: 0px;
-        border-bottom-right-radius: 0px;
-    }}
-"""
-
-# PageWand
-STYLE_WAND_MAIN_CONTAINER = f"""
-    #MainBox {{
-        background-color: {MAC_BG};
-        border-top: none;
-        border-bottom-left-radius: 0px;
-        border-bottom-right-radius: 0px;
-    }}
-"""
-
-# PageStatistics
-STYLE_STATISTICS_MAIN_CONTAINER = f"""
-    #MainBox {{
-        background-color: {MAC_BG};
-        border-top: none;
-        border-bottom-left-radius: 0px;
-        border-bottom-right-radius: 0px;
-        border-top-left-radius: 0px;
-        border-top-right-radius: 0px;
-    }}
-"""
-
-# PageSetting
-STYLE_SETTING_MAIN_CONTAINER = f"""
-    #MainBox {{
-        background-color: {MAC_BG};
-        border-top: none;
-        border-bottom-left-radius: 0px;
-        border-bottom-right-radius: 0px;
-    }}
-"""
+STYLE_HOME_MAIN_CONTAINER = "#MainBox { border: none; }"
+STYLE_RECORD_MAIN_CONTAINER = "#MainBox { border: none; }"
+STYLE_WAND_MAIN_CONTAINER = "#MainBox { border: none; }"
+STYLE_STATISTICS_MAIN_CONTAINER = "#MainBox { border: none; }"
+STYLE_SETTING_MAIN_CONTAINER = "#MainBox { border: none; }"
 
 # ────────────────────────────────────────────────────────────────────────────
 # CONTAINER & CARD STYLES

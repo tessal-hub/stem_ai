@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
 from ui.wand_3d_widget import Wand3DWidget
 from ui.component_factory import make_empty_state_card
 from ui.mac_material import apply_soft_shadow
+from ui.i18n_bridge import tr_ui
 from ui.tokens import (
     ACCENT,
     ACCENT_TEXT,
@@ -78,6 +79,12 @@ class PageHome(QWidget):
         self.data_store = data_store
         self._stat_rows: dict[str, tuple[QLabel, QLabel, QProgressBar]] = {}
         self._manager_keys: tuple[str, ...] = ()
+        self._connected = False
+        self._current_mode = "IDLE"
+        self._spell_empty_title = None
+        self._spell_empty_body = None
+        self._overflow_lbl = None
+        self._overflow_extra = 0
         self._init_ui()
         self._configure_accessibility()
         self._load_data()
@@ -88,16 +95,36 @@ class PageHome(QWidget):
         Args:
             connected: True nếu wand đã kết nối.
         """
+        self._connected = connected
         if connected:
-            self.status_bar.setText("▶ WAND CONNECTED - READY")
+            self.status_bar.setText(tr_ui("home_status_connected"))
             self.status_bar.setStyleSheet(self._status_style(ACCENT, ACCENT_TEXT))
         else:
-            self.status_bar.setText("● WAND DISCONNECTED - WAITING FOR DEVICE")
+            self.status_bar.setText(tr_ui("home_status_disconnected"))
             self.status_bar.setStyleSheet(self._status_style(DANGER, ACCENT_TEXT))
 
     def set_mode(self, mode: str) -> None:
         """Cập nhật nhãn chế độ hoạt động hiện tại."""
-        self.mode_label.setText(f"MODE:  {mode.upper()}")
+        self._current_mode = mode.upper()
+        self.mode_label.setText(f"{tr_ui('home_mode_prefix')}  {self._current_mode}")
+
+    def apply_ui_language(self) -> None:
+        """Refresh static labels after locale change."""
+        self._viewer_title.setText(tr_ui("home_viewer_title"))
+        self._viewer_subtitle.setText(tr_ui("home_viewer_subtitle"))
+        self._spellbook_title.setText(tr_ui("home_spellbook"))
+        self._manager_title.setText(tr_ui("home_manager"))
+        self.set_mode(self._current_mode)
+        self.set_connection_status(self._connected)
+        if self._spell_empty_title is not None:
+            self._spell_empty_title.setText(tr_ui("home_no_spells_title"))
+            self._spell_empty_body.setText(tr_ui("home_no_spells_body"))
+        if self._manager_empty_title is not None:
+            self._manager_empty_title.setText(tr_ui("home_manager_empty_title"))
+            self._manager_empty_body.setText(tr_ui("home_manager_empty_body"))
+        if self._overflow_lbl is not None and self._overflow_extra > 0:
+            self._overflow_lbl.setText(tr_ui("home_overflow", n=self._overflow_extra))
+        self._rebuild_manager_rows(self.data_store.system_stats)
 
     def set_sensor_readout(self, values: list[float] | tuple[float, ...]) -> None:
         """No-op: sensor readout đã chuyển sang 3D viewer."""
@@ -139,7 +166,7 @@ class PageHome(QWidget):
         outer.addLayout(content, stretch=1)
 
     def _build_status_bar(self) -> QLabel:
-        self.status_bar = QLabel("● WAND DISCONNECTED - WAITING FOR DEVICE")
+        self.status_bar = QLabel(tr_ui("home_status_disconnected"))
         self.status_bar.setObjectName("HomeStatusBar")
         self.status_bar.setStyleSheet(self._status_style(DANGER, ACCENT_TEXT))
         self.status_bar.setFixedHeight(HOME_STATUS_H)
@@ -149,6 +176,10 @@ class PageHome(QWidget):
     @staticmethod
     def _status_style(bg_color: str, fg_color: str) -> str:
         return STYLE_HOME_STATUS_TEMPLATE.format(bg_color=bg_color, fg_color=fg_color)
+
+    @staticmethod
+    def _stat_label_for_key(key: str) -> str:
+        return tr_ui(f"home_stat_{key}")
 
     def _build_center_column(self) -> QWidget:
         widget = QWidget()
@@ -174,12 +205,12 @@ class PageHome(QWidget):
         title_block = QVBoxLayout()
         title_block.setContentsMargins(0, 0, 0, 0)
         title_block.setSpacing(SPACING_XS)
-        title = QLabel("3D WAND ORIENTATION")
-        title.setStyleSheet(STYLE_HOME_SECTION_TITLE)
-        subtitle = QLabel("Complementary filter using normalized MPU6050 samples")
-        subtitle.setStyleSheet(STYLE_HOME_SECTION_SUBTITLE)
-        title_block.addWidget(title)
-        title_block.addWidget(subtitle)
+        self._viewer_title = QLabel(tr_ui("home_viewer_title"))
+        self._viewer_title.setStyleSheet(STYLE_HOME_SECTION_TITLE)
+        self._viewer_subtitle = QLabel(tr_ui("home_viewer_subtitle"))
+        self._viewer_subtitle.setStyleSheet(STYLE_HOME_SECTION_SUBTITLE)
+        title_block.addWidget(self._viewer_title)
+        title_block.addWidget(self._viewer_subtitle)
         header.addLayout(title_block)
         header.addStretch()
         layout.addLayout(header)
@@ -230,7 +261,7 @@ class PageHome(QWidget):
         layout = QHBoxLayout(box)
         layout.setContentsMargins(MARGIN_COMFORTABLE, 0, MARGIN_COMFORTABLE, 0)
         layout.setSpacing(SPACING_MD)
-        self.mode_label = QLabel("MODE:  IDLE")
+        self.mode_label = QLabel(f"{tr_ui('home_mode_prefix')}  IDLE")
         self.mode_label.setObjectName("HomeModePill")
         self.mode_label.setStyleSheet(STYLE_HOME_MODE_LABEL)
         layout.addWidget(self.mode_label)
@@ -247,9 +278,9 @@ class PageHome(QWidget):
         layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
         layout.setSpacing(SPACING_MD)
 
-        title = QLabel("SPELLBOOK")
-        title.setStyleSheet(STYLE_HOME_SECTION_TITLE)
-        layout.addWidget(title)
+        self._spellbook_title = QLabel(tr_ui("home_spellbook"))
+        self._spellbook_title.setStyleSheet(STYLE_HOME_SECTION_TITLE)
+        layout.addWidget(self._spellbook_title)
 
         content = QWidget()
         content.setStyleSheet(STYLE_TRANSPARENT_WIDGET)
@@ -260,20 +291,30 @@ class PageHome(QWidget):
         spells = self.data_store.get_spell_list()
         max_display = 3
         if not spells:
-            empty_card, _ = make_empty_state_card(
-                "No spells yet",
-                "Record your first spell from the Record screen to populate this list.",
+            empty_card, empty_layout = make_empty_state_card(
+                tr_ui("home_no_spells_title"),
+                tr_ui("home_no_spells_body"),
             )
-            empty_card.setAccessibleName("No spells recorded yet")
+            empty_card.setAccessibleName(tr_ui("home_no_spells_title"))
+            t0 = empty_layout.itemAt(0)
+            t1 = empty_layout.itemAt(1)
+            self._spell_empty_title = t0.widget() if t0 is not None else None
+            self._spell_empty_body = t1.widget() if t1 is not None else None
             spell_layout.addWidget(empty_card)
         else:
+            self._spell_empty_title = None
+            self._spell_empty_body = None
             for spell in spells[:max_display]:
                 spell_layout.addWidget(self._make_spell_button(f"✨ {spell}"))
             if len(spells) > max_display:
-                overflow_lbl = QLabel(f"+ {len(spells) - max_display} more")
-                overflow_lbl.setStyleSheet(STYLE_HOME_OVERFLOW_TEXT)
-                overflow_lbl.setAccessibleName("Additional spells hidden from the overview")
-                spell_layout.addWidget(overflow_lbl)
+                self._overflow_extra = len(spells) - max_display
+                self._overflow_lbl = QLabel(tr_ui("home_overflow", n=self._overflow_extra))
+                self._overflow_lbl.setStyleSheet(STYLE_HOME_OVERFLOW_TEXT)
+                self._overflow_lbl.setAccessibleName("Additional spells hidden from the overview")
+                spell_layout.addWidget(self._overflow_lbl)
+            else:
+                self._overflow_lbl = None
+                self._overflow_extra = 0
 
         spell_layout.addStretch()
         layout.addWidget(content)
@@ -290,9 +331,9 @@ class PageHome(QWidget):
         layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
         layout.setSpacing(SPACING_SM)
 
-        title = QLabel("SYSTEM MANAGER")
-        title.setStyleSheet(STYLE_HOME_SECTION_SUBTITLE)
-        layout.addWidget(title)
+        self._manager_title = QLabel(tr_ui("home_manager"))
+        self._manager_title.setStyleSheet(STYLE_HOME_SECTION_SUBTITLE)
+        layout.addWidget(self._manager_title)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -308,10 +349,14 @@ class PageHome(QWidget):
         scroll.setWidget(self._manager_container)
         layout.addWidget(scroll, stretch=1)
 
-        self._manager_empty_state, _ = make_empty_state_card(
-            "Waiting for telemetry",
-            "Connect your wand to start receiving CPU, RAM, and UDP runtime statistics.",
+        self._manager_empty_state, mgr_empty_layout = make_empty_state_card(
+            tr_ui("home_manager_empty_title"),
+            tr_ui("home_manager_empty_body"),
         )
+        m0 = mgr_empty_layout.itemAt(0)
+        m1 = mgr_empty_layout.itemAt(1)
+        self._manager_empty_title = m0.widget() if m0 is not None else None
+        self._manager_empty_body = m1.widget() if m1 is not None else None
         self._manager_empty_state.setVisible(False)
         layout.addWidget(self._manager_empty_state)
 
@@ -358,7 +403,7 @@ class PageHome(QWidget):
             indicator.setFixedSize(HOME_MANAGER_DOT, HOME_MANAGER_DOT)
             indicator.setStyleSheet(STYLE_HOME_MANAGER_INDICATOR)
 
-            name_label = QLabel(key)
+            name_label = QLabel(self._stat_label_for_key(key))
             name_label.setStyleSheet(STYLE_HOME_STAT_NAME)
             value_label = QLabel(value)
             value_label.setObjectName("HomeManagerValue")

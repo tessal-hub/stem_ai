@@ -15,7 +15,9 @@ from config import DATASET_DIR, ensure_data_dir
 from ui.main_window import MainWindow
 from logic.data_store import DataStore
 from logic.handler import Handler
-from theme import apply_flat_widget_chrome, apply_modern_theme
+from theme import apply_flat_widget_chrome, apply_modern_theme, get_modern_stylesheet
+from logic.theme_manager import theme_manager
+from logic.locale_manager import locale_manager
 
 
 def _remove_legacy_demo_spell_folders(data_store: DataStore) -> None:
@@ -50,14 +52,23 @@ def main():
     """Hàm chính khởi chạy toàn bộ ứng dụng STEM Spell Book."""
     # 1. Khởi tạo ứng dụng PyQt
     app = QApplication(sys.argv)
-    apply_modern_theme(app)
-
+    
     # Đảm bảo các thư mục dữ liệu tồn tại trước khi chạy I/O
     ensure_data_dir()
     
     # 2. Khởi tạo DataStore (bộ nhớ dùng chung chứa data và setting)
     data_store = DataStore(dataset_dir=str(DATASET_DIR))
     _remove_legacy_demo_spell_folders(data_store)
+
+    locale_manager.current_language = data_store.get_settings_snapshot().get("ui_language", "en")
+
+    # 2a. Khởi tạo Theme
+    current_theme = data_store.get_settings_snapshot().get("theme", "light")
+    theme_manager.current_theme = current_theme
+    apply_modern_theme(app, current_theme)
+    
+    # Cập nhật theme khi có thay đổi từ setting
+    theme_manager.theme_changed.connect(lambda t: app.setStyleSheet(get_modern_stylesheet(t)))
     
     # 3. Khởi tạo MainWindow và truyền DataStore vào để vẽ giao diện ban đầu
     window = MainWindow(data_store)

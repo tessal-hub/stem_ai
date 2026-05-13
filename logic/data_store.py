@@ -27,6 +27,7 @@ from config import (
     ensure_data_dir,
 )
 from constants import SYSTEM_SPELL_NAMES, canonical_system_spell, is_system_spell, normalize_spell_name
+from .dataset_layout import discover_class_directories, spell_write_dir, storage_dirs_for_spell
 from .frame_protocol import FrameValidationError, validate_six_axis_values
 
 
@@ -59,6 +60,8 @@ class SettingsStore:
         "firmware_mode": "data",
         "idf_main_dir": "",
         "demo_spell_cleanup_done": False,
+        "theme": "light",
+        "ui_language": "en",
     }
 
     def __init__(self) -> None:
@@ -129,6 +132,8 @@ class SettingsStore:
                 "demo_spell_cleanup_done",
                 self._DEFAULTS["demo_spell_cleanup_done"],
             ),
+            "theme": self.get_str("theme", self._DEFAULTS["theme"]),
+            "ui_language": self.get_str("ui_language", self._DEFAULTS["ui_language"]),
         }
 
     @staticmethod
@@ -191,6 +196,20 @@ class SettingsStore:
                 merged.get("demo_spell_cleanup_done", self._DEFAULTS["demo_spell_cleanup_done"]),
                 self._DEFAULTS["demo_spell_cleanup_done"],
             ),
+            "theme": (
+                t
+                if (t := str(merged.get("theme", self._DEFAULTS["theme"])).strip().lower())
+                in {"light", "dark"}
+                else str(self._DEFAULTS["theme"])
+            ),
+            "ui_language": (
+                "vi"
+                if str(merged.get("ui_language", self._DEFAULTS["ui_language"]))
+                .strip()
+                .lower()
+                in {"vi", "vn", "vietnamese"}
+                else "en"
+            ),
         }
 
     def save(self, config: Mapping[str, Any]) -> dict[str, Any]:
@@ -211,6 +230,8 @@ class SettingsStore:
         self.set_str("firmware_mode", normalized["firmware_mode"])
         self.set_str("idf_main_dir", normalized["idf_main_dir"])
         self.set_bool("demo_spell_cleanup_done", normalized["demo_spell_cleanup_done"])
+        self.set_str("theme", normalized["theme"])
+        self.set_str("ui_language", normalized["ui_language"])
 
         # Cleanup deprecated path keys from older schema revisions.
         self._settings.remove("workspace_path")
@@ -400,7 +421,7 @@ class DataStore(QObject):
         """
         with self._db_write_lock:
             for spell_name in SYSTEM_SPELL_NAMES:
-                spell_path = Path(self.dataset_dir) / spell_name
+                spell_path = spell_write_dir(Path(self.dataset_dir), spell_name)
                 spell_path.mkdir(parents=True, exist_ok=True)
 
     # ── State Mutation ──────────────────────────────────────────────────
@@ -594,11 +615,10 @@ class DataStore(QObject):
 
         self.spell_counts.clear()
         if os.path.exists(self.dataset_dir):
-            for item in os.listdir(self.dataset_dir):
-                spell_path = os.path.join(self.dataset_dir, item)
-                if os.path.isdir(spell_path):
-                    csv_files = glob.glob(os.path.join(spell_path, "*.csv"))
-                    self.spell_counts[item] = len(csv_files)
+            class_map = discover_class_directories(Path(self.dataset_dir))
+            for item, paths in class_map.items():
+                total = sum(len(list(p.glob("*.csv"))) for p in paths)
+                self.spell_counts[item] = total
 
         for spell_name in SYSTEM_SPELL_NAMES:
             self.spell_counts.setdefault(spell_name, 0)
@@ -648,10 +668,10 @@ class DataStore(QObject):
         return list(self.spell_counts.keys())
 
     def get_samples_for_spell(self, spell_name: str) -> list[str]:
-        spell_path = os.path.join(self.dataset_dir, spell_name)
-        if not os.path.isdir(spell_path):
-            return []
-        return sorted(f for f in os.listdir(spell_path) if f.endswith(".csv"))
+        names: list[str] = []
+        for d in storage_dirs_for_spell(Path(self.dataset_dir), spell_name):
+            names.extend(f.name for f in sorted(d.glob("*.csv")))
+        return sorted(names)
 
     def save_cropped_data(
         self,
@@ -662,13 +682,11 @@ class DataStore(QObject):
         if not data or not spell_name.strip():
             return False
 
-        normalized_name = normalize_spell_name(spell_name)
-        folder_name = canonical_system_spell(normalized_name)
-        folder = os.path.join(self.dataset_dir, folder_name)
-        os.makedirs(folder, exist_ok=True)
+        folder = spell_write_dir(Path(self.dataset_dir), spell_name)
+        folder.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        file_path = os.path.join(folder, f"sample_{timestamp}.csv")
+        file_path = folder / f"sample_{timestamp}.csv"
 
         try:
             with open(file_path, mode="w", newline="") as f:
@@ -689,20 +707,18 @@ class DataStore(QObject):
         if is_system_spell(spell_name):
             return False
 
-        spell_path = os.path.join(self.dataset_dir, normalize_spell_name(spell_name))
-        if not os.path.exists(spell_path):
+        dirs = storage_dirs_for_spell(Path(self.dataset_dir), spell_name)
+        if not dirs:
             return False
 
         try:
-            # Remove all files in the spell directory
-            for filename in os.listdir(spell_path):
-                file_path = os.path.join(spell_path, filename)
-                if os.path.isfile(file_path):
-                    os.remove(file_path)
-            
-            # Remove the directory itself
-            os.rmdir(spell_path)
-            
+            for spell_path in dirs:
+                for filename in os.listdir(spell_path):
+                    file_path = os.path.join(spell_path, filename)
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                os.rmdir(spell_path)
+
             # Refresh the database
             self.refresh_database(force=True)
             return True

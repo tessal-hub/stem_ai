@@ -25,12 +25,14 @@ import tensorflow as tf
 tf.get_logger().setLevel('ERROR')
 tf.autograph.set_verbosity(3)
 
-# --- 2. CẤU HÌNH ĐƯỜNG DẪN CỨNG (HARDCODED DIRECTORIES) ---
-# Sửa các đường dẫn này nếu bạn chuyển project sang máy khác
-DATASET_DIR = Path("e:/00.Project/05.STEM_AI/02.stem_app/stem_ai/app_data/dataset")
-OUTPUT_DIR = Path("e:/00.Project/05.STEM_AI/02.stem_app/stem_ai/app_data/standalone_gesture_model")
+_ROOT = Path(__file__).resolve().parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
-# --- 3. CẤU HÌNH THÔNG SỐ AI ---
+from config import APP_DATA_DIR, DATASET_DIR  # noqa: E402
+from logic.dataset_layout import discover_class_directories  # noqa: E402
+
+OUTPUT_DIR = APP_DATA_DIR / "standalone_gesture_model"
 WINDOW_SIZE = 40
 STEP = 2
 EPOCHS = 100
@@ -97,20 +99,26 @@ def main():
         sys.exit(1)
 
     print(f"[1/6] ĐANG QUÉT DỮ LIỆU TẠI: {dataset_root}")
-    label_dirs = sorted([d for d in dataset_root.iterdir() if d.is_dir()])
-    
-    if len(label_dirs) < 2:
-        print("[LỖI] Cần ít nhất 2 thư mục (2 class) để huấn luyện AI.")
+    class_dir_map = discover_class_directories(dataset_root)
+    class_names_ordered = sorted(class_dir_map.keys())
+
+    if len(class_names_ordered) < 2:
+        print("[LỖI] Cần ít nhất 2 thư mục lớp (spell/primitive) để huấn luyện AI.")
         sys.exit(1)
 
     class_names = []
     class_file_rows = {}
     min_rows = 10**9
 
-    for class_index, label_dir in enumerate(label_dirs):
-        class_name = label_dir.name.strip()
-        csv_files = sorted(label_dir.glob("*.csv"))
-        if not csv_files: continue
+    class_index = 0
+    for class_name in class_names_ordered:
+        label_paths = class_dir_map.get(class_name, [])
+        csv_files: list[Path] = []
+        for label_dir in label_paths:
+            csv_files.extend(sorted(label_dir.glob("*.csv")))
+        csv_files.sort(key=lambda p: p.as_posix())
+        if not csv_files:
+            continue
 
         class_names.append(class_name)
         print(f"  -> Đã tìm thấy Class: {class_name} ({len(csv_files)} files)")
@@ -118,12 +126,18 @@ def main():
         files_for_class = []
         for csv_file in csv_files:
             rows = read_csv_rows(csv_file)
-            if not rows: continue
+            if not rows:
+                continue
             min_rows = min(min_rows, len(rows))
             files_for_class.append(rows)
 
         if files_for_class:
             class_file_rows[class_index] = files_for_class
+            class_index += 1
+
+    if len(class_names) < 2:
+        print("[LỖI] Cần ít nhất 2 lớp có file CSV hợp lệ để huấn luyện.")
+        sys.exit(1)
 
     print(f"\n[2/6] TIỀN XỬ LÝ & CHIA TẬP TRAIN/VAL")
     rng = random.Random(42)

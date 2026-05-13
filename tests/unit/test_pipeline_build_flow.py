@@ -196,3 +196,42 @@ def test_build_flow_keeps_pre_normalized_csv_scale(monkeypatch, tmp_path) -> Non
     )
 
     assert captured_max_abs["value"] >= 1.0
+
+
+def test_build_flow_nested_spells_layout(monkeypatch, tmp_path) -> None:
+    """dataset/spells/<class>/*.csv must be picked up (not only flat dataset/<class>)."""
+    dataset = tmp_path / "dataset"
+    (dataset / "spells" / "PULSE").mkdir(parents=True)
+    (dataset / "spells" / "ORBIT").mkdir(parents=True)
+    _write_csv(
+        dataset / "spells" / "PULSE" / "sample_1.csv",
+        [[1, 2, 3, 4, 5, 6]] * 8,
+    )
+    _write_csv(
+        dataset / "spells" / "ORBIT" / "sample_1.csv",
+        [[2, 3, 4, 5, 6, 7]] * 8,
+    )
+
+    app_data = tmp_path / "app_data"
+    model_path = app_data / "model.tflite"
+    cc_path = app_data / "gesture_model.cc"
+
+    monkeypatch.setattr(pipeline, "APP_DATA_DIR", app_data)
+    monkeypatch.setattr(pipeline, "DEFAULT_MODEL_PATH", model_path)
+    monkeypatch.setattr(pipeline, "GESTURE_MODEL_CC_OUTPUT", cc_path)
+
+    import sys
+
+    monkeypatch.setitem(sys.modules, "tensorflow", _FakeTF())
+
+    result = pipeline.build_gesture_model(
+        dataset_dir=str(dataset),
+        output_mode="tflite",
+        selected_spells=["PULSE", "ORBIT"],
+        epochs=1,
+        window_size=4,
+        step=2,
+    )
+
+    assert set(result.classes) == {"ORBIT", "PULSE"}
+    assert Path(result.tflite_path).exists()

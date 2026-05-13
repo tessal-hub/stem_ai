@@ -18,6 +18,7 @@ from ui.tokens import (
     WAND_TERMINAL_MIN_H,
 )
 from ui.wand_panels.shared import make_section_label
+from ui.i18n_bridge import tr_ui
 
 # Flush buffered terminal lines at most this often (ms).
 # 100 ms → ≤10 DOM updates/s regardless of how fast lines arrive (~50 Hz).
@@ -68,10 +69,11 @@ class WandTerminalPanel(QWidget):
         layout.setSpacing(SPACING_SM)
 
         header = QHBoxLayout()
-        header.addWidget(make_section_label("UART TERMINAL"))
+        self._term_header = make_section_label(tr_ui("wand_section_terminal"))
+        header.addWidget(self._term_header)
         header.addStretch()
 
-        self.btn_term_clear = QPushButton("CLEAR")
+        self.btn_term_clear = QPushButton(tr_ui("wand_clear"))
         self.btn_term_clear.setStyleSheet(STYLE_BTN_SMALL)
         self.btn_term_clear.setMinimumHeight(BTN_SMALL_H)
         self.btn_term_clear.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -91,6 +93,10 @@ class WandTerminalPanel(QWidget):
         )
 
         layout.addWidget(self.terminal_output, stretch=1)
+
+    def apply_ui_language(self) -> None:
+        self._term_header.setText(tr_ui("wand_section_terminal"))
+        self.btn_term_clear.setText(tr_ui("wand_clear"))
 
     def _init_signals(self) -> None:
         """Kết nối toàn bộ signal và slot nội bộ."""
