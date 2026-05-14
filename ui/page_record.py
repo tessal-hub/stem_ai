@@ -142,12 +142,12 @@ class PageRecord(QWidget):
 
     def set_wand_ready(self, is_ready: bool) -> None:
         if is_ready:
-            self.lbl_wand_status.setText(f"● {tr_ui('record_ready')}")
+            self.lbl_wand_status.setText(tr_ui('record_ready'))
             self.lbl_wand_status.setStyleSheet(
                 STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
             )
         else:
-            self.lbl_wand_status.setText(f"● {tr_ui('record_not_ready')}")
+            self.lbl_wand_status.setText(tr_ui('record_not_ready'))
             self.lbl_wand_status.setStyleSheet(
                 STYLE_RECORD_STATUS_TEMPLATE.format(color=DANGER)
             )
@@ -159,7 +159,7 @@ class PageRecord(QWidget):
         if hasattr(self, "btn_delete_latest_sample"):
             self.btn_delete_latest_sample.setEnabled(not recording)
 
-        status = f"● {tr_ui('record_recording_short')}" if recording else f"● {tr_ui('record_ready')}"
+        status = tr_ui('record_recording_short') if recording else tr_ui('record_ready')
         color = ACCENT if recording else SUCCESS
         self.lbl_wand_status.setText(status)
         self.lbl_wand_status.setStyleSheet(
@@ -182,7 +182,7 @@ class PageRecord(QWidget):
 
     def set_save_status(self, spell_name: str) -> None:
         """Visual feedback after a successful crop-save."""
-        self.lbl_wand_status.setText(f"✔ {tr_ui('record_status_saved', name=spell_name)}")
+        self.lbl_wand_status.setText(tr_ui('record_status_saved', name=spell_name))
         self.lbl_wand_status.setStyleSheet(
             STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
         )

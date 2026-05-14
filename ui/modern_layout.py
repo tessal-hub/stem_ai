@@ -18,20 +18,20 @@ from PyQt6.QtWidgets import (
 )
 from ui.mac_material import apply_soft_shadow
 
-# Modern spacing values (in pixels)
-SPACING_XS = 4       # Minimal spacing between tightly grouped items
-SPACING_SM = 8       # Small spacing between form elements
-SPACING_MD = 12      # Medium spacing between sections
-SPACING_LG = 16      # Large spacing between panels
-SPACING_XL = 24      # Extra large spacing for major sections
-SPACING_XXL = 32     # Maximum spacing (rarely used)
+# Modern spacing values (in pixels) - Increased for minimalist-ui editorial feel
+SPACING_XS = 6       # Minimal spacing between tightly grouped items
+SPACING_SM = 12      # Small spacing between form elements
+SPACING_MD = 24      # Medium spacing between sections
+SPACING_LG = 32      # Large spacing between panels
+SPACING_XL = 48      # Extra large spacing for major sections
+SPACING_XXL = 64     # Maximum spacing
 
-# Modern margins for containers
-MARGIN_COMPACT = 8
-MARGIN_STANDARD = 12
-MARGIN_COMFORTABLE = 16
-MARGIN_SPACIOUS = 20
-MARGIN_LUXURIOUS = 24
+# Modern margins for containers - Increased for premium macro-whitespace
+MARGIN_COMPACT = 12
+MARGIN_STANDARD = 24
+MARGIN_COMFORTABLE = 32
+MARGIN_SPACIOUS = 48
+MARGIN_LUXURIOUS = 64
 
 
 def create_modern_card(

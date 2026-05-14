@@ -26,12 +26,20 @@ from ui.asset_utils import resolve_asset_path
 from ui.i18n_bridge import tr_ui
 from ui.tokens import (
     APP_FONT_STACK,
+    BORDER_COLOR,
+    HOVER_BG,
     PRIMARY_COLOR,
+    PRIMARY_LIGHT,
     SHELL_BRAND_H,
     SHELL_BRAND_ICON,
     SHELL_NAV_H,
     SHELL_SIDEBAR_W,
+    SURFACE_0,
+    SURFACE_1,
+    SURFACE_2,
+    TEXT_PRIMARY,
     TEXT_SECONDARY,
+    TEXT_TERTIARY,
 )
 from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_MD, SPACING_SM
 
@@ -46,12 +54,12 @@ class NavItem:
 
 
 NAV_ITEMS: tuple[NavItem, ...] = (
-    NavItem("nav_home", "assets/icon/home.svg", "shell_subtitle_home"),
-    NavItem("nav_record", "assets/icon/record.svg", "shell_subtitle_record"),
-    NavItem("nav_statistics", "assets/icon/statistic.svg", "shell_subtitle_statistics"),
-    NavItem("nav_primitives", "assets/icon/record.svg", "shell_subtitle_primitives"),
-    NavItem("nav_wand", "assets/icon/wand.svg", "shell_subtitle_wand"),
-    NavItem("nav_settings", "assets/icon/setting.svg", "shell_subtitle_settings"),
+    NavItem("nav_home_editorial", "assets/icon/home.svg", "shell_subtitle_home"),
+    NavItem("nav_primitives_editorial", "assets/icon/record.svg", "shell_subtitle_primitives"),
+    NavItem("nav_statistics_editorial", "assets/icon/statistic.svg", "shell_subtitle_statistics"),
+    NavItem("nav_record_editorial", "assets/icon/record.svg", "shell_subtitle_record"),
+    NavItem("nav_wand_editorial", "assets/icon/wand.svg", "shell_subtitle_wand"),
+    NavItem("nav_settings_editorial", "assets/icon/setting.svg", "shell_subtitle_settings"),
 )
 
 
@@ -78,12 +86,11 @@ class MacShell(QWidget):
     def _init_ui(self, title: str) -> None:
         """Xây dựng layout chính gồm toolbar, sidebar và vùng nội dung."""
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(1, 1, 1, 1)
+        outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
         chrome = QWidget()
         chrome.setObjectName("StemChrome")
-        chrome.setStyleSheet("")
         chrome_layout = QVBoxLayout(chrome)
         chrome_layout.setContentsMargins(0, 0, 0, 0)
         chrome_layout.setSpacing(0)
@@ -94,7 +101,7 @@ class MacShell(QWidget):
         body_layout.setSpacing(0)
 
         self.content_host = QWidget()
-        self.content_host.setStyleSheet("")
+        self.content_host.setObjectName("StemContentHost")
         self.content_layout = QVBoxLayout(self.content_host)
         self.content_layout.setContentsMargins(0, 0, 0, 0)
         self.content_layout.setSpacing(0)
@@ -106,15 +113,98 @@ class MacShell(QWidget):
         chrome_layout.addWidget(body, stretch=1)
         outer.addWidget(chrome)
 
-        self.setStyleSheet(
-            f"* {{ font-family: {APP_FONT_STACK}; }} QPushButton {{ text-align: left; }}"
-        )
+        self._apply_shell_styles()
 
         # Đăng ký gesture vuốt cho cả shell và vùng nội dung
         self.grabGesture(Qt.GestureType.SwipeGesture)
         self.content_host.grabGesture(Qt.GestureType.SwipeGesture)
 
         self.set_active_index(0)
+
+    def _apply_shell_styles(self) -> None:
+        """Apply the global shell stylesheet based on minimalist tokens."""
+        self.setStyleSheet(f"""
+            * {{
+                font-family: {APP_FONT_STACK};
+                color: {TEXT_PRIMARY};
+            }}
+            #StemChrome {{
+                background-color: {SURFACE_0};
+            }}
+            #StemToolbar {{
+                background-color: {SURFACE_1};
+                border-bottom: 1px solid {BORDER_COLOR};
+            }}
+            #StemToolbarTitle {{
+                font-family: {TITLE_FONT_STACK};
+                font-size: 22px;
+                font-weight: 500;
+                color: {TEXT_PRIMARY};
+                letter-spacing: -0.01em;
+            }}
+            #StemToolbarSubtitle {{
+                font-size: 12px;
+                font-weight: 500;
+                color: {TEXT_SECONDARY};
+                letter-spacing: 0.02em;
+            }}
+            #StemNavHint {{
+                font-size: 11px;
+                font-weight: 600;
+                color: {TEXT_TERTIARY};
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+            }}
+            #StemSidebar {{
+                background-color: {SURFACE_2};
+                border-right: 1px solid {BORDER_COLOR};
+            }}
+            #StemBrandTitle {{
+                font-family: {TITLE_FONT_STACK};
+                font-size: 18px;
+                font-weight: 600;
+                letter-spacing: 0.02em;
+                color: {TEXT_PRIMARY};
+                font-style: italic;
+            }}
+            #StemBrandSubtitle {{
+                font-size: 10px;
+                font-weight: 800;
+                color: {TEXT_SECONDARY};
+                letter-spacing: 0.15em;
+                text-transform: uppercase;
+            }}
+            #StemNavSectionLabel {{
+                font-size: 10px;
+                font-weight: 800;
+                color: {TEXT_TERTIARY};
+                text-transform: uppercase;
+                letter-spacing: 0.1em;
+                margin-top: 20px;
+                margin-bottom: 8px;
+            }}
+            QToolButton#StemNavBtn {{
+                background-color: transparent;
+                border: none;
+                border-radius: 8px;
+                color: {TEXT_SECONDARY};
+                font-size: 13px;
+                font-weight: 600;
+                padding-left: 12px;
+                text-align: left;
+            }}
+            QToolButton#StemNavBtn:hover {{
+                background-color: {HOVER_BG};
+                color: {TEXT_PRIMARY};
+            }}
+            QToolButton#StemNavBtn[active="true"] {{
+                background-color: {PRIMARY_COLOR};
+                color: #FFFFFF;
+            }}
+            #StemContentHost {{
+                background-color: transparent;
+            }}
+        """)
 
     # ------------------------------------------------------------------
     # Public methods
@@ -170,31 +260,27 @@ class MacShell(QWidget):
         """Top toolbar with title and navigation hint."""
         toolbar = QWidget()
         toolbar.setObjectName("StemToolbar")
-        toolbar.setFixedHeight(60)
-        toolbar.setStyleSheet("")
+        toolbar.setFixedHeight(80)  # More whitespace
         toolbar_layout = QHBoxLayout(toolbar)
         toolbar_layout.setContentsMargins(
-            MARGIN_COMFORTABLE, SPACING_SM, MARGIN_COMFORTABLE, SPACING_SM
+            MARGIN_COMFORTABLE, 0, MARGIN_COMFORTABLE, 0
         )
         toolbar_layout.setSpacing(SPACING_SM)
 
         self.title_label = QLabel(tr_ui("nav_home"))
         self.title_label.setObjectName("StemToolbarTitle")
-        self.title_label.setStyleSheet("")
         self.subtitle_label = QLabel(tr_ui("shell_subtitle_home"))
         self.subtitle_label.setObjectName("StemToolbarSubtitle")
-        self.subtitle_label.setStyleSheet("")
 
         title_block = QWidget()
         title_layout = QVBoxLayout(title_block)
         title_layout.setContentsMargins(0, 0, 0, 0)
-        title_layout.setSpacing(1)
+        title_layout.setSpacing(2)
         title_layout.addWidget(self.title_label)
         title_layout.addWidget(self.subtitle_label)
 
         self.nav_hint_label = QLabel(tr_ui("shell_nav_hint"))
         self.nav_hint_label.setObjectName("StemNavHint")
-        self.nav_hint_label.setStyleSheet("")
 
         toolbar_layout.addWidget(title_block)
         toolbar_layout.addStretch()
@@ -221,7 +307,7 @@ class MacShell(QWidget):
         brand.setFixedHeight(SHELL_BRAND_H)
         brand_layout = QVBoxLayout(brand)
         brand_layout.setContentsMargins(0, 0, 0, 0)
-        brand_layout.setSpacing(SPACING_SM)
+        brand_layout.setSpacing(6)
 
         brand_icon_row = QWidget()
         icon_layout = QHBoxLayout(brand_icon_row)
@@ -231,10 +317,9 @@ class MacShell(QWidget):
 
         brand_icon = QLabel("◉")
         brand_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        brand_icon.setFixedSize(SHELL_BRAND_ICON)
+        brand_icon.setFixedSize(30, 30)
         brand_icon.setStyleSheet(
-            "background-color: "
-            f"{PRIMARY_COLOR}; color: white; border-radius: 15px; font-size: 16px; font-weight: 900;"
+            f"background-color: {PRIMARY_COLOR}; color: white; border-radius: 15px; font-size: 14px; font-weight: 900;"
         )
         icon_layout.addWidget(brand_icon)
         icon_layout.addStretch()
@@ -243,12 +328,11 @@ class MacShell(QWidget):
         brand_title.setObjectName("StemBrandTitle")
         self._brand_title_label = brand_title
         brand_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        brand_title.setStyleSheet("")
+
         brand_subtitle = QLabel(tr_ui("shell_brand_book"))
         brand_subtitle.setObjectName("StemBrandSubtitle")
         self._brand_subtitle_label = brand_subtitle
         brand_subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        brand_subtitle.setStyleSheet("")
 
         brand_layout.addWidget(brand_icon_row)
         brand_layout.addWidget(brand_title)
@@ -260,7 +344,6 @@ class MacShell(QWidget):
         self.sidebar = QWidget()
         self.sidebar.setObjectName("StemSidebar")
         self.sidebar.setFixedWidth(SHELL_SIDEBAR_W)
-        self.sidebar.setStyleSheet("")
         sidebar_layout = QVBoxLayout(self.sidebar)
         sidebar_layout.setContentsMargins(
             SPACING_MD, MARGIN_COMFORTABLE, SPACING_MD, MARGIN_COMFORTABLE
@@ -272,7 +355,6 @@ class MacShell(QWidget):
         nav_title = QLabel(tr_ui("shell_nav_title"))
         nav_title.setObjectName("StemNavSectionLabel")
         self._nav_section_label = nav_title
-        nav_title.setStyleSheet("")
         sidebar_layout.addWidget(nav_title)
 
         for index, item in enumerate(NAV_ITEMS):

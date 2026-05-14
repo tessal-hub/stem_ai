@@ -46,6 +46,7 @@ from ui.tokens import (
     STYLE_HOME_VIEWER_CARD,
     STYLE_SCROLL_AREA,
     STYLE_TRANSPARENT_WIDGET,
+    TITLE_FONT_STACK,
 )
 from ui.modern_layout import (
     MARGIN_COMFORTABLE,
@@ -158,11 +159,19 @@ class PageHome(QWidget):
 
         outer.addWidget(self._build_status_bar())
 
-        content = QHBoxLayout()
+        content = QVBoxLayout()
         content.setSpacing(SPACING_LG)
         content.setContentsMargins(0, 0, 0, 0)
-        content.addWidget(self._build_center_column(), stretch=1)
-        content.addWidget(self._build_right_column(), stretch=0)
+        
+        # Center the viewer box for a clean, editorial feel
+        viewer_container = QHBoxLayout()
+        viewer_container.addStretch(1)
+        viewer_box = self._build_viewer_box()
+        viewer_box.setMaximumWidth(960)
+        viewer_container.addWidget(viewer_box, stretch=2)
+        viewer_container.addStretch(1)
+        
+        content.addLayout(viewer_container, stretch=1)
         outer.addLayout(content, stretch=1)
 
     def _build_status_bar(self) -> QLabel:
@@ -305,7 +314,7 @@ class PageHome(QWidget):
             self._spell_empty_title = None
             self._spell_empty_body = None
             for spell in spells[:max_display]:
-                spell_layout.addWidget(self._make_spell_button(f"✨ {spell}"))
+                spell_layout.addWidget(self._make_spell_button(spell))
             if len(spells) > max_display:
                 self._overflow_extra = len(spells) - max_display
                 self._overflow_lbl = QLabel(tr_ui("home_overflow", n=self._overflow_extra))
