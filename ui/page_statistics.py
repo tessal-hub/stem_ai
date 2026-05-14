@@ -41,6 +41,7 @@ from ui.tokens import (
 )
 from logic.rarity_utils import resolve_rarity
 from ui.mac_material import apply_soft_shadow
+from logic.theme_manager import theme_manager
 from ui.component_factory import (
     make_card_count_label,
     make_card_name_label,
@@ -177,21 +178,45 @@ class PageStatistics(QWidget):
             self.sample_list.addItem(tr_ui("stats_no_samples_line"))
         self.stacked_spells.setCurrentIndex(1)
 
+    def refresh_styles(self) -> None:
+        """Re-apply styles based on current theme."""
+        p = theme_manager.get_palette()
+        
+        # 1. Update Cards
+        for card in [self.feature_card, self.model_card, self.graph_card, self.mastery_box]:
+            card.setStyleSheet(f"""
+                #VanguardCardOuter {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: 24px; }}
+                #VanguardCardInner {{ background-color: {p.SURFACE_PRIMARY}; border: none; border-radius: 16px; }}
+            """)
+        
+        # 2. Update Plots
+        for plot in [self.fft_plot]:
+            plot.setBackground("transparent")
+            plot.getAxis("left").setPen(p.TEXT_TERTIARY)
+            plot.getAxis("bottom").setPen(p.TEXT_TERTIARY)
+            
+        # 3. Update Lists
+        self.sample_list.setStyleSheet(f"""
+            QListWidget {{ background-color: transparent; border: none; color: {p.TEXT_PRIMARY}; }}
+            QListWidget::item {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: 12px; margin-bottom: 8px; padding: 12px; }}
+            QListWidget::item:selected {{ background-color: {p.PRIMARY}; color: {p.SURFACE_PRIMARY}; border: none; }}
+        """)
+        
+        # 4. Update Mastery Spells
+        self.update_spell_stats(self.data_store.spell_counts)
+
     def _init_ui(self) -> None:
         """Xây dựng layout chính gồm 2 cột: spell cards và features."""
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(
-            MARGIN_COMFORTABLE,
-            MARGIN_COMFORTABLE,
-            MARGIN_COMFORTABLE,
-            MARGIN_COMFORTABLE,
-        )
+        outer.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
         outer.setSpacing(SPACING_LG)
         content = QHBoxLayout()
         content.setSpacing(SPACING_LG)
         content.addWidget(self._build_left_column(), stretch=5)
         content.addWidget(self._build_right_column(), stretch=3)
         outer.addLayout(content)
+        
+        self.refresh_styles()
 
     def _build_left_column(self) -> QWidget:
         widget = QWidget()
@@ -199,112 +224,64 @@ class PageStatistics(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_LG)
 
-        top_row = QGridLayout()
-        top_row.setHorizontalSpacing(SPACING_MD)
-        top_row.setVerticalSpacing(SPACING_SM)
-        self.lbl_total_samples = self._make_section_label("TOTAL SAMPLES: 0", accent=False)
-        self.lbl_total_spells  = self._make_section_label("ACTIVE SPELLS: 0",  accent=False)
-        lbl_title = self._make_section_label("DATA DISTRIBUTION")
-        lbl_title.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        top_row.addWidget(self.lbl_total_samples, 0, 0)
-        top_row.addWidget(self.lbl_total_spells, 0, 1)
-        top_row.setColumnStretch(2, 1)
-        top_row.addWidget(lbl_title, 0, 3)
+        from ui.component_factory import make_card
+        
+        # Stats Summary
+        top_row = QHBoxLayout()
+        top_row.setSpacing(SPACING_MD)
+        self.lbl_total_samples = make_section_label("TOTAL SAMPLES: 0", accent=False)
+        self.lbl_total_spells  = make_section_label("ACTIVE SPELLS: 0",  accent=False)
+        top_row.addWidget(self.lbl_total_samples)
+        top_row.addWidget(self.lbl_total_spells)
+        top_row.addStretch()
         layout.addLayout(top_row)
 
-        feature_card = self._make_standard_frame()
-        feature_layout = QVBoxLayout(feature_card)
-        feature_layout.setContentsMargins(
-            MARGIN_COMFORTABLE,
-            MARGIN_COMFORTABLE,
-            MARGIN_COMFORTABLE,
-            MARGIN_COMFORTABLE,
-        )
-        feature_layout.setSpacing(SPACING_SM)
-        feature_layout.addWidget(self._make_section_label("LIVE FEATURES", accent=False))
+        # Feature Card
+        self.feature_card, feature_layout = make_card()
+        feature_layout.addWidget(make_section_label("LIVE FEATURES", accent=True))
         self.lbl_accel_stats = QLabel("Accel: mean --  var --  rms --")
-        self.lbl_accel_stats.setStyleSheet(STYLE_STATISTICS_INFO_LABEL)
         self.lbl_gyro_stats = QLabel("Gyro: mean --  var --  rms --")
-        self.lbl_gyro_stats.setStyleSheet(STYLE_STATISTICS_INFO_LABEL)
         feature_layout.addWidget(self.lbl_accel_stats)
         feature_layout.addWidget(self.lbl_gyro_stats)
-        layout.addWidget(feature_card)
+        layout.addWidget(self.feature_card)
 
-        model_card = self._make_standard_frame()
-        model_layout = QVBoxLayout(model_card)
-        model_layout.setContentsMargins(
-            MARGIN_COMFORTABLE,
-            MARGIN_COMFORTABLE,
-            MARGIN_COMFORTABLE,
-            MARGIN_COMFORTABLE,
-        )
-        model_layout.setSpacing(SPACING_SM)
-        model_layout.addWidget(self._make_section_label("MODEL TRAIN / BUILD", accent=False))
-
+        # Model Card
+        self.model_card, model_layout = make_card()
+        model_layout.addWidget(make_section_label("MODEL TRAIN / BUILD", accent=True))
         self.lbl_train_status = QLabel("Train: idle")
-        self.lbl_train_status.setStyleSheet(STYLE_STATISTICS_INFO_LABEL)
         self.lbl_build_status = QLabel("Build: idle")
-        self.lbl_build_status.setStyleSheet(STYLE_STATISTICS_INFO_LABEL)
-
         self.model_progress = QProgressBar()
         self.model_progress.setRange(0, 100)
         self.model_progress.setValue(0)
-        self.model_progress.setTextVisible(True)
-        self.model_progress.setFormat("%p%")
-
         self.btn_train_build = make_primary_button("TRAIN + BUILD GESTURE MODEL")
         self.btn_health_audit = make_outline_button("RUN DATASET HEALTH AUDIT")
-
         model_layout.addWidget(self.lbl_train_status)
         model_layout.addWidget(self.lbl_build_status)
         model_layout.addWidget(self.model_progress)
         model_layout.addWidget(self.btn_train_build)
         model_layout.addWidget(self.btn_health_audit)
-        self.model_error_state, _ = make_error_state_card(
-            "Model build error",
-            "Training or build failed. Check the status details and retry after fixing data or environment issues.",
-        )
-        self.model_error_state.setVisible(False)
-        model_layout.addWidget(self.model_error_state)
-        layout.addWidget(model_card)
+        layout.addWidget(self.model_card)
 
-        graph_card = self._make_standard_frame()
-        graph_layout = QVBoxLayout(graph_card)
+        # FFT Card
+        self.graph_card, graph_layout = make_card()
         graph_layout.setContentsMargins(0, 0, 0, 0)
         self.fft_stack = QStackedWidget()
-        self.fft_placeholder = self._make_graph_placeholder()
-        self.fft_placeholder.setText(tr_ui("stats_fft_wait_features"))
+        self.fft_placeholder = make_graph_placeholder()
         self.fft_placeholder.setMinimumHeight(STATISTICS_FFT_MIN_H)
         self.fft_stack.addWidget(self.fft_placeholder)
-
+        
         self.fft_plot = pg.PlotWidget()
-
-        # FFT frequency analysis header
-        fft_header = QHBoxLayout()
-        fft_header.setContentsMargins(
-            MARGIN_COMFORTABLE,
-            SPACING_SM,
-            MARGIN_COMFORTABLE,
-            0,
-        )
-        fft_header.addWidget(self._make_section_label("FREQUENCY SPECTRUM", accent=False))
-        fft_header.addStretch()
-        self.lbl_dominant_freq = QLabel("Dominant: -- Hz")
-        self.lbl_dominant_freq.setStyleSheet(STYLE_STATISTICS_META_LABEL)
-        fft_header.addWidget(self.lbl_dominant_freq)
-        graph_layout.addLayout(fft_header)
-
         self.fft_plot.setBackground("transparent")
         self.fft_plot.showGrid(x=True, y=True, alpha=0.2)
-        self.fft_plot.getAxis("left").setPen(TEXT_MUTED)
-        self.fft_plot.getAxis("bottom").setPen(TEXT_MUTED)
-        self.fft_plot.setLabel("left", tr_ui("stats_plot_fft_mag"), color=TEXT_MUTED)
-        self.fft_plot.setLabel("bottom", tr_ui("stats_plot_freq"), color=TEXT_MUTED)
         self.fft_curve = self.fft_plot.plot(pen=pg.mkPen(WAND_ACCENT, width=2))
         self.fft_stack.addWidget(self.fft_plot)
-        self.fft_stack.setCurrentWidget(self.fft_placeholder)
+        
+        graph_layout.addWidget(make_section_label("FREQUENCY SPECTRUM", accent=True))
+        self.lbl_dominant_freq = QLabel("Dominant: -- Hz")
+        graph_layout.addWidget(self.lbl_dominant_freq)
         graph_layout.addWidget(self.fft_stack)
-        layout.addWidget(graph_card, stretch=1)
+        layout.addWidget(self.graph_card, stretch=1)
+        
         return widget
 
     def _build_right_column(self) -> QWidget:
@@ -324,9 +301,12 @@ class PageStatistics(QWidget):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_LG)
-        layout.addWidget(self._make_section_label("SPELL MASTERY"))
+        layout.addWidget(make_section_label("SPELL MASTERY"))
+        
+        from ui.component_factory import make_card
+        self.mastery_box, inner_layout = make_card()
+        
         self.mastery_stack = QStackedWidget()
-
         self.mastery_scroll = QScrollArea()
         self.mastery_scroll.setWidgetResizable(True)
         self.mastery_scroll.setStyleSheet(STYLE_SCROLL_AREA)
@@ -337,15 +317,13 @@ class PageStatistics(QWidget):
         self._spell_cards_layout.setSpacing(SPACING_SM)
         self.mastery_scroll.setWidget(scroll_content)
         self.mastery_stack.addWidget(self.mastery_scroll)
-
-        empty_card, _ = make_empty_state_card(
-            "No spell data yet",
-            "Capture your first samples in Record, then return here to inspect distribution and rarity tiers.",
-        )
+        
+        empty_card, _ = make_empty_state_card("No spell data yet", "Capture your first samples in Record.")
         self.mastery_empty_state = empty_card
         self.mastery_stack.addWidget(self.mastery_empty_state)
-
-        layout.addWidget(self.mastery_stack)
+        
+        inner_layout.addWidget(self.mastery_stack)
+        layout.addWidget(self.mastery_box)
         return page
 
     def _build_sample_list_page(self) -> QWidget:
@@ -399,8 +377,7 @@ class PageStatistics(QWidget):
 
     @staticmethod
     def _make_section_label(text: str, accent: bool = True) -> QLabel:
-        color = WAND_ACCENT if accent else TEXT_BODY
-        return make_section_label(text, accent_color=color)
+        return make_section_label(text, accent=accent)
 
     @staticmethod
     def _make_graph_placeholder() -> QLabel:

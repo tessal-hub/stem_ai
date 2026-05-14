@@ -18,6 +18,7 @@ from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_SM
 from ui.wand_panels.connection_presenter import ConnectionStatusPresenter
 from ui.wand_panels.shared import make_button, make_card, make_section_label
 from ui.i18n_bridge import tr_ui
+from logic.theme_manager import theme_manager
 
 
 class WandConnectionPanel(QWidget):
@@ -93,6 +94,12 @@ class WandConnectionPanel(QWidget):
             connected=self._serial_connected,
             device_label=self._last_port,
         )
+
+    def refresh_styles(self) -> None:
+        """Re-apply styles based on current theme."""
+        p = theme_manager.get_palette()
+        self.combo_serial_ports.setStyleSheet(f"background-color: {p.SURFACE_TERTIARY}; color: {p.TEXT_PRIMARY}; border: 1px solid {p.BORDER}; border-radius: 6px; padding: 4px;")
+        self.set_serial_status(self._serial_connected, self.combo_serial_ports.currentText())
 
     def _init_ui(self) -> None:
         """Xây dựng layout panel gồm status, dropdown, và các nút."""

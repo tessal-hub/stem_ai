@@ -62,6 +62,18 @@ class WandTerminalPanel(QWidget):
         self._pending_lines.clear()
         self.terminal_output.append_line(batch)
 
+    def refresh_styles(self) -> None:
+        """Re-apply styles based on current theme."""
+        from logic.theme_manager import theme_manager
+        p = theme_manager.get_palette()
+        self.terminal_output.setStyleSheet(f"""
+            QTextEdit {{ background-color: {p.SURFACE_TERTIARY}; color: {p.TEXT_PRIMARY}; border: 1px solid {p.BORDER}; border-radius: 8px; padding: 12px; font-family: 'Geist Mono'; }}
+        """)
+        self.btn_term_clear.setStyleSheet(f"""
+            QPushButton {{ background-color: transparent; border: 1px solid {p.BORDER}; border-radius: 14px; color: {p.TEXT_SECONDARY}; padding: 0 16px; font-size: 11px; font-weight: 700; }}
+            QPushButton:hover {{ background-color: {p.HOVER_BG}; color: {p.TEXT_PRIMARY}; }}
+        """)
+
     def _init_ui(self) -> None:
         """Xây dựng layout gồm header và terminal output."""
         layout = QVBoxLayout(self)

@@ -1,5 +1,5 @@
 """
-ui/palettes.py — Color palette definitions for Light and Dark themes.
+ui/palettes.py — High-end color palette definitions for Vanguard Studio.
 """
 
 from dataclasses import dataclass
@@ -10,13 +10,13 @@ class Palette:
     PRIMARY_LIGHT: str
     PRIMARY_DARK: str
     
-    SURFACE_PRIMARY: str
-    SURFACE_SECONDARY: str
-    SURFACE_TERTIARY: str
+    SURFACE_PRIMARY: str   # Pure high-contrast (White/Deep Black)
+    SURFACE_SECONDARY: str # Background canvas (Cream/Obsidian)
+    SURFACE_TERTIARY: str  # Staggered paper/card depth
     
-    TEXT_PRIMARY: str
-    TEXT_SECONDARY: str
-    TEXT_TERTIARY: str
+    TEXT_PRIMARY: str      # Pure ink
+    TEXT_SECONDARY: str    # Lead/Muted
+    TEXT_TERTIARY: str     # Ghost
     
     BORDER: str
     BORDER_LIGHT: str
@@ -24,6 +24,9 @@ class Palette:
     STATUS_SUCCESS: str
     STATUS_WARNING: str
     STATUS_ERROR: str
+    STATUS_SUCCESS_TEXT: str
+    STATUS_ERROR_TEXT: str
+    STATUS_WARNING_TEXT: str
     
     HOVER_BG: str
     TERM_BG: str
@@ -32,61 +35,75 @@ class Palette:
     GLASS_BG: str
     GLASS_BG_STRONG: str
     GLASS_EDGE: str
+    
+    SHADOW_COLOR: str
 
+# Vanguard Editorial Luxury (Light)
 LIGHT_PALETTE = Palette(
-    PRIMARY="#2f3137",
-    PRIMARY_LIGHT="#ececef",
-    PRIMARY_DARK="#1f2024",
+    PRIMARY="#1A1918",
+    PRIMARY_LIGHT="#3D3C3A",
+    PRIMARY_DARK="#000000",
     
-    SURFACE_PRIMARY="#ffffff",
-    SURFACE_SECONDARY="#f5f5f7",
-    SURFACE_TERTIARY="#f5f5f7",
+    SURFACE_PRIMARY="#FFFFFF",
+    SURFACE_SECONDARY="#FDFBF7",
+    SURFACE_TERTIARY="#F9F7F2",
     
-    TEXT_PRIMARY="#1c1c1e",
-    TEXT_SECONDARY="#636366",
-    TEXT_TERTIARY="#8e8e93",
+    TEXT_PRIMARY="#1A1918",
+    TEXT_SECONDARY="#6B6A67",
+    TEXT_TERTIARY="#B8B7B2",
     
-    BORDER="rgba(0, 0, 0, 0.1)",
-    BORDER_LIGHT="rgba(0, 0, 0, 0.05)",
+    BORDER="rgba(26, 25, 24, 0.08)",
+    BORDER_LIGHT="rgba(26, 25, 24, 0.04)",
     
-    STATUS_SUCCESS="#10b981",
-    STATUS_WARNING="#f59e0b",
-    STATUS_ERROR="#ef4444",
+    STATUS_SUCCESS="#EDF3EC",
+    STATUS_WARNING="#FBF3DB",
+    STATUS_ERROR="#FDEBEC",
+    STATUS_SUCCESS_TEXT="#346538",
+    STATUS_ERROR_TEXT="#9F2F2D",
+    STATUS_WARNING_TEXT="#956400",
     
-    HOVER_BG="#f2f2f7",
-    TERM_BG="#f2f2f7",
-    TERM_FG="#1c1c1e",
+    HOVER_BG="rgba(26, 25, 24, 0.05)",
+    TERM_BG="#F9F7F2",
+    TERM_FG="#1A1918",
     
-    GLASS_BG="rgba(255, 255, 255, 0.8)",
-    GLASS_BG_STRONG="rgba(255, 255, 255, 0.95)",
-    GLASS_EDGE="rgba(0, 0, 0, 0.05)"
+    GLASS_BG="rgba(255, 255, 255, 0.7)",
+    GLASS_BG_STRONG="rgba(255, 255, 255, 0.9)",
+    GLASS_EDGE="rgba(0, 0, 0, 0.05)",
+    
+    SHADOW_COLOR="rgba(15, 23, 42, 0.12)"
 )
 
+# Vanguard Obsidian (Dark)
 DARK_PALETTE = Palette(
-    PRIMARY="#a1a1aa",
-    PRIMARY_LIGHT="#27272a",
-    PRIMARY_DARK="#ffffff",
+    PRIMARY="#EAEAEA",
+    PRIMARY_LIGHT="#FFFFFF",
+    PRIMARY_DARK="#A1A1AA",
     
-    SURFACE_PRIMARY="#09090b",
-    SURFACE_SECONDARY="#18181b",
-    SURFACE_TERTIARY="#09090b",
+    SURFACE_PRIMARY="#050505",    # Deep Black
+    SURFACE_SECONDARY="#09090B",  # Obsidian
+    SURFACE_TERTIARY="#121214",   # Depth
     
-    TEXT_PRIMARY="#f4f4f5",
-    TEXT_SECONDARY="#a1a1aa",
-    TEXT_TERTIARY="#71717a",
+    TEXT_PRIMARY="#EAEAEA",
+    TEXT_SECONDARY="#A1A1AA",
+    TEXT_TERTIARY="#52525B",
     
     BORDER="rgba(255, 255, 255, 0.1)",
     BORDER_LIGHT="rgba(255, 255, 255, 0.05)",
     
-    STATUS_SUCCESS="#10b981",
-    STATUS_WARNING="#f59e0b",
-    STATUS_ERROR="#ef4444",
+    STATUS_SUCCESS="#064E3B",
+    STATUS_WARNING="#78350F",
+    STATUS_ERROR="#7F1D1D",
+    STATUS_SUCCESS_TEXT="#34D399",
+    STATUS_ERROR_TEXT="#F87171",
+    STATUS_WARNING_TEXT="#F59E0B",
     
-    HOVER_BG="#27272a",
-    TERM_BG="#09090b",
-    TERM_FG="#f4f4f5",
+    HOVER_BG="rgba(255, 255, 255, 0.08)",
+    TERM_BG="#050505",
+    TERM_FG="#EAEAEA",
     
-    GLASS_BG="rgba(24, 24, 27, 0.8)",
-    GLASS_BG_STRONG="rgba(39, 39, 42, 0.95)",
-    GLASS_EDGE="rgba(255, 255, 255, 0.1)"
+    GLASS_BG="rgba(9, 9, 11, 0.7)",
+    GLASS_BG_STRONG="rgba(5, 5, 5, 0.9)",
+    GLASS_EDGE="rgba(255, 255, 255, 0.1)",
+    
+    SHADOW_COLOR="rgba(0, 0, 0, 0.4)"
 )

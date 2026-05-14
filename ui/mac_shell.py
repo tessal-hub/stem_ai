@@ -13,6 +13,7 @@ from PyQt6.QtCore import QEvent, QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtWidgets import (
+    QFrame,
     QGestureEvent,
     QHBoxLayout,
     QLabel,
@@ -24,8 +25,11 @@ from PyQt6.QtWidgets import (
 
 from ui.asset_utils import resolve_asset_path
 from ui.i18n_bridge import tr_ui
+from ui.mac_material import apply_soft_shadow
+from logic.theme_manager import theme_manager
 from ui.tokens import (
     APP_FONT_STACK,
+    TITLE_FONT_STACK,
     BORDER_COLOR,
     HOVER_BG,
     PRIMARY_COLOR,
@@ -113,7 +117,8 @@ class MacShell(QWidget):
         chrome_layout.addWidget(body, stretch=1)
         outer.addWidget(chrome)
 
-        self._apply_shell_styles()
+        theme_manager.theme_changed.connect(self.refresh_styles)
+        self.refresh_styles()
 
         # Đăng ký gesture vuốt cho cả shell và vùng nội dung
         self.grabGesture(Qt.GestureType.SwipeGesture)
@@ -121,151 +126,114 @@ class MacShell(QWidget):
 
         self.set_active_index(0)
 
-    def _apply_shell_styles(self) -> None:
-        """Apply the global shell stylesheet based on minimalist tokens."""
+    def refresh_styles(self) -> None:
+        """Re-apply global shell stylesheet based on active theme."""
+        p = theme_manager.get_palette()
         self.setStyleSheet(f"""
             * {{
                 font-family: {APP_FONT_STACK};
-                color: {TEXT_PRIMARY};
+                color: {p.TEXT_PRIMARY};
             }}
             #StemChrome {{
-                background-color: {SURFACE_0};
+                background-color: {p.SURFACE_SECONDARY};
             }}
             #StemToolbar {{
-                background-color: {SURFACE_1};
-                border-bottom: 1px solid {BORDER_COLOR};
+                background-color: {p.SURFACE_PRIMARY};
+                border: 1px solid {p.BORDER};
+                border-radius: 20px;
             }}
             #StemToolbarTitle {{
                 font-family: {TITLE_FONT_STACK};
-                font-size: 22px;
+                font-size: 18px;
                 font-weight: 500;
-                color: {TEXT_PRIMARY};
+                color: {p.TEXT_PRIMARY};
                 letter-spacing: -0.01em;
             }}
             #StemToolbarSubtitle {{
-                font-size: 12px;
-                font-weight: 500;
-                color: {TEXT_SECONDARY};
-                letter-spacing: 0.02em;
-            }}
-            #StemNavHint {{
                 font-size: 11px;
-                font-weight: 600;
-                color: {TEXT_TERTIARY};
+                font-weight: 500;
+                color: {p.TEXT_SECONDARY};
+                letter-spacing: 0.02em;
                 text-transform: uppercase;
-                letter-spacing: 0.05em;
             }}
             #StemSidebar {{
-                background-color: {SURFACE_2};
-                border-right: 1px solid {BORDER_COLOR};
+                background-color: {p.SURFACE_TERTIARY};
+                border-right: 1px solid {p.BORDER};
             }}
             #StemBrandTitle {{
                 font-family: {TITLE_FONT_STACK};
-                font-size: 18px;
+                font-size: 16px;
                 font-weight: 600;
-                letter-spacing: 0.02em;
-                color: {TEXT_PRIMARY};
+                color: {p.TEXT_PRIMARY};
                 font-style: italic;
             }}
             #StemBrandSubtitle {{
-                font-size: 10px;
+                font-size: 9px;
                 font-weight: 800;
-                color: {TEXT_SECONDARY};
-                letter-spacing: 0.15em;
+                color: {p.TEXT_SECONDARY};
+                letter-spacing: 0.1em;
                 text-transform: uppercase;
             }}
             #StemNavSectionLabel {{
-                font-size: 10px;
+                font-size: 9px;
                 font-weight: 800;
-                color: {TEXT_TERTIARY};
+                color: {p.TEXT_TERTIARY};
                 text-transform: uppercase;
-                letter-spacing: 0.1em;
-                margin-top: 20px;
-                margin-bottom: 8px;
+                letter-spacing: 0.08em;
+                margin-top: 16px;
+                margin-bottom: 4px;
             }}
             QToolButton#StemNavBtn {{
                 background-color: transparent;
                 border: none;
-                border-radius: 8px;
-                color: {TEXT_SECONDARY};
-                font-size: 13px;
+                border-radius: 6px;
+                color: {p.TEXT_SECONDARY};
+                font-size: 12px;
                 font-weight: 600;
-                padding-left: 12px;
+                padding-left: 10px;
                 text-align: left;
             }}
             QToolButton#StemNavBtn:hover {{
-                background-color: {HOVER_BG};
-                color: {TEXT_PRIMARY};
+                background-color: {p.HOVER_BG};
+                color: {p.TEXT_PRIMARY};
             }}
             QToolButton#StemNavBtn[active="true"] {{
-                background-color: {PRIMARY_COLOR};
-                color: #FFFFFF;
+                background-color: {p.PRIMARY};
+                color: {p.SURFACE_PRIMARY};
             }}
             #StemContentHost {{
                 background-color: transparent;
             }}
         """)
-
-    # ------------------------------------------------------------------
-    # Public methods
-    # ------------------------------------------------------------------
-
-    def set_active_index(self, index: int) -> None:
-        """Đặt trang active trong sidebar và cập nhật tiêu đề toolbar.
-
-        Args:
-            index: Chỉ số trang cần active.
-        """
-        if not NAV_ITEMS:
-            return
-        self._active_index = max(0, min(len(NAV_ITEMS) - 1, index))
-        item = NAV_ITEMS[self._active_index]
-
-        self.title_label.setText(tr_ui(item.label_key))
-        self.subtitle_label.setText(tr_ui(item.subtitle_key))
-
-        for button_index, button in enumerate(self._buttons):
-            is_active = button_index == self._active_index
-            button.setProperty("active", is_active)
-            lk = button.property("nav_label_key")
-            if isinstance(lk, str) and lk:
-                button.setText(tr_ui(lk))
-            icon_path = button.property("nav_icon_path")
-            if isinstance(icon_path, str) and icon_path:
-                icon = self._tint_svg(
-                    icon_path,
-                    QColor("white") if is_active else QColor(TEXT_SECONDARY),
-                    SHELL_BRAND_ICON,
-                )
-                if icon.isNull():
-                    icon = QIcon(icon_path)
-                button.setIcon(icon)
-            button_style = button.style()
-            if button_style is not None:
-                button_style.unpolish(button)
-                button_style.polish(button)
-
-    def event(self, event: QEvent) -> bool:
-        """Xử lý gesture event cho swipe navigation."""
-        if event.type() == QEvent.Type.Gesture:
-            if isinstance(event, QGestureEvent):
-                return self._handle_gesture_event(event)
-        return super().event(event)
-
-    # ------------------------------------------------------------------
-    # Private methods — UI builders
-    # ------------------------------------------------------------------
+        # Refresh brand icon
+        icon = self._tint_svg(
+            resolve_asset_path("assets/icon/cooliocns SVG/Interface/Book_Open.svg"),
+            QColor(p.PRIMARY),
+            QSize(24, 24)
+        )
+        self._brand_icon.setPixmap(icon.pixmap(QSize(24, 24)))
+        # Refresh buttons
+        self.set_active_index(self._active_index)
 
     def _build_toolbar(self, title: str) -> QWidget:
-        """Top toolbar with title and navigation hint."""
-        toolbar = QWidget()
-        toolbar.setObjectName("StemToolbar")
-        toolbar.setFixedHeight(80)  # More whitespace
-        toolbar_layout = QHBoxLayout(toolbar)
-        toolbar_layout.setContentsMargins(
-            MARGIN_COMFORTABLE, 0, MARGIN_COMFORTABLE, 0
-        )
-        toolbar_layout.setSpacing(SPACING_SM)
+        """Top toolbar with title and navigation hint — Floating Island architecture."""
+        container = QWidget()
+        container.setObjectName("StemToolbarContainer")
+        container.setFixedHeight(54) # Shrunk from 96
+        
+        c_layout = QHBoxLayout(container)
+        c_layout.setContentsMargins(16, 12, 16, 4)
+        c_layout.addStretch(1)
+        
+        self.toolbar = QFrame()
+        self.toolbar.setObjectName("StemToolbar")
+        self.toolbar.setFixedWidth(500)  # Narrower island
+        self.toolbar.setFixedHeight(36)  # Shrunk from 64
+        apply_soft_shadow(self.toolbar, blur_radius=12, y_offset=3, color="rgba(0,0,0,0.06)")
+        
+        toolbar_layout = QHBoxLayout(self.toolbar)
+        toolbar_layout.setContentsMargins(20, 0, 20, 0)
+        toolbar_layout.setSpacing(SPACING_MD)
 
         self.title_label = QLabel(tr_ui("nav_home"))
         self.title_label.setObjectName("StemToolbarTitle")
@@ -273,33 +241,22 @@ class MacShell(QWidget):
         self.subtitle_label.setObjectName("StemToolbarSubtitle")
 
         title_block = QWidget()
-        title_layout = QVBoxLayout(title_block)
+        title_block.setStyleSheet("background: transparent;")
+        title_layout = QHBoxLayout(title_block)
         title_layout.setContentsMargins(0, 0, 0, 0)
-        title_layout.setSpacing(2)
+        title_layout.setSpacing(SPACING_MD)
         title_layout.addWidget(self.title_label)
         title_layout.addWidget(self.subtitle_label)
 
-        self.nav_hint_label = QLabel(tr_ui("shell_nav_hint"))
-        self.nav_hint_label.setObjectName("StemNavHint")
-
+        toolbar_layout.addStretch()
         toolbar_layout.addWidget(title_block)
         toolbar_layout.addStretch()
-        toolbar_layout.addWidget(self.nav_hint_label)
-        _ = title  # legacy param; shell uses i18n keys
-        return toolbar
-
-    def apply_ui_language(self) -> None:
-        """Refresh shell chrome strings after locale change."""
-        self.nav_hint_label.setText(tr_ui("shell_nav_hint"))
-        self._brand_title_label.setText(tr_ui("shell_brand_stem"))
-        self._brand_subtitle_label.setText(tr_ui("shell_brand_book"))
-        self._nav_section_label.setText(tr_ui("shell_nav_title"))
-        for button in self._buttons:
-            lk = button.property("nav_label_key")
-            if isinstance(lk, str) and lk:
-                button.setText(tr_ui(lk))
-                button.setAccessibleName(tr_ui(lk))
-        self.set_active_index(self._active_index)
+        
+        c_layout.addWidget(self.toolbar)
+        c_layout.addStretch(1)
+        
+        _ = title  # legacy param
+        return container
 
     def _build_brand_widget(self) -> QWidget:
         """Tạo widget brand (logo + tên app) cho phần đầu sidebar."""
@@ -307,23 +264,11 @@ class MacShell(QWidget):
         brand.setFixedHeight(SHELL_BRAND_H)
         brand_layout = QVBoxLayout(brand)
         brand_layout.setContentsMargins(0, 0, 0, 0)
-        brand_layout.setSpacing(6)
+        brand_layout.setSpacing(4)
 
-        brand_icon_row = QWidget()
-        icon_layout = QHBoxLayout(brand_icon_row)
-        icon_layout.setContentsMargins(0, 0, 0, 0)
-        icon_layout.setSpacing(0)
-        icon_layout.addStretch()
-
-        brand_icon = QLabel("◉")
-        brand_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        brand_icon.setFixedSize(30, 30)
-        brand_icon.setStyleSheet(
-            f"background-color: {PRIMARY_COLOR}; color: white; border-radius: 15px; font-size: 14px; font-weight: 900;"
-        )
-        icon_layout.addWidget(brand_icon)
-        icon_layout.addStretch()
-
+        self._brand_icon = QLabel()
+        self._brand_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
         brand_title = QLabel(tr_ui("shell_brand_stem"))
         brand_title.setObjectName("StemBrandTitle")
         self._brand_title_label = brand_title
@@ -334,33 +279,35 @@ class MacShell(QWidget):
         self._brand_subtitle_label = brand_subtitle
         brand_subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        brand_layout.addWidget(brand_icon_row)
+        brand_layout.addWidget(self._brand_icon)
         brand_layout.addWidget(brand_title)
         brand_layout.addWidget(brand_subtitle)
         return brand
 
     def _build_sidebar(self) -> QWidget:
-        """Tạo sidebar với brand, danh sách nút điều hướng."""
+        """Tạo sidebar với brand, danh sách nút điều hướng cực kỳ gọn gàng."""
         self.sidebar = QWidget()
         self.sidebar.setObjectName("StemSidebar")
         self.sidebar.setFixedWidth(SHELL_SIDEBAR_W)
         sidebar_layout = QVBoxLayout(self.sidebar)
-        sidebar_layout.setContentsMargins(
-            SPACING_MD, MARGIN_COMFORTABLE, SPACING_MD, MARGIN_COMFORTABLE
-        )
-        sidebar_layout.setSpacing(SPACING_SM)
+        sidebar_layout.setContentsMargins(12, 16, 12, 16) # Reduced margins
+        sidebar_layout.setSpacing(0)
 
         sidebar_layout.addWidget(self._build_brand_widget())
+        sidebar_layout.addSpacing(12)
 
         nav_title = QLabel(tr_ui("shell_nav_title"))
         nav_title.setObjectName("StemNavSectionLabel")
         self._nav_section_label = nav_title
         sidebar_layout.addWidget(nav_title)
+        sidebar_layout.addSpacing(6)
 
+        self._buttons = []
         for index, item in enumerate(NAV_ITEMS):
             button = self._make_nav_button(item.label_key, item.icon, index)
             self._buttons.append(button)
             sidebar_layout.addWidget(button)
+            sidebar_layout.addSpacing(4) # Tighter spacing
 
         sidebar_layout.addStretch()
         return self.sidebar
@@ -456,6 +403,34 @@ class MacShell(QWidget):
         painter.fillRect(pixmap.rect(), color)
         painter.end()
         return QIcon(pixmap)
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def set_active_index(self, index: int) -> None:
+        """Cập nhật trạng thái 'active' của các nút trong sidebar."""
+        self._active_index = index
+        p = theme_manager.get_palette()
+        for i, button in enumerate(self._buttons):
+            is_active = (i == index)
+            button.setChecked(is_active)
+            button.setProperty("active", is_active)
+            
+            # Update icon color based on active state
+            icon_path = button.property("nav_icon_path")
+            color = QColor(p.SURFACE_PRIMARY) if is_active else QColor(p.TEXT_SECONDARY)
+            button.setIcon(self._tint_svg(icon_path, color, SHELL_BRAND_ICON))
+            
+            # Refresh stylesheet to apply active color
+            button.style().unpolish(button)
+            button.style().polish(button)
+
+        # Update toolbar title/subtitle
+        if 0 <= index < len(NAV_ITEMS):
+            item = NAV_ITEMS[index]
+            self.title_label.setText(tr_ui(item.label_key))
+            self.subtitle_label.setText(tr_ui(item.subtitle_key))
 
     # ------------------------------------------------------------------
     # Slots

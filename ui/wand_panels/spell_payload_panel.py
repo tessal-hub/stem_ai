@@ -63,6 +63,16 @@ class WandSpellPayloadPanel(QWidget):
         """Trả về danh sách spell chưa được chọn."""
         return [name for name in self._spell_order if name not in self._selected_spells]
 
+    def refresh_styles(self) -> None:
+        """Re-apply styles based on current theme."""
+        from logic.theme_manager import theme_manager
+        p = theme_manager.get_palette()
+        self._left_title.setStyleSheet(f"color: {p.TEXT_SECONDARY}; font-size: 11px; font-weight: 700; text-transform: uppercase;")
+        self._right_title.setStyleSheet(f"color: {p.TEXT_SECONDARY}; font-size: 11px; font-weight: 700; text-transform: uppercase;")
+        self.list_selected_spells.setStyleSheet(f"QListWidget {{ background: transparent; border: none; }}")
+        self.list_available_spells.setStyleSheet(f"QListWidget {{ background: transparent; border: none; }}")
+        self._refresh_lists()
+
     def _init_ui(self) -> None:
         """Xây dựng layout gồm 2 danh sách (selected/available) trong QSplitter."""
         layout = QVBoxLayout(self)

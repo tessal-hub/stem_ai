@@ -45,9 +45,14 @@ from ui.tokens import (
     TEXT_BODY,
     TEXT_MUTED,
     WARNING,
+    MARGIN_COMFORTABLE,
+    SPACING_LG,
+    SPACING_MD,
+    SPACING_SM,
 )
 
 from logic.locale_manager import locale_manager
+from logic.theme_manager import theme_manager
 from logic.primitive_i18n import get_primitive_catalog
 from ui.i18n_bridge import tr_ui
 
@@ -113,6 +118,31 @@ class PagePrimitiveCollect(QWidget):
         if self._selected_gesture and self._selected_group:
             self._set_instruction_for_selection()
 
+    def refresh_styles(self) -> None:
+        """Re-apply styles based on current theme."""
+        p = theme_manager.get_palette()
+        
+        # 1. Update Plot Styles
+        self.preview_plot.setBackground("transparent")
+        self.preview_plot.getAxis("left").setPen(p.TEXT_TERTIARY)
+        self.preview_plot.getAxis("bottom").setPen(p.TEXT_TERTIARY)
+        
+        # 2. Update Cards
+        for card in [self.preview_card, self.quality_card, self.train_card]:
+            card.setStyleSheet(f"""
+                #VanguardCardOuter {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: 24px; }}
+                #VanguardCardInner {{ background-color: {p.SURFACE_PRIMARY}; border: none; border-radius: 16px; }}
+            """)
+            
+        # 3. Update Quality evaluation styles
+        self.lbl_quality_samples.setStyleSheet(f"color: {p.TEXT_PRIMARY};")
+        self.lbl_quality_duration.setStyleSheet(f"color: {p.TEXT_PRIMARY};")
+        self.lbl_quality_motion.setStyleSheet(f"color: {p.TEXT_PRIMARY};")
+        self.lbl_quality_clipping.setStyleSheet(f"color: {p.TEXT_PRIMARY};")
+        
+        # 4. Update Gesture Cards
+        self._rebuild_cards()
+
     def _init_ui(self) -> None:
         """Xây dựng layout chính gồm 2 cột: gesture cards và controls/plot."""
         outer = QVBoxLayout(self)
@@ -124,6 +154,8 @@ class PagePrimitiveCollect(QWidget):
         content.addWidget(self._build_left_column(), stretch=3)
         content.addWidget(self._build_right_column(), stretch=2)
         outer.addLayout(content)
+        
+        self.refresh_styles()
 
     def _build_left_column(self) -> QWidget:
         widget = QWidget()
@@ -131,40 +163,30 @@ class PagePrimitiveCollect(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_LG)
 
-        preview_card = make_card_frame()
-        preview_card.setStyleSheet(STYLE_STATISTICS_CARD)
-        preview_layout = QVBoxLayout(preview_card)
-        preview_layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
-        preview_layout.setSpacing(SPACING_SM)
-        self._sec_preview = make_section_label(tr_ui("primitive_signal_preview"), accent_color=TEXT_BODY)
+        from ui.component_factory import make_card
+        
+        # Preview Card
+        self.preview_card, preview_layout = make_card()
+        self.preview_card.setObjectName("VanguardCardOuter")
+        self._sec_preview = make_section_label(tr_ui("primitive_signal_preview"), accent=True)
         preview_layout.addWidget(self._sec_preview)
 
         self.preview_plot = pg.PlotWidget()
         self.preview_plot.setMinimumHeight(320)
         preview_layout.addWidget(self.preview_plot)
-        layout.addWidget(preview_card, stretch=3)
+        layout.addWidget(self.preview_card, stretch=3)
 
-        quality_card = make_card_frame()
-        quality_card.setStyleSheet(STYLE_STATISTICS_CARD)
-        quality_layout = QVBoxLayout(quality_card)
-        quality_layout.setContentsMargins(
-            MARGIN_COMFORTABLE,
-            MARGIN_COMFORTABLE,
-            MARGIN_COMFORTABLE,
-            MARGIN_COMFORTABLE,
-        )
-        quality_layout.setSpacing(SPACING_SM)
-        self._sec_quality = make_section_label(tr_ui("primitive_quality"), accent_color=TEXT_BODY)
+        # Quality Card
+        self.quality_card, quality_layout = make_card()
+        self._sec_quality = make_section_label(tr_ui("primitive_quality"), accent=True)
         quality_layout.addWidget(self._sec_quality)
 
         self.lbl_quality_status = QLabel(tr_ui("primitive_quality_none"))
-        self.lbl_quality_status.setStyleSheet(STYLE_RECORD_STATUS_TEMPLATE.format(color=TEXT_MUTED))
         quality_layout.addWidget(self.lbl_quality_status)
 
         self.quality_score = QProgressBar()
         self.quality_score.setRange(0, 100)
         self.quality_score.setValue(0)
-        self.quality_score.setFormat(tr_ui("primitive_quality_bar"))
         quality_layout.addWidget(self.quality_score)
 
         quality_grid = QGridLayout()
@@ -172,24 +194,16 @@ class PagePrimitiveCollect(QWidget):
         quality_grid.setVerticalSpacing(SPACING_SM)
 
         self._lbl_q_samples = QLabel(tr_ui("primitive_lbl_samples"))
-        self._lbl_q_samples.setStyleSheet(STYLE_RECORD_FIELD_LABEL)
         self.lbl_quality_samples = QLabel("--")
-        self.lbl_quality_samples.setStyleSheet(STYLE_RECORD_STATUS_TEMPLATE.format(color=TEXT_BODY))
 
         self._lbl_q_duration = QLabel(tr_ui("primitive_lbl_duration"))
-        self._lbl_q_duration.setStyleSheet(STYLE_RECORD_FIELD_LABEL)
         self.lbl_quality_duration = QLabel("--")
-        self.lbl_quality_duration.setStyleSheet(STYLE_RECORD_STATUS_TEMPLATE.format(color=TEXT_BODY))
 
         self._lbl_q_motion = QLabel(tr_ui("primitive_lbl_motion"))
-        self._lbl_q_motion.setStyleSheet(STYLE_RECORD_FIELD_LABEL)
         self.lbl_quality_motion = QLabel("--")
-        self.lbl_quality_motion.setStyleSheet(STYLE_RECORD_STATUS_TEMPLATE.format(color=TEXT_BODY))
 
         self._lbl_q_clip = QLabel(tr_ui("primitive_lbl_clipping"))
-        self._lbl_q_clip.setStyleSheet(STYLE_RECORD_FIELD_LABEL)
         self.lbl_quality_clipping = QLabel("--")
-        self.lbl_quality_clipping.setStyleSheet(STYLE_RECORD_STATUS_TEMPLATE.format(color=TEXT_BODY))
 
         quality_grid.addWidget(self._lbl_q_samples, 0, 0)
         quality_grid.addWidget(self.lbl_quality_samples, 0, 1)
@@ -203,31 +217,23 @@ class PagePrimitiveCollect(QWidget):
 
         self.lbl_quality_notes = make_hint(tr_ui("primitive_quality_hint_start"))
         quality_layout.addWidget(self.lbl_quality_notes)
+        layout.addWidget(self.quality_card, stretch=2)
 
-        layout.addWidget(quality_card, stretch=2)
-
-        train_card = make_card_frame()
-        train_card.setStyleSheet(STYLE_STATISTICS_CARD)
-        train_layout = QVBoxLayout(train_card)
-        train_layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
-        train_layout.setSpacing(SPACING_SM)
-        self._sec_encoder = make_section_label(tr_ui("primitive_encoder"), accent_color=TEXT_BODY)
+        # Train Card
+        self.train_card, train_layout = make_card()
+        self._sec_encoder = make_section_label(tr_ui("primitive_encoder"), accent=True)
         train_layout.addWidget(self._sec_encoder)
 
         self.encoder_progress = QProgressBar()
         self.encoder_progress.setRange(0, 100)
         self.encoder_progress.setValue(0)
-        self.encoder_progress.setTextVisible(True)
-        self.encoder_progress.setFormat("%p%")
         train_layout.addWidget(self.encoder_progress)
 
         self.lbl_encoder_status = QLabel(tr_ui("primitive_encoder_not_ready"))
-        self.lbl_encoder_status.setStyleSheet(STYLE_RECORD_STATUS_TEMPLATE.format(color=TEXT_MUTED))
         train_layout.addWidget(self.lbl_encoder_status)
 
-        self.btn_train_encoder = make_button(tr_ui("primitive_btn_train"), STYLE_BTN_PRIMARY, BTN_H)
+        self.btn_train_encoder = make_button(tr_ui("primitive_btn_train"), height=BTN_H)
         self.btn_train_encoder.setEnabled(False)
-        self.btn_train_encoder.setToolTip(tr_ui("primitive_hint_train"))
         train_layout.addWidget(self.btn_train_encoder)
 
         metrics_grid = QGridLayout()
@@ -235,19 +241,11 @@ class PagePrimitiveCollect(QWidget):
         metrics_grid.setVerticalSpacing(SPACING_SM)
 
         self._lbl_ratio_title = QLabel(tr_ui("primitive_lbl_distance_ratio"))
-        self._lbl_ratio_title.setStyleSheet(STYLE_RECORD_FIELD_LABEL)
         self.lbl_distance_ratio = QLabel("--")
-        self.lbl_distance_ratio.setStyleSheet(STYLE_RECORD_STATUS_TEMPLATE.format(color=TEXT_BODY))
-
         self._lbl_f5_title = QLabel(tr_ui("primitive_lbl_fewshot_5"))
-        self._lbl_f5_title.setStyleSheet(STYLE_RECORD_FIELD_LABEL)
         self.lbl_fewshot_5 = QLabel("--")
-        self.lbl_fewshot_5.setStyleSheet(STYLE_RECORD_STATUS_TEMPLATE.format(color=TEXT_BODY))
-
         self._lbl_f10_title = QLabel(tr_ui("primitive_lbl_fewshot_10"))
-        self._lbl_f10_title.setStyleSheet(STYLE_RECORD_FIELD_LABEL)
         self.lbl_fewshot_10 = QLabel("--")
-        self.lbl_fewshot_10.setStyleSheet(STYLE_RECORD_STATUS_TEMPLATE.format(color=TEXT_BODY))
 
         metrics_grid.addWidget(self._lbl_ratio_title, 0, 0)
         metrics_grid.addWidget(self.lbl_distance_ratio, 0, 1)
@@ -257,7 +255,7 @@ class PagePrimitiveCollect(QWidget):
         metrics_grid.addWidget(self.lbl_fewshot_10, 2, 1)
         train_layout.addLayout(metrics_grid)
 
-        layout.addWidget(train_card, stretch=2)
+        layout.addWidget(self.train_card, stretch=2)
         return widget
 
     def _build_right_column(self) -> QWidget:

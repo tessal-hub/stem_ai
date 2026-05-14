@@ -15,144 +15,83 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 from ui.wand_3d_widget import Wand3DWidget
-from ui.component_factory import make_empty_state_card
+from ui.component_factory import make_empty_state_card, make_card
 from ui.mac_material import apply_soft_shadow
 from ui.i18n_bridge import tr_ui
+from logic.theme_manager import theme_manager
 from ui.tokens import (
-    ACCENT,
-    ACCENT_TEXT,
-    BTN_H,
-    DANGER,
-    HOME_MANAGER_DOT,
-    HOME_MODE_H,
-    HOME_RIGHT_W,
     HOME_STATUS_H,
-    HOME_VIEWER_INNER_MARGIN,
     HOME_VIEWER_MIN_H,
-    PROGRESS_H,
-    STYLE_HOME_MANAGER_BAR,
-    STYLE_HOME_MANAGER_INDICATOR,
-    STYLE_HOME_MANAGER_ROW,
-    STYLE_HOME_MODE_LABEL,
-    STYLE_HOME_OVERFLOW_TEXT,
-    STYLE_HOME_RIGHT_PANEL,
-    STYLE_HOME_RIGHT_SECTION,
-    STYLE_HOME_SECTION_SUBTITLE,
     STYLE_HOME_SECTION_TITLE,
-    STYLE_HOME_STATUS_TEMPLATE,
-    STYLE_HOME_SPELL_BTN,
-    STYLE_HOME_STAT_NAME,
-    STYLE_HOME_STAT_VALUE,
-    STYLE_HOME_VIEWER_CARD,
-    STYLE_SCROLL_AREA,
-    STYLE_TRANSPARENT_WIDGET,
-    TITLE_FONT_STACK,
-)
-from ui.modern_layout import (
+    STYLE_HOME_SECTION_SUBTITLE,
     MARGIN_COMFORTABLE,
-    SPACING_MD,
     SPACING_LG,
-    SPACING_SM,
     SPACING_XS,
-)
-
-
-_HOME_SYSTEM_STAT_KEYS = (
-    "CPU",
-    "RAM",
-    "Port",
-    "Baudrate",
-    "UDP Rate",
-    "UDP Jitter",
-    "UDP Loss",
+    TITLE_FONT_STACK,
 )
 
 
 class PageHome(QWidget):
     """
     Trang Dashboard chính của ứng dụng.
-    Hiển thị trạng thái kết nối wand, mô phỏng hướng 3D,
-    và thống kê manager (spell counts, RAM, v.v.).
+    Hiển thị trạng thái kết nối wand và mô phỏng hướng 3D.
     """
 
     def __init__(self, data_store) -> None:
         super().__init__()
         self.data_store = data_store
-        self._stat_rows: dict[str, tuple[QLabel, QLabel, QProgressBar]] = {}
-        self._manager_keys: tuple[str, ...] = ()
         self._connected = False
         self._current_mode = "IDLE"
-        self._spell_empty_title = None
-        self._spell_empty_body = None
-        self._overflow_lbl = None
-        self._overflow_extra = 0
+        
         self._init_ui()
         self._configure_accessibility()
         self._load_data()
 
     def set_connection_status(self, connected: bool) -> None:
-        """Cập nhật giao diện trạng thái kết nối wand.
-
-        Args:
-            connected: True nếu wand đã kết nối.
-        """
+        """Cập nhật giao diện trạng thái kết nối wand."""
         self._connected = connected
+        p = theme_manager.get_palette()
         if connected:
             self.status_bar.setText(tr_ui("home_status_connected"))
-            self.status_bar.setStyleSheet(self._status_style(ACCENT, ACCENT_TEXT))
+            self.status_bar.setStyleSheet(self._status_style(p.PRIMARY, "#FFFFFF"))
         else:
             self.status_bar.setText(tr_ui("home_status_disconnected"))
-            self.status_bar.setStyleSheet(self._status_style(DANGER, ACCENT_TEXT))
+            self.status_bar.setStyleSheet(self._status_style(p.STATUS_ERROR_TEXT, "#FFFFFF"))
 
     def set_mode(self, mode: str) -> None:
         """Cập nhật nhãn chế độ hoạt động hiện tại."""
         self._current_mode = mode.upper()
-        self.mode_label.setText(f"{tr_ui('home_mode_prefix')}  {self._current_mode}")
 
     def apply_ui_language(self) -> None:
         """Refresh static labels after locale change."""
         self._viewer_title.setText(tr_ui("home_viewer_title"))
         self._viewer_subtitle.setText(tr_ui("home_viewer_subtitle"))
-        self._spellbook_title.setText(tr_ui("home_spellbook"))
-        self._manager_title.setText(tr_ui("home_manager"))
         self.set_mode(self._current_mode)
         self.set_connection_status(self._connected)
-        if self._spell_empty_title is not None:
-            self._spell_empty_title.setText(tr_ui("home_no_spells_title"))
-            self._spell_empty_body.setText(tr_ui("home_no_spells_body"))
-        if self._manager_empty_title is not None:
-            self._manager_empty_title.setText(tr_ui("home_manager_empty_title"))
-            self._manager_empty_body.setText(tr_ui("home_manager_empty_body"))
-        if self._overflow_lbl is not None and self._overflow_extra > 0:
-            self._overflow_lbl.setText(tr_ui("home_overflow", n=self._overflow_extra))
-        self._rebuild_manager_rows(self.data_store.system_stats)
 
-    def set_sensor_readout(self, values: list[float] | tuple[float, ...]) -> None:
-        """No-op: sensor readout đã chuyển sang 3D viewer."""
-        return
-
-    def update_manager_stats(self, stats: dict[str, str]) -> None:
-        if stats is None:
-            return
-
-        normalized = {str(key): str(value) for key, value in stats.items()}
-        normalized_keys = tuple(normalized.keys())
-        if not any(key in _HOME_SYSTEM_STAT_KEYS for key in normalized):
-            return
-        if normalized_keys != self._manager_keys:
-            self._rebuild_manager_rows(normalized)
-            return
-
-        for key, value in normalized.items():
-            row = self._stat_rows.get(key)
-            if row is None:
-                continue
-            name_label, value_label, progress_bar = row
-            value_label.setText(value)
-            progress_bar.setValue(self._stat_value_to_percent(value))
+    def refresh_styles(self) -> None:
+        """Re-apply styles based on current theme."""
+        p = theme_manager.get_palette()
+        
+        # Update Hero Section Titles
+        self._viewer_title.setStyleSheet(f"font-family: {TITLE_FONT_STACK}; color: {p.TEXT_PRIMARY}; font-size: 24px; font-weight: 500;")
+        self._viewer_subtitle.setStyleSheet(f"color: {p.TEXT_SECONDARY}; font-weight: 600; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase;")
+        
+        # Update Viewer Card
+        self.viewer_card.setStyleSheet(f"""
+            #HomeViewerCard {{
+                background-color: {p.SURFACE_TERTIARY};
+                border: 1px solid {p.BORDER};
+                border-radius: 24px;
+            }}
+        """)
+        self.sim_view.setStyleSheet(f"background-color: {p.SURFACE_PRIMARY}; border-radius: 16px;")
+        
+        # Update Status Bar
+        self.set_connection_status(self._connected)
 
     def _init_ui(self) -> None:
-        """Trang chính (Dashboard) — hiển thị trạng thái kết nối, mô phỏng 3D, và thống kê hệ thống."""
+        """Trang chính (Dashboard) — hiển thị trạng thái kết nối, mô phỏng 3D."""
         outer = QVBoxLayout(self)
         outer.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
         outer.setSpacing(SPACING_LG)
@@ -163,324 +102,94 @@ class PageHome(QWidget):
         content.setSpacing(SPACING_LG)
         content.setContentsMargins(0, 0, 0, 0)
         
-        # Center the viewer box for a clean, editorial feel
+        # Expanding content area
         viewer_container = QHBoxLayout()
         viewer_container.addStretch(1)
-        viewer_box = self._build_viewer_box()
-        viewer_box.setMaximumWidth(960)
-        viewer_container.addWidget(viewer_box, stretch=2)
+        self.viewer_card = self._build_viewer_box()
+        self.viewer_card.setMaximumWidth(1400) # Allow full-bleed on standard screens
+        viewer_container.addWidget(self.viewer_card, stretch=10)
         viewer_container.addStretch(1)
         
         content.addLayout(viewer_container, stretch=1)
         outer.addLayout(content, stretch=1)
+        
+        self.refresh_styles()
 
-    def _build_status_bar(self) -> QLabel:
+    def _build_status_bar(self) -> QWidget:
+        """Xây dựng status bar kiểu 'Floating Island'."""
+        container = QWidget()
+        container.setFixedHeight(HOME_STATUS_H + 16)
+        
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 4, 0, 4)
+        layout.addStretch(1)
+        
         self.status_bar = QLabel(tr_ui("home_status_disconnected"))
         self.status_bar.setObjectName("HomeStatusBar")
-        self.status_bar.setStyleSheet(self._status_style(DANGER, ACCENT_TEXT))
+        self.status_bar.setFixedWidth(340)
         self.status_bar.setFixedHeight(HOME_STATUS_H)
         self.status_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        return self.status_bar
+        
+        apply_soft_shadow(self.status_bar, blur_radius=12, y_offset=4, color="rgba(0,0,0,0.08)")
+        
+        layout.addWidget(self.status_bar)
+        layout.addStretch(1)
+        return container
 
     @staticmethod
     def _status_style(bg_color: str, fg_color: str) -> str:
-        return STYLE_HOME_STATUS_TEMPLATE.format(bg_color=bg_color, fg_color=fg_color)
-
-    @staticmethod
-    def _stat_label_for_key(key: str) -> str:
-        return tr_ui(f"home_stat_{key}")
-
-    def _build_center_column(self) -> QWidget:
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(SPACING_LG)  # Modern 16px spacing between major sections
-        layout.addWidget(self._build_viewer_box(), stretch=1)
-        return widget
+        return (
+            "QLabel {{ "
+            f"background-color: {bg_color}; "
+            f"color: {fg_color}; padding: 6px 18px; font-size: 11px; "
+            "font-weight: 800; letter-spacing: 0.05em; border-radius: 15px; }}"
+        )
 
     def _build_viewer_box(self) -> QFrame:
+        """Xây dựng box chứa vùng hiển thị 3D wand."""
         box = QFrame()
         box.setObjectName("HomeViewerCard")
-        box.setStyleSheet(STYLE_HOME_VIEWER_CARD)
-        apply_soft_shadow(box, blur_radius=22, y_offset=4, color="rgba(15, 23, 42, 0.14)")
         
         layout = QVBoxLayout(box)
-        layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
-        layout.setSpacing(SPACING_MD)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(0)
 
-        header = QHBoxLayout()
-        header.setContentsMargins(0, 0, 0, 0)
-        header.setSpacing(SPACING_MD)
-        title_block = QVBoxLayout()
-        title_block.setContentsMargins(0, 0, 0, 0)
-        title_block.setSpacing(SPACING_XS)
+        inner_content = QFrame()
+        inner_content.setObjectName("HomeInnerCore")
+        inner_layout = QVBoxLayout(inner_content)
+        inner_layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
+        
+        header = QVBoxLayout()
+        header.setContentsMargins(0, 0, 0, SPACING_LG)
+        header.setSpacing(SPACING_XS)
+        
         self._viewer_title = QLabel(tr_ui("home_viewer_title"))
-        self._viewer_title.setStyleSheet(STYLE_HOME_SECTION_TITLE)
         self._viewer_subtitle = QLabel(tr_ui("home_viewer_subtitle"))
-        self._viewer_subtitle.setStyleSheet(STYLE_HOME_SECTION_SUBTITLE)
-        title_block.addWidget(self._viewer_title)
-        title_block.addWidget(self._viewer_subtitle)
-        header.addLayout(title_block)
-        header.addStretch()
-        layout.addLayout(header)
+        
+        header.addWidget(self._viewer_title)
+        header.addWidget(self._viewer_subtitle)
+        inner_layout.addLayout(header)
 
         self.sim_view = QFrame()
         self.sim_view.setObjectName("HomeViewerSurface")
-        self.sim_view.setFrameShape(QFrame.Shape.NoFrame)
-        self.sim_view.setFrameShadow(QFrame.Shadow.Plain)
-        self.sim_view.setStyleSheet(STYLE_HOME_VIEWER_CARD)
         self.sim_view.setMinimumHeight(HOME_VIEWER_MIN_H)
-        apply_soft_shadow(self.sim_view, blur_radius=16, y_offset=3, color="rgba(15, 23, 42, 0.10)")
-
+        
         sim_inner = QVBoxLayout(self.sim_view)
-        sim_inner.setContentsMargins(
-            HOME_VIEWER_INNER_MARGIN,
-            HOME_VIEWER_INNER_MARGIN,
-            HOME_VIEWER_INNER_MARGIN,
-            HOME_VIEWER_INNER_MARGIN,
-        )
+        sim_inner.setContentsMargins(0, 0, 0, 0)
+        
         self.wand_3d = Wand3DWidget()
         sim_inner.addWidget(self.wand_3d, stretch=1)
 
-        layout.addWidget(self.sim_view, stretch=1)
+        inner_layout.addWidget(self.sim_view, stretch=1)
+        layout.addWidget(inner_content)
+        
         return box
-
-    def _build_right_column(self) -> QWidget:
-        widget = QWidget()
-        widget.setObjectName("HomeRightPanel")
-        widget.setMaximumWidth(HOME_RIGHT_W)
-        widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
-        widget.setStyleSheet(STYLE_HOME_RIGHT_PANEL)
-
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(SPACING_LG)  # Modern 16px spacing between right column sections
-        layout.addWidget(self._build_mode_box())
-        layout.addWidget(self._build_spellbook())
-        layout.addWidget(self._build_manager_box(), stretch=1)
-        return widget
-
-    def _build_mode_box(self) -> QFrame:
-        box = QFrame()
-        box.setObjectName("HomeRightSection")
-        box.setStyleSheet(STYLE_HOME_RIGHT_SECTION)
-        box.setFixedHeight(HOME_MODE_H)
-        apply_soft_shadow(box, blur_radius=18, y_offset=3, color="rgba(15, 23, 42, 0.12)")
-
-        layout = QHBoxLayout(box)
-        layout.setContentsMargins(MARGIN_COMFORTABLE, 0, MARGIN_COMFORTABLE, 0)
-        layout.setSpacing(SPACING_MD)
-        self.mode_label = QLabel(f"{tr_ui('home_mode_prefix')}  IDLE")
-        self.mode_label.setObjectName("HomeModePill")
-        self.mode_label.setStyleSheet(STYLE_HOME_MODE_LABEL)
-        layout.addWidget(self.mode_label)
-        layout.addStretch()
-        return box
-
-    def _build_spellbook(self) -> QFrame:
-        box = QFrame()
-        box.setObjectName("HomeRightSection")
-        box.setStyleSheet(STYLE_HOME_RIGHT_SECTION)
-        apply_soft_shadow(box, blur_radius=18, y_offset=3, color="rgba(15, 23, 42, 0.12)")
-
-        layout = QVBoxLayout(box)
-        layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
-        layout.setSpacing(SPACING_MD)
-
-        self._spellbook_title = QLabel(tr_ui("home_spellbook"))
-        self._spellbook_title.setStyleSheet(STYLE_HOME_SECTION_TITLE)
-        layout.addWidget(self._spellbook_title)
-
-        content = QWidget()
-        content.setStyleSheet(STYLE_TRANSPARENT_WIDGET)
-        spell_layout = QVBoxLayout(content)
-        spell_layout.setContentsMargins(0, 0, 0, 0)
-        spell_layout.setSpacing(SPACING_SM)
-
-        spells = self.data_store.get_spell_list()
-        max_display = 3
-        if not spells:
-            empty_card, empty_layout = make_empty_state_card(
-                tr_ui("home_no_spells_title"),
-                tr_ui("home_no_spells_body"),
-            )
-            empty_card.setAccessibleName(tr_ui("home_no_spells_title"))
-            t0 = empty_layout.itemAt(0)
-            t1 = empty_layout.itemAt(1)
-            self._spell_empty_title = t0.widget() if t0 is not None else None
-            self._spell_empty_body = t1.widget() if t1 is not None else None
-            spell_layout.addWidget(empty_card)
-        else:
-            self._spell_empty_title = None
-            self._spell_empty_body = None
-            for spell in spells[:max_display]:
-                spell_layout.addWidget(self._make_spell_button(spell))
-            if len(spells) > max_display:
-                self._overflow_extra = len(spells) - max_display
-                self._overflow_lbl = QLabel(tr_ui("home_overflow", n=self._overflow_extra))
-                self._overflow_lbl.setStyleSheet(STYLE_HOME_OVERFLOW_TEXT)
-                self._overflow_lbl.setAccessibleName("Additional spells hidden from the overview")
-                spell_layout.addWidget(self._overflow_lbl)
-            else:
-                self._overflow_lbl = None
-                self._overflow_extra = 0
-
-        spell_layout.addStretch()
-        layout.addWidget(content)
-        return box
-
-    def _build_manager_box(self) -> QFrame:
-        box = QFrame()
-        box.setObjectName("HomeRightSection")
-        box.setStyleSheet(STYLE_HOME_RIGHT_SECTION)
-        box.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
-        apply_soft_shadow(box, blur_radius=18, y_offset=3, color="rgba(15, 23, 42, 0.12)")
-
-        layout = QVBoxLayout(box)
-        layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
-        layout.setSpacing(SPACING_SM)
-
-        self._manager_title = QLabel(tr_ui("home_manager"))
-        self._manager_title.setStyleSheet(STYLE_HOME_SECTION_SUBTITLE)
-        layout.addWidget(self._manager_title)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet(STYLE_SCROLL_AREA)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-
-        self._manager_container = QWidget()
-        self._manager_container.setStyleSheet(STYLE_TRANSPARENT_WIDGET)
-        self._manager_layout = QVBoxLayout(self._manager_container)
-        self._manager_layout.setContentsMargins(0, 0, 0, 0)
-        self._manager_layout.setSpacing(SPACING_SM)
-        scroll.setWidget(self._manager_container)
-        layout.addWidget(scroll, stretch=1)
-
-        self._manager_empty_state, mgr_empty_layout = make_empty_state_card(
-            tr_ui("home_manager_empty_title"),
-            tr_ui("home_manager_empty_body"),
-        )
-        m0 = mgr_empty_layout.itemAt(0)
-        m1 = mgr_empty_layout.itemAt(1)
-        self._manager_empty_title = m0.widget() if m0 is not None else None
-        self._manager_empty_body = m1.widget() if m1 is not None else None
-        self._manager_empty_state.setVisible(False)
-        layout.addWidget(self._manager_empty_state)
-
-        self._rebuild_manager_rows(self.data_store.system_stats)
-        return box
-
-    def _rebuild_manager_rows(self, stats: dict[str, str]) -> None:
-        if not stats:
-            self._manager_keys = ()
-            self._stat_rows = {}
-            while self._manager_layout.count():
-                item = self._manager_layout.takeAt(0)
-                widget = item.widget() if item is not None else None
-                if widget is not None:
-                    widget.deleteLater()
-            self._manager_empty_state.setVisible(True)
-            return
-
-        self._manager_empty_state.setVisible(False)
-        self._manager_keys = tuple(stats.keys())
-        self._stat_rows = {}
-
-        while self._manager_layout.count():
-            item = self._manager_layout.takeAt(0)
-            if item is None:
-                continue
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
-
-        for key, value in stats.items():
-            row = QWidget()
-            row.setObjectName("HomeManagerRow")
-            row.setStyleSheet(STYLE_HOME_MANAGER_ROW)
-            row_layout = QVBoxLayout(row)
-            row_layout.setContentsMargins(0, 0, 0, 0)
-            row_layout.setSpacing(SPACING_XS)
-
-            top = QHBoxLayout()
-            top.setContentsMargins(0, 0, 0, 0)
-            top.setSpacing(SPACING_SM)
-
-            indicator = QLabel()
-            indicator.setFixedSize(HOME_MANAGER_DOT, HOME_MANAGER_DOT)
-            indicator.setStyleSheet(STYLE_HOME_MANAGER_INDICATOR)
-
-            name_label = QLabel(self._stat_label_for_key(key))
-            name_label.setStyleSheet(STYLE_HOME_STAT_NAME)
-            value_label = QLabel(value)
-            value_label.setObjectName("HomeManagerValue")
-            value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            value_label.setStyleSheet(STYLE_HOME_STAT_VALUE)
-            value_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-
-            top.addWidget(indicator)
-            top.addWidget(name_label)
-            top.addStretch()
-            top.addWidget(value_label)
-
-            progress = QProgressBar()
-            progress.setObjectName("HomeManagerBar")
-            progress.setRange(0, 100)
-            progress.setTextVisible(False)
-            progress.setFixedHeight(PROGRESS_H)
-            progress.setStyleSheet(STYLE_HOME_MANAGER_BAR)
-            progress.setValue(self._stat_value_to_percent(value))
-
-            row_layout.addLayout(top)
-            row_layout.addWidget(progress)
-            self._manager_layout.addWidget(row)
-            self._stat_rows[key] = (name_label, value_label, progress)
-
-        self._manager_layout.addStretch()
-
-    @staticmethod
-    def _make_spell_button(label: str) -> QPushButton:
-        btn = QPushButton(label)
-        btn.setFixedHeight(BTN_H)
-        btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        btn.setStyleSheet(STYLE_HOME_SPELL_BTN)
-        btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn.setAccessibleName(f"Spell button {label}")
-        return btn
 
     def _load_data(self) -> None:
-        """Nạp trạng thái ban đầu cho Dashboard."""
+        """Nạp trạng thái ban đầu."""
         self.set_connection_status(False)
 
     def _configure_accessibility(self) -> None:
-        """Đặt accessible names và thứ tự tab cho các control."""
+        """Đặt accessible names."""
         self.status_bar.setAccessibleName("Home status banner")
-        self.status_bar.setAccessibleDescription(
-            "Dynamic banner showing wand connection state"
-        )
-        self.mode_label.setAccessibleName("Current wand mode")
         self.wand_3d.setAccessibleName("3D wand orientation viewer")
-
-    @staticmethod
-    def _stat_value_to_percent(value: str) -> int:
-        stripped = value.strip().replace(",", "")
-        numeric = "".join(ch for ch in stripped if ch.isdigit() or ch in ".-+")
-        if not numeric:
-            return 0
-        try:
-            number = float(numeric)
-        except ValueError:
-            return 0
-        upper = stripped.upper()
-        if "CPU" in upper or "%" in upper:
-            return max(0, min(100, int(number)))
-        if "RAM" in upper and "KB" in upper:
-            return max(0, min(100, int(number / 8192.0 * 100)))
-        if "RSSI" in upper or "DBM" in upper:
-            return max(0, min(100, int(number + 100)))
-        if "RATE" in upper or "HZ" in upper:
-            return max(0, min(100, int(number)))
-        return 0
-

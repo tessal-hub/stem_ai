@@ -50,6 +50,12 @@ class PageWand(QWidget):
     # Khởi tạo giao diện
     # ------------------------------------------------------------------
 
+    def refresh_styles(self) -> None:
+        """Re-apply styles based on current theme."""
+        for panel in [self.connection_panel, self.flash_panel, self.terminal_panel, self.stats_panel, self.payload_panel]:
+            if hasattr(panel, "refresh_styles"):
+                panel.refresh_styles()
+
     def _init_ui(self) -> None:
         """Xây dựng layout 2 cột với các panel con."""
         outer = QVBoxLayout(self)

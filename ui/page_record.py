@@ -23,7 +23,7 @@ from PyQt6.QtWidgets import (
 from constants import canonical_system_spell, is_system_spell
 from ui.tokens import (
     # Colors, Sizes
-    BG_DARK, TEXT_BODY, TEXT_MUTED, ACCENT,
+    TEXT_BODY, TEXT_MUTED, ACCENT,
     SUCCESS, DANGER, WARNING, BTN_H, SPELL_BTN_H, RIGHT_MAX_W, CROP_REGION,
     RECORD_GRAPH_MIN_H, RECORD_LIST_MIN_H,
     PLOT_AX_COLOR, PLOT_AY_COLOR, PLOT_AZ_COLOR,
@@ -54,6 +54,7 @@ from ui.component_factory import (
 from ui.mac_material import apply_soft_shadow
 from ui.confirm_dialog import confirm_destructive
 from ui.i18n_bridge import tr_ui
+from logic.theme_manager import theme_manager
 from ui.modern_layout import (
     MARGIN_COMFORTABLE,
     SPACING_MD,
@@ -152,6 +153,21 @@ class PageRecord(QWidget):
                 STYLE_RECORD_STATUS_TEMPLATE.format(color=DANGER)
             )
 
+    def refresh_styles(self) -> None:
+        """Re-apply styles based on current theme."""
+        p = theme_manager.get_palette()
+        # Update Plot Styles
+        for plot in [self.graph1, self.graph2]:
+            plot.setBackground("transparent")
+            plot.getAxis("left").setPen(p.TEXT_TERTIARY)
+            plot.getAxis("bottom").setPen(p.TEXT_TERTIARY)
+        # Update Library
+        self.spell_list.setStyleSheet(f"""
+            QListWidget {{ background-color: transparent; border: none; color: {p.TEXT_PRIMARY}; }}
+            QListWidget::item {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: 8px; margin-bottom: 4px; padding: 10px; }}
+            QListWidget::item:selected {{ background-color: {p.PRIMARY}; color: {p.SURFACE_PRIMARY}; border: none; }}
+        """)
+
     def set_recording_state(self, recording: bool) -> None:
         self.btn_start.setEnabled(not recording)
         self.btn_stop.setEnabled(recording)
@@ -241,7 +257,7 @@ class PageRecord(QWidget):
     def _setup_plots(self) -> None:
         log.debug("[PageRecord._setup_plots] Starting plot setup...")
         for plot in [self.graph1, self.graph2]:
-            plot.setBackground(BG_DARK)
+            plot.setBackground("transparent")
             plot.showGrid(x=True, y=True, alpha=0.1)
             plot.getAxis("left").setPen(TEXT_MUTED)
             plot.getAxis("bottom").setPen(TEXT_MUTED)
@@ -634,6 +650,29 @@ class PageRecord(QWidget):
 
     # ── UI Construction ─────────────────────────────────────────────────
 
+    def refresh_styles(self) -> None:
+        """Re-apply styles based on current theme."""
+        p = theme_manager.get_palette()
+        
+        # 1. Update Plot Styles
+        for plot in [self.plot_accel, self.plot_gyro]:
+            plot.setBackground("transparent")
+            plot.getAxis("left").setPen(p.TEXT_TERTIARY)
+            plot.getAxis("bottom").setPen(p.TEXT_TERTIARY)
+            
+        # 2. Update Layout Cards
+        self.graph_card.setStyleSheet(f"""
+            #VanguardCardOuter {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: 24px; }}
+            #VanguardCardInner {{ background-color: {p.SURFACE_PRIMARY}; border: none; border-radius: 16px; }}
+        """)
+        
+        # 3. Update Sidebar Library
+        self.spell_list.setStyleSheet(f"""
+            QListWidget {{ background-color: transparent; border: none; color: {p.TEXT_PRIMARY}; }}
+            QListWidget::item {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: 8px; margin-bottom: 4px; padding: 10px; }}
+            QListWidget::item:selected {{ background-color: {p.PRIMARY}; color: white; border: none; }}
+        """)
+
     def _init_ui(self) -> None:
         """Xây dựng layout chính gồm 2 cột: plot bên trái, controls bên phải."""
         outer = QVBoxLayout(self)
@@ -674,7 +713,7 @@ class PageRecord(QWidget):
         self.lbl_wand_status.setStyleSheet(
             STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
         )
-        self.lbl_timeline = make_section_label(tr_ui("record_timeline"), accent_color=ACCENT)
+        self.lbl_timeline = make_section_label(tr_ui("record_timeline"), accent=True)
         self.lbl_timeline.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
@@ -736,7 +775,7 @@ class PageRecord(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_LG)
 
-        self._section_toolbar = make_section_label(tr_ui("record_toolbar"), accent_color=ACCENT)
+        self._section_toolbar = make_section_label(tr_ui("record_toolbar"), accent=True)
         layout.addWidget(self._section_toolbar)
 
         # Details card with modern shadow
@@ -826,7 +865,7 @@ class PageRecord(QWidget):
         batch_layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
         batch_layout.setSpacing(SPACING_MD)
 
-        self._section_batch = make_section_label(tr_ui("record_batch"), accent_color=TEXT_BODY)
+        self._section_batch = make_section_label(tr_ui("record_batch"), accent=False)
         batch_layout.addWidget(self._section_batch)
 
         batch_btn_row = QGridLayout()
@@ -866,7 +905,7 @@ class PageRecord(QWidget):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_MD)
-        self._section_spell_library = make_section_label(tr_ui("record_spell_list"), accent_color=TEXT_BODY)
+        self._section_spell_library = make_section_label(tr_ui("record_spell_list"), accent=False)
         layout.addWidget(self._section_spell_library)
         
         # Spell list

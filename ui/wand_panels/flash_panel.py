@@ -47,6 +47,16 @@ class WandFlashPanel(QWidget):
         if status_text:
             self.lbl_flash_status.setText(f"● {status_text}")
 
+    def refresh_styles(self) -> None:
+        """Re-apply styles based on current theme."""
+        from logic.theme_manager import theme_manager
+        p = theme_manager.get_palette()
+        self.lbl_flash_status.setStyleSheet(f"color: {p.TEXT_SECONDARY}; font-size: 11px; font-weight: 600;")
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{ background-color: {p.SURFACE_TERTIARY}; border: none; border-radius: 4px; text-align: center; color: transparent; }}
+            QProgressBar::chunk {{ background-color: {p.PRIMARY}; border-radius: 4px; }}
+        """)
+
     def _init_ui(self) -> None:
         """Xây dựng layout gồm nút build và thanh tiến trình."""
         layout = QVBoxLayout(self)

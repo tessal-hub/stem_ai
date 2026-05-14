@@ -1,13 +1,8 @@
 """
-Factory tạo widget UI thống nhất.
-
-Gộp các pattern tạo widget từ tất cả các trang UI vào một module duy nhất,
-đảm bảo style và hành vi nhất quán trên toàn bộ ứng dụng.
-
-Factory trả về widget trần; việc kết nối signal xảy ra ở component cha.
+Factory tạo widget UI thống nhất — Theme aware via Vanguard Palette.
 """
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -20,536 +15,227 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 from ui.mac_material import apply_soft_shadow
+from logic.theme_manager import theme_manager
 
 from ui.tokens import (
-    # Colors
-    TEXT_MUTED,
-    SETTINGS_ACCENT,
     # Sizes
     BTN_H,
     SETTINGS_BTN_H,
     SETTINGS_INPUT_H,
     LABEL_W,
-    GRAPH_MIN_H,
-    # Button styles
-    STYLE_BTN_OUTLINE,
-    STYLE_BTN_PRIMARY,
-    STYLE_SETTING_BTN_OUTLINE,
-    STYLE_SETTING_BTN_PRIMARY,
-    STYLE_SETTING_BTN_DANGER,
-    # Card styles
-    STYLE_CARD,
-    STYLE_CARD_NO_BORDER,
-    # Component styles
-    STYLE_CHECKBOX,
-    STYLE_RECORD_CHECKBOX,
-    STYLE_SETTING_CHECKBOX,
-    STYLE_COMBO,
-    STYLE_RECORD_COMBO,
-    STYLE_WAND_COMBO,
-    STYLE_SETTING_INPUT,
-    STYLE_RARITY_BADGE_STATISTICS,
-    STYLE_SECTION_LABEL_TEMPLATE,
-    STYLE_STAT_LABEL,
-    STYLE_HINT_LABEL_TEMPLATE,
-    STYLE_CARD_NAME_LABEL,
-    STYLE_CARD_COUNT_LABEL,
-    STYLE_GRAPH_PLACEHOLDER,
-    STYLE_FORM_ROW_LABEL,
-    STYLE_STATE_EMPTY_CARD,
-    STYLE_STATE_EMPTY_TITLE,
-    STYLE_STATE_EMPTY_BODY,
-    STYLE_STATE_ERROR_CARD,
-    STYLE_STATE_ERROR_TITLE,
-    STYLE_STATE_ERROR_BODY,
-    # Status/template styles
-    STATUS_LABEL_STYLE_TEMPLATE,
+    RECORD_GRAPH_MIN_H,
+    TITLE_FONT_STACK,
+    APP_FONT_STACK,
 )
-from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_MD
+from ui.modern_layout import (
+    MARGIN_COMFORTABLE,
+    SPACING_XS,
+    SPACING_SM,
+    SPACING_MD,
+    SPACING_LG,
+)
 
+def p(): return theme_manager.get_palette()
 
 # ────────────────────────────────────────────────────────────────────────────
 # CARD & FRAME FACTORIES
 # ────────────────────────────────────────────────────────────────────────────
 
 def make_card(
-    margins: tuple[int, int, int, int] = (
-        MARGIN_COMFORTABLE,
-        MARGIN_COMFORTABLE,
-        MARGIN_COMFORTABLE,
-        MARGIN_COMFORTABLE,
-    ),
-    spacing: int = SPACING_MD,
+    margins: tuple[int, int, int, int] = (SPACING_MD, SPACING_MD, SPACING_MD, SPACING_MD),
+    spacing: int = SPACING_SM,
 ) -> tuple[QFrame, QVBoxLayout]:
-    """
-    Create a styled card frame with a vertical layout.
+    """Create a high-end 'Double-Bezel' styled card."""
+    palette = p()
+    outer = QFrame()
+    outer.setObjectName("VanguardCardOuter")
+    outer.setStyleSheet(f"""
+        #VanguardCardOuter {{
+            background-color: {palette.SURFACE_TERTIARY};
+            border: 1px solid {palette.BORDER};
+            border-radius: 20px;
+        }}
+    """)
+    outer_layout = QVBoxLayout(outer)
+    outer_layout.setContentsMargins(6, 6, 6, 6) 
     
-    Returns both the frame and its configured layout for convenience.
+    inner = QFrame()
+    inner.setObjectName("VanguardCardInner")
+    inner.setStyleSheet(f"""
+        #VanguardCardInner {{
+            background-color: {palette.SURFACE_PRIMARY};
+            border: none;
+            border-radius: 14px;
+        }}
+    """)
+    apply_soft_shadow(inner, blur_radius=16, y_offset=3, color=palette.SHADOW_COLOR)
     
-    Args:
-        margins: (top, left, bottom, right) margins for the layout.
-        spacing: Spacing between items in the layout.
-    
-    Returns:
-        Tuple of (frame, layout) ready for adding widgets.
-    """
-    frame = QFrame()
-    frame.setObjectName("CardFrame")
-    frame.setFrameShape(QFrame.Shape.NoFrame)
-    frame.setFrameShadow(QFrame.Shadow.Plain)
-    frame.setStyleSheet(STYLE_CARD)
-    apply_soft_shadow(frame, blur_radius=20, y_offset=4, color="rgba(15, 23, 42, 0.16)")
-    layout = QVBoxLayout(frame)
-    layout.setContentsMargins(*margins)
-    layout.setSpacing(spacing)
-    return frame, layout
-
+    inner_layout = QVBoxLayout(inner)
+    inner_layout.setContentsMargins(*margins)
+    inner_layout.setSpacing(spacing)
+    outer_layout.addWidget(inner)
+    return outer, inner_layout
 
 def make_card_frame() -> QFrame:
-    """
-    Create a styled card frame (no layout).
-    
-    Use when you need to manage the layout yourself.
-    
-    Returns:
-        QFrame: Styled card frame ready for layout attachment.
-    """
-    frame = QFrame()
-    frame.setObjectName("CardFrame")
-    frame.setFrameShape(QFrame.Shape.NoFrame)
-    frame.setFrameShadow(QFrame.Shadow.Plain)
-    frame.setStyleSheet(STYLE_CARD)
-    apply_soft_shadow(frame, blur_radius=20, y_offset=4, color="rgba(15, 23, 42, 0.16)")
-    return frame
-
-
-def make_section_frame() -> QFrame:
-    """
-    Create a generic section frame.
-    
-    Returns:
-        QFrame: Styled frame for grouping related content.
-    """
-    frame = QFrame()
-    frame.setObjectName("CardFrame")
-    frame.setFrameShape(QFrame.Shape.NoFrame)
-    frame.setFrameShadow(QFrame.Shadow.Plain)
-    frame.setStyleSheet(STYLE_CARD)
-    apply_soft_shadow(frame, blur_radius=20, y_offset=4, color="rgba(15, 23, 42, 0.16)")
-    return frame
-
-
-def make_borderless_frame() -> QFrame:
-    """
-    Create a transparent frame with no border.
-    
-    Returns:
-        QFrame: Borderless frame for layout organization.
-    """
-    frame = QFrame()
-    frame.setObjectName("CardFrame")
-    frame.setFrameShape(QFrame.Shape.NoFrame)
-    frame.setFrameShadow(QFrame.Shadow.Plain)
-    frame.setStyleSheet(STYLE_CARD_NO_BORDER)
-    return frame
-
+    """Legacy alias for creating a Vanguard card frame."""
+    outer, _ = make_card()
+    return outer
 
 # ────────────────────────────────────────────────────────────────────────────
 # BUTTON FACTORIES
 # ────────────────────────────────────────────────────────────────────────────
 
-def make_button(
-    label: str,
-    style: str,
-    height: int = BTN_H,
-    cursor: bool = True,
-) -> QPushButton:
-    """
-    Create a styled button.
-    
-    Args:
-        label: Button text.
-        style: Stylesheet to apply.
-        height: Button height in pixels.
-        cursor: If True, set pointing hand cursor.
-    
-    Returns:
-        QPushButton: Styled button ready for signals.
-    """
+def make_button(label: str, style: str = "", height: int = BTN_H) -> QPushButton:
     btn = QPushButton(label)
     btn.setFixedHeight(height)
-    btn.setStyleSheet(style)
-    if cursor:
-        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+    btn.setCursor(Qt.CursorShape.PointingHandCursor)
+    if style:
+        btn.setStyleSheet(style)
     return btn
 
+def make_primary_button(label: str, height: int = BTN_H) -> QPushButton:
+    palette = p()
+    btn = make_button(label, height=height)
+    btn.setStyleSheet(f"""
+        QPushButton {{
+            background-color: {palette.PRIMARY};
+            color: {palette.SURFACE_PRIMARY};
+            border: none;
+            border-radius: {height//2}px;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            padding: 0 20px;
+        }}
+        QPushButton:hover {{ background-color: {palette.PRIMARY_LIGHT}; }}
+    """)
+    return btn
 
 def make_outline_button(label: str, height: int = BTN_H) -> QPushButton:
-    """Create an outline button (secondary action)."""
-    return make_button(label, STYLE_BTN_OUTLINE, height)
-
-
-def make_primary_button(label: str, height: int = BTN_H) -> QPushButton:
-    """Create a primary button (accent color)."""
-    return make_button(label, STYLE_BTN_PRIMARY, height)
-
-
-def make_setting_outline_button(label: str) -> QPushButton:
-    """Create a settings outline button."""
-    return make_button(label, STYLE_SETTING_BTN_OUTLINE, SETTINGS_BTN_H)
-
-
-def make_setting_primary_button(label: str) -> QPushButton:
-    """Create a settings primary button."""
-    return make_button(label, STYLE_SETTING_BTN_PRIMARY, SETTINGS_BTN_H)
-
-
-def make_setting_danger_button(label: str) -> QPushButton:
-    """Create a settings danger button (red, for destructive actions)."""
-    return make_button(label, STYLE_SETTING_BTN_DANGER, SETTINGS_BTN_H)
-
+    palette = p()
+    btn = make_button(label, height=height)
+    btn.setStyleSheet(f"""
+        QPushButton {{
+            background-color: transparent;
+            color: {palette.TEXT_PRIMARY};
+            border: 1px solid {palette.BORDER};
+            border-radius: {height//2}px;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            padding: 0 20px;
+        }}
+        QPushButton:hover {{ background-color: {palette.HOVER_BG}; border-color: {palette.TEXT_PRIMARY}; }}
+    """)
+    return btn
 
 # ────────────────────────────────────────────────────────────────────────────
-# LABEL & TEXT FACTORIES
+# LABEL FACTORIES
 # ────────────────────────────────────────────────────────────────────────────
 
-def make_label(text: str, style: str = "") -> QLabel:
-    """
-    Create a generic label.
-    
-    Args:
-        text: Label text.
-        style: Optional stylesheet.
-    
-    Returns:
-        QLabel: Unstyled or custom-styled label.
-    """
+def make_section_label(text: str, accent: bool = True) -> QLabel:
+    palette = p()
     lbl = QLabel(text)
-    if style:
-        lbl.setStyleSheet(style)
+    color = palette.PRIMARY if accent else palette.TEXT_PRIMARY
+    lbl.setStyleSheet(f"""
+        font-family: {TITLE_FONT_STACK};
+        color: {color};
+        font-weight: 700;
+        font-size: 13px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    """)
     return lbl
-
-
-def make_section_label(
-    text: str,
-    accent_color: str = SETTINGS_ACCENT,
-) -> QLabel:
-    """
-    Create a section header label.
-    
-    Args:
-        text: Label text.
-        accent_color: Color for the text (default: settings accent).
-    
-    Returns:
-        QLabel: Bold, larger section label.
-    """
-    lbl = QLabel(text)
-    lbl.setStyleSheet(STYLE_SECTION_LABEL_TEMPLATE.format(color=accent_color))
-    return lbl
-
-
-def make_stat_label(text: str) -> QLabel:
-    """
-    Create a statistic/info label (muted, smaller).
-    
-    Args:
-        text: Label text.
-    
-    Returns:
-        QLabel: Small, muted info label.
-    """
-    lbl = QLabel(text)
-    lbl.setStyleSheet(STYLE_STAT_LABEL)
-    return lbl
-
-
-def make_hint(text: str, color: str = TEXT_MUTED) -> QLabel:
-    """
-    Create a hint/help text label.
-    
-    Args:
-        text: Hint text.
-        color: Text color.
-    
-    Returns:
-        QLabel: Small, wrapped hint label.
-    """
-    lbl = QLabel(text)
-    lbl.setStyleSheet(STYLE_HINT_LABEL_TEMPLATE.format(color=color))
-    lbl.setWordWrap(True)
-    return lbl
-
-
-def make_card_name_label(name: str) -> QLabel:
-    """Create a card name label (bold, main text color)."""
-    lbl = QLabel(name)
-    lbl.setStyleSheet(STYLE_CARD_NAME_LABEL)
-    return lbl
-
-
-def make_card_count_label(count: int) -> QLabel:
-    """Create a card count label (muted, smaller)."""
-    lbl = QLabel(f"Samples: {count}")
-    lbl.setStyleSheet(STYLE_CARD_COUNT_LABEL)
-    return lbl
-
-
-def make_graph_placeholder() -> QLabel:
-    """
-    Create a placeholder for missing graph/data.
-    
-    Returns:
-        QLabel: Centered, placeholder label with minimum height.
-    """
-    lbl = QLabel("DATA GRAPH")
-    lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    lbl.setStyleSheet(STYLE_GRAPH_PLACEHOLDER)
-    lbl.setMinimumHeight(GRAPH_MIN_H)
-    return lbl
-
-
-def make_status_label(text: str, color: str) -> QLabel:
-    """
-    Create a colored status label (for connection states, etc.).
-    
-    Args:
-        text: Status text.
-        color: Status color (e.g., SUCCESS, DANGER).
-    
-    Returns:
-        QLabel: Colored status label.
-    """
-    lbl = QLabel(text)
-    lbl.setStyleSheet(STATUS_LABEL_STYLE_TEMPLATE.format(color=color))
-    return lbl
-
-
-def make_rarity_badge_wand(label: str, color: str) -> QLabel:
-    """
-    Create a rarity badge with background color (PageWand style).
-    
-    Args:
-        label: Rarity tier label (e.g., "EPIC").
-        color: Background color from rarity tier.
-    
-    Returns:
-        QLabel: Colored badge label.
-    """
-    lbl = QLabel(label)
-    lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    lbl.setStyleSheet(STYLE_RARITY_BADGE_STATISTICS.format(color=color))
-    return lbl
-
-
-def make_rarity_badge_statistics(label: str, color: str) -> QLabel:
-    """
-    Create a rarity badge with border (PageStatistics style).
-    
-    Args:
-        label: Rarity tier label (e.g., "EPIC").
-        color: Border and text color from rarity tier.
-    
-    Returns:
-        QLabel: Bordered badge label.
-    """
-    lbl = QLabel(label)
-    lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    lbl.setStyleSheet(STYLE_RARITY_BADGE_STATISTICS.format(color=color))
-    return lbl
-
-
-# ────────────────────────────────────────────────────────────────────────────
-# INPUT COMPONENT FACTORIES
-# ────────────────────────────────────────────────────────────────────────────
-
-def make_checkbox(label: str, checked: bool = False) -> QCheckBox:
-    """
-    Create a styled checkbox.
-    
-    Args:
-        label: Checkbox label text.
-        checked: Initial checked state.
-    
-    Returns:
-        QCheckBox: Styled checkbox ready for signals.
-    """
-    chk = QCheckBox(label)
-    chk.setChecked(checked)
-    chk.setStyleSheet(STYLE_CHECKBOX)
-    return chk
-
-
-def make_record_checkbox(label: str, checked: bool = False) -> QCheckBox:
-    """Create a PageRecord-styled checkbox."""
-    chk = QCheckBox(label)
-    chk.setChecked(checked)
-    chk.setStyleSheet(STYLE_RECORD_CHECKBOX)
-    return chk
-
-
-def make_setting_checkbox(label: str, checked: bool = False) -> QCheckBox:
-    """Create a PageSetting-styled checkbox."""
-    chk = QCheckBox(label)
-    chk.setChecked(checked)
-    chk.setStyleSheet(STYLE_SETTING_CHECKBOX)
-    return chk
-
-
-def make_combo(items: list[str], height: int = 32) -> QComboBox:
-    """
-    Create a styled dropdown combobox.
-    
-    Args:
-        items: List of combobox items.
-        height: Height in pixels.
-    
-    Returns:
-        QComboBox: Styled combobox ready for signals.
-    """
-    combo = QComboBox()
-    combo.addItems(items)
-    combo.setStyleSheet(STYLE_COMBO)
-    combo.setFixedHeight(height)
-    combo.setCursor(Qt.CursorShape.PointingHandCursor)
-    return combo
-
-
-def make_record_combo(items: list[str]) -> QComboBox:
-    """Create a PageRecord-styled combobox."""
-    combo = QComboBox()
-    combo.addItems(items)
-    combo.setStyleSheet(STYLE_RECORD_COMBO)
-    combo.setFixedHeight(32)
-    combo.setCursor(Qt.CursorShape.PointingHandCursor)
-    return combo
-
-
-def make_wand_combo(items: list[str]) -> QComboBox:
-    """Create a PageWand-styled combobox."""
-    combo = QComboBox()
-    combo.addItems(items)
-    combo.setStyleSheet(STYLE_WAND_COMBO)
-    combo.setFixedHeight(32)
-    combo.setCursor(Qt.CursorShape.PointingHandCursor)
-    return combo
-
-
-def make_setting_combo(items: list[str]) -> QComboBox:
-    """Create a PageSetting-styled combobox."""
-    combo = QComboBox()
-    combo.addItems(items)
-    combo.setStyleSheet(STYLE_SETTING_INPUT)
-    combo.setFixedHeight(SETTINGS_INPUT_H)
-    combo.setCursor(Qt.CursorShape.PointingHandCursor)
-    return combo
-
-
-def make_spinbox(
-    min_val: int,
-    max_val: int,
-    *,
-    step: int = 1,
-    suffix: str = "",
-    height: int = SETTINGS_INPUT_H,
-) -> QSpinBox:
-    """
-    Create a styled spinbox (number input).
-    
-    Args:
-        min_val: Minimum value.
-        max_val: Maximum value.
-        step: Step size (keyword-only).
-        suffix: Unit suffix (e.g., "ms", "%").
-        height: Height in pixels.
-    
-    Returns:
-        QSpinBox: Styled spinbox ready for signals.
-    """
-    spin = QSpinBox()
-    spin.setRange(min_val, max_val)
-    spin.setSingleStep(step)
-    if suffix:
-        spin.setSuffix(suffix)
-    spin.setStyleSheet(STYLE_SETTING_INPUT)
-    spin.setFixedHeight(height)
-    return spin
-
-
-# ────────────────────────────────────────────────────────────────────────────
-# LAYOUT FACTORIES
-# ────────────────────────────────────────────────────────────────────────────
-
-def make_form_row(
-    label_text: str,
-    widget: QWidget,
-    label_width: int = LABEL_W,
-) -> QHBoxLayout:
-    """
-    Create a labeled form row layout.
-    
-    Typical usage:
-        label_lbl = QLineEdit(...)
-        row = make_form_row("Project Name:", label_lbl)
-        some_layout.addLayout(row)
-    
-    Args:
-        label_text: Label text (e.g., "Project Name:").
-        widget: Widget to place on the right.
-        label_width: Width of the label in pixels.
-    
-    Returns:
-        QHBoxLayout: Row layout with label | stretch | widget.
-    """
-    row = QHBoxLayout()
-    lbl = QLabel(label_text)
-    lbl.setStyleSheet(STYLE_FORM_ROW_LABEL)
-    lbl.setMinimumWidth(label_width)
-    lbl.setWordWrap(True)
-    row.addWidget(lbl)
-    row.addWidget(widget, stretch=1)
-    return row
-
 
 def make_empty_state_card(title: str, message: str) -> tuple[QFrame, QVBoxLayout]:
-    """Create a reusable empty-state card with iOS-style hierarchy."""
-    frame = QFrame()
-    frame.setObjectName("CardFrame")
-    frame.setStyleSheet(STYLE_STATE_EMPTY_CARD)
-    apply_soft_shadow(frame, blur_radius=18, y_offset=3, color="rgba(15, 23, 42, 0.12)")
-
-    layout = QVBoxLayout(frame)
-    layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
-    layout.setSpacing(SPACING_MD)
-
-    title_label = QLabel(title)
-    title_label.setStyleSheet(STYLE_STATE_EMPTY_TITLE)
-    body_label = QLabel(message)
-    body_label.setWordWrap(True)
-    body_label.setStyleSheet(STYLE_STATE_EMPTY_BODY)
-
-    layout.addWidget(title_label)
-    layout.addWidget(body_label)
+    palette = p()
+    frame, layout = make_card(margins=(32, 32, 32, 32))
+    
+    title_lbl = QLabel(title)
+    title_lbl.setStyleSheet(f"font-family: {TITLE_FONT_STACK}; color: {palette.TEXT_PRIMARY}; font-size: 18px; font-weight: 700;")
+    
+    body_lbl = QLabel(message)
+    body_lbl.setWordWrap(True)
+    body_lbl.setStyleSheet(f"color: {palette.TEXT_SECONDARY}; font-size: 13px; line-height: 1.5;")
+    
+    layout.addWidget(title_lbl, alignment=Qt.AlignmentFlag.AlignCenter)
+    layout.addWidget(body_lbl, alignment=Qt.AlignmentFlag.AlignCenter)
     return frame, layout
 
+def make_graph_placeholder() -> QLabel:
+    palette = p()
+    lbl = QLabel("FOCAL STUDY AREA")
+    lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    lbl.setStyleSheet(f"""
+        background-color: {palette.SURFACE_TERTIARY};
+        color: {palette.TEXT_TERTIARY};
+        border: 1px dashed {palette.BORDER};
+        border-radius: 12px;
+        font-weight: 800;
+        font-size: 10px;
+        letter-spacing: 0.2em;
+    """)
+    lbl.setMinimumHeight(400)
+    return lbl
+
+def make_rarity_badge_statistics(label: str, color: str) -> QLabel:
+    lbl = QLabel(label)
+    lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    lbl.setStyleSheet(f"""
+        background-color: {color};
+        color: #FFFFFF;
+        border-radius: 10px;
+        padding: 2px 10px;
+        font-weight: 900;
+        font-size: 9px;
+        letter-spacing: 0.05em;
+    """)
+    return lbl
+
+def make_rarity_badge_wand(label: str, color: str) -> QLabel:
+    return make_rarity_badge_statistics(label, color)
+
+def make_checkbox(text: str, checked: bool = False) -> QCheckBox:
+    palette = p()
+    cb = QCheckBox(text)
+    cb.setChecked(checked)
+    cb.setStyleSheet(f"""
+        QCheckBox {{ color: {palette.TEXT_PRIMARY}; font-size: 11px; font-weight: 600; spacing: 8px; }}
+        QCheckBox::indicator {{ width: 16px; height: 16px; border-radius: 4px; border: 1px solid {palette.BORDER}; }}
+        QCheckBox::indicator:checked {{ background-color: {palette.PRIMARY}; border: none; image: none; }}
+    """)
+    return cb
+
+def make_hint(text: str, color: str = "") -> QLabel:
+    palette = p()
+    lbl = QLabel(text)
+    lbl.setWordWrap(True)
+    c = color if color else palette.TEXT_TERTIARY
+    lbl.setStyleSheet(f"color: {c}; font-size: 11px; font-weight: 500; line-height: 1.4;")
+    return lbl
+
+def make_card_name_label(name: str) -> QLabel:
+    palette = p()
+    lbl = QLabel(name)
+    lbl.setStyleSheet(f"font-family: {TITLE_FONT_STACK}; color: {palette.TEXT_PRIMARY}; font-size: 14px; font-weight: 700;")
+    return lbl
+
+def make_card_count_label(count: int) -> QLabel:
+    palette = p()
+    lbl = QLabel(str(count))
+    lbl.setStyleSheet(f"color: {palette.TEXT_SECONDARY}; font-size: 11px; font-weight: 800; text-transform: uppercase;")
+    return lbl
 
 def make_error_state_card(title: str, message: str) -> tuple[QFrame, QVBoxLayout]:
-    """Create a reusable error-state card with actionable messaging style."""
-    frame = QFrame()
-    frame.setObjectName("CardFrame")
-    frame.setStyleSheet(STYLE_STATE_ERROR_CARD)
-    apply_soft_shadow(frame, blur_radius=18, y_offset=3, color="rgba(127, 29, 29, 0.16)")
-
-    layout = QVBoxLayout(frame)
-    layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
-    layout.setSpacing(SPACING_MD)
-
-    title_label = QLabel(title)
-    title_label.setStyleSheet(STYLE_STATE_ERROR_TITLE)
-    body_label = QLabel(message)
-    body_label.setWordWrap(True)
-    body_label.setStyleSheet(STYLE_STATE_ERROR_BODY)
-
-    layout.addWidget(title_label)
-    layout.addWidget(body_label)
+    palette = p()
+    frame, layout = make_card(margins=(24, 24, 24, 24))
+    lbl_title = QLabel(title)
+    lbl_title.setStyleSheet(f"color: {palette.STATUS_ERROR}; font-weight: 800; font-size: 13px; text-transform: uppercase;")
+    lbl_msg = QLabel(message)
+    lbl_msg.setWordWrap(True)
+    lbl_msg.setStyleSheet(f"color: {palette.TEXT_SECONDARY}; font-size: 12px;")
+    layout.addWidget(lbl_title)
+    layout.addWidget(lbl_msg)
     return frame, layout

@@ -85,6 +85,19 @@ class WandStatsPanel(QWidget):
         self.stats_plot.setYRange(0, 10)
         ax_bottom.setTicks([[(0, tr_ui("wand_no_data"))]])
 
+    def refresh_styles(self) -> None:
+        """Re-apply styles based on current theme."""
+        from logic.theme_manager import theme_manager
+        p = theme_manager.get_palette()
+        self.stats_plot.setBackground("transparent")
+        self.stats_plot.getAxis("left").setPen(p.TEXT_SECONDARY)
+        self.stats_plot.getAxis("bottom").setPen(p.TEXT_SECONDARY)
+        # Update any info labels already in the grid
+        for i in range(self.layout_stats.count()):
+            widget = self.layout_stats.itemAt(i).widget()
+            if isinstance(widget, QLabel):
+                widget.setStyleSheet(f"color: {p.TEXT_PRIMARY}; font-size: 11px; font-weight: 600;")
+
     def _init_ui(self) -> None:
         """Xây dựng layout gồm grid thống kê và biểu đồ plot."""
         layout = QVBoxLayout(self)

@@ -179,6 +179,19 @@ class PageSetting(QWidget):
     # UI construction
     # ------------------------------------------------------------------
 
+    def refresh_styles(self) -> None:
+        """Re-apply styles based on current theme."""
+        p = theme_manager.get_palette()
+        self.setStyleSheet(f"color: {p.TEXT_PRIMARY};")
+        
+        # Update any card styles if needed
+        # In this page, most components are standard or use factory styles
+        # but we can ensure the console and progress bar are updated
+        if hasattr(self, 'console_log') and self.console_log:
+             self.console_log.setStyleSheet(STYLE_CONSOLE)
+        if hasattr(self, 'progress_bar') and self.progress_bar:
+             self.progress_bar.setStyleSheet(STYLE_SETTING_PROGRESS)
+
     def _init_ui(self) -> None:
         """Main layout: scrollable 3-column top row, paths, firmware; fixed control bar."""
         outer = QVBoxLayout(self)

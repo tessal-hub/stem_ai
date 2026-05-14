@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STEM Spell Book · Vanguard Edition</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #FDFBF7;
+            --ink: #1A1918;
+            --accent: #346538;
+            --bezier: cubic-bezier(0.32, 0.72, 0, 1);
+        }
+        
+        body {
+            background-color: var(--bg);
+            color: var(--ink);
+            font-family: 'Geist', sans-serif;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Grain Overlay */
+        .noise::before {
+            content: "";
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: url("https://grainy-gradients.vercel.app/noise.svg");
+            opacity: 0.04;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        .serif { font-family: 'Newsreader', serif; }
+
+        /* Double-Bezel Architecture */
+        .bezel-outer {
+            padding: 8px;
+            background: rgba(0,0,0,0.03);
+            border: 1px solid rgba(0,0,0,0.05);
+            border-radius: 2.5rem;
+            transition: transform 0.8s var(--bezier), opacity 0.8s var(--bezier);
+        }
+        .bezel-inner {
+            background: #FFFFFF;
+            border-radius: calc(2.5rem - 8px);
+            box-shadow: inset 0 1px 1px rgba(255,255,255,0.8);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Fluid Island Nav */
+        .nav-island {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(24px);
+            border: 1px solid rgba(0,0,0,0.05);
+            box-shadow: 0 12px 40px -12px rgba(0,0,0,0.1);
+        }
+
+        /* Magnetic Button-in-Button */
+        .btn-vanguard {
+            transition: all 0.4s var(--bezier);
+        }
+        .btn-vanguard:active { transform: scale(0.96); }
+        .btn-vanguard .icon-circle {
+            transition: transform 0.5s var(--bezier);
+        }
+        .btn-vanguard:hover .icon-circle {
+            transform: translate(2px, -2px) scale(1.1);
+        }
+
+        /* Entrance Animations */
+        .reveal {
+            animation: revealUp 1.2s var(--bezier) forwards;
+            opacity: 0;
+            transform: translateY(32px);
+        }
+        @keyframes revealUp {
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .stagger-1 { animation-delay: 0.1s; }
+        .stagger-2 { animation-delay: 0.2s; }
+        .stagger-3 { animation-delay: 0.3s; }
+    </style>
+</head>
+<body class="noise">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const App = () => {
+            return (
+                <div className="min-h-[100dvh] selection:bg-black selection:text-white">
+                    {/* Floating Nav Island */}
+                    <nav className="fixed top-8 left-1/2 -translate-x-1/2 z-[100] reveal">
+                        <div className="nav-island px-8 py-4 rounded-full flex items-center gap-12">
+                            <div className="serif italic font-semibold text-lg tracking-tight">SpellBook.</div>
+                            <div className="hidden md:flex items-center gap-8 text-[11px] font-bold uppercase tracking-[0.2em] opacity-40">
+                                <a href="#" className="hover:opacity-100 transition-opacity">Threshold</a>
+                                <a href="#" className="hover:opacity-100 transition-opacity">Grimoire</a>
+                                <a href="#" className="hover:opacity-100 transition-opacity">Alchemy</a>
+                            </div>
+                            <button className="w-10 h-10 rounded-full bg-black flex flex-col items-center justify-center gap-1 group">
+                                <span className="w-4 h-[1.5px] bg-white group-hover:w-5 transition-all"></span>
+                                <span className="w-4 h-[1.5px] bg-white"></span>
+                            </button>
+                        </div>
+                    </nav>
+
+                    <main className="max-w-[1440px] mx-auto px-6 pt-48 pb-32">
+                        {/* Header Section */}
+                        <header className="mb-24 reveal stagger-1">
+                            <div className="flex items-center gap-4 mb-6">
+                                <span className="rounded-full px-3 py-1 bg-black/5 border border-black/5 text-[10px] uppercase tracking-[0.2em] font-bold">Vanguard Studio v2</span>
+                                <div className="w-12 h-[1px] bg-black/10"></div>
+                            </div>
+                            <h1 className="serif text-8xl md:text-[10rem] leading-[0.85] tracking-[-0.04em] mb-12">
+                                The Grand <br/> 
+                                <span className="italic opacity-30">Threshold</span>
+                            </h1>
+                            <p className="max-w-xl text-xl leading-relaxed opacity-60">
+                                Mastery of the arcane motion. A cinematic studio for high-fidelity gesture synthesis and edge intelligence.
+                            </p>
+                        </header>
+
+                        {/* Asymmetrical Bento Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+                            
+                            {/* Primary Hero: 3D orientation */}
+                            <div className="md:col-span-8 reveal stagger-2">
+                                <div className="bezel-outer h-full">
+                                    <div className="bezel-inner p-12 h-[600px] flex flex-col justify-between">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <h2 className="serif text-4xl italic mb-2">Orientation Study</h2>
+                                                <p className="text-xs uppercase tracking-widest opacity-40">50Hz Spatial Telemetry</p>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <div className="w-2 h-2 rounded-full bg-accent animate-pulse"></div>
+                                                <span className="text-[10px] font-bold opacity-40">LIVE</span>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Cinematic Wand Representation */}
+                                        <div className="relative flex-1 flex items-center justify-center">
+                                            <div className="absolute w-[1px] h-full bg-gradient-to-b from-transparent via-black/10 to-transparent"></div>
+                                            <div className="absolute w-full h-[1px] bg-gradient-to-r from-transparent via-black/10 to-transparent"></div>
+                                            
+                                            <div className="relative w-2 h-80 bg-[#1A1918] rounded-full rotate-[15deg] shadow-2xl shadow-black/20">
+                                                <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-white/20 backdrop-blur-xl border border-white/30 flex items-center justify-center">
+                                                    <div className="w-2 h-2 rounded-full bg-accent"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex justify-between items-end">
+                                            <div className="font-mono text-[10px] opacity-30">
+                                                TIMESTAMP: 172.934<br/>
+                                                BUFFER: ACTIVE
+                                            </div>
+                                            <div className="flex gap-12">
+                                                {['Pitch', 'Roll', 'Yaw'].map(label => (
+                                                    <div key={label}>
+                                                        <p className="text-[9px] uppercase tracking-widest opacity-30 mb-1">{label}</p>
+                                                        <p className="serif text-2xl italic">24.2°</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Secondary Stats */}
+                            <div className="md:col-span-4 flex flex-col gap-8 reveal stagger-3">
+                                <div className="bezel-outer flex-1">
+                                    <div className="bezel-inner p-10 h-full flex flex-col justify-between">
+                                        <div>
+                                            <h3 className="serif text-3xl italic mb-6">Grimoire Progress</h3>
+                                            <div className="space-y-8">
+                                                <SpellStat label="Lumos" value={82} />
+                                                <SpellStat label="Expelliarmus" value={45} />
+                                                <SpellStat label="Nox" value={12} />
+                                            </div>
+                                        </div>
+                                        
+                                        <button className="btn-vanguard w-full bg-black text-white rounded-full pl-8 pr-2 py-2 flex items-center justify-between group">
+                                            <span className="text-[11px] font-bold uppercase tracking-[0.2em]">Open Spellbook</span>
+                                            <div className="icon-circle w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+                                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 11L11 1M11 1H1M11 1V11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                            </div>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="bezel-outer bg-accent/10 border-accent/20">
+                                    <div className="bezel-inner bg-accent p-10 text-white shadow-none">
+                                        <p className="text-[10px] uppercase tracking-[0.3em] font-bold mb-2 opacity-60">Level Mastery</p>
+                                        <h3 className="serif text-5xl italic mb-6">Initiate</h3>
+                                        <div className="h-[2px] bg-white/20 w-full mb-4">
+                                            <div className="h-full bg-white w-[65%]"></div>
+                                        </div>
+                                        <p className="text-[11px] font-medium opacity-60 italic">3,400 XP to next chapter</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </main>
+
+                    {/* Footer Rhythm */}
+                    <footer className="max-w-[1440px] mx-auto px-6 pt-32 pb-12 opacity-20 reveal">
+                        <div className="flex justify-between items-end border-t border-black/10 pt-12">
+                            <div>
+                                <p className="serif text-2xl italic">Vanguard SpellBook</p>
+                                <p className="text-[9px] uppercase tracking-widest mt-2">© 2026 PRECISION MOTION ANALYSIS</p>
+                            </div>
+                            <p className="text-[9px] uppercase tracking-widest">DESIGNED FOR THE BEYOND</p>
+                        </div>
+                    </footer>
+                </div>
+            );
+        };
+
+        const SpellStat = ({ label, value }) => (
+            <div>
+                <div className="flex justify-between items-end mb-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-40">{label}</p>
+                    <p className="serif text-lg italic">{value}%</p>
+                </div>
+                <div className="h-[1px] bg-black/5 w-full relative">
+                    <div className="h-full bg-black/20" style={{ width: `${value}%` }}></div>
+                </div>
+            </div>
+        );
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

@@ -58,8 +58,8 @@ class MainWindow(QMainWindow):
     def _init_ui(self) -> None:
         """Khởi tạo cửa sổ, tạo các trang và page stack."""
         self.setWindowTitle("STEM Spell Book")
-        self.setWindowIcon(QIcon(resolve_asset_path("assets/icon/wand.svg")))
-        self.resize(1024, 800)
+        self.setWindowIcon(QIcon(resolve_asset_path("assets/icon/cooliocns SVG/Interface/Book_Open.svg")))
+        self.resize(1100, 850)
         self.setMinimumSize(1000, 700)
         self.setStyleSheet("QMainWindow { background-color: transparent; }")
 
@@ -67,19 +67,19 @@ class MainWindow(QMainWindow):
         self.shell = MacShell("STEM Spell Book")
         self.setCentralWidget(self.shell)
 
-        # ── Các trang — lưu thành named attrs để truy cập type-safe ────
+        # ── Các trang (Thứ tự phải khớp với NAV_ITEMS trong MacShell) ────
         self.page_home = PageHome(self.data_store)
-        self.page_record = PageRecord(self.data_store)
-        self.page_statistics = PageStatistics(self.data_store)
         self.page_primitive_collect = PagePrimitiveCollect(self.data_store)
+        self.page_statistics = PageStatistics(self.data_store)
+        self.page_record = PageRecord(self.data_store)
         self.page_wand = PageWand(self.data_store)
         self.page_setting = PageSetting(self.data_store)
 
         self._pages: list[QWidget] = [
             self.page_home,
-            self.page_record,
-            self.page_statistics,
             self.page_primitive_collect,
+            self.page_statistics,
+            self.page_record,
             self.page_wand,
             self.page_setting,
         ]
@@ -115,9 +115,6 @@ class MainWindow(QMainWindow):
         self.data_store.sig_connection_state_updated.connect(
             self.page_home.set_connection_status
         )
-        self.data_store.sig_stats_updated.connect(
-            self.page_home.update_manager_stats
-        )
         self.data_store.sig_live_features_updated.connect(
             self.page_statistics.update_live_features
         )
@@ -130,6 +127,14 @@ class MainWindow(QMainWindow):
         )
 
         locale_manager.language_changed.connect(self._apply_ui_language)
+        theme_manager.theme_changed.connect(self._apply_theme)
+
+    def _apply_theme(self, theme_name: str) -> None:
+        """Refresh styles across all components when theme changes."""
+        log.info("Applying theme: %s", theme_name)
+        for page in self._pages:
+            if hasattr(page, "refresh_styles"):
+                page.refresh_styles()
 
     # ------------------------------------------------------------------
     # Nạp dữ liệu ban đầu
@@ -142,7 +147,6 @@ class MainWindow(QMainWindow):
         # Đồng bộ trạng thái kết nối hiện tại vào UI
         connected, _ = self.data_store.get_connection_state()
         self.page_home.set_connection_status(connected)
-        self.page_home.update_manager_stats(self.data_store.system_stats)
 
         if hasattr(self.data_store, "get_primitive_collection_stats"):
             self.page_primitive_collect.update_collection_stats(
