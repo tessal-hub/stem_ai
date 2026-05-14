@@ -54,7 +54,7 @@ def make_card(
         #VanguardCardOuter {{
             background-color: {palette.SURFACE_TERTIARY};
             border: 1px solid {palette.BORDER};
-            border-radius: 20px;
+            border-radius: 0px;
         }}
     """)
     outer_layout = QVBoxLayout(outer)
@@ -66,7 +66,7 @@ def make_card(
         #VanguardCardInner {{
             background-color: {palette.SURFACE_PRIMARY};
             border: none;
-            border-radius: 14px;
+            border-radius: 0px;
         }}
     """)
     apply_soft_shadow(inner, blur_radius=16, y_offset=3, color=palette.SHADOW_COLOR)
@@ -86,7 +86,7 @@ def make_card_frame() -> QFrame:
         #VanguardCardOuter {{
             background-color: {palette.SURFACE_TERTIARY};
             border: 1px solid {palette.BORDER};
-            border-radius: 20px;
+            border-radius: 0px;
         }}
     """)
     return frame
@@ -111,7 +111,7 @@ def make_primary_button(label: str, height: int = BTN_H) -> QPushButton:
             background-color: {palette.PRIMARY};
             color: {palette.SURFACE_PRIMARY};
             border: none;
-            border-radius: {height//2}px;
+            border-radius: 0px;
             font-size: 11px;
             font-weight: 800;
             letter-spacing: 0.05em;
@@ -130,7 +130,7 @@ def make_outline_button(label: str, height: int = BTN_H) -> QPushButton:
             background-color: transparent;
             color: {palette.TEXT_PRIMARY};
             border: 1px solid {palette.BORDER};
-            border-radius: {height//2}px;
+            border-radius: 0px;
             font-size: 11px;
             font-weight: 800;
             letter-spacing: 0.05em;
@@ -182,7 +182,7 @@ def make_graph_placeholder() -> QLabel:
         background-color: {palette.SURFACE_TERTIARY};
         color: {palette.TEXT_TERTIARY};
         border: 1px dashed {palette.BORDER};
-        border-radius: 12px;
+        border-radius: 0px;
         font-weight: 800;
         font-size: 10px;
         letter-spacing: 0.2em;
@@ -197,7 +197,7 @@ def make_rarity_badge_statistics(label: str, color: str) -> QLabel:
     lbl.setStyleSheet(f"""
         background-color: {color};
         color: {text_color};
-        border-radius: 10px;
+        border-radius: 0px;
         padding: 2px 10px;
         font-weight: 900;
         font-size: 9px;
@@ -214,7 +214,7 @@ def make_checkbox(text: str, checked: bool = False) -> QCheckBox:
     cb.setChecked(checked)
     cb.setStyleSheet(f"""
         QCheckBox {{ color: {palette.TEXT_PRIMARY}; font-size: 11px; font-weight: 600; spacing: 8px; }}
-        QCheckBox::indicator {{ width: 16px; height: 16px; border-radius: 4px; border: 1px solid {palette.BORDER}; }}
+        QCheckBox::indicator {{ width: 16px; height: 16px; border-radius: 0px; border: 1px solid {palette.BORDER}; }}
         QCheckBox::indicator:checked {{ background-color: {palette.PRIMARY}; border: none; image: none; }}
     """)
     return cb

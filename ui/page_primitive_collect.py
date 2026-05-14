@@ -57,7 +57,7 @@ from logic.primitive_i18n import get_primitive_catalog
 from ui.i18n_bridge import tr_ui
 
 STYLE_GROUP_DONE = (
-    f"QPushButton {{ background-color: {SUCCESS}; color: {ACCENT_TEXT}; border: none; border-radius: 12px; "
+    f"QPushButton {{ background-color: {SUCCESS}; color: {ACCENT_TEXT}; border: none; border-radius: 0px; "
     "font-size: 11px; font-weight: 700; padding: 5px 10px; }}"
     f" QPushButton:hover {{ background-color: {SUCCESS}; color: {ACCENT_TEXT}; }}"
 )
@@ -286,6 +286,7 @@ class PagePrimitiveCollect(QWidget):
         self.btn_start_collect.clicked.connect(self._on_start_clicked)
         self.btn_stop_collect.clicked.connect(self._on_stop_clicked)
         self.btn_capture_collect.clicked.connect(self._on_capture_clicked)
+        self.btn_train_encoder.clicked.connect(self.sig_train_encoder_requested.emit)
         self.btn_start_collect.setToolTip(tr_ui("record_tt_start"))
         self.btn_stop_collect.setToolTip(tr_ui("record_tt_stop"))
         self.btn_capture_collect.setToolTip(tr_ui("record_tt_snip"))

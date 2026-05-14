@@ -35,6 +35,7 @@ class WandFlashPanel(QWidget):
         self._title_lbl.setText(tr_ui("wand_section_model"))
         self.btn_build_tflite.setText(tr_ui("wand_build_tflite"))
         self.btn_build_cc.setText(tr_ui("wand_build_cc"))
+        self.btn_upload.setText(tr_ui("wand_upload_model"))
 
     def update_flash_progress(self, percentage: int, status_text: str = "") -> None:
         """Cập nhật thanh tiến trình và nhãn trạng thái.
@@ -81,12 +82,16 @@ class WandFlashPanel(QWidget):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(SPACING_MD)
         self.btn_build_tflite = make_button(tr_ui("wand_build_tflite"), STYLE_BTN_OUTLINE, height=BTN_H)
-        self.btn_build_cc = make_button(tr_ui("wand_build_cc"), STYLE_BTN_PRIMARY, height=BTN_H)
+        self.btn_build_cc = make_button(tr_ui("wand_build_cc"), STYLE_BTN_OUTLINE, height=BTN_H)
+        self.btn_upload = make_button(tr_ui("wand_upload_model"), STYLE_BTN_PRIMARY, height=BTN_H)
+        
         # Legacy aliases kept for existing access paths.
         self.btn_compile = self.btn_build_cc
-        self.btn_flash = self.btn_build_tflite
+        self.btn_flash = self.btn_upload  # Flash usually means the final step
+        
         btn_row.addWidget(self.btn_build_tflite)
         btn_row.addWidget(self.btn_build_cc)
+        btn_row.addWidget(self.btn_upload)
         card_layout.addLayout(btn_row)
 
         self.lbl_flash_status = QLabel(tr_ui("wand_flash_ready"))
@@ -106,3 +111,4 @@ class WandFlashPanel(QWidget):
         """Kết nối toàn bộ signal và slot nội bộ."""
         self.btn_build_tflite.clicked.connect(self.sig_build_tflite_clicked.emit)
         self.btn_build_cc.clicked.connect(self.sig_build_cc_clicked.emit)
+        self.btn_upload.clicked.connect(self.sig_upload_clicked.emit)

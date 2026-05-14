@@ -44,7 +44,7 @@ class ConfirmDialog(QDialog):
         body_label.setWordWrap(True)
         body_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         body_label.setStyleSheet(
-            f"color: {TEXT_MUTED}; font-size: 12px; line-height: 1.35;"
+            f"color: {TEXT_PRIMARY}; font-size: 12px; line-height: 1.45; font-family: {APP_FONT_STACK};"
         )
 
         button_box = QDialogButtonBox()
@@ -55,15 +55,15 @@ class ConfirmDialog(QDialog):
         self.cancel_button.setFixedHeight(30)
         self.confirm_button.setFixedHeight(30)
         self.cancel_button.setStyleSheet(
-            f"background-color: {BG_WHITE}; color: {TEXT_BODY}; border: 1px solid {BORDER}; border-radius: 8px; padding: 4px 12px;"
+            f"background-color: {BG_WHITE}; color: {TEXT_BODY}; border: 1px solid {BORDER}; border-radius: 0px; padding: 4px 12px;"
         )
         if danger:
             self.confirm_button.setStyleSheet(
-                f"background-color: {DANGER}; color: {ACCENT_TEXT}; border: none; border-radius: 8px; padding: 4px 12px;"
+                f"background-color: {DANGER}; color: {ACCENT_TEXT}; border: none; border-radius: 0px; padding: 4px 12px;"
             )
         else:
             self.confirm_button.setStyleSheet(
-                f"background-color: {ACCENT}; color: {ACCENT_TEXT}; border: none; border-radius: 8px; padding: 4px 12px;"
+                f"background-color: {ACCENT}; color: {ACCENT_TEXT}; border: none; border-radius: 0px; padding: 4px 12px;"
             )
 
         button_box.addButton(self.cancel_button, QDialogButtonBox.ButtonRole.RejectRole)
@@ -76,7 +76,7 @@ class ConfirmDialog(QDialog):
         layout.addWidget(button_box)
 
         self.setStyleSheet(
-            f"QDialog#ConfirmDialog {{ background-color: {BG_WHITE}; border: 1px solid {BORDER}; border-radius: 14px; }}"
+            f"QDialog#ConfirmDialog {{ background-color: {BG_WHITE}; border: 1px solid {BORDER}; border-radius: 0px; }}"
         )
 
 

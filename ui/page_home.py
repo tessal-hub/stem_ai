@@ -93,10 +93,10 @@ class PageHome(QWidget):
             #HomeViewerCard {{
                 background-color: {p.SURFACE_TERTIARY};
                 border: 1px solid {p.BORDER};
-                border-radius: 24px;
+                border-radius: 0px;
             }}
         """)
-        self.sim_view.setStyleSheet(f"background-color: {p.SURFACE_PRIMARY}; border-radius: 16px;")
+        self.sim_view.setStyleSheet(f"background-color: {p.SURFACE_PRIMARY}; border-radius: 0px;")
         
         # Update Status Bar
         self.set_connection_status(self._connected)
@@ -153,7 +153,7 @@ class PageHome(QWidget):
             "QLabel {{ "
             f"background-color: {bg_color}; "
             f"color: {fg_color}; padding: 6px 18px; font-size: 11px; "
-            "font-weight: 800; letter-spacing: 0.05em; border-radius: 15px; }}"
+            "font-weight: 800; letter-spacing: 0.05em; border-radius: 0px; }}"
         )
 
     def _build_viewer_box(self) -> QFrame:

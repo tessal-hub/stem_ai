@@ -422,7 +422,16 @@ class Handler(QObject):
         else:
             msg += "\n❌ Dataset needs improvement before training."
             
-        QMessageBox.information(self.ui_statistics, "Dataset Health Audit", msg)
+        from ui.confirm_dialog import ConfirmDialog
+        dialog = ConfirmDialog(
+            self.ui_statistics,
+            title="Dataset Health Audit",
+            message=msg,
+            confirm_text="OK",
+            cancel_text="",
+            danger=False
+        )
+        dialog.exec()
 
     def _connect_store_and_home_signals(self) -> None:
         """Wire DataStore state-update signals and Home page interaction signals."""

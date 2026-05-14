@@ -1,13 +1,8 @@
-"""
-Trang thống kê — phân bố dữ liệu spell, chỉ số mastery, và FFT features.
-"""
-
 from __future__ import annotations
 
 from functools import partial
 
 from PyQt6.QtCore import Qt, pyqtSignal
-import pyqtgraph as pg
 from PyQt6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -18,6 +13,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QStackedWidget,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -29,7 +25,6 @@ from ui.tokens import (
     # Sizes
     BTN_H,
     RIGHT_MAX_W,
-    STATISTICS_FFT_MIN_H,
     STATISTICS_SAMPLE_LIST_MIN_H,
     # Styles
     STYLE_STATISTICS_CARD,
@@ -40,6 +35,7 @@ from ui.tokens import (
     STYLE_STATISTICS_INFO_LABEL,
     STYLE_STATISTICS_META_LABEL,
     STYLE_TRANSPARENT_WIDGET,
+    STYLE_TERMINAL,
 )
 from logic.rarity_utils import resolve_rarity
 from ui.mac_material import apply_soft_shadow
@@ -49,7 +45,6 @@ from ui.component_factory import (
     make_card_name_label,
     make_empty_state_card,
     make_error_state_card,
-    make_graph_placeholder,
     make_outline_button,
     make_primary_button,
     make_rarity_badge_statistics,
@@ -76,8 +71,7 @@ class ClickableFrame(QFrame):
 class PageStatistics(QWidget):
     """
     Trang thống kê dữ liệu.
-    Hiển thị phân bố spell, chỉ số mastery, live FFT features,
-    và danh sách sample cho mỗi spell.
+    Hiển thị phân bố spell, chỉ số mastery, và nhật ký huấn luyện model.
     """
 
     sig_spell_selected = pyqtSignal(str)
@@ -97,19 +91,21 @@ class PageStatistics(QWidget):
         self._load_data()
 
     def apply_ui_language(self) -> None:
-        """Re-apply FFT / feature strings after locale change."""
-        self.fft_placeholder.setText(tr_ui("stats_fft_wait_features"))
-        self.fft_plot.setLabel("left", tr_ui("stats_plot_fft_mag"), color=TEXT_MUTED)
-        self.fft_plot.setLabel("bottom", tr_ui("stats_plot_freq"), color=TEXT_MUTED)
+        """Re-apply strings after locale change."""
         self.update_live_features(self._last_features)
+        self._sec_preview.setText(tr_ui("stats_live_features"))
+        self._sec_model.setText(tr_ui("stats_model_train"))
+        self._sec_console.setText(tr_ui("sub_console"))
+        self._sec_mastery.setText(tr_ui("stats_spell_mastery"))
+        self.btn_train_build.setText(tr_ui("stats_btn_train"))
+        self.btn_health_audit.setText(tr_ui("stats_btn_audit"))
+        self.btn_back_spells.setText(tr_ui("record_btn_back"))
 
     def update_live_features(self, features: dict) -> None:
         self._last_features = dict(features) if features else {}
         if not features:
             self.lbl_accel_stats.setText(tr_ui("stats_placeholder_accel"))
             self.lbl_gyro_stats.setText(tr_ui("stats_placeholder_gyro"))
-            self.lbl_dominant_freq.setText(tr_ui("stats_dominant_wait"))
-            self.fft_stack.setCurrentWidget(self.fft_placeholder)
             return
 
         self.lbl_accel_stats.setText(
@@ -129,25 +125,7 @@ class PageStatistics(QWidget):
             )
         )
 
-        freqs = features.get("fft_freqs")
-        mags = features.get("fft_mags")
-        if freqs and mags and len(freqs) == len(mags):
-            self.fft_curve.setData(freqs, mags)
-            # Find and display dominant frequency
-            try:
-                max_idx = mags.index(max(mags))
-                dominant_freq = freqs[max_idx]
-                self.lbl_dominant_freq.setText(tr_ui("stats_dominant_hz", f=dominant_freq))
-            except (ValueError, IndexError):
-                self.lbl_dominant_freq.setText(tr_ui("stats_dominant_na"))
-            self.fft_stack.setCurrentWidget(self.fft_plot)
-            return
-
-        self.lbl_dominant_freq.setText(tr_ui("stats_fft_unavailable"))
-        self.fft_stack.setCurrentWidget(self.fft_placeholder)
-
     def update_spell_stats(self, spell_counts: dict[str, int]) -> None:
-        # FIX: Gán vào biến local để Pylance xác nhận không bị đổi thành None giữa chừng
         target_layout = self._spell_cards_layout
         if target_layout is None: return
         
@@ -185,22 +163,19 @@ class PageStatistics(QWidget):
         p = theme_manager.get_palette()
         
         # 1. Update Cards
-        for card in [self.feature_card, self.model_card, self.graph_card, self.mastery_box]:
+        for card in [self.feature_card, self.model_card, self.console_card, self.mastery_box]:
             card.setStyleSheet(f"""
-                #VanguardCardOuter {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: 24px; }}
-                #VanguardCardInner {{ background-color: {p.SURFACE_PRIMARY}; border: none; border-radius: 16px; }}
+                #VanguardCardOuter {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: 0px; }}
+                #VanguardCardInner {{ background-color: {p.SURFACE_PRIMARY}; border: none; border-radius: 0px; }}
             """)
         
-        # 2. Update Plots
-        for plot in [self.fft_plot]:
-            plot.setBackground("transparent")
-            plot.getAxis("left").setPen(p.TEXT_TERTIARY)
-            plot.getAxis("bottom").setPen(p.TEXT_TERTIARY)
+        # 2. Update Console
+        self.train_console.setStyleSheet(STYLE_TERMINAL)
             
         # 3. Update Lists
         self.sample_list.setStyleSheet(f"""
             QListWidget {{ background-color: transparent; border: none; color: {p.TEXT_PRIMARY}; }}
-            QListWidget::item {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: 12px; margin-bottom: 8px; padding: 12px; }}
+            QListWidget::item {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: 0px; margin-bottom: 8px; padding: 12px; }}
             QListWidget::item:selected {{ background-color: {p.PRIMARY}; color: {p.SURFACE_PRIMARY}; border: none; }}
         """)
         
@@ -208,14 +183,14 @@ class PageStatistics(QWidget):
         self.update_spell_stats(self.data_store.spell_counts)
 
     def _init_ui(self) -> None:
-        """Xây dựng layout chính gồm 2 cột: spell cards và features."""
+        """Xây dựng layout chính gồm 2 cột: spell cards và features/console."""
         outer = QVBoxLayout(self)
         outer.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
         outer.setSpacing(SPACING_LG)
         content = QHBoxLayout()
         content.setSpacing(SPACING_LG)
         content.addWidget(self._build_left_column(), stretch=5)
-        content.addWidget(self._build_right_column(), stretch=3)
+        content.addWidget(self._build_right_column(), stretch=4)
         outer.addLayout(content)
         
         self.refresh_styles()
@@ -240,7 +215,8 @@ class PageStatistics(QWidget):
 
         # Feature Card
         self.feature_card, feature_layout = make_card()
-        feature_layout.addWidget(make_section_label("LIVE FEATURES", accent=True))
+        self._sec_preview = make_section_label(tr_ui("stats_live_features"), accent=True)
+        feature_layout.addWidget(self._sec_preview)
         self.lbl_accel_stats = QLabel("Accel: mean --  var --  rms --")
         self.lbl_gyro_stats = QLabel("Gyro: mean --  var --  rms --")
         feature_layout.addWidget(self.lbl_accel_stats)
@@ -249,14 +225,15 @@ class PageStatistics(QWidget):
 
         # Model Card
         self.model_card, model_layout = make_card()
-        model_layout.addWidget(make_section_label("MODEL TRAIN / BUILD", accent=True))
+        self._sec_model = make_section_label(tr_ui("stats_model_train"), accent=True)
+        model_layout.addWidget(self._sec_model)
         self.lbl_train_status = QLabel("Train: idle")
         self.lbl_build_status = QLabel("Build: idle")
         self.model_progress = QProgressBar()
         self.model_progress.setRange(0, 100)
         self.model_progress.setValue(0)
-        self.btn_train_build = make_primary_button("TRAIN + BUILD GESTURE MODEL")
-        self.btn_health_audit = make_outline_button("RUN DATASET HEALTH AUDIT")
+        self.btn_train_build = make_primary_button(tr_ui("stats_btn_train"))
+        self.btn_health_audit = make_outline_button(tr_ui("stats_btn_audit"))
         model_layout.addWidget(self.lbl_train_status)
         model_layout.addWidget(self.lbl_build_status)
         model_layout.addWidget(self.model_progress)
@@ -264,25 +241,17 @@ class PageStatistics(QWidget):
         model_layout.addWidget(self.btn_health_audit)
         layout.addWidget(self.model_card)
 
-        # FFT Card
-        self.graph_card, graph_layout = make_card()
-        graph_layout.setContentsMargins(0, 0, 0, 0)
-        self.fft_stack = QStackedWidget()
-        self.fft_placeholder = make_graph_placeholder()
-        self.fft_placeholder.setMinimumHeight(STATISTICS_FFT_MIN_H)
-        self.fft_stack.addWidget(self.fft_placeholder)
+        # Console Card (Replaces FFT)
+        self.console_card, console_layout = make_card()
+        self._sec_console = make_section_label(tr_ui("sub_console"), accent=True)
+        console_layout.addWidget(self._sec_console)
         
-        self.fft_plot = pg.PlotWidget()
-        self.fft_plot.setBackground("transparent")
-        self.fft_plot.showGrid(x=True, y=True, alpha=0.2)
-        self.fft_curve = self.fft_plot.plot(pen=pg.mkPen(WAND_ACCENT, width=2))
-        self.fft_stack.addWidget(self.fft_plot)
-        
-        graph_layout.addWidget(make_section_label("FREQUENCY SPECTRUM", accent=True))
-        self.lbl_dominant_freq = QLabel("Dominant: -- Hz")
-        graph_layout.addWidget(self.lbl_dominant_freq)
-        graph_layout.addWidget(self.fft_stack)
-        layout.addWidget(self.graph_card, stretch=1)
+        self.train_console = QTextEdit()
+        self.train_console.setReadOnly(True)
+        self.train_console.setStyleSheet(STYLE_TERMINAL)
+        self.train_console.setPlaceholderText("ML pipeline logs will appear here...")
+        console_layout.addWidget(self.train_console)
+        layout.addWidget(self.console_card, stretch=1)
         
         return widget
 
@@ -303,7 +272,8 @@ class PageStatistics(QWidget):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_LG)
-        layout.addWidget(make_section_label("SPELL MASTERY"))
+        self._sec_mastery = make_section_label(tr_ui("stats_spell_mastery"))
+        layout.addWidget(self._sec_mastery)
         
         from ui.component_factory import make_card
         self.mastery_box, inner_layout = make_card()
@@ -334,7 +304,7 @@ class PageStatistics(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_LG)
         top_row = QHBoxLayout()
-        self.btn_back_spells = make_outline_button("◀ BACK", BTN_H)
+        self.btn_back_spells = make_outline_button(tr_ui("record_btn_back"), BTN_H)
         self.btn_back_spells.setStyleSheet(STYLE_STATISTICS_BTN_BACK)
         self.lbl_current_spell = QLabel("SAMPLES: —")
         self.lbl_current_spell.setStyleSheet(STYLE_STATISTICS_CURRENT_SPELL)
@@ -370,22 +340,6 @@ class PageStatistics(QWidget):
         return card
 
     @staticmethod
-    def _make_standard_frame() -> QFrame:
-        frame = QFrame()
-        frame.setObjectName("CardFrame")
-        frame.setStyleSheet(STYLE_STATISTICS_CARD)
-        apply_soft_shadow(frame, blur_radius=20, y_offset=4, color="rgba(15, 23, 42, 0.14)")
-        return frame
-
-    @staticmethod
-    def _make_section_label(text: str, accent: bool = True) -> QLabel:
-        return make_section_label(text, accent=accent)
-
-    @staticmethod
-    def _make_graph_placeholder() -> QLabel:
-        return make_graph_placeholder()
-
-    @staticmethod
     def _make_card_name_label(name: str) -> QLabel:
         return make_card_name_label(name)
 
@@ -398,11 +352,9 @@ class PageStatistics(QWidget):
         return make_rarity_badge_statistics(label, color)
 
     def _emit_spell_selected(self, spell_name: str) -> None:
-        """Phát tín hiệu chọn spell từ card click, giữ rõ danh tính callback."""
         self.sig_spell_selected.emit(spell_name)
 
     def _init_signals(self) -> None:
-        """Kết nối toàn bộ signal và slot của trang thống kê."""
         self.btn_back_spells.clicked.connect(self._on_btn_back_spells_clicked)
         self.sample_list.itemDoubleClicked.connect(self._on_sample_list_item_double_clicked)
         self.btn_train_build.clicked.connect(self.sig_train_build_requested.emit)
@@ -410,15 +362,12 @@ class PageStatistics(QWidget):
         self.sig_spell_selected.connect(self._on_spell_selected)
 
     def _on_btn_back_spells_clicked(self) -> None:
-        """Quay lại trang spell mastery từ danh sách sample."""
         self.stacked_spells.setCurrentIndex(0)
 
     def _on_sample_list_item_double_clicked(self, item) -> None:
-        """Mở sample được double-click từ danh sách chi tiết."""
         self.sig_sample_opened.emit(item.text())
 
     def _on_spell_selected(self, spell_name: str) -> None:
-        """Nạp danh sách sample khi người dùng chọn một spell card."""
         self.load_samples_for_spell(
             spell_name,
             self.data_store.get_samples_for_spell(spell_name),
@@ -427,15 +376,22 @@ class PageStatistics(QWidget):
     def set_training_state(self, running: bool) -> None:
         self.btn_train_build.setEnabled(not running)
         if running:
+            self.train_console.clear()
+            self.train_console.append(">> ML Pipeline started...")
             self.model_progress.setValue(0)
             self.lbl_train_status.setText("Train: running...")
             self.lbl_build_status.setText("Build: waiting...")
-            self.model_error_state.setVisible(False)
 
     def update_training_status(self, text: str) -> None:
         msg = text.strip()
         if not msg:
             return
+        self.train_console.append(f"[{self._get_time_stamp()}] {msg}")
+        # Scroll to bottom
+        self.train_console.verticalScrollBar().setValue(
+            self.train_console.verticalScrollBar().maximum()
+        )
+        
         if "[TRAIN]" in msg:
             self.lbl_train_status.setText(f"Train: {msg.replace('[TRAIN]', '').strip()}")
         elif "[BUILD]" in msg:
@@ -443,33 +399,35 @@ class PageStatistics(QWidget):
         elif "[DONE]" in msg:
             self.lbl_build_status.setText("Build: completed")
 
+    @staticmethod
+    def _get_time_stamp() -> str:
+        from datetime import datetime
+        return datetime.now().strftime("%H:%M:%S")
+
     def update_training_progress(self, value: int) -> None:
         self.model_progress.setValue(max(0, min(100, int(value))))
 
     def set_training_finished(self, success: bool, summary: str) -> None:
         self.btn_train_build.setEnabled(True)
         if success:
+            self.train_console.append(">> ML Pipeline completed successfully.")
             self.model_progress.setValue(100)
             self.lbl_train_status.setText("Train: completed")
             self.lbl_build_status.setText(f"Build: {summary}")
-            self.model_error_state.setVisible(False)
         else:
+            self.train_console.append(f">> ERROR: {summary}")
             self.lbl_build_status.setText(f"Build: failed - {summary}")
-            self.model_error_state.setVisible(True)
 
     def _load_data(self) -> None:
-        """Nạp dữ liệu ban đầu từ DataStore vào trang thống kê."""
         self.update_spell_stats(self.data_store.spell_counts)
         self.update_live_features({})
 
     def _configure_accessibility(self) -> None:
-        """Đặt accessible names và thứ tự tab traversal cho các control."""
         self.lbl_total_samples.setAccessibleName("Total samples metric")
         self.lbl_total_spells.setAccessibleName("Active spells metric")
         self.lbl_train_status.setAccessibleName("Model training status")
         self.lbl_build_status.setAccessibleName("Model build status")
-        self.lbl_dominant_freq.setAccessibleName("Dominant FFT frequency")
-        self.fft_plot.setAccessibleName("Frequency spectrum FFT plot")
+        self.train_console.setAccessibleName("Model training console logs")
         self.model_progress.setAccessibleName("Training progress")
         self.btn_back_spells.setAccessibleName("Back to mastery list")
         self.sample_list.setAccessibleName("Samples for selected spell")

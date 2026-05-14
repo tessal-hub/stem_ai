@@ -195,7 +195,7 @@ class PageRecord(QWidget):
         # Update Library
         self.spell_list.setStyleSheet(f"""
             QListWidget {{ background-color: transparent; border: none; color: {p.TEXT_PRIMARY}; }}
-            QListWidget::item {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: 8px; margin-bottom: 4px; padding: 10px; }}
+            QListWidget::item {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: 0px; margin-bottom: 4px; padding: 10px; }}
             QListWidget::item:selected {{ background-color: {p.PRIMARY}; color: {p.SURFACE_PRIMARY}; border: none; }}
         """)
 

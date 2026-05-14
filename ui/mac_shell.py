@@ -140,7 +140,7 @@ class MacShell(QWidget):
             #StemToolbar {{
                 background-color: {p.SURFACE_PRIMARY};
                 border: 1px solid {p.BORDER};
-                border-radius: 20px;
+                border-radius: 0px;
             }}
             #StemToolbarTitle {{
                 font-family: {TITLE_FONT_STACK};
@@ -186,9 +186,9 @@ class MacShell(QWidget):
             QToolButton#StemNavBtn {{
                 background-color: transparent;
                 border: none;
-                border-radius: 6px;
+                border-radius: 0px;
                 color: {p.TEXT_PRIMARY};
-                font-family: 'Segoe UI', 'Inter', 'Noto Sans', 'Roboto', sans-serif;
+                font-family: {APP_FONT_STACK};
                 font-size: 13px;
                 font-weight: 600;
                 padding-left: 10px;

@@ -113,6 +113,7 @@ class PageWand(QWidget):
         # Flash panel → slot nội bộ → page-level signals
         self.flash_panel.sig_build_tflite_clicked.connect(self._on_btn_build_tflite_clicked)
         self.flash_panel.sig_build_cc_clicked.connect(self._on_btn_build_cc_clicked)
+        self.flash_panel.sig_upload_clicked.connect(self.sig_flash_upload.emit)
 
         # Terminal panel
         self.terminal_panel.sig_clear_requested.connect(self.sig_term_clear.emit)
