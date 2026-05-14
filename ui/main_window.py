@@ -26,6 +26,7 @@ from ui.page_setting import PageSetting
 from ui.i18n_bridge import tr_ui
 from logic.udp_worker import UdpWorker
 from logic.locale_manager import locale_manager
+from logic.theme_manager import theme_manager
 
 log = logging.getLogger(__name__)
 

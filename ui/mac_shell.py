@@ -432,6 +432,19 @@ class MacShell(QWidget):
             self.title_label.setText(tr_ui(item.label_key))
             self.subtitle_label.setText(tr_ui(item.subtitle_key))
 
+    def apply_ui_language(self) -> None:
+        """Refresh shell labels after locale change."""
+        self._brand_title_label.setText(tr_ui("shell_brand_stem"))
+        self._brand_subtitle_label.setText(tr_ui("shell_brand_book"))
+        self._nav_section_label.setText(tr_ui("shell_nav_title"))
+        for button in self._buttons:
+            label_key = button.property("nav_label_key")
+            if isinstance(label_key, str):
+                translated = tr_ui(label_key)
+                button.setText(translated)
+                button.setAccessibleName(translated)
+        self.set_active_index(self._active_index)
+
     # ------------------------------------------------------------------
     # Slots
     # ------------------------------------------------------------------

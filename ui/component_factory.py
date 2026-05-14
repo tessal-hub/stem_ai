@@ -77,9 +77,18 @@ def make_card(
     return outer, inner_layout
 
 def make_card_frame() -> QFrame:
-    """Legacy alias for creating a Vanguard card frame."""
-    outer, _ = make_card()
-    return outer
+    """Legacy alias for creating a standalone Vanguard card frame."""
+    palette = p()
+    frame = QFrame()
+    frame.setObjectName("VanguardCardOuter")
+    frame.setStyleSheet(f"""
+        #VanguardCardOuter {{
+            background-color: {palette.SURFACE_TERTIARY};
+            border: 1px solid {palette.BORDER};
+            border-radius: 20px;
+        }}
+    """)
+    return frame
 
 # ────────────────────────────────────────────────────────────────────────────
 # BUTTON FACTORIES
