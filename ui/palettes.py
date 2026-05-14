@@ -50,7 +50,7 @@ LIGHT_PALETTE = Palette(
     
     TEXT_PRIMARY="#1A1918",
     TEXT_SECONDARY="#6B6A67",
-    TEXT_TERTIARY="#B8B7B2",
+    TEXT_TERTIARY="#72716D",
     
     BORDER="rgba(26, 25, 24, 0.08)",
     BORDER_LIGHT="rgba(26, 25, 24, 0.04)",
@@ -85,7 +85,7 @@ DARK_PALETTE = Palette(
     
     TEXT_PRIMARY="#EAEAEA",
     TEXT_SECONDARY="#A1A1AA",
-    TEXT_TERTIARY="#52525B",
+    TEXT_TERTIARY="#7D7D86",
     
     BORDER="rgba(255, 255, 255, 0.1)",
     BORDER_LIGHT="rgba(255, 255, 255, 0.05)",

@@ -19,6 +19,7 @@ from ui.component_factory import make_empty_state_card, make_card
 from ui.mac_material import apply_soft_shadow
 from ui.i18n_bridge import tr_ui
 from logic.theme_manager import theme_manager
+from ui.color_utils import readable_text_on
 from ui.tokens import (
     HOME_STATUS_H,
     HOME_VIEWER_MIN_H,
@@ -53,10 +54,20 @@ class PageHome(QWidget):
         p = theme_manager.get_palette()
         if connected:
             self.status_bar.setText(tr_ui("home_status_connected"))
-            self.status_bar.setStyleSheet(self._status_style(p.PRIMARY, "#FFFFFF"))
+            self.status_bar.setStyleSheet(
+                self._status_style(
+                    p.STATUS_SUCCESS,
+                    readable_text_on(p.STATUS_SUCCESS, dark_text=p.STATUS_SUCCESS_TEXT, light_text="#FFFFFF"),
+                )
+            )
         else:
             self.status_bar.setText(tr_ui("home_status_disconnected"))
-            self.status_bar.setStyleSheet(self._status_style(p.STATUS_ERROR_TEXT, "#FFFFFF"))
+            self.status_bar.setStyleSheet(
+                self._status_style(
+                    p.STATUS_ERROR,
+                    readable_text_on(p.STATUS_ERROR, dark_text=p.STATUS_ERROR_TEXT, light_text="#FFFFFF"),
+                )
+            )
 
     def set_mode(self, mode: str) -> None:
         """Cập nhật nhãn chế độ hoạt động hiện tại."""

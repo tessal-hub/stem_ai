@@ -10,16 +10,12 @@ from PyQt6.QtWidgets import QGridLayout, QLabel, QVBoxLayout, QWidget
 from ui.layout_utils import clear_layout
 from ui.modern_layout import SPACING_LG, SPACING_SM, SPACING_XS
 from ui.tokens import (
-    ACCENT,
-    BG_WHITE,
-    BORDER_MID,
     STYLE_SETTINGS_HINT_TEMPLATE,
     STYLE_STATISTICS_INFO_LABEL,
-    TEXT_BODY,
-    TEXT_MUTED,
 )
 from ui.wand_panels.shared import make_card, make_section_label
 from ui.i18n_bridge import tr_ui
+from logic.theme_manager import theme_manager
 
 
 class WandStatsPanel(QWidget):
@@ -36,9 +32,10 @@ class WandStatsPanel(QWidget):
             stats: Dict chứa các thông số (Battery, RAM Free, RSSI...).
         """
         clear_layout(self.layout_stats)
+        p = theme_manager.get_palette()
         if not stats:
             lbl = QLabel(tr_ui("wand_stats_waiting"))
-            lbl.setStyleSheet(STYLE_SETTINGS_HINT_TEMPLATE.format(color=TEXT_MUTED))
+            lbl.setStyleSheet(STYLE_SETTINGS_HINT_TEMPLATE.format(color=p.TEXT_SECONDARY))
             self.layout_stats.addWidget(lbl, 0, 0)
             return
 
@@ -60,11 +57,14 @@ class WandStatsPanel(QWidget):
             spell_counts: Dict spell_name → số lượng mẫu.
         """
         self.stats_plot.clear()
+        p = theme_manager.get_palette()
 
         ax_bottom = self.stats_plot.getAxis("bottom")
         ax_left = self.stats_plot.getAxis("left")
-        ax_left.setPen(TEXT_MUTED)
-        ax_bottom.setPen(TEXT_MUTED)
+        ax_left.setPen(p.TEXT_SECONDARY)
+        ax_bottom.setPen(p.TEXT_SECONDARY)
+        ax_left.setTextPen(p.TEXT_PRIMARY)
+        ax_bottom.setTextPen(p.TEXT_PRIMARY)
 
         spells = list(spell_counts.keys())
         counts = list(spell_counts.values())
@@ -74,24 +74,25 @@ class WandStatsPanel(QWidget):
                 x=np.arange(len(spells)),
                 height=counts,
                 width=0.6,
-                brush=pg.mkBrush(ACCENT),
+                brush=pg.mkBrush(QColor(p.PRIMARY)),
             )
             self.stats_plot.addItem(bar)
             ax_bottom.setTicks([list(enumerate(spells))])
             return
 
-        bar = pg.BarGraphItem(x=[0], height=[0], width=0.6, brush=pg.mkBrush(QColor(BORDER_MID)))
+        bar = pg.BarGraphItem(x=[0], height=[0], width=0.6, brush=pg.mkBrush(QColor(p.TEXT_TERTIARY)))
         self.stats_plot.addItem(bar)
         self.stats_plot.setYRange(0, 10)
         ax_bottom.setTicks([[(0, tr_ui("wand_no_data"))]])
 
     def refresh_styles(self) -> None:
         """Re-apply styles based on current theme."""
-        from logic.theme_manager import theme_manager
         p = theme_manager.get_palette()
         self.stats_plot.setBackground("transparent")
         self.stats_plot.getAxis("left").setPen(p.TEXT_SECONDARY)
         self.stats_plot.getAxis("bottom").setPen(p.TEXT_SECONDARY)
+        self.stats_plot.getAxis("left").setTextPen(p.TEXT_PRIMARY)
+        self.stats_plot.getAxis("bottom").setTextPen(p.TEXT_PRIMARY)
         # Update any info labels already in the grid
         for i in range(self.layout_stats.count()):
             widget = self.layout_stats.itemAt(i).widget()
@@ -115,19 +116,20 @@ class WandStatsPanel(QWidget):
         card_layout.addLayout(self.layout_stats)
 
         self.stats_plot = pg.PlotWidget()
-        self.stats_plot.setBackground(BG_WHITE)
+        self.stats_plot.setBackground("transparent")
         self.stats_plot.setMouseEnabled(x=False, y=False)
         self.stats_plot.hideButtons()
         self.stats_plot.showGrid(x=False, y=True, alpha=0.3)
 
+        p = theme_manager.get_palette()
         ax_bottom = self.stats_plot.getAxis("bottom")
-        ax_bottom.setPen(TEXT_MUTED)
-        ax_bottom.setTextPen(TEXT_BODY)
+        ax_bottom.setPen(p.TEXT_SECONDARY)
+        ax_bottom.setTextPen(p.TEXT_PRIMARY)
         ax_bottom.setStyle(tickTextOffset=8)
 
         ax_left = self.stats_plot.getAxis("left")
-        ax_left.setPen(TEXT_MUTED)
-        ax_left.setTextPen(TEXT_BODY)
+        ax_left.setPen(p.TEXT_SECONDARY)
+        ax_left.setTextPen(p.TEXT_PRIMARY)
 
         card_layout.addWidget(self.stats_plot, stretch=1)
         layout.addWidget(card, stretch=1)

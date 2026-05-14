@@ -5,12 +5,15 @@ Modern, professional theme system with Light/Dark mode support.
 from PyQt6.QtWidgets import QFrame, QWidget, QApplication
 from ui.palettes import LIGHT_PALETTE, DARK_PALETTE, Palette
 from logic.theme_manager import theme_manager
+from ui.color_utils import readable_text_on
 
 def get_modern_stylesheet(theme_name: str = "light") -> str:
     """
     Generate comprehensive modern QSS stylesheet based on selected theme.
     """
     p = DARK_PALETTE if theme_name == "dark" else LIGHT_PALETTE
+    on_primary = readable_text_on(p.PRIMARY, dark_text=p.SURFACE_PRIMARY, light_text="#FFFFFF")
+    on_status_error = readable_text_on(p.STATUS_ERROR, dark_text=p.TEXT_PRIMARY, light_text="#FFFFFF")
     
     # Base stylesheet
     qss = f"""
@@ -59,13 +62,13 @@ QPushButton:hover {{
 
 QPushButton#btn_primary, QPushButton#btn_start, QPushButton#btn_record {{
     background-color: {p.PRIMARY};
-    color: white;
+    color: {on_primary};
     border: none;
 }}
 
 QPushButton#btn_stop, QPushButton#btn_danger {{
     background-color: {p.STATUS_ERROR};
-    color: white;
+    color: {on_status_error};
     border: none;
 }}
 
@@ -178,7 +181,7 @@ QToolButton#StemNavBtn:hover {{
 
 QToolButton#StemNavBtn[active="true"] {{
     background-color: {p.PRIMARY};
-    color: #ffffff;
+    color: {on_primary};
     border: 1px solid {p.PRIMARY};
     border-radius: 14px;
 }}

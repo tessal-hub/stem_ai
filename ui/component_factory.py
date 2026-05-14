@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
 )
 from ui.mac_material import apply_soft_shadow
 from logic.theme_manager import theme_manager
+from ui.color_utils import readable_text_on
 
 from ui.tokens import (
     # Sizes
@@ -192,9 +193,10 @@ def make_graph_placeholder() -> QLabel:
 def make_rarity_badge_statistics(label: str, color: str) -> QLabel:
     lbl = QLabel(label)
     lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    text_color = readable_text_on(color, dark_text="#111111", light_text="#FFFFFF")
     lbl.setStyleSheet(f"""
         background-color: {color};
-        color: #FFFFFF;
+        color: {text_color};
         border-radius: 10px;
         padding: 2px 10px;
         font-weight: 900;

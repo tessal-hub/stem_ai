@@ -54,6 +54,7 @@ from ui.component_factory import (
 from ui.mac_material import apply_soft_shadow
 from ui.confirm_dialog import confirm_destructive
 from ui.i18n_bridge import tr_ui
+from ui.color_utils import readable_text_on
 from logic.theme_manager import theme_manager
 from ui.modern_layout import (
     MARGIN_COMFORTABLE,
@@ -670,7 +671,7 @@ class PageRecord(QWidget):
         self.spell_list.setStyleSheet(f"""
             QListWidget {{ background-color: transparent; border: none; color: {p.TEXT_PRIMARY}; }}
             QListWidget::item {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: 8px; margin-bottom: 4px; padding: 10px; }}
-            QListWidget::item:selected {{ background-color: {p.PRIMARY}; color: white; border: none; }}
+            QListWidget::item:selected {{ background-color: {p.PRIMARY}; color: {readable_text_on(p.PRIMARY, dark_text=p.SURFACE_PRIMARY, light_text="#FFFFFF")}; border: none; }}
         """)
 
     def _init_ui(self) -> None:

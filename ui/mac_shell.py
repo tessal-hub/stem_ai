@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from PyQt6.QtCore import QEvent, QSize, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QIcon, QPainter, QPixmap
+from PyQt6.QtGui import QColor, QFontMetrics, QIcon, QPainter, QPixmap
 from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtWidgets import (
     QFrame,
@@ -187,10 +187,12 @@ class MacShell(QWidget):
                 background-color: transparent;
                 border: none;
                 border-radius: 6px;
-                color: {p.TEXT_SECONDARY};
-                font-size: 12px;
+                color: {p.TEXT_PRIMARY};
+                font-family: 'Segoe UI', 'Inter', 'Noto Sans', 'Roboto', sans-serif;
+                font-size: 13px;
                 font-weight: 600;
                 padding-left: 10px;
+                padding-right: 10px;
                 text-align: left;
             }}
             QToolButton#StemNavBtn:hover {{
@@ -214,6 +216,7 @@ class MacShell(QWidget):
         self._brand_icon.setPixmap(icon.pixmap(QSize(24, 24)))
         # Refresh buttons
         self.set_active_index(self._active_index)
+        self._update_sidebar_width()
 
     def _build_toolbar(self, title: str) -> QWidget:
         """Top toolbar with title and navigation hint — Floating Island architecture."""
@@ -310,7 +313,25 @@ class MacShell(QWidget):
             sidebar_layout.addSpacing(4) # Tighter spacing
 
         sidebar_layout.addStretch()
+        self._update_sidebar_width()
         return self.sidebar
+
+    def _update_sidebar_width(self) -> None:
+        """Grow sidebar width so all nav labels stay fully visible."""
+        if not hasattr(self, "sidebar") or not self._buttons:
+            return
+        max_btn_width = 0
+        for button in self._buttons:
+            metrics = QFontMetrics(button.font())
+            text_width = metrics.horizontalAdvance(button.text())
+            icon_width = button.iconSize().width()
+            button_width = text_width + icon_width + 56  # icon/text gap + button paddings + safety
+            max_btn_width = max(max_btn_width, button_width, button.sizeHint().width())
+        nav_title_width = self._nav_section_label.sizeHint().width()
+        content_width = max(max_btn_width, nav_title_width)
+        sidebar_margins = 24  # left + right margins in sidebar_layout
+        target_width = max(SHELL_SIDEBAR_W, content_width + sidebar_margins + 20)
+        self.sidebar.setFixedWidth(target_width)
 
     def _make_nav_button(self, label_key: str, icon_path: str, index: int) -> QToolButton:
         """Create a sidebar navigation button."""
@@ -443,6 +464,7 @@ class MacShell(QWidget):
                 translated = tr_ui(label_key)
                 button.setText(translated)
                 button.setAccessibleName(translated)
+        self._update_sidebar_width()
         self.set_active_index(self._active_index)
 
     # ------------------------------------------------------------------

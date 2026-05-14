@@ -5,6 +5,7 @@ Centralizes colors, sizes, stylesheet constants, and visual elements.
 
 from PyQt6.QtCore import QSize
 from ui.palettes import LIGHT_PALETTE, DARK_PALETTE
+from ui.color_utils import readable_text_on
 
 # Initial default (Light)
 _p = LIGHT_PALETTE
@@ -22,7 +23,7 @@ TEXT_TERTIARY  = _p.TEXT_TERTIARY
 TEXT_BODY      = _p.TEXT_SECONDARY  # Alias for comfort
 TEXT_MUTED     = _p.TEXT_TERTIARY   # Alias for comfort
 ACCENT         = _p.PRIMARY
-ACCENT_TEXT    = "#FFFFFF"
+ACCENT_TEXT    = readable_text_on(PRIMARY_COLOR, dark_text=TEXT_PRIMARY, light_text="#FFFFFF")
 BG_WHITE       = _p.SURFACE_PRIMARY
 BG_DARK        = _p.SURFACE_TERTIARY
 SUCCESS        = _p.STATUS_SUCCESS
@@ -62,8 +63,8 @@ APP_FONT_STACK = "'SF Pro Display', 'Geist Sans', 'Helvetica Neue', 'Switzer', s
 TITLE_FONT_STACK = "'Newsreader', 'Georgia', 'Times New Roman', serif"
 
 # ── Shell layout tokens ──
-SHELL_SIDEBAR_W = 130
-SHELL_NAV_H = 34
+SHELL_SIDEBAR_W = 180
+SHELL_NAV_H = 38
 SHELL_BRAND_H = 60
 SHELL_BRAND_ICON = QSize(22, 22)
 SHELL_NAV_ICON = QSize(16, 16)
@@ -138,7 +139,7 @@ STYLE_RARITY_BADGE_STATISTICS = STYLE_RARITY_BADGE_WAND
 STYLE_BTN_PRIMARY = f"""
     QPushButton {{
         background-color: {PRIMARY_COLOR};
-        color: #FFFFFF;
+        color: {ACCENT_TEXT};
         border: none;
         border-radius: 18px;
         font-size: 11px;
@@ -150,7 +151,7 @@ STYLE_BTN_PRIMARY = f"""
     QPushButton:hover {{ background-color: {PRIMARY_LIGHT}; }}
 """
 STYLE_BTN_OUTLINE = f"""
-    QPushButton {{ background-color: transparent; color: {TEXT_PRIMARY}; border: 1px solid {BORDER_COLOR}; border-radius: 18px; font-size: 11px; font-weight: 800; padding: 10px 24px; }}
+    QPushButton {{ background-color: {SURFACE_2}; color: {TEXT_PRIMARY}; border: 1px solid {BORDER_COLOR}; border-radius: 18px; font-size: 11px; font-weight: 800; padding: 10px 24px; }}
     QPushButton:hover {{ background-color: {HOVER_BG}; }}
 """
 
@@ -168,9 +169,9 @@ STYLE_BTN_BASE = f"""
     QPushButton:hover {{ background-color: {HOVER_BG}; }}
 """
 STYLE_BTN_START = STYLE_BTN_PRIMARY
-STYLE_BTN_STOP  = f"QPushButton {{ background-color: {STATUS_ERROR}; color: #FFFFFF; border: none; border-radius: 18px; font-size: 11px; font-weight: 800; padding: 10px 24px; }}"
+STYLE_BTN_STOP  = f"QPushButton {{ background-color: {STATUS_ERROR}; color: {STATUS_ERROR_TEXT}; border: none; border-radius: 18px; font-size: 11px; font-weight: 800; padding: 10px 24px; }}"
 STYLE_BTN_SNIP  = f"QPushButton {{ background-color: {STATUS_WARNING}; color: {TEXT_PRIMARY}; border: none; border-radius: 18px; font-size: 11px; font-weight: 800; padding: 10px 24px; }}"
-STYLE_BTN_DANGER_OUTLINE = f"QPushButton {{ background-color: transparent; color: {STATUS_ERROR}; border: 1px solid {STATUS_ERROR}; border-radius: 18px; font-size: 11px; font-weight: 700; padding: 8px 16px; }}"
+STYLE_BTN_DANGER_OUTLINE = f"QPushButton {{ background-color: {STATUS_ERROR}; color: {STATUS_ERROR_TEXT}; border: 1px solid {STATUS_ERROR_TEXT}; border-radius: 18px; font-size: 11px; font-weight: 700; padding: 8px 16px; }}"
 STYLE_BTN_BACK = STYLE_BTN_BASE
 STYLE_BTN_SMALL = f"QPushButton {{ background-color: {SURFACE_2}; color: {TEXT_PRIMARY}; border: 1px solid {BORDER_COLOR}; border-radius: 14px; font-size: 10px; font-weight: 700; padding: 4px 10px; }}"
 

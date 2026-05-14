@@ -18,17 +18,13 @@ from PyQt6.QtWidgets import (
 from logic.rarity_utils import RARITY_TIERS, RarityTier
 from ui.modern_layout import MARGIN_STANDARD, SPACING_SM
 from ui.tokens import (
-    STYLE_LIST,
-    STYLE_TRANSPARENT_WIDGET,
     STYLE_WAND_EMPTY_ROW_TEMPLATE,
-    STYLE_WAND_LIST_TITLE,
-    STYLE_WAND_SPELL_NAME,
     WAND_SPELL_LIST_MIN_H,
-    TEXT_MUTED,
 )
 from ui.component_factory import make_rarity_badge_wand
 from ui.wand_panels.shared import make_section_label
 from ui.i18n_bridge import tr_ui
+from logic.theme_manager import theme_manager
 
 
 class WandSpellPayloadPanel(QWidget):
@@ -41,6 +37,7 @@ class WandSpellPayloadPanel(QWidget):
         self._spell_counts: dict[str, int] = {}
         self._init_ui()
         self._init_signals()
+        self.refresh_styles()
 
     def load_spell_list(self, spell_counts: dict[str, int]) -> None:
         """Nạp danh sách spell vào panel, giữ lại spell đã chọn nếu vẫn hợp lệ.
@@ -65,12 +62,32 @@ class WandSpellPayloadPanel(QWidget):
 
     def refresh_styles(self) -> None:
         """Re-apply styles based on current theme."""
-        from logic.theme_manager import theme_manager
         p = theme_manager.get_palette()
-        self._left_title.setStyleSheet(f"color: {p.TEXT_SECONDARY}; font-size: 11px; font-weight: 700; text-transform: uppercase;")
-        self._right_title.setStyleSheet(f"color: {p.TEXT_SECONDARY}; font-size: 11px; font-weight: 700; text-transform: uppercase;")
-        self.list_selected_spells.setStyleSheet(f"QListWidget {{ background: transparent; border: none; }}")
-        self.list_available_spells.setStyleSheet(f"QListWidget {{ background: transparent; border: none; }}")
+        section_style = (
+            f"color: {p.TEXT_PRIMARY}; font-size: 12px; "
+            "font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;"
+        )
+        self._hdr_payload.setStyleSheet(section_style)
+        self._left_title.setStyleSheet(section_style)
+        self._right_title.setStyleSheet(section_style)
+        list_style = f"""
+            QListWidget {{
+                background-color: {p.SURFACE_PRIMARY};
+                border: 1px solid {p.BORDER};
+                border-radius: 12px;
+                padding: 6px;
+            }}
+            QListWidget::item {{
+                border: none;
+                margin: 0;
+                padding: 0;
+            }}
+            QListWidget::item:selected {{
+                background: transparent;
+            }}
+        """
+        self.list_selected_spells.setStyleSheet(list_style)
+        self.list_available_spells.setStyleSheet(list_style)
         self._refresh_lists()
 
     def _init_ui(self) -> None:
@@ -89,11 +106,9 @@ class WandSpellPayloadPanel(QWidget):
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(SPACING_SM)
         self._left_title = QLabel(tr_ui("wand_selected_title"))
-        self._left_title.setStyleSheet(STYLE_WAND_LIST_TITLE)
         left_layout.addWidget(self._left_title)
 
         self.list_selected_spells = QListWidget()
-        self.list_selected_spells.setStyleSheet(STYLE_LIST)
         self.list_selected_spells.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
         self.list_selected_spells.setMinimumHeight(WAND_SPELL_LIST_MIN_H)
         self.list_selected_spells.setAccessibleName("Selected spells list")
@@ -104,11 +119,9 @@ class WandSpellPayloadPanel(QWidget):
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(SPACING_SM)
         self._right_title = QLabel(tr_ui("wand_available_title"))
-        self._right_title.setStyleSheet(STYLE_WAND_LIST_TITLE)
         right_layout.addWidget(self._right_title)
 
         self.list_available_spells = QListWidget()
-        self.list_available_spells.setStyleSheet(STYLE_LIST)
         self.list_available_spells.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
         self.list_available_spells.setMinimumHeight(WAND_SPELL_LIST_MIN_H)
         self.list_available_spells.setAccessibleName("Available spells list")
@@ -161,15 +174,21 @@ class WandSpellPayloadPanel(QWidget):
         """
         item = QListWidgetItem(list_widget)
         item.setData(Qt.ItemDataRole.UserRole, spell_name)
+        p = theme_manager.get_palette()
 
         widget = QWidget()
-        widget.setStyleSheet(STYLE_TRANSPARENT_WIDGET)
+        widget.setStyleSheet(
+            f"background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: 10px;"
+        )
 
         row = QHBoxLayout(widget)
         row.setContentsMargins(MARGIN_STANDARD, SPACING_SM, MARGIN_STANDARD, SPACING_SM)
+        row.setSpacing(SPACING_SM)
 
         name_label = QLabel(spell_name)
-        name_label.setStyleSheet(STYLE_WAND_SPELL_NAME)
+        name_label.setStyleSheet(
+            f"color: {p.TEXT_PRIMARY}; font-size: 13px; font-weight: 700;"
+        )
         name_label.setWordWrap(True)
         name_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         font = QFont()
@@ -187,9 +206,11 @@ class WandSpellPayloadPanel(QWidget):
 
     def _add_empty_row(self, list_widget: QListWidget, text: str) -> None:
         item = QListWidgetItem(list_widget)
+        p = theme_manager.get_palette()
         widget = QLabel(text)
-        widget.setStyleSheet(STYLE_WAND_EMPTY_ROW_TEMPLATE.format(color=TEXT_MUTED))
+        widget.setStyleSheet(STYLE_WAND_EMPTY_ROW_TEMPLATE.format(color=p.TEXT_SECONDARY))
         widget.setWordWrap(True)
+        widget.setContentsMargins(MARGIN_STANDARD, SPACING_SM, MARGIN_STANDARD, SPACING_SM)
         item.setSizeHint(widget.sizeHint())
         list_widget.setItemWidget(item, widget)
 
