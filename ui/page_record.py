@@ -9,63 +9,93 @@ Architecture compliance (docs/01_ARCHITECTURE/OVERVIEW.md and docs/06_CONTRACTS/
     - MUST NOT import anything from /logic.
 """
 from __future__ import annotations
+
 import logging
+
+from PyQt6.QtCore import QTime, QTimer, Qt, pyqtSignal
+from PyQt6.QtWidgets import (
+    QComboBox,
+    QFormLayout,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QSizePolicy,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
+
 import numpy as np
 import pyqtgraph as pg
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QTime
-from PyQt6.QtWidgets import (
-    QFormLayout,
-    QGridLayout,
-    QComboBox, QFrame, QHBoxLayout, QLabel,
-    QListWidget, QListWidgetItem, QMessageBox, QPushButton, QSizePolicy,
-    QStackedWidget, QVBoxLayout, QWidget,
-)
+
 from constants import canonical_system_spell, is_system_spell
+from ui.component_factory import (
+    make_button,
+    make_checkbox,
+    make_card_frame,
+    make_hint,
+    make_section_label,
+)
+from ui.color_utils import readable_text_on
+from ui.confirm_dialog import confirm_destructive
+from ui.i18n_bridge import tr_ui
+from ui.mac_material import apply_soft_shadow
+from ui.modern_layout import (
+    MARGIN_COMFORTABLE,
+    SPACING_LG,
+    SPACING_MD,
+    SPACING_SM,
+)
 from ui.tokens import (
-    # Colors, Sizes
-    TEXT_BODY, TEXT_MUTED, ACCENT,
-    SUCCESS, DANGER, WARNING, BTN_H, SPELL_BTN_H, RIGHT_MAX_W, CROP_REGION,
-    RECORD_GRAPH_MIN_H, RECORD_LIST_MIN_H,
-    PLOT_AX_COLOR, PLOT_AY_COLOR, PLOT_AZ_COLOR,
-    PLOT_GX_COLOR, PLOT_GY_COLOR, PLOT_GZ_COLOR, PLOT_HANDLE_HOVER_COLOR,
-    # Styles (page-specific)
-    STYLE_RECORD_MAIN_CONTAINER,
-    STYLE_RECORD_GRAPH_CARD,
+    ACCENT,
+    BTN_H,
+    CROP_REGION,
+    DANGER,
+    PLOT_AX_COLOR,
+    PLOT_AY_COLOR,
+    PLOT_AZ_COLOR,
+    PLOT_GX_COLOR,
+    PLOT_GY_COLOR,
+    PLOT_GZ_COLOR,
+    PLOT_HANDLE_HOVER_COLOR,
+    RECORD_GRAPH_MIN_H,
+    RECORD_LIST_MIN_H,
+    RIGHT_MAX_W,
+    SPELL_BTN_H,
+    STYLE_BTN_BACK,
     STYLE_BTN_BASE,
+    STYLE_BTN_DANGER_OUTLINE,
+    STYLE_BTN_SNIP,
     STYLE_BTN_START,
     STYLE_BTN_STOP,
-    STYLE_BTN_SNIP,
-    STYLE_BTN_DANGER_OUTLINE,
-    STYLE_BTN_BACK,
-    STYLE_RECORD_LIST,
     STYLE_RECORD_COMBO,
     STYLE_RECORD_CURRENT_SPELL,
     STYLE_RECORD_FIELD_LABEL,
+    STYLE_RECORD_GRAPH_CARD,
+    STYLE_RECORD_LIST,
+    STYLE_RECORD_MAIN_CONTAINER,
     STYLE_RECORD_METRIC_VALUE,
     STYLE_RECORD_STATUS_TEMPLATE,
+    SUCCESS,
+    TEXT_BODY,
+    TEXT_MUTED,
+    WARNING,
 )
-from ui.component_factory import (
-    make_card_frame,
-    make_button,
-    make_section_label,
-    make_checkbox,
-    make_hint,
-)
-from ui.mac_material import apply_soft_shadow
-from ui.confirm_dialog import confirm_destructive
-from ui.i18n_bridge import tr_ui
-from ui.color_utils import readable_text_on
 from logic.theme_manager import theme_manager
-from ui.modern_layout import (
-    MARGIN_COMFORTABLE,
-    SPACING_MD,
-    SPACING_LG,
-    SPACING_SM,
-)
 
 log = logging.getLogger(__name__)
 
 _EMPTY_SPELL_LIST = "__STEM_EMPTY_SPELL_LIST__"
+_RECORDING_TIMER_INTERVAL_MS = 1000
+_PLOT_TIMER_INTERVAL_MS = 33
+_DEFAULT_CROP_REGION_START = 30
+_DEFAULT_CROP_REGION_END = 120
+_AUTO_CROP_TAIL_SAMPLE_COUNT = 200
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -120,13 +150,13 @@ class PageRecord(QWidget):
         """Xử lý phím tắt bàn phím cho các thao tác recording."""
         if event.key() == Qt.Key.Key_S and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             if self.btn_start.isEnabled():
-                self._on_start()
+                self._on_btn_start_clicked()
         elif event.key() == Qt.Key.Key_T and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             if self.btn_stop.isEnabled():
-                self._on_stop()
+                self._on_btn_stop_clicked()
         elif event.key() == Qt.Key.Key_X and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             if self.btn_snip.isEnabled():
-                self._on_snip()
+                self._on_btn_snip_clicked()
         else:
             super().keyPressEvent(event)
 
@@ -300,7 +330,7 @@ class PageRecord(QWidget):
 
         # Crop region overlay on graph1 — LARGER handles for easier drag
         self.crop_region = pg.LinearRegionItem(
-            [30, 120],
+            [_DEFAULT_CROP_REGION_START, _DEFAULT_CROP_REGION_END],
             brush=CROP_REGION,
         )
         self.crop_region.setZValue(10)
@@ -314,7 +344,11 @@ class PageRecord(QWidget):
         log.debug("[PageRecord._setup_plots] Plot setup complete!")
 
     def _on_crop_region_changed(self) -> None:
-        """Update the sample count display when crop region changes."""
+        """Cập nhật số mẫu đang chọn khi vùng crop thay đổi.
+
+        Returns:
+            None.
+        """
         if not self.crop_region.isVisible():
             return
         
@@ -326,11 +360,10 @@ class PageRecord(QWidget):
         self.lbl_record_count.setText(tr_ui("record_selected_samples", n=sample_count))
 
     def _render_plots(self) -> None:
-        """Timer callback (~30 FPS). Pure display — no data processing.
+        """Render đồ thị live theo timer, chỉ xử lý hiển thị và không đổi dữ liệu nguồn.
 
-        Uses numpy column-slicing instead of per-column list comprehensions to
-        extract the six signal axes from the snapshot in a single pass.  The
-        widget visibility guard ensures no work is done when the page is hidden.
+        Returns:
+            None.
         """
         # Skip rendering when this widget is not visible (e.g. user is on a
         # different page) to avoid doing unnecessary GPU/CPU work.
@@ -372,7 +405,7 @@ class PageRecord(QWidget):
 
     # ── Toolbar Actions ─────────────────────────────────────────────────
 
-    def _on_start(self) -> None:
+    def _on_btn_start_clicked(self) -> None:
         """START: Begin recording and send command to device."""
         spell_name = self.combo_spell.currentText().strip()
         if not spell_name:
@@ -396,11 +429,11 @@ class PageRecord(QWidget):
         
         # Start recording timer
         self.recording_start_time.start()
-        self.recording_timer.start(1000)  # Update every second
+        self.recording_timer.start(_RECORDING_TIMER_INTERVAL_MS)
         
         self.sig_start_record.emit(spell_name)
 
-    def _on_stop(self) -> None:
+    def _on_btn_stop_clicked(self) -> None:
         """STOP: cease recording buffer and finalize file."""
         self.is_live = False
         self.crop_region.show()
@@ -409,7 +442,7 @@ class PageRecord(QWidget):
         buf_len = len(self.store.get_live_buffer_snapshot())
         if buf_len > 0:
             # Aim for last 2 seconds (assuming 50Hz = 100 samples/second)
-            crop_start = max(0, buf_len - 200)
+            crop_start = max(0, buf_len - _AUTO_CROP_TAIL_SAMPLE_COUNT)
             self.crop_region.setRegion([crop_start, buf_len])
         
         self.btn_start.setEnabled(True)
@@ -429,7 +462,7 @@ class PageRecord(QWidget):
         
         self.sig_stop_record.emit()
 
-    def _on_snip(self) -> None:
+    def _on_btn_snip_clicked(self) -> None:
         """SNIP: Cut the selected region and emit with spell name."""
         if not self.crop_region.isVisible():
             return
@@ -488,25 +521,25 @@ class PageRecord(QWidget):
 
         self.sig_snip_record.emit()
 
-    def _zoom_in(self) -> None:
+    def _on_btn_zoom_in_clicked(self) -> None:
         """Zoom in on both plots."""
         for plot in [self.graph1, self.graph2]:
             if plot.isVisible():
                 plot.getViewBox().scaleBy((0.8, 0.8))
 
-    def _zoom_out(self) -> None:
+    def _on_btn_zoom_out_clicked(self) -> None:
         """Zoom out on both plots."""
         for plot in [self.graph1, self.graph2]:
             if plot.isVisible():
                 plot.getViewBox().scaleBy((1.25, 1.25))
 
-    def _zoom_fit(self) -> None:
+    def _on_btn_zoom_fit_clicked(self) -> None:
         """Fit both plots to show all data."""
         for plot in [self.graph1, self.graph2]:
             if plot.isVisible():
                 plot.getViewBox().autoRange()
 
-    def _on_clear_samples(self) -> None:
+    def _on_btn_clear_samples_clicked(self) -> None:
         """Clear all recorded samples from current buffer."""
         if not confirm_destructive(
             self,
@@ -521,7 +554,7 @@ class PageRecord(QWidget):
         self.sig_clear_buffer.emit()
         # Update UI
         self.lbl_record_count.setText("0")
-        self.crop_region.setRegion([30, 120])
+        self.crop_region.setRegion([_DEFAULT_CROP_REGION_START, _DEFAULT_CROP_REGION_END])
         self.is_live = True
         self.crop_region.hide()
         self.lbl_wand_status.setText(f"✔ {tr_ui('record_cleared')}")
@@ -529,7 +562,7 @@ class PageRecord(QWidget):
             STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
         )
 
-    def _on_export_csv(self) -> None:
+    def _on_btn_export_csv_clicked(self) -> None:
         """Export current recorded samples to CSV file."""
         buf = self.store.get_live_buffer_snapshot()
         if not buf:
@@ -545,7 +578,7 @@ class PageRecord(QWidget):
             STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
         )
 
-    def _on_delete_latest_sample(self) -> None:
+    def _on_btn_delete_latest_sample_clicked(self) -> None:
         """Quick-delete the newest recorded CSV sample for the active spell."""
         spell_name = self.current_spell_name.strip() or self.combo_spell.currentText().strip()
         if not spell_name:
@@ -582,7 +615,7 @@ class PageRecord(QWidget):
             STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
         )
 
-    def _on_spell_list_clicked(self, item) -> None:
+    def _on_spell_list_item_clicked(self, item) -> None:
         """Handle spell list item click: auto-select spell in combo and emit signal."""
         if item.data(Qt.ItemDataRole.UserRole) == _EMPTY_SPELL_LIST:
             return
@@ -598,7 +631,7 @@ class PageRecord(QWidget):
         # Emit signal for handler
         self.sig_spell_selected.emit(spell_name)
 
-    def _on_delete_spell(self) -> None:
+    def _on_btn_delete_spell_clicked(self) -> None:
         """Handle spell deletion with 2-step verification."""
         # Get selected spell
         current_item = self.spell_list.currentItem()
@@ -635,6 +668,10 @@ class PageRecord(QWidget):
             cancel_text=tr_ui("record_del_abort"),
         ):
             self.sig_spell_deleted.emit(spell_name)
+
+    def _on_btn_back_spells_clicked(self) -> None:
+        """Quay về danh sách spell từ trang chi tiết sample."""
+        self.stacked_spells.setCurrentIndex(0)
 
     def show_protected_spell_warning(self, spell_name: str) -> None:
         """Display clear UX feedback when a protected spell deletion is blocked."""
@@ -769,6 +806,7 @@ class PageRecord(QWidget):
         return widget
 
     def _build_right_column(self) -> QWidget:
+        """Xây dựng cột phải gồm details, controls, danh sách spell và batch actions."""
         widget = QWidget()
         widget.setMaximumWidth(RIGHT_MAX_W)
         widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
@@ -778,8 +816,21 @@ class PageRecord(QWidget):
 
         self._section_toolbar = make_section_label(tr_ui("record_toolbar"), accent=True)
         layout.addWidget(self._section_toolbar)
+        layout.addWidget(self._build_detail_card())
+        layout.addWidget(self._build_controls_card())
 
-        # Details card with modern shadow
+        # ── Spell list stack ───────────────────────────────────────
+        self.stacked_spells = QStackedWidget()
+        self.stacked_spells.addWidget(self._build_spell_list_page())
+        self.stacked_spells.addWidget(self._build_sample_list_page())
+        layout.addWidget(self.stacked_spells, stretch=1)
+
+        layout.addWidget(self._build_batch_card())
+
+        return widget
+
+    def _build_detail_card(self) -> QFrame:
+        """Xây dựng card chứa spell selector và chỉ số recorded/duration."""
         detail_card = make_card_frame()
         detail_layout = QVBoxLayout(detail_card)
         detail_layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
@@ -800,7 +851,6 @@ class PageRecord(QWidget):
 
         self._lbl_spell = QLabel(tr_ui("record_spell_label"))
         self._lbl_spell.setStyleSheet(STYLE_RECORD_FIELD_LABEL)
-
         detail_form.addRow(self._lbl_spell, self.combo_spell)
         detail_layout.addLayout(detail_form)
 
@@ -814,53 +864,42 @@ class PageRecord(QWidget):
 
         self.lbl_record_count = QLabel("0")
         self.lbl_record_count.setStyleSheet(STYLE_RECORD_METRIC_VALUE)
-
         self.lbl_record_duration = QLabel("00:00")
         self.lbl_record_duration.setStyleSheet(STYLE_RECORD_METRIC_VALUE)
         count_grid.addWidget(self.lbl_record_count, 1, 0)
         count_grid.addWidget(self.lbl_record_duration, 1, 1)
         detail_layout.addLayout(count_grid)
-        layout.addWidget(detail_card)
+        return detail_card
 
-        # ── Controls card with modern shadow ─────────────────────
+    def _build_controls_card(self) -> QFrame:
+        """Xây dựng card chứa nút START/STOP/SNIP và hint thao tác."""
         controls_card = make_card_frame()
         ctrl_layout = QVBoxLayout(controls_card)
         ctrl_layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
         ctrl_layout.setSpacing(SPACING_MD)
 
-        # Buttons: START | STOP | SNIP
         btn_row = QGridLayout()
         btn_row.setHorizontalSpacing(SPACING_SM)
         btn_row.setVerticalSpacing(SPACING_SM)
         self.btn_start = make_button(tr_ui("record_btn_start"), STYLE_BTN_START, BTN_H)
-        self.btn_stop  = make_button(tr_ui("record_btn_stop"),  STYLE_BTN_STOP,  BTN_H)
-        self.btn_snip  = make_button(tr_ui("record_btn_snip"),  STYLE_BTN_SNIP,  BTN_H)
+        self.btn_stop = make_button(tr_ui("record_btn_stop"), STYLE_BTN_STOP, BTN_H)
+        self.btn_snip = make_button(tr_ui("record_btn_snip"), STYLE_BTN_SNIP, BTN_H)
         self.btn_stop.setEnabled(False)
         self.btn_snip.setEnabled(False)
-        
-        # Add tooltips for better UX (include keyboard shortcuts)
         self.btn_start.setToolTip(tr_ui("record_tt_start"))
         self.btn_stop.setToolTip(tr_ui("record_tt_stop"))
         self.btn_snip.setToolTip(tr_ui("record_tt_snip"))
-        
         btn_row.addWidget(self.btn_start, 0, 0)
         btn_row.addWidget(self.btn_stop, 0, 1)
         btn_row.addWidget(self.btn_snip, 0, 2)
         ctrl_layout.addLayout(btn_row)
 
-        # Hint
         self._hint_controls = make_hint(tr_ui("record_hint_controls"))
         ctrl_layout.addWidget(self._hint_controls)
+        return controls_card
 
-        layout.addWidget(controls_card)
-
-        # ── Spell list stack ───────────────────────────────────────
-        self.stacked_spells = QStackedWidget()
-        self.stacked_spells.addWidget(self._build_spell_list_page())
-        self.stacked_spells.addWidget(self._build_sample_list_page())
-        layout.addWidget(self.stacked_spells, stretch=1)
-
-        # ── Batch operations card (moved to bottom) ───────────────────
+    def _build_batch_card(self) -> QFrame:
+        """Xây dựng card batch operations: delete latest, clear, export."""
         batch_card = make_card_frame()
         batch_layout = QVBoxLayout(batch_card)
         batch_layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
@@ -872,34 +911,21 @@ class PageRecord(QWidget):
         batch_btn_row = QGridLayout()
         batch_btn_row.setHorizontalSpacing(SPACING_SM)
         batch_btn_row.setVerticalSpacing(SPACING_SM)
-
-        self.btn_clear_samples = make_button(
-            tr_ui("record_btn_clear"),
-            STYLE_BTN_DANGER_OUTLINE,
-            BTN_H,
-        )
+        self.btn_clear_samples = make_button(tr_ui("record_btn_clear"), STYLE_BTN_DANGER_OUTLINE, BTN_H)
         self.btn_clear_samples.setToolTip(tr_ui("record_tt_clear"))
-
         self.btn_export_csv = make_button(tr_ui("record_btn_export"), STYLE_BTN_BASE, BTN_H)
         self.btn_export_csv.setToolTip(tr_ui("record_tt_export"))
-
         self.btn_delete_latest_sample = make_button(
             tr_ui("record_btn_delete_latest"),
             STYLE_BTN_DANGER_OUTLINE,
             BTN_H,
         )
-        self.btn_delete_latest_sample.setToolTip(
-            tr_ui("record_tt_delete_latest")
-        )
-
+        self.btn_delete_latest_sample.setToolTip(tr_ui("record_tt_delete_latest"))
         batch_btn_row.addWidget(self.btn_delete_latest_sample, 0, 0)
         batch_btn_row.addWidget(self.btn_clear_samples, 0, 1)
         batch_btn_row.addWidget(self.btn_export_csv, 0, 2)
         batch_layout.addLayout(batch_btn_row)
-
-        layout.addWidget(batch_card)
-
-        return widget
+        return batch_card
 
     def _build_spell_list_page(self) -> QWidget:
         page = QWidget()
@@ -951,35 +977,33 @@ class PageRecord(QWidget):
     def _init_signals(self) -> None:
         """Kết nối toàn bộ signal và slot của trang recording."""
         # Toolbar buttons
-        self.btn_start.clicked.connect(lambda: self._on_start())
-        self.btn_stop.clicked.connect(lambda: self._on_stop())
-        self.btn_snip.clicked.connect(lambda: self._on_snip())
+        self.btn_start.clicked.connect(self._on_btn_start_clicked)
+        self.btn_stop.clicked.connect(self._on_btn_stop_clicked)
+        self.btn_snip.clicked.connect(self._on_btn_snip_clicked)
 
         # Graph visibility toggles
         self.chk_graph1.toggled.connect(self.graph1.setVisible)
         self.chk_graph2.toggled.connect(self.graph2.setVisible)
         
         # Zoom controls
-        self.btn_zoom_in.clicked.connect(self._zoom_in)
-        self.btn_zoom_out.clicked.connect(self._zoom_out)
-        self.btn_zoom_fit.clicked.connect(self._zoom_fit)
+        self.btn_zoom_in.clicked.connect(self._on_btn_zoom_in_clicked)
+        self.btn_zoom_out.clicked.connect(self._on_btn_zoom_out_clicked)
+        self.btn_zoom_fit.clicked.connect(self._on_btn_zoom_fit_clicked)
 
         # Batch operations
-        self.btn_delete_latest_sample.clicked.connect(self._on_delete_latest_sample)
-        self.btn_clear_samples.clicked.connect(self._on_clear_samples)
-        self.btn_export_csv.clicked.connect(self._on_export_csv)
+        self.btn_delete_latest_sample.clicked.connect(self._on_btn_delete_latest_sample_clicked)
+        self.btn_clear_samples.clicked.connect(self._on_btn_clear_samples_clicked)
+        self.btn_export_csv.clicked.connect(self._on_btn_export_csv_clicked)
 
         # Spell list navigation
-        self.btn_back_spells.clicked.connect(
-            lambda: self.stacked_spells.setCurrentIndex(0)
-        )
-        self.spell_list.itemClicked.connect(self._on_spell_list_clicked)
-        self.btn_delete_spell.clicked.connect(self._on_delete_spell)
+        self.btn_back_spells.clicked.connect(self._on_btn_back_spells_clicked)
+        self.spell_list.itemClicked.connect(self._on_spell_list_item_clicked)
+        self.btn_delete_spell.clicked.connect(self._on_btn_delete_spell_clicked)
 
         # Plot refresh timer — throttled for high-throughput stability
         self._plot_timer = QTimer(self)
         self._plot_timer.timeout.connect(self._render_plots)
-        self._plot_timer.start(33)  # ~30 FPS
+        self._plot_timer.start(_PLOT_TIMER_INTERVAL_MS)
 
     def apply_ui_language(self) -> None:
         """Refresh visible strings after app language change."""

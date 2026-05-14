@@ -538,8 +538,26 @@ class PageSetting(QWidget):
         }
 
     def _on_btn_save_clicked(self) -> None:
-        """Xử lý khi người dùng nhấn nút Save Settings."""
+        """Slot xử lý sự kiện nhấn nút Save Settings và ủy quyền toàn bộ logic."""
+        self._handle_save_action()
+
+    def _handle_save_action(self) -> None:
+        """Thu thập config, kiểm tra hợp lệ, rồi phát tín hiệu lưu khi hợp lệ."""
         config = self._collect_config()
+        if not self._is_config_valid(config):
+            return
+        self._last_saved = config
+        self.sig_settings_saved.emit(config)
+
+    def _is_config_valid(self, config: dict[str, Any]) -> bool:
+        """Kiểm tra các điều kiện hợp lệ trước khi lưu cấu hình.
+
+        Args:
+            config: Dữ liệu cấu hình vừa thu thập từ UI.
+
+        Returns:
+            True nếu cấu hình hợp lệ và có thể lưu.
+        """
         if not config.get("project_name"):
             QMessageBox.warning(
                 self,
@@ -547,11 +565,8 @@ class PageSetting(QWidget):
                 tr(self._lang, "msg_missing_project"),
             )
             self.txt_project_name.setFocus()
-            return
-        if not self._validate_paths(config):
-            return
-        self._last_saved = config
-        self.sig_settings_saved.emit(config)
+            return False
+        return self._validate_paths(config)
 
     def _on_btn_revert_clicked(self) -> None:
         """Xử lý khi người dùng nhấn nút Revert Changes."""

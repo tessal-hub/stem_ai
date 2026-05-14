@@ -9,11 +9,18 @@ Architecture:
 """
 
 import json
+import logging
 import socket
 import time
 from typing import Any
 
 from PyQt6.QtCore import QThread, pyqtSignal
+
+_UDP_BUFFER_SIZE = 4096
+_SOCKET_TIMEOUT_S = 1.0
+_HEALTH_EMIT_INTERVAL_S = 0.2
+_IDLE_HEALTH_THRESHOLD_S = 2.0
+_STOP_WAIT_TIMEOUT_MS = 2000
 
 
 class UdpWorker(QThread):
@@ -24,6 +31,7 @@ class UdpWorker(QThread):
     sig_status_change = pyqtSignal(bool)  # Emits True when receiving, False if timeout/disconnected
     sig_error         = pyqtSignal(str)
     sig_health_update = pyqtSignal(dict)
+    sig_finished      = pyqtSignal(bool, str)
 
     def __init__(self, host: str = "0.0.0.0", port: int = 5555, parent=None) -> None:
         super().__init__(parent)
@@ -38,59 +46,59 @@ class UdpWorker(QThread):
         self._last_health_emit = 0.0
         self._ema_rate_hz: float | None = None
         self._ema_jitter_ms: float | None = None
-        self._health_emit_interval = 0.2
+        self._health_emit_interval = _HEALTH_EMIT_INTERVAL_S
 
     def run(self) -> None:
         """Main thread loop. Blocks on recvfrom() but does not block the UI."""
         self._is_running = True
-        self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        
-        # Set timeout to periodically check if thread should stop
-        self._sock.settimeout(1.0)
-        
+        run_success = True
+        run_message = "UDP worker stopped"
+
         try:
+            self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self._sock.settimeout(_SOCKET_TIMEOUT_S)
             self._sock.bind((self.host, self.port))
-        except Exception as e:
-            self.sig_error.emit(f"Failed to bind UDP socket on {self.host}:{self.port} -> {e}")
+
+            while self._is_running:
+                try:
+                    data, _addr = self._sock.recvfrom(_UDP_BUFFER_SIZE)
+                    self.sig_status_change.emit(True)
+
+                    payload_str = data.decode("utf-8").strip()
+                    payload_dict = json.loads(payload_str)
+                    self._update_health_metrics(payload_dict)
+                    self.sig_data_received.emit(payload_dict)
+                except socket.timeout:
+                    self._emit_idle_health_if_needed()
+                except json.JSONDecodeError:
+                    self.sig_error.emit("Received malformed JSON from ESP32.")
+                except Exception as exc:
+                    raise RuntimeError(f"UDP runtime error: {exc}") from exc
+        except Exception as exc:
+            run_success = False
+            run_message = str(exc)
+            self.sig_error.emit(run_message)
+        finally:
             self._is_running = False
-            return
-
-        while self._is_running:
-            try:
-                data, addr = self._sock.recvfrom(4096)  # Buffer size 4KB
-                
-                # Signal connection status if we successfully got data
-                self.sig_status_change.emit(True)
-
-                # Assuming ESP32 sends JSON data. E.g., {"accel_x": 1.2, "gyro_z": -45.1}
-                payload_str = data.decode("utf-8").strip()
-                payload_dict = json.loads(payload_str)
-                self._update_health_metrics(payload_dict)
-                
-                self.sig_data_received.emit(payload_dict)
-
-            except socket.timeout:
-                # Normal behavior every 1 second if no data arrives
-                self._emit_idle_health_if_needed()
-            except json.JSONDecodeError:
-                self.sig_error.emit("Received malformed JSON from ESP32.")
-            except Exception as e:
-                self.sig_error.emit(f"UDP Error: {e}")
-
-        # Cleanup when thread stops
-        if self._sock:
-            self._sock.close()
+            if self._sock:
+                self._sock.close()
+                self._sock = None
+            self.sig_finished.emit(run_success, run_message)
 
     def stop(self) -> None:
         """Gracefully asks the thread to terminate."""
         self._is_running = False
-        if not self.wait(2000):
-            import logging
+        if not self.wait(_STOP_WAIT_TIMEOUT_MS):
             logging.getLogger(__name__).warning(
                 "UdpWorker: thread did not exit within 2 s after stop()"
             )
 
     def _update_health_metrics(self, payload: dict[str, Any]) -> None:
+        """Cập nhật thống kê tốc độ/jitter/loss từ một gói UDP mới nhận.
+
+        Args:
+            payload: Payload JSON đã parse từ ESP32.
+        """
         now = time.perf_counter()
         self._packet_count += 1
 
@@ -117,6 +125,11 @@ class UdpWorker(QThread):
         self._emit_health_snapshot(now)
 
     def _emit_health_snapshot(self, now: float) -> None:
+        """Phát snapshot health định kỳ để UI hiển thị chất lượng kết nối.
+
+        Args:
+            now: Mốc thời gian hiện tại từ ``time.perf_counter``.
+        """
         if now - self._last_health_emit < self._health_emit_interval:
             return
         self._last_health_emit = now
@@ -137,7 +150,7 @@ class UdpWorker(QThread):
         if self._last_rx_time is None:
             return
         now = time.perf_counter()
-        if now - self._last_rx_time >= 2.0:
+        if now - self._last_rx_time >= _IDLE_HEALTH_THRESHOLD_S:
             self.sig_status_change.emit(False)
             self._emit_health_snapshot(now)
 

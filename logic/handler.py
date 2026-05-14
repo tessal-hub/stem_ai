@@ -320,7 +320,11 @@ class Handler(QObject):
         self._connect_ui_action_signals()
         self._connect_signals_serial_worker()
         self._connect_store_and_home_signals()
-        self._connect_worker_output_signals()
+        self._connect_model_uploader_signals()
+        self._connect_flash_worker_signals()
+        self._connect_recorder_signals()
+        self._connect_data_io_worker_signals()
+        self._connect_feature_worker_signals()
 
     def _connect_ui_action_signals(self) -> None:
         """Wire user-action signals from all UI pages to handler slots."""
@@ -336,10 +340,10 @@ class Handler(QObject):
         # UI Setting → Handler (firmware flashing)
         if self.ui_setting:
             self.ui_setting.sig_flash_data_firmware.connect(
-                lambda: self.handle_firmware_flash("data")
+                self._on_ui_setting_flash_data_requested
             )
             self.ui_setting.sig_flash_inference_firmware.connect(
-                lambda: self.handle_firmware_flash("inference")
+                self._on_ui_setting_flash_inference_requested
             )
 
         # UI Record → Handler (recording & data cropping)
@@ -358,6 +362,31 @@ class Handler(QObject):
         if self.ui_statistics:
             self.ui_statistics.sig_train_build_requested.connect(self.on_train_build_model_requested)
             self.ui_statistics.sig_health_audit_requested.connect(self._on_health_audit_requested)
+        self._connect_primitive_collect_signals()
+
+    def _connect_primitive_collect_signals(self) -> None:
+        """Wire primitive-collection page actions to handler slots."""
+        if self.ui_primitive_collect:
+            self.ui_primitive_collect.sig_start_collection.connect(
+                self.on_primitive_collection_start
+            )
+            self.ui_primitive_collect.sig_stop_collection.connect(
+                self.on_primitive_collection_stop
+            )
+            self.ui_primitive_collect.sig_capture_collection.connect(
+                self.on_primitive_collection_capture
+            )
+            self.ui_primitive_collect.sig_train_encoder_requested.connect(
+                self.on_train_encoder_requested
+            )
+
+    def _on_ui_setting_flash_data_requested(self) -> None:
+        """Handle UI request to flash data-collection firmware."""
+        self.handle_firmware_flash("data")
+
+    def _on_ui_setting_flash_inference_requested(self) -> None:
+        """Handle UI request to flash inference firmware."""
+        self.handle_firmware_flash("inference")
 
     def _on_health_audit_requested(self) -> None:
         """Thực hiện audit sức khỏe dataset."""
@@ -395,20 +424,6 @@ class Handler(QObject):
             
         QMessageBox.information(self.ui_statistics, "Dataset Health Audit", msg)
 
-        if self.ui_primitive_collect:
-            self.ui_primitive_collect.sig_start_collection.connect(
-                self.on_primitive_collection_start
-            )
-            self.ui_primitive_collect.sig_stop_collection.connect(
-                self.on_primitive_collection_stop
-            )
-            self.ui_primitive_collect.sig_capture_collection.connect(
-                self.on_primitive_collection_capture
-            )
-            self.ui_primitive_collect.sig_train_encoder_requested.connect(
-                self.on_train_encoder_requested
-            )
-
     def _connect_store_and_home_signals(self) -> None:
         """Wire DataStore state-update signals and Home page interaction signals."""
         # DataStore → UI (state updates)
@@ -421,9 +436,8 @@ class Handler(QObject):
                 self.ui_primitive_collect.update_collection_stats
             )
 
-    def _connect_worker_output_signals(self) -> None:
-        """Wire background-worker output signals to UI/handler slots (all queued for thread safety)."""
-        # Model Uploader → UI/Handler
+    def _connect_model_uploader_signals(self) -> None:
+        """Wire model-uploader worker outputs via queued Qt connections."""
         self._connect_many_queued(
             [
                 (self.uploader.sig_progress, self.ui_wand.update_flash_progress),
@@ -433,7 +447,8 @@ class Handler(QObject):
             ]
         )
 
-        # Flash Worker → UI/Handler
+    def _connect_flash_worker_signals(self) -> None:
+        """Wire flash-worker outputs via queued Qt connections."""
         if self.ui_setting:
             self._connect_many_queued(
                 [
@@ -444,7 +459,8 @@ class Handler(QObject):
                 ]
             )
 
-        # Data Recorder → UI
+    def _connect_recorder_signals(self) -> None:
+        """Wire recorder-worker outputs via queued Qt connections."""
         self._connect_many_queued(
             [
                 (self.recorder.sig_record_count, self.ui_record.update_record_count),
@@ -455,7 +471,9 @@ class Handler(QObject):
                 (self.recorder.sig_recording_state, self._on_recorder_state_changed),
             ]
         )
-        # DataIOWorker → Handler/UI (off-thread file I/O results)
+
+    def _connect_data_io_worker_signals(self) -> None:
+        """Wire data I/O worker outputs via queued Qt connections."""
         self._connect_many_queued(
             [
                 (self.data_io_worker.sig_save_done, self._on_io_save_done),
@@ -467,7 +485,8 @@ class Handler(QObject):
             ]
         )
 
-        # FeatureWorker → DataStore (off-thread FFT / stat features)
+    def _connect_feature_worker_signals(self) -> None:
+        """Wire feature-worker output to DataStore via queued Qt connection."""
         self._connect_queued(
             self.feature_worker.sig_features_ready,
             self.store.update_live_features,
@@ -605,11 +624,6 @@ class Handler(QObject):
             {"ax": ax, "ay": ay, "az": az, "gx": gx, "gy": gy, "gz": gz}
         )
 
-    def _on_sensor_data_updated(self, sensor_buffers: dict) -> None:
-        """Receive updated sensor buffer data from DataStore."""
-        # Currently not used in UI, but available for future sensor value display
-        pass
-
     def _on_raw_data_received(self, norm_values: list[float]) -> None:
         """Route sensor samples into DataStore rolling live buffer for PageRecord.
 
@@ -624,7 +638,7 @@ class Handler(QObject):
         if self._parse_sensor_frame_6d(norm_values) is None:
             return
         try:
-            self.store.add_live_sample(list(norm_values))
+            self.store.add_live_sample(list(norm_values), emit=True)
         except Exception as e:
             self.ui_wand.append_terminal_text(f"[ERROR] Buffer update failed: {e}")
 

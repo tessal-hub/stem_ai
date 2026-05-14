@@ -453,11 +453,14 @@ class DataStore(QObject):
             self.sig_sensor_data_updated.emit(sensor_snapshot)
 
     def add_live_sample(self, sample: list[float], *, emit: bool = True) -> list[list[float]]:
-        """Append one 6-axis sample to rolling live buffer and emit snapshot.
+        """Thêm một mẫu 6 trục vào live buffer và phát snapshot khi đến chu kỳ emit.
 
-        The rate-limit check and timestamp update are performed inside
-        ``_buffer_lock`` so that concurrent callers from different threads
-        cannot both pass the gate and emit duplicate snapshots.
+        Args:
+            sample: Mẫu dữ liệu thô theo thứ tự [ax, ay, az, gx, gy, gz].
+            emit: True để phát ``sig_live_buffer_updated`` theo throttle; False để chỉ ghi buffer.
+
+        Returns:
+            Snapshot của live buffer nếu đã emit ở lần gọi này; ngược lại trả về list rỗng.
         """
         try:
             normalized_sample = validate_six_axis_values(sample)
@@ -481,7 +484,11 @@ class DataStore(QObject):
         return snapshot
 
     def get_live_buffer_snapshot(self) -> list[list[float]]:
-        """Return a thread-safe shallow copy of the rolling live buffer."""
+        """Lấy bản sao thread-safe của rolling live buffer hiện tại.
+
+        Returns:
+            Danh sách các mẫu 6 trục, mỗi mẫu là ``list[float]``.
+        """
         with self._buffer_lock:
             return [list(row) for row in self.live_buffer]
 

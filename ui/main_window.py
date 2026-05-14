@@ -229,7 +229,7 @@ class MainWindow(QMainWindow):
                 }
             )
             if self.page_record.is_live:
-                self.data_store.add_live_sample(values)
+                self.data_store.add_live_sample(values, emit=True)
 
         # Text thô → terminal wand (throttle để tránh quá tải UI)
         self._udp_log_count += 1

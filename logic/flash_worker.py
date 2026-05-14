@@ -20,6 +20,12 @@ from pathlib import Path
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
+_FLASH_TIMEOUT_S = 300
+_ESPTOOL_CHECK_TIMEOUT_S = 5
+_PROCESS_TERMINATE_TIMEOUT_S = 5
+_PROCESS_CLEANUP_TIMEOUT_S = 2
+_FLASH_ADDRESS = "0x10000"
+
 
 class FlashWorker(QThread):
     """Flash firmware to ESP32-S3 via esptool in background thread."""
@@ -35,6 +41,7 @@ class FlashWorker(QThread):
         self._process: subprocess.Popen | None = None
         self._port: str = ""
         self._bin_path: str = ""
+        self._last_error_message: str = ""
 
     def flash_firmware(self, port: str, bin_path: str) -> None:
         """
@@ -50,30 +57,35 @@ class FlashWorker(QThread):
 
     def run(self) -> None:
         """Core run loop — validate inputs, build command, then execute flash."""
+        self._last_error_message = ""
+        success = False
+        finished_message = "Flash failed"
         try:
             bin_file = self._validate_flash_inputs()
             if bin_file is None:
+                finished_message = self._last_error_message or "Flash validation failed"
                 return
             cmd = self._build_esptool_cmd(bin_file)
-            self._execute_flash(cmd)
+            success, finished_message = self._execute_flash(cmd)
         except subprocess.TimeoutExpired:
             self.log_msg.emit("[ERROR] Flash operation timed out (5 minutes)")
             self.sig_error.emit("Flash operation timed out")
-            self.sig_finished.emit(False, "Timeout")
+            finished_message = "Timeout"
             if self._process:
                 self._process.kill()
         except Exception as e:
             self.log_msg.emit(f"[ERROR] Flash exception: {type(e).__name__}: {e}")
             self.sig_error.emit(f"Flash exception: {type(e).__name__}: {e}")
-            self.sig_finished.emit(False, f"Exception: {e}")
+            finished_message = f"Exception: {e}"
         finally:
             self._cleanup()
+            self.sig_finished.emit(success, finished_message)
 
     def _fail(self, message: str) -> None:
-        """Emit error and finished-failure signals with a single call."""
+        """Emit one error path and store latest failure reason for run() finalization."""
+        self._last_error_message = message
         self.log_msg.emit(f"[ERROR] {message}")
         self.sig_error.emit(message)
-        self.sig_finished.emit(False, message)
 
     def _validate_flash_inputs(self) -> "Path | None":
         """Validate port, binary path, binary size, and esptool availability.
@@ -121,12 +133,12 @@ class FlashWorker(QThread):
             "--flash_mode", "dio",
             "--flash_freq", "80m",
             "--flash_size", "keep",
-            "0x10000",           # Address where app firmware is flashed
+            _FLASH_ADDRESS,      # Address where app firmware is flashed
             str(bin_file),
         ]
 
-    def _execute_flash(self, cmd: list[str]) -> None:
-        """Spawn the esptool subprocess, stream its output, and emit results."""
+    def _execute_flash(self, cmd: list[str]) -> tuple[bool, str]:
+        """Spawn esptool process, stream output, and return final status tuple."""
         self.log_msg.emit(f"[INFO] Command: {' '.join(cmd)}")
         self.log_msg.emit(f"[INFO] Using Python: {sys.executable}")
         self.log_msg.emit("=" * 70)
@@ -143,21 +155,21 @@ class FlashWorker(QThread):
 
         if not (self._process and self._process.stdout):
             self._fail("Failed to start esptool process")
-            return
+            return False, self._last_error_message
 
         success = self._parse_esptool_output(self._process.stdout)
-        return_code = self._process.wait(timeout=300)
+        return_code = self._process.wait(timeout=_FLASH_TIMEOUT_S)
 
         if return_code == 0 and success:
             self.sig_progress.emit(100)
             self.log_msg.emit("=" * 70)
             self.log_msg.emit("[SUCCESS] Firmware flash completed!")
-            self.sig_finished.emit(True, "Flash successful")
-        else:
-            self.log_msg.emit("=" * 70)
-            self.log_msg.emit(f"[FAILED] Firmware flash failed (exit code: {return_code})")
-            self.sig_error.emit(f"Flash failed (exit code: {return_code})")
-            self.sig_finished.emit(False, "Flash failed")
+            return True, "Flash successful"
+
+        self.log_msg.emit("=" * 70)
+        self.log_msg.emit(f"[FAILED] Firmware flash failed (exit code: {return_code})")
+        self.sig_error.emit(f"Flash failed (exit code: {return_code})")
+        return False, f"Flash failed (exit code: {return_code})"
 
     def _check_esptool_available(self) -> bool:
         """Check if esptool is installed in current Python environment."""
@@ -167,7 +179,7 @@ class FlashWorker(QThread):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                timeout=5,
+                timeout=_ESPTOOL_CHECK_TIMEOUT_S,
                 encoding="utf-8",
                 errors="ignore",
             )
@@ -198,7 +210,6 @@ class FlashWorker(QThread):
                     try:
                         percent = int(match.group(1))
                         if 0 <= percent <= 100:
-                            self.progress.emit(percent)
                             self.sig_progress.emit(percent)
                     except ValueError:
                         pass
@@ -217,7 +228,7 @@ class FlashWorker(QThread):
         if self._process and self._process.poll() is None:  # Process still running
             try:
                 self._process.terminate()
-                self._process.wait(timeout=5)
+                self._process.wait(timeout=_PROCESS_TERMINATE_TIMEOUT_S)
             except Exception as e:
                 self.log_msg.emit(f"[WARN] Error terminating process: {e}")
                 try:
@@ -231,7 +242,7 @@ class FlashWorker(QThread):
             try:
                 if self._process.poll() is None:  # Still running
                     self._process.terminate()
-                    self._process.wait(timeout=2)
+                    self._process.wait(timeout=_PROCESS_CLEANUP_TIMEOUT_S)
             except Exception:
                 pass
             self._process = None

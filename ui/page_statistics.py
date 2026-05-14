@@ -4,6 +4,8 @@ Trang thống kê — phân bố dữ liệu spell, chỉ số mastery, và FFT 
 
 from __future__ import annotations
 
+from functools import partial
+
 from PyQt6.QtCore import Qt, pyqtSignal
 import pyqtgraph as pg
 from PyQt6.QtWidgets import (
@@ -161,7 +163,7 @@ class PageStatistics(QWidget):
         self.mastery_stack.setCurrentWidget(self.mastery_scroll)
         for spell_name, count in sorted_spells:
             card = self._make_spell_card(spell_name, count)
-            card.clicked.connect(lambda checked=False, s=spell_name: self.sig_spell_selected.emit(s))
+            card.clicked.connect(partial(self._emit_spell_selected, spell_name))
             target_layout.addWidget(card)
             
         target_layout.addStretch()
@@ -395,17 +397,31 @@ class PageStatistics(QWidget):
     def _make_rarity_badge(label: str, color: str) -> QLabel:
         return make_rarity_badge_statistics(label, color)
 
+    def _emit_spell_selected(self, spell_name: str) -> None:
+        """Phát tín hiệu chọn spell từ card click, giữ rõ danh tính callback."""
+        self.sig_spell_selected.emit(spell_name)
+
     def _init_signals(self) -> None:
         """Kết nối toàn bộ signal và slot của trang thống kê."""
-        self.btn_back_spells.clicked.connect(lambda checked: self.stacked_spells.setCurrentIndex(0))
-        self.sample_list.itemDoubleClicked.connect(lambda item: self.sig_sample_opened.emit(item.text()))
+        self.btn_back_spells.clicked.connect(self._on_btn_back_spells_clicked)
+        self.sample_list.itemDoubleClicked.connect(self._on_sample_list_item_double_clicked)
         self.btn_train_build.clicked.connect(self.sig_train_build_requested.emit)
         self.btn_health_audit.clicked.connect(self.sig_health_audit_requested.emit)
-        self.sig_spell_selected.connect(
-            lambda spell_name: self.load_samples_for_spell(
-                spell_name, 
-                self.data_store.get_samples_for_spell(spell_name)
-            )
+        self.sig_spell_selected.connect(self._on_spell_selected)
+
+    def _on_btn_back_spells_clicked(self) -> None:
+        """Quay lại trang spell mastery từ danh sách sample."""
+        self.stacked_spells.setCurrentIndex(0)
+
+    def _on_sample_list_item_double_clicked(self, item) -> None:
+        """Mở sample được double-click từ danh sách chi tiết."""
+        self.sig_sample_opened.emit(item.text())
+
+    def _on_spell_selected(self, spell_name: str) -> None:
+        """Nạp danh sách sample khi người dùng chọn một spell card."""
+        self.load_samples_for_spell(
+            spell_name,
+            self.data_store.get_samples_for_spell(spell_name),
         )
 
     def set_training_state(self, running: bool) -> None:
