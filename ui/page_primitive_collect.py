@@ -45,10 +45,11 @@ from ui.tokens import (
     TEXT_BODY,
     TEXT_MUTED,
     WARNING,
-    MARGIN_COMFORTABLE,
-    SPACING_LG,
-    SPACING_MD,
-    SPACING_SM,
+    APP_FONT_STACK,
+    TITLE_FONT_STACK,
+    CARD_RADIUS,
+    BTN_RADIUS,
+    INPUT_RADIUS,
 )
 
 from logic.locale_manager import locale_manager
@@ -56,11 +57,12 @@ from logic.theme_manager import theme_manager
 from logic.primitive_i18n import get_primitive_catalog
 from ui.i18n_bridge import tr_ui
 
-STYLE_GROUP_DONE = (
-    f"QPushButton {{ background-color: {SUCCESS}; color: {ACCENT_TEXT}; border: none; border-radius: 0px; "
-    "font-size: 11px; font-weight: 700; padding: 5px 10px; }}"
-    f" QPushButton:hover {{ background-color: {SUCCESS}; color: {ACCENT_TEXT}; }}"
-)
+def get_style_group_done():
+    return (
+        f"QPushButton {{ background-color: {SUCCESS}; color: {ACCENT_TEXT}; border: none; border-radius: {BTN_RADIUS}; "
+        f"font-family: {APP_FONT_STACK}; font-size: 11px; font-weight: 700; padding: 5px 10px; }}"
+        f" QPushButton:hover {{ background-color: {SUCCESS}; color: {ACCENT_TEXT}; }}"
+    )
 
 
 class PagePrimitiveCollect(QWidget):
@@ -130,15 +132,15 @@ class PagePrimitiveCollect(QWidget):
         # 2. Update Cards
         for card in [self.preview_card, self.quality_card, self.train_card]:
             card.setStyleSheet(f"""
-                #VanguardCardOuter {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: 24px; }}
-                #VanguardCardInner {{ background-color: {p.SURFACE_PRIMARY}; border: none; border-radius: 16px; }}
+                #VanguardCardOuter {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: {CARD_RADIUS}; }}
+                #VanguardCardInner {{ background-color: {p.SURFACE_PRIMARY}; border: none; border-radius: calc({CARD_RADIUS} - 4px); }}
             """)
             
         # 3. Update Quality evaluation styles
-        self.lbl_quality_samples.setStyleSheet(f"color: {p.TEXT_PRIMARY};")
-        self.lbl_quality_duration.setStyleSheet(f"color: {p.TEXT_PRIMARY};")
-        self.lbl_quality_motion.setStyleSheet(f"color: {p.TEXT_PRIMARY};")
-        self.lbl_quality_clipping.setStyleSheet(f"color: {p.TEXT_PRIMARY};")
+        self.lbl_quality_samples.setStyleSheet(f"color: {p.TEXT_PRIMARY}; font-family: {APP_FONT_STACK};")
+        self.lbl_quality_duration.setStyleSheet(f"color: {p.TEXT_PRIMARY}; font-family: {APP_FONT_STACK};")
+        self.lbl_quality_motion.setStyleSheet(f"color: {p.TEXT_PRIMARY}; font-family: {APP_FONT_STACK};")
+        self.lbl_quality_clipping.setStyleSheet(f"color: {p.TEXT_PRIMARY}; font-family: {APP_FONT_STACK};")
         
         # 4. Update Gesture Cards
         self._rebuild_cards()
@@ -187,6 +189,8 @@ class PagePrimitiveCollect(QWidget):
         self.quality_score = QProgressBar()
         self.quality_score.setRange(0, 100)
         self.quality_score.setValue(0)
+        self.quality_score.setFixedHeight(12)
+        self.quality_score.setStyleSheet(f"QProgressBar {{ background-color: {theme_manager.get_palette().SURFACE_TERTIARY}; border: none; border-radius: {INPUT_RADIUS}; }} QProgressBar::chunk {{ background-color: {theme_manager.get_palette().PRIMARY}; border-radius: {INPUT_RADIUS}; }}")
         quality_layout.addWidget(self.quality_score)
 
         quality_grid = QGridLayout()
@@ -227,12 +231,14 @@ class PagePrimitiveCollect(QWidget):
         self.encoder_progress = QProgressBar()
         self.encoder_progress.setRange(0, 100)
         self.encoder_progress.setValue(0)
+        self.encoder_progress.setFixedHeight(12)
+        self.encoder_progress.setStyleSheet(f"QProgressBar {{ background-color: {theme_manager.get_palette().SURFACE_TERTIARY}; border: none; border-radius: {INPUT_RADIUS}; }} QProgressBar::chunk {{ background-color: {theme_manager.get_palette().PRIMARY}; border-radius: {INPUT_RADIUS}; }}")
         train_layout.addWidget(self.encoder_progress)
 
         self.lbl_encoder_status = QLabel(tr_ui("primitive_encoder_not_ready"))
         train_layout.addWidget(self.lbl_encoder_status)
 
-        self.btn_train_encoder = make_button(tr_ui("primitive_btn_train"), height=BTN_H)
+        self.btn_train_encoder = make_button(tr_ui("primitive_btn_train"), style=STYLE_BTN_PRIMARY, height=BTN_H)
         self.btn_train_encoder.setEnabled(False)
         train_layout.addWidget(self.btn_train_encoder)
 
@@ -286,7 +292,6 @@ class PagePrimitiveCollect(QWidget):
         self.btn_start_collect.clicked.connect(self._on_start_clicked)
         self.btn_stop_collect.clicked.connect(self._on_stop_clicked)
         self.btn_capture_collect.clicked.connect(self._on_capture_clicked)
-        self.btn_train_encoder.clicked.connect(self.sig_train_encoder_requested.emit)
         self.btn_start_collect.setToolTip(tr_ui("record_tt_start"))
         self.btn_stop_collect.setToolTip(tr_ui("record_tt_stop"))
         self.btn_capture_collect.setToolTip(tr_ui("record_tt_snip"))
@@ -426,7 +431,8 @@ class PagePrimitiveCollect(QWidget):
         clear_layout(self.cards_layout)
         self._card_widgets.clear()
         for gesture_name, info in self._catalog.items():
-            card = make_card_frame()
+            card = QFrame()
+            card.setObjectName("CardFrame")
             card.setStyleSheet(STYLE_STATISTICS_CARD)
             card.installEventFilter(self)
 
@@ -435,15 +441,17 @@ class PagePrimitiveCollect(QWidget):
             card_layout.setSpacing(SPACING_SM)
 
             title = QLabel(gesture_name)
-            title.setStyleSheet(f"{STYLE_RECORD_FIELD_LABEL} font-size: 12px; font-weight: 800;")
+            title.setStyleSheet(f"{STYLE_RECORD_FIELD_LABEL} font-size: 13px; font-weight: 700; color: {theme_manager.get_palette().TEXT_PRIMARY};")
             desc = QLabel(info["description"])
             desc.setWordWrap(True)
-            desc.setStyleSheet(STYLE_RECORD_STATUS_TEMPLATE.format(color=TEXT_MUTED))
+            desc.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px; font-family: {APP_FONT_STACK};")
 
             progress = QProgressBar()
             progress.setRange(0, int(info["target_samples"]))
             progress.setValue(0)
+            progress.setFixedHeight(8)
             progress.setFormat(f"%v/{int(info['target_samples'])}")
+            progress.setStyleSheet(f"QProgressBar {{ background-color: {theme_manager.get_palette().SURFACE_TERTIARY}; border: none; border-radius: {INPUT_RADIUS}; }} QProgressBar::chunk {{ background-color: {theme_manager.get_palette().PRIMARY}; border-radius: {INPUT_RADIUS}; }}")
 
             groups_grid = QGridLayout()
             groups_grid.setHorizontalSpacing(SPACING_SM)
@@ -643,7 +651,7 @@ class PagePrimitiveCollect(QWidget):
                 group_count = int(group_counts.get(group_name, 0))
                 button.setText(f"{group_name[0]}: {group_count}/{group_target}")
                 if group_count >= group_target:
-                    button.setStyleSheet(STYLE_GROUP_DONE)
+                    button.setStyleSheet(get_style_group_done())
                 elif gesture_name == self._selected_gesture and group_name == self._selected_group:
                     button.setStyleSheet(STYLE_BTN_PRIMARY)
                 else:

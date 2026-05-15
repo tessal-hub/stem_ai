@@ -27,6 +27,10 @@ from ui.tokens import (
     RECORD_GRAPH_MIN_H,
     TITLE_FONT_STACK,
     APP_FONT_STACK,
+    CARD_RADIUS,
+    BTN_RADIUS,
+    INPUT_RADIUS,
+    BADGE_RADIUS,
 )
 from ui.modern_layout import (
     MARGIN_COMFORTABLE,
@@ -54,7 +58,7 @@ def make_card(
         #VanguardCardOuter {{
             background-color: {palette.SURFACE_TERTIARY};
             border: 1px solid {palette.BORDER};
-            border-radius: 0px;
+            border-radius: {CARD_RADIUS};
         }}
     """)
     outer_layout = QVBoxLayout(outer)
@@ -66,7 +70,7 @@ def make_card(
         #VanguardCardInner {{
             background-color: {palette.SURFACE_PRIMARY};
             border: none;
-            border-radius: 0px;
+            border-radius: calc({CARD_RADIUS} - 4px);
         }}
     """)
     apply_soft_shadow(inner, blur_radius=16, y_offset=3, color=palette.SHADOW_COLOR)
@@ -86,7 +90,7 @@ def make_card_frame() -> QFrame:
         #VanguardCardOuter {{
             background-color: {palette.SURFACE_TERTIARY};
             border: 1px solid {palette.BORDER};
-            border-radius: 0px;
+            border-radius: {CARD_RADIUS};
         }}
     """)
     return frame
@@ -111,12 +115,11 @@ def make_primary_button(label: str, height: int = BTN_H) -> QPushButton:
             background-color: {palette.PRIMARY};
             color: {palette.SURFACE_PRIMARY};
             border: none;
-            border-radius: 0px;
-            font-size: 11px;
-            font-weight: 800;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            padding: 0 20px;
+            border-radius: {BTN_RADIUS};
+            font-family: {APP_FONT_STACK};
+            font-size: 13px;
+            font-weight: 600;
+            padding: 0 24px;
         }}
         QPushButton:hover {{ background-color: {palette.PRIMARY_LIGHT}; }}
     """)
@@ -130,14 +133,13 @@ def make_outline_button(label: str, height: int = BTN_H) -> QPushButton:
             background-color: transparent;
             color: {palette.TEXT_PRIMARY};
             border: 1px solid {palette.BORDER};
-            border-radius: 0px;
-            font-size: 11px;
-            font-weight: 800;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            padding: 0 20px;
+            border-radius: {BTN_RADIUS};
+            font-family: {APP_FONT_STACK};
+            font-size: 13px;
+            font-weight: 600;
+            padding: 0 24px;
         }}
-        QPushButton:hover {{ background-color: {palette.HOVER_BG}; border-color: {palette.TEXT_PRIMARY}; }}
+        QPushButton:hover {{ background-color: {palette.HOVER_BG}; border-color: {palette.PRIMARY}; }}
     """)
     return btn
 
@@ -153,9 +155,7 @@ def make_section_label(text: str, accent: bool = True) -> QLabel:
         font-family: {TITLE_FONT_STACK};
         color: {color};
         font-weight: 700;
-        font-size: 13px;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
+        font-size: 14px;
     """)
     return lbl
 
@@ -168,7 +168,34 @@ def make_empty_state_card(title: str, message: str) -> tuple[QFrame, QVBoxLayout
     
     body_lbl = QLabel(message)
     body_lbl.setWordWrap(True)
-    body_lbl.setStyleSheet(f"color: {palette.TEXT_SECONDARY}; font-size: 13px; line-height: 1.5;")
+    body_lbl.setStyleSheet(f"color: {palette.TEXT_SECONDARY}; font-size: 13px; line-height: 1.5; font-family: {APP_FONT_STACK};")
+    
+    layout.addWidget(title_lbl, alignment=Qt.AlignmentFlag.AlignCenter)
+    layout.addWidget(body_lbl, alignment=Qt.AlignmentFlag.AlignCenter)
+    return frame, layout
+
+def make_card_name_label(name: str) -> QLabel:
+    palette = p()
+    lbl = QLabel(name)
+    lbl.setStyleSheet(f"color: {palette.TEXT_PRIMARY}; font-size: 15px; font-weight: 600; font-family: {APP_FONT_STACK};")
+    return lbl
+
+def make_card_count_label(count: int) -> QLabel:
+    palette = p()
+    lbl = QLabel(f"{count} samples")
+    lbl.setStyleSheet(f"color: {palette.TEXT_SECONDARY}; font-size: 12px; font-family: {APP_FONT_STACK};")
+    return lbl
+
+def make_error_state_card(title: str, message: str) -> tuple[QFrame, QVBoxLayout]:
+    palette = p()
+    frame, layout = make_card(margins=(32, 32, 32, 32))
+    
+    title_lbl = QLabel(title)
+    title_lbl.setStyleSheet(f"color: {palette.STATUS_ERROR_TEXT}; font-size: 18px; font-weight: 700; font-family: {TITLE_FONT_STACK};")
+    
+    body_lbl = QLabel(message)
+    body_lbl.setWordWrap(True)
+    body_lbl.setStyleSheet(f"color: {palette.TEXT_SECONDARY}; font-size: 13px; line-height: 1.5; font-family: {APP_FONT_STACK};")
     
     layout.addWidget(title_lbl, alignment=Qt.AlignmentFlag.AlignCenter)
     layout.addWidget(body_lbl, alignment=Qt.AlignmentFlag.AlignCenter)
@@ -182,12 +209,28 @@ def make_graph_placeholder() -> QLabel:
         background-color: {palette.SURFACE_TERTIARY};
         color: {palette.TEXT_TERTIARY};
         border: 1px dashed {palette.BORDER};
-        border-radius: 0px;
-        font-weight: 800;
-        font-size: 10px;
-        letter-spacing: 0.2em;
+        border-radius: {CARD_RADIUS};
+        font-family: {APP_FONT_STACK};
+        font-weight: 600;
+        font-size: 11px;
+        letter-spacing: 0.1em;
     """)
     lbl.setMinimumHeight(400)
+    return lbl
+
+def make_rarity_badge_wand(label: str, color: str) -> QLabel:
+    lbl = QLabel(label)
+    lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    text_color = readable_text_on(color, dark_text="#111111", light_text="#FFFFFF")
+    lbl.setStyleSheet(f"""
+        background-color: {color};
+        color: {text_color};
+        border-radius: {BADGE_RADIUS};
+        padding: 4px 12px;
+        font-family: {APP_FONT_STACK};
+        font-weight: 700;
+        font-size: 9px;
+    """)
     return lbl
 
 def make_rarity_badge_statistics(label: str, color: str) -> QLabel:
@@ -197,56 +240,54 @@ def make_rarity_badge_statistics(label: str, color: str) -> QLabel:
     lbl.setStyleSheet(f"""
         background-color: {color};
         color: {text_color};
-        border-radius: 0px;
-        padding: 2px 10px;
-        font-weight: 900;
-        font-size: 9px;
-        letter-spacing: 0.05em;
+        border-radius: {BADGE_RADIUS};
+        padding: 4px 14px;
+        font-family: {APP_FONT_STACK};
+        font-weight: 700;
+        font-size: 10px;
     """)
     return lbl
 
-def make_rarity_badge_wand(label: str, color: str) -> QLabel:
-    return make_rarity_badge_statistics(label, color)
-
-def make_checkbox(text: str, checked: bool = False) -> QCheckBox:
+def make_checkbox(label: str, checked: bool = False) -> QCheckBox:
     palette = p()
-    cb = QCheckBox(text)
-    cb.setChecked(checked)
-    cb.setStyleSheet(f"""
-        QCheckBox {{ color: {palette.TEXT_PRIMARY}; font-size: 11px; font-weight: 600; spacing: 8px; }}
-        QCheckBox::indicator {{ width: 16px; height: 16px; border-radius: 0px; border: 1px solid {palette.BORDER}; }}
-        QCheckBox::indicator:checked {{ background-color: {palette.PRIMARY}; border: none; image: none; }}
+    chk = QCheckBox(label)
+    chk.setChecked(checked)
+    chk.setCursor(Qt.CursorShape.PointingHandCursor)
+    chk.setStyleSheet(f"""
+        QCheckBox {{
+            color: {palette.TEXT_PRIMARY};
+            font-family: {APP_FONT_STACK};
+            font-size: 13px;
+            spacing: 8px;
+        }}
+        QCheckBox::indicator {{
+            width: 18px;
+            height: 18px;
+            border-radius: 4px;
+            border: 1px solid {palette.BORDER};
+            background-color: {palette.SURFACE_TERTIARY};
+        }}
+        QCheckBox::indicator:checked {{
+            background-color: {palette.PRIMARY};
+            border-color: {palette.PRIMARY};
+            image: url(assets/icon/check.svg); /* Ensure this asset exists or fallback to color */
+        }}
+        QCheckBox::indicator:hover {{
+            border-color: {palette.PRIMARY};
+        }}
     """)
-    return cb
+    return chk
 
-def make_hint(text: str, color: str = "") -> QLabel:
+def make_hint(text: str, color: str | None = None) -> QLabel:
     palette = p()
     lbl = QLabel(text)
     lbl.setWordWrap(True)
-    c = color if color else palette.TEXT_TERTIARY
-    lbl.setStyleSheet(f"color: {c}; font-size: 11px; font-weight: 500; line-height: 1.4;")
+    text_color = color if color else palette.TEXT_TERTIARY
+    lbl.setStyleSheet(f"""
+        color: {text_color};
+        font-size: 12px;
+        line-height: 1.4;
+        font-style: italic;
+        font-family: {APP_FONT_STACK};
+    """)
     return lbl
-
-def make_card_name_label(name: str) -> QLabel:
-    palette = p()
-    lbl = QLabel(name)
-    lbl.setStyleSheet(f"font-family: {TITLE_FONT_STACK}; color: {palette.TEXT_PRIMARY}; font-size: 14px; font-weight: 700;")
-    return lbl
-
-def make_card_count_label(count: int) -> QLabel:
-    palette = p()
-    lbl = QLabel(str(count))
-    lbl.setStyleSheet(f"color: {palette.TEXT_SECONDARY}; font-size: 11px; font-weight: 800; text-transform: uppercase;")
-    return lbl
-
-def make_error_state_card(title: str, message: str) -> tuple[QFrame, QVBoxLayout]:
-    palette = p()
-    frame, layout = make_card(margins=(24, 24, 24, 24))
-    lbl_title = QLabel(title)
-    lbl_title.setStyleSheet(f"color: {palette.STATUS_ERROR}; font-weight: 800; font-size: 13px; text-transform: uppercase;")
-    lbl_msg = QLabel(message)
-    lbl_msg.setWordWrap(True)
-    lbl_msg.setStyleSheet(f"color: {palette.TEXT_SECONDARY}; font-size: 12px;")
-    layout.addWidget(lbl_title)
-    layout.addWidget(lbl_msg)
-    return frame, layout

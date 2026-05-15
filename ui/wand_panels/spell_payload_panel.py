@@ -18,7 +18,10 @@ from PyQt6.QtWidgets import (
 from logic.rarity_utils import RARITY_TIERS, RarityTier
 from ui.modern_layout import MARGIN_STANDARD, SPACING_SM
 from ui.tokens import (
+    APP_FONT_STACK,
+    CARD_RADIUS,
     STYLE_WAND_EMPTY_ROW_TEMPLATE,
+    TITLE_FONT_STACK,
     WAND_SPELL_LIST_MIN_H,
 )
 from ui.component_factory import make_rarity_badge_wand
@@ -64,8 +67,8 @@ class WandSpellPayloadPanel(QWidget):
         """Re-apply styles based on current theme."""
         p = theme_manager.get_palette()
         section_style = (
-            f"color: {p.TEXT_PRIMARY}; font-size: 12px; "
-            "font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;"
+            f"font-family: {TITLE_FONT_STACK}; color: {p.TEXT_PRIMARY}; font-size: 12px; "
+            "font-weight: 800; letter-spacing: 0.05em;"
         )
         self._hdr_payload.setStyleSheet(section_style)
         self._left_title.setStyleSheet(section_style)
@@ -74,7 +77,7 @@ class WandSpellPayloadPanel(QWidget):
             QListWidget {{
                 background-color: {p.SURFACE_PRIMARY};
                 border: 1px solid {p.BORDER};
-                border-radius: 12px;
+                border-radius: {CARD_RADIUS};
                 padding: 6px;
             }}
             QListWidget::item {{
@@ -178,7 +181,8 @@ class WandSpellPayloadPanel(QWidget):
 
         widget = QWidget()
         widget.setStyleSheet(
-            f"background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: 10px;"
+            f"background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; "
+            f"border-radius: {CARD_RADIUS}; font-family: {APP_FONT_STACK};"
         )
 
         row = QHBoxLayout(widget)

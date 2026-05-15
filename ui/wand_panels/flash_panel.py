@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QLabel, QProgressBar, QVBoxLayout, QWid
 
 from ui.tokens import (
     BTN_H,
+    INPUT_RADIUS,
     PROGRESS_H,
     STYLE_HOME_SECTION_SUBTITLE,
     STYLE_BTN_OUTLINE,
@@ -54,8 +55,8 @@ class WandFlashPanel(QWidget):
         p = theme_manager.get_palette()
         self.lbl_flash_status.setStyleSheet(f"color: {p.TEXT_SECONDARY}; font-size: 11px; font-weight: 600;")
         self.progress_bar.setStyleSheet(f"""
-            QProgressBar {{ background-color: {p.SURFACE_TERTIARY}; border: none; border-radius: 4px; text-align: center; color: transparent; }}
-            QProgressBar::chunk {{ background-color: {p.PRIMARY}; border-radius: 4px; }}
+            QProgressBar {{ background-color: {p.SURFACE_TERTIARY}; border: none; border-radius: {INPUT_RADIUS}; text-align: center; color: transparent; }}
+            QProgressBar::chunk {{ background-color: {p.PRIMARY}; border-radius: {INPUT_RADIUS}; }}
         """)
 
     def _init_ui(self) -> None:

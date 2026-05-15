@@ -6,7 +6,9 @@ from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import QComboBox, QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from ui.tokens import (
+    APP_FONT_STACK,
     DANGER,
+    INPUT_RADIUS,
     SETTINGS_INPUT_H,
     STATUS_LABEL_STYLE_TEMPLATE,
     STYLE_BTN_OUTLINE,
@@ -98,7 +100,11 @@ class WandConnectionPanel(QWidget):
     def refresh_styles(self) -> None:
         """Re-apply styles based on current theme."""
         p = theme_manager.get_palette()
-        self.combo_serial_ports.setStyleSheet(f"background-color: {p.SURFACE_TERTIARY}; color: {p.TEXT_PRIMARY}; border: 1px solid {p.BORDER}; border-radius: 6px; padding: 4px;")
+        self.combo_serial_ports.setStyleSheet(
+            f"background-color: {p.SURFACE_TERTIARY}; color: {p.TEXT_PRIMARY}; "
+            f"border: 1px solid {p.BORDER}; border-radius: {INPUT_RADIUS}; "
+            f"padding: 4px; font-family: {APP_FONT_STACK};"
+        )
         self.set_serial_status(self._serial_connected, self.combo_serial_ports.currentText())
 
     def _init_ui(self) -> None:

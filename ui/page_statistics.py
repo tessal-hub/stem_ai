@@ -1,3 +1,7 @@
+"""
+Trang thống kê — phân bố dữ liệu spell, chỉ số mastery, và nhật ký huấn luyện model.
+"""
+
 from __future__ import annotations
 
 from functools import partial
@@ -36,6 +40,10 @@ from ui.tokens import (
     STYLE_STATISTICS_META_LABEL,
     STYLE_TRANSPARENT_WIDGET,
     STYLE_TERMINAL,
+    # Geometry & Font
+    CARD_RADIUS,
+    APP_FONT_STACK,
+    TITLE_FONT_STACK,
 )
 from logic.rarity_utils import resolve_rarity
 from ui.mac_material import apply_soft_shadow
@@ -91,7 +99,7 @@ class PageStatistics(QWidget):
         self._load_data()
 
     def apply_ui_language(self) -> None:
-        """Re-apply strings after locale change."""
+        """Reload strings after locale change."""
         self.update_live_features(self._last_features)
         self._sec_preview.setText(tr_ui("stats_live_features"))
         self._sec_model.setText(tr_ui("stats_model_train"))
@@ -165,8 +173,8 @@ class PageStatistics(QWidget):
         # 1. Update Cards
         for card in [self.feature_card, self.model_card, self.console_card, self.mastery_box]:
             card.setStyleSheet(f"""
-                #VanguardCardOuter {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: 0px; }}
-                #VanguardCardInner {{ background-color: {p.SURFACE_PRIMARY}; border: none; border-radius: 0px; }}
+                #VanguardCardOuter {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: {CARD_RADIUS}; }}
+                #VanguardCardInner {{ background-color: {p.SURFACE_PRIMARY}; border: none; border-radius: calc({CARD_RADIUS} - 4px); }}
             """)
         
         # 2. Update Console
@@ -174,9 +182,9 @@ class PageStatistics(QWidget):
             
         # 3. Update Lists
         self.sample_list.setStyleSheet(f"""
-            QListWidget {{ background-color: transparent; border: none; color: {p.TEXT_PRIMARY}; }}
-            QListWidget::item {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: 0px; margin-bottom: 8px; padding: 12px; }}
-            QListWidget::item:selected {{ background-color: {p.PRIMARY}; color: {p.SURFACE_PRIMARY}; border: none; }}
+            QListWidget {{ background-color: transparent; border: none; color: {p.TEXT_PRIMARY}; font-family: {APP_FONT_STACK}; }}
+            QListWidget::item {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: 12px; margin-bottom: 8px; padding: 12px; }}
+            QListWidget::item:selected {{ background-color: {p.PRIMARY}; color: white; border: none; }}
         """)
         
         # 4. Update Mastery Spells

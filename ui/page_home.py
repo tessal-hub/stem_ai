@@ -21,6 +21,7 @@ from ui.i18n_bridge import tr_ui
 from logic.theme_manager import theme_manager
 from ui.color_utils import readable_text_on
 from ui.tokens import (
+    APP_FONT_STACK,
     HOME_STATUS_H,
     HOME_VIEWER_MIN_H,
     STYLE_HOME_SECTION_TITLE,
@@ -29,6 +30,8 @@ from ui.tokens import (
     SPACING_LG,
     SPACING_XS,
     TITLE_FONT_STACK,
+    CARD_RADIUS,
+    BTN_RADIUS,
 )
 
 
@@ -85,122 +88,86 @@ class PageHome(QWidget):
         p = theme_manager.get_palette()
         
         # Update Hero Section Titles
-        self._viewer_title.setStyleSheet(f"font-family: {TITLE_FONT_STACK}; color: {p.TEXT_PRIMARY}; font-size: 24px; font-weight: 500;")
-        self._viewer_subtitle.setStyleSheet(f"color: {p.TEXT_SECONDARY}; font-weight: 600; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase;")
+        self._viewer_title.setStyleSheet(f"font-family: {TITLE_FONT_STACK}; color: {p.TEXT_PRIMARY}; font-size: 24px; font-weight: 600;")
+        self._viewer_subtitle.setStyleSheet(f"color: {p.TEXT_SECONDARY}; font-weight: 500; font-size: 12px; font-family: {APP_FONT_STACK};")
         
         # Update Viewer Card
         self.viewer_card.setStyleSheet(f"""
             #HomeViewerCard {{
                 background-color: {p.SURFACE_TERTIARY};
                 border: 1px solid {p.BORDER};
-                border-radius: 0px;
+                border-radius: {CARD_RADIUS};
             }}
         """)
-        self.sim_view.setStyleSheet(f"background-color: {p.SURFACE_PRIMARY}; border-radius: 0px;")
-        
-        # Update Status Bar
-        self.set_connection_status(self._connected)
+        self.sim_view.setStyleSheet(f"background-color: {p.SURFACE_PRIMARY}; border-radius: {BTN_RADIUS};")
 
     def _init_ui(self) -> None:
-        """Trang chính (Dashboard) — hiển thị trạng thái kết nối, mô phỏng 3D."""
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
-        outer.setSpacing(SPACING_LG)
+        """Khởi tạo các thành phần giao diện."""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
+        layout.setSpacing(SPACING_LG)
 
-        outer.addWidget(self._build_status_bar())
-
-        content = QVBoxLayout()
-        content.setSpacing(SPACING_LG)
-        content.setContentsMargins(0, 0, 0, 0)
-        
-        # Expanding content area
-        viewer_container = QHBoxLayout()
-        viewer_container.addStretch(1)
-        self.viewer_card = self._build_viewer_box()
-        self.viewer_card.setMaximumWidth(1400) # Allow full-bleed on standard screens
-        viewer_container.addWidget(self.viewer_card, stretch=10)
-        viewer_container.addStretch(1)
-        
-        content.addLayout(viewer_container, stretch=1)
-        outer.addLayout(content, stretch=1)
-        
-        self.refresh_styles()
-
-    def _build_status_bar(self) -> QWidget:
-        """Xây dựng status bar kiểu 'Floating Island'."""
-        container = QWidget()
-        container.setFixedHeight(HOME_STATUS_H + 16)
-        
-        layout = QHBoxLayout(container)
-        layout.setContentsMargins(0, 4, 0, 4)
-        layout.addStretch(1)
-        
+        # ── Status Bar ──
         self.status_bar = QLabel(tr_ui("home_status_disconnected"))
-        self.status_bar.setObjectName("HomeStatusBar")
-        self.status_bar.setFixedWidth(340)
-        self.status_bar.setFixedHeight(HOME_STATUS_H)
+        self.status_bar.setFixedHeight(HOME_STATUS_H + 12)
         self.status_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
-        apply_soft_shadow(self.status_bar, blur_radius=12, y_offset=4, color="rgba(0,0,0,0.08)")
-        
         layout.addWidget(self.status_bar)
-        layout.addStretch(1)
-        return container
 
-    @staticmethod
-    def _status_style(bg_color: str, fg_color: str) -> str:
-        return (
-            "QLabel {{ "
-            f"background-color: {bg_color}; "
-            f"color: {fg_color}; padding: 6px 18px; font-size: 11px; "
-            "font-weight: 800; letter-spacing: 0.05em; border-radius: 0px; }}"
-        )
+        # ── Content Layout (2 columns) ──
+        content = QHBoxLayout()
+        content.setSpacing(SPACING_LG)
 
-    def _build_viewer_box(self) -> QFrame:
-        """Xây dựng box chứa vùng hiển thị 3D wand."""
-        box = QFrame()
-        box.setObjectName("HomeViewerCard")
-        
-        layout = QVBoxLayout(box)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(0)
-
-        inner_content = QFrame()
-        inner_content.setObjectName("HomeInnerCore")
-        inner_layout = QVBoxLayout(inner_content)
-        inner_layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
-        
-        header = QVBoxLayout()
-        header.setContentsMargins(0, 0, 0, SPACING_LG)
-        header.setSpacing(SPACING_XS)
+        # Left Column (3D Viewer)
+        left_col = QVBoxLayout()
+        left_col.setSpacing(SPACING_XS)
         
         self._viewer_title = QLabel(tr_ui("home_viewer_title"))
+        self._viewer_title.setStyleSheet(STYLE_HOME_SECTION_TITLE)
         self._viewer_subtitle = QLabel(tr_ui("home_viewer_subtitle"))
+        self._viewer_subtitle.setStyleSheet(STYLE_HOME_SECTION_SUBTITLE)
         
-        header.addWidget(self._viewer_title)
-        header.addWidget(self._viewer_subtitle)
-        inner_layout.addLayout(header)
+        left_col.addWidget(self._viewer_title)
+        left_col.addWidget(self._viewer_subtitle)
 
-        self.sim_view = QFrame()
-        self.sim_view.setObjectName("HomeViewerSurface")
-        self.sim_view.setMinimumHeight(HOME_VIEWER_MIN_H)
-        
-        sim_inner = QVBoxLayout(self.sim_view)
-        sim_inner.setContentsMargins(0, 0, 0, 0)
-        
-        self.wand_3d = Wand3DWidget()
-        sim_inner.addWidget(self.wand_3d, stretch=1)
+        self.viewer_card = QFrame()
+        self.viewer_card.setObjectName("HomeViewerCard")
+        self.viewer_card.setMinimumHeight(HOME_VIEWER_MIN_H)
+        viewer_layout = QVBoxLayout(self.viewer_card)
+        viewer_layout.setContentsMargins(12, 12, 12, 12)
 
-        inner_layout.addWidget(self.sim_view, stretch=1)
-        layout.addWidget(inner_content)
+        self.sim_view = Wand3DWidget()
+        viewer_layout.addWidget(self.sim_view)
         
-        return box
+        left_col.addWidget(self.viewer_card, stretch=1)
+        content.addLayout(left_col, stretch=2)
+
+        # Right Column (Legacy placeholder)
+        right_col = QVBoxLayout()
+        # Adding empty state as a temporary aesthetic placeholder
+        empty_card, _ = make_empty_state_card(tr_ui("home_no_spells_title"), tr_ui("home_no_spells_body"))
+        right_col.addWidget(empty_card)
+        right_col.addStretch()
+        content.addLayout(right_col, stretch=1)
+
+        layout.addLayout(content)
+        self.refresh_styles()
+
+    def _status_style(self, bg_color: str, fg_color: str) -> str:
+        """Helper generating status bar stylesheet."""
+        return f"""
+            background-color: {bg_color};
+            color: {fg_color};
+            border-radius: {BTN_RADIUS};
+            font-family: {APP_FONT_STACK};
+            font-size: 13px;
+            font-weight: 700;
+        """
 
     def _load_data(self) -> None:
         """Nạp trạng thái ban đầu."""
-        self.set_connection_status(False)
+        self.set_connection_status(self.data_store.is_connected)
 
     def _configure_accessibility(self) -> None:
-        """Đặt accessible names."""
-        self.status_bar.setAccessibleName("Home status banner")
-        self.wand_3d.setAccessibleName("3D wand orientation viewer")
+        """Cấu hình accessible names."""
+        self.status_bar.setAccessibleName("Wand connection status")
+        self.sim_view.setAccessibleName("3D Wand orientation preview")

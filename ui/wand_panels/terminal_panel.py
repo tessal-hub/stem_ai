@@ -11,7 +11,11 @@ from PyQt6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 from ui.modern_layout import SPACING_SM
 from ui.terminal_widget import TerminalWidget
 from ui.tokens import (
+    APP_FONT_STACK,
+    BTN_RADIUS,
     BTN_SMALL_H,
+    INPUT_RADIUS,
+    MONO_FONT_STACK,
     STYLE_BTN_SMALL,
     STYLE_TERMINAL,
     TERM_MIN_H,
@@ -67,10 +71,10 @@ class WandTerminalPanel(QWidget):
         from logic.theme_manager import theme_manager
         p = theme_manager.get_palette()
         self.terminal_output.setStyleSheet(f"""
-            QTextEdit {{ background-color: {p.SURFACE_TERTIARY}; color: {p.TEXT_PRIMARY}; border: 1px solid {p.BORDER}; border-radius: 8px; padding: 12px; font-family: 'Geist Mono'; }}
+            QTextEdit {{ background-color: {p.SURFACE_TERTIARY}; color: {p.TEXT_PRIMARY}; border: 1px solid {p.BORDER}; border-radius: {INPUT_RADIUS}; padding: 12px; font-family: {MONO_FONT_STACK}; }}
         """)
         self.btn_term_clear.setStyleSheet(f"""
-            QPushButton {{ background-color: transparent; border: 1px solid {p.BORDER}; border-radius: 14px; color: {p.TEXT_SECONDARY}; padding: 0 16px; font-size: 11px; font-weight: 700; }}
+            QPushButton {{ background-color: transparent; border: 1px solid {p.BORDER}; border-radius: {BTN_RADIUS}; color: {p.TEXT_SECONDARY}; padding: 0 16px; font-size: 11px; font-weight: 700; font-family: {APP_FONT_STACK}; }}
             QPushButton:hover {{ background-color: {p.HOVER_BG}; color: {p.TEXT_PRIMARY}; }}
         """)
 

@@ -12,6 +12,10 @@ from ui.tokens import (
     DANGER,
     TEXT_BODY,
     TEXT_MUTED,
+    TEXT_PRIMARY,
+    APP_FONT_STACK,
+    BTN_RADIUS,
+    CARD_RADIUS,
 )
 
 
@@ -33,18 +37,18 @@ class ConfirmDialog(QDialog):
         self.setObjectName("ConfirmDialog")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 16)
-        layout.setSpacing(14)
+        layout.setContentsMargins(24, 24, 24, 20)
+        layout.setSpacing(16)
 
         title_label = QLabel(title)
         title_label.setStyleSheet(
-            f"color: {TEXT_BODY}; font-size: 15px; font-weight: 700;"
+            f"color: {TEXT_BODY}; font-size: 16px; font-weight: 700; font-family: {APP_FONT_STACK};"
         )
         body_label = QLabel(message)
         body_label.setWordWrap(True)
         body_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         body_label.setStyleSheet(
-            f"color: {TEXT_PRIMARY}; font-size: 12px; line-height: 1.45; font-family: {APP_FONT_STACK};"
+            f"color: {TEXT_PRIMARY}; font-size: 13px; line-height: 1.5; font-family: {APP_FONT_STACK};"
         )
 
         button_box = QDialogButtonBox()
@@ -52,18 +56,21 @@ class ConfirmDialog(QDialog):
         self.confirm_button = QPushButton(confirm_text)
         self.cancel_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.confirm_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.cancel_button.setFixedHeight(30)
-        self.confirm_button.setFixedHeight(30)
+        self.cancel_button.setFixedHeight(36)
+        self.confirm_button.setFixedHeight(36)
+        
+        common_btn_style = f"font-family: {APP_FONT_STACK}; font-size: 12px; font-weight: 600; padding: 4px 20px; border-radius: {BTN_RADIUS};"
+        
         self.cancel_button.setStyleSheet(
-            f"background-color: {BG_WHITE}; color: {TEXT_BODY}; border: 1px solid {BORDER}; border-radius: 0px; padding: 4px 12px;"
+            f"{common_btn_style} background-color: {BG_WHITE}; color: {TEXT_BODY}; border: 1px solid {BORDER};"
         )
         if danger:
             self.confirm_button.setStyleSheet(
-                f"background-color: {DANGER}; color: {ACCENT_TEXT}; border: none; border-radius: 0px; padding: 4px 12px;"
+                f"{common_btn_style} background-color: {DANGER}; color: {ACCENT_TEXT}; border: none;"
             )
         else:
             self.confirm_button.setStyleSheet(
-                f"background-color: {ACCENT}; color: {ACCENT_TEXT}; border: none; border-radius: 0px; padding: 4px 12px;"
+                f"{common_btn_style} background-color: {ACCENT}; color: {ACCENT_TEXT}; border: none;"
             )
 
         button_box.addButton(self.cancel_button, QDialogButtonBox.ButtonRole.RejectRole)
@@ -76,7 +83,7 @@ class ConfirmDialog(QDialog):
         layout.addWidget(button_box)
 
         self.setStyleSheet(
-            f"QDialog#ConfirmDialog {{ background-color: {BG_WHITE}; border: 1px solid {BORDER}; border-radius: 0px; }}"
+            f"QDialog#ConfirmDialog {{ background-color: {BG_WHITE}; border: 1px solid {BORDER}; border-radius: {CARD_RADIUS}; }}"
         )
 
 

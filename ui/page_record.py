@@ -53,6 +53,7 @@ from ui.modern_layout import (
 )
 from ui.tokens import (
     ACCENT,
+    ACCENT_TEXT,
     BTN_H,
     CROP_REGION,
     DANGER,
@@ -85,6 +86,10 @@ from ui.tokens import (
     TEXT_BODY,
     TEXT_MUTED,
     WARNING,
+    CARD_RADIUS,
+    BTN_RADIUS,
+    INPUT_RADIUS,
+    APP_FONT_STACK,
 )
 from logic.theme_manager import theme_manager
 
@@ -195,7 +200,7 @@ class PageRecord(QWidget):
         # Update Library
         self.spell_list.setStyleSheet(f"""
             QListWidget {{ background-color: transparent; border: none; color: {p.TEXT_PRIMARY}; }}
-            QListWidget::item {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: 0px; margin-bottom: 4px; padding: 10px; }}
+            QListWidget::item {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: {CARD_RADIUS}; margin-bottom: 6px; padding: 12px; }}
             QListWidget::item:selected {{ background-color: {p.PRIMARY}; color: {p.SURFACE_PRIMARY}; border: none; }}
         """)
 
@@ -693,22 +698,24 @@ class PageRecord(QWidget):
         p = theme_manager.get_palette()
         
         # 1. Update Plot Styles
-        for plot in [self.plot_accel, self.plot_gyro]:
+        for plot in [self.graph1, self.graph2]:
             plot.setBackground("transparent")
             plot.getAxis("left").setPen(p.TEXT_TERTIARY)
             plot.getAxis("bottom").setPen(p.TEXT_TERTIARY)
             
         # 2. Update Layout Cards
-        self.graph_card.setStyleSheet(f"""
-            #VanguardCardOuter {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: 24px; }}
-            #VanguardCardInner {{ background-color: {p.SURFACE_PRIMARY}; border: none; border-radius: 16px; }}
-        """)
+        self.main_container.setStyleSheet(f"background-color: transparent;")
         
         # 3. Update Sidebar Library
         self.spell_list.setStyleSheet(f"""
-            QListWidget {{ background-color: transparent; border: none; color: {p.TEXT_PRIMARY}; }}
-            QListWidget::item {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: 8px; margin-bottom: 4px; padding: 10px; }}
-            QListWidget::item:selected {{ background-color: {p.PRIMARY}; color: {readable_text_on(p.PRIMARY, dark_text=p.SURFACE_PRIMARY, light_text="#FFFFFF")}; border: none; }}
+            QListWidget {{ background-color: transparent; border: none; color: {p.TEXT_PRIMARY}; font-family: {APP_FONT_STACK}; }}
+            QListWidget::item {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: {CARD_RADIUS}; margin-bottom: 6px; padding: 12px; }}
+            QListWidget::item:selected {{ background-color: {p.PRIMARY}; color: {ACCENT_TEXT}; border: none; }}
+        """)
+        self.sample_list.setStyleSheet(f"""
+            QListWidget {{ background-color: transparent; border: none; color: {p.TEXT_PRIMARY}; font-family: {APP_FONT_STACK}; }}
+            QListWidget::item {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: {CARD_RADIUS}; margin-bottom: 6px; padding: 12px; }}
+            QListWidget::item:selected {{ background-color: {p.PRIMARY}; color: {ACCENT_TEXT}; border: none; }}
         """)
 
     def _init_ui(self) -> None:
