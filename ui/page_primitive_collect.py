@@ -266,7 +266,7 @@ class PagePrimitiveCollect(QWidget):
 
     def _build_right_column(self) -> QWidget:
         widget = QWidget()
-        widget.setMaximumWidth(RIGHT_MAX_W)
+        # Removed restrictive maximum width to prevent clipping
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_MD)

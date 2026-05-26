@@ -109,7 +109,7 @@ class PageHome(QWidget):
 
         # ── Status Bar ──
         self.status_bar = QLabel(tr_ui("home_status_disconnected"))
-        self.status_bar.setFixedHeight(HOME_STATUS_H + 12)
+        self.status_bar.setMinimumHeight(HOME_STATUS_H + 12)
         self.status_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.status_bar)
 

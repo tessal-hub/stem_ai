@@ -60,6 +60,7 @@ from ui.component_factory import (
 )
 from ui.layout_utils import clear_layout
 from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_LG, SPACING_MD, SPACING_SM
+from ui.modern_layout import create_modern_card, add_card_shadow
 from ui.i18n_bridge import tr_ui
 
 
@@ -222,7 +223,8 @@ class PageStatistics(QWidget):
         layout.addLayout(top_row)
 
         # Feature Card
-        self.feature_card, feature_layout = make_card()
+        self.feature_card, feature_layout = create_modern_card(margin=MARGIN_COMFORTABLE, spacing=SPACING_MD)
+        add_card_shadow(self.feature_card, blur_radius=12, offset_y=3)
         self._sec_preview = make_section_label(tr_ui("stats_live_features"), accent=True)
         feature_layout.addWidget(self._sec_preview)
         self.lbl_accel_stats = QLabel("Accel: mean --  var --  rms --")
@@ -232,7 +234,8 @@ class PageStatistics(QWidget):
         layout.addWidget(self.feature_card)
 
         # Model Card
-        self.model_card, model_layout = make_card()
+        self.model_card, model_layout = create_modern_card(margin=MARGIN_COMFORTABLE, spacing=SPACING_MD)
+        add_card_shadow(self.model_card, blur_radius=12, offset_y=3)
         self._sec_model = make_section_label(tr_ui("stats_model_train"), accent=True)
         model_layout.addWidget(self._sec_model)
         self.lbl_train_status = QLabel("Train: idle")
@@ -250,7 +253,8 @@ class PageStatistics(QWidget):
         layout.addWidget(self.model_card)
 
         # Console Card (Replaces FFT)
-        self.console_card, console_layout = make_card()
+        self.console_card, console_layout = create_modern_card(margin=MARGIN_COMFORTABLE, spacing=SPACING_MD)
+        add_card_shadow(self.console_card, blur_radius=12, offset_y=3)
         self._sec_console = make_section_label(tr_ui("sub_console"), accent=True)
         console_layout.addWidget(self._sec_console)
         
@@ -283,8 +287,9 @@ class PageStatistics(QWidget):
         self._sec_mastery = make_section_label(tr_ui("stats_spell_mastery"))
         layout.addWidget(self._sec_mastery)
         
-        from ui.component_factory import make_card
-        self.mastery_box, inner_layout = make_card()
+        # Mastery list container
+        self.mastery_box, inner_layout = create_modern_card(margin=MARGIN_COMFORTABLE, spacing=SPACING_MD)
+        add_card_shadow(self.mastery_box, blur_radius=10, offset_y=2)
         
         self.mastery_stack = QStackedWidget()
         self.mastery_scroll = QScrollArea()
@@ -327,16 +332,13 @@ class PageStatistics(QWidget):
         return page
 
     def _make_spell_card(self, spell_name: str, count: int) -> ClickableFrame:
+        # Use ClickableFrame so callers can connect to `.clicked`
         card = ClickableFrame()
         card.setObjectName("CardFrame")
         card.setStyleSheet(STYLE_STATISTICS_CARD)
+        add_card_shadow(card, blur_radius=8, offset_y=2)
         layout = QHBoxLayout(card)
-        layout.setContentsMargins(
-            MARGIN_COMFORTABLE,
-            MARGIN_COMFORTABLE,
-            MARGIN_COMFORTABLE,
-            MARGIN_COMFORTABLE,
-        )
+        layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
         info = QVBoxLayout()
         info.addWidget(self._make_card_name_label(spell_name))
         info.addWidget(self._make_card_count_label(count))

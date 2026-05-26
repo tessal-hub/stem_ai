@@ -48,11 +48,11 @@ LIGHT_PALETTE = Palette(
     SURFACE_SECONDARY="#FDFBF7",
     SURFACE_TERTIARY="#F9F7F2",
     
-    TEXT_PRIMARY="#1A1918",
-    TEXT_SECONDARY="#6B6A67",
-    TEXT_TERTIARY="#72716D",
+    TEXT_PRIMARY="#000000",      # Purest Ink
+    TEXT_SECONDARY="#403F3D",    # Deep Gray
+    TEXT_TERTIARY="#555452",     # High Contrast Ghost
     
-    BORDER="rgba(26, 25, 24, 0.08)",
+    BORDER="rgba(0, 0, 0, 0.12)",
     BORDER_LIGHT="rgba(26, 25, 24, 0.04)",
     
     STATUS_SUCCESS="#EDF3EC",
@@ -83,11 +83,11 @@ DARK_PALETTE = Palette(
     SURFACE_SECONDARY="#09090B",  # Obsidian
     SURFACE_TERTIARY="#121214",   # Depth
     
-    TEXT_PRIMARY="#EAEAEA",
-    TEXT_SECONDARY="#A1A1AA",
-    TEXT_TERTIARY="#7D7D86",
+    TEXT_PRIMARY="#FFFFFF",      # Pure White
+    TEXT_SECONDARY="#E4E4E7",    # Light Silver
+    TEXT_TERTIARY="#A1A1AA",     # High Contrast Muted
     
-    BORDER="rgba(255, 255, 255, 0.1)",
+    BORDER="rgba(255, 255, 255, 0.15)",
     BORDER_LIGHT="rgba(255, 255, 255, 0.05)",
     
     STATUS_SUCCESS="#064E3B",

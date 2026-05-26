@@ -135,6 +135,16 @@ class MacShell(QWidget):
             * {{
                 font-family: {APP_FONT_STACK};
                 color: {p.TEXT_PRIMARY};
+                outline: none;
+            }}
+            QWidget:focus {{
+                outline: none;
+            }}
+            QToolButton {{
+                outline: none;
+            }}
+            QPushButton {{
+                outline: none;
             }}
             #StemChrome {{
                 background-color: {p.SURFACE_SECONDARY};
@@ -231,7 +241,7 @@ class MacShell(QWidget):
 
         # Brand Section
         brand = QFrame()
-        brand.setFixedHeight(SHELL_BRAND_H)
+        brand.setMinimumHeight(SHELL_BRAND_H)
         brand_layout = QHBoxLayout(brand)
         brand_layout.setContentsMargins(20, 0, 20, 0)
         brand_layout.setSpacing(12)
@@ -274,7 +284,7 @@ class MacShell(QWidget):
             btn.setIcon(QIcon(resolve_asset_path(item.icon)))
             btn.setIconSize(QSize(20, 20))
             btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-            btn.setFixedHeight(44)
+            btn.setMinimumHeight(44)
             btn.setSizePolicy(btn.sizePolicy().horizontalPolicy(), btn.sizePolicy().verticalPolicy())
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             
@@ -298,7 +308,7 @@ class MacShell(QWidget):
         """Tạo thanh công cụ phía trên."""
         toolbar = QFrame()
         toolbar.setObjectName("StemToolbar")
-        toolbar.setFixedHeight(SHELL_NAV_H + 20)
+        toolbar.setMinimumHeight(SHELL_NAV_H + 20)
 
         layout = QHBoxLayout(toolbar)
         layout.setContentsMargins(24, 0, 24, 0)

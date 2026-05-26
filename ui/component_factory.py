@@ -48,9 +48,9 @@ def p(): return theme_manager.get_palette()
 
 def make_card(
     margins: tuple[int, int, int, int] = (SPACING_MD, SPACING_MD, SPACING_MD, SPACING_MD),
-    spacing: int = SPACING_SM,
+    spacing: int = SPACING_MD,
 ) -> tuple[QFrame, QVBoxLayout]:
-    """Create a high-end 'Double-Bezel' styled card."""
+    """Create a high-end 'Double-Bezel' styled card with generous padding."""
     palette = p()
     outer = QFrame()
     outer.setObjectName("VanguardCardOuter")
@@ -62,7 +62,7 @@ def make_card(
         }}
     """)
     outer_layout = QVBoxLayout(outer)
-    outer_layout.setContentsMargins(6, 6, 6, 6) 
+    outer_layout.setContentsMargins(8, 8, 8, 8) 
     
     inner = QFrame()
     inner.setObjectName("VanguardCardInner")
@@ -101,7 +101,7 @@ def make_card_frame() -> QFrame:
 
 def make_button(label: str, style: str = "", height: int = BTN_H) -> QPushButton:
     btn = QPushButton(label)
-    btn.setFixedHeight(height)
+    btn.setMinimumHeight(height)
     btn.setCursor(Qt.CursorShape.PointingHandCursor)
     if style:
         btn.setStyleSheet(style)
@@ -270,7 +270,6 @@ def make_checkbox(label: str, checked: bool = False) -> QCheckBox:
         QCheckBox::indicator:checked {{
             background-color: {palette.PRIMARY};
             border-color: {palette.PRIMARY};
-            image: url(assets/icon/check.svg); /* Ensure this asset exists or fallback to color */
         }}
         QCheckBox::indicator:hover {{
             border-color: {palette.PRIMARY};

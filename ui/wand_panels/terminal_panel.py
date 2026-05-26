@@ -101,9 +101,6 @@ class WandTerminalPanel(QWidget):
         self.terminal_output.setStyleSheet(STYLE_TERMINAL)
         self.terminal_output.setMinimumHeight(max(TERM_MIN_H, WAND_TERMINAL_MIN_H))
 
-        font = QFont("Consolas", 11)
-        font.setStyleHint(QFont.StyleHint.Monospace)
-        self.terminal_output.setFont(font)
         self.terminal_output.setPlainText(
             ">> WAND TERMINAL INITIALIZED...\n>> WAITING FOR DATA..."
         )

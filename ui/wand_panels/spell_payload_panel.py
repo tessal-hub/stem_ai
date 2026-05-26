@@ -190,14 +190,11 @@ class WandSpellPayloadPanel(QWidget):
         row.setSpacing(SPACING_SM)
 
         name_label = QLabel(spell_name)
-        name_label.setStyleSheet(
-            f"color: {p.TEXT_PRIMARY}; font-size: 13px; font-weight: 700;"
-        )
         name_label.setWordWrap(True)
         name_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        font = QFont()
-        font.setBold(True)
-        name_label.setFont(font)
+        name_label.setStyleSheet(
+            f"color: {p.TEXT_PRIMARY}; font-size: 13px; font-weight: 700; font-family: {APP_FONT_STACK};"
+        )
 
         rarity = self._resolve_rarity(count)
         badge = self._make_rarity_badge(rarity.label, rarity.color)

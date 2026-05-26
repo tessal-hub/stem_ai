@@ -56,8 +56,8 @@ class ConfirmDialog(QDialog):
         self.confirm_button = QPushButton(confirm_text)
         self.cancel_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.confirm_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.cancel_button.setFixedHeight(36)
-        self.confirm_button.setFixedHeight(36)
+        self.cancel_button.setMinimumHeight(36)
+        self.confirm_button.setMinimumHeight(36)
         
         common_btn_style = f"font-family: {APP_FONT_STACK}; font-size: 12px; font-weight: 600; padding: 4px 20px; border-radius: {BTN_RADIUS};"
         

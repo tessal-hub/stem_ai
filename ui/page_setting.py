@@ -346,7 +346,7 @@ class PageSetting(QWidget):
 
         self.btn_clear_db = QPushButton("")
         self.btn_clear_db.setStyleSheet(STYLE_SETTING_BTN_DANGER)
-        self.btn_clear_db.setFixedHeight(SETTINGS_BTN_H)
+        self.btn_clear_db.setMinimumHeight(SETTINGS_BTN_H)
         self.btn_clear_db.setCursor(Qt.CursorShape.PointingHandCursor)
         self._tx(self.btn_clear_db, "btn_clear_db")
 
@@ -422,13 +422,13 @@ class PageSetting(QWidget):
 
         self.btn_revert = QPushButton("")
         self.btn_revert.setStyleSheet(STYLE_SETTING_BTN_OUTLINE)
-        self.btn_revert.setFixedHeight(SETTINGS_BTN_H)
+        self.btn_revert.setMinimumHeight(SETTINGS_BTN_H)
         self.btn_revert.setCursor(Qt.CursorShape.PointingHandCursor)
         self._tx(self.btn_revert, "btn_revert")
 
         self.btn_save = QPushButton("")
         self.btn_save.setStyleSheet(STYLE_SETTING_BTN_PRIMARY)
-        self.btn_save.setFixedHeight(SETTINGS_BTN_H)
+        self.btn_save.setMinimumHeight(SETTINGS_BTN_H)
         self.btn_save.setCursor(Qt.CursorShape.PointingHandCursor)
         self._tx(self.btn_save, "btn_save")
 
@@ -803,7 +803,7 @@ class PageSetting(QWidget):
         def _make_browse_btn() -> QPushButton:
             btn = QPushButton("")
             btn.setStyleSheet(STYLE_SETTING_BTN_OUTLINE)
-            btn.setFixedHeight(SETTINGS_INPUT_H)
+            btn.setMinimumHeight(SETTINGS_INPUT_H)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             self._tx(btn, "btn_browse")
             return btn
@@ -821,7 +821,7 @@ class PageSetting(QWidget):
         self.btn_reset_idf_main = _make_reset_btn()
         self.btn_open_idf_main = QPushButton("")
         self.btn_open_idf_main.setStyleSheet(STYLE_SETTING_BTN_PRIMARY)
-        self.btn_open_idf_main.setFixedHeight(SETTINGS_INPUT_H)
+        self.btn_open_idf_main.setMinimumHeight(SETTINGS_INPUT_H)
         self.btn_open_idf_main.setCursor(Qt.CursorShape.PointingHandCursor)
         self._tx(self.btn_open_idf_main, "btn_open_idf")
 

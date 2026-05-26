@@ -6,17 +6,33 @@ from PyQt6.QtWidgets import QFrame, QWidget, QApplication
 from ui.palettes import LIGHT_PALETTE, DARK_PALETTE, Palette
 from logic.theme_manager import theme_manager
 from ui.color_utils import readable_text_on
+from ui.tokens import (
+    APP_FONT_STACK,
+    TITLE_FONT_STACK,
+    MONO_FONT_STACK,
+    CARD_RADIUS,
+    BTN_RADIUS,
+    INPUT_RADIUS,
+)
 
 def get_modern_stylesheet(theme_name: str = "light") -> str:
     """
     Generate comprehensive modern QSS stylesheet based on selected theme.
+    Force focus outline removal and high contrast.
     """
     p = DARK_PALETTE if theme_name == "dark" else LIGHT_PALETTE
     on_primary = readable_text_on(p.PRIMARY, dark_text=p.SURFACE_PRIMARY, light_text="#FFFFFF")
-    on_status_error = readable_text_on(p.STATUS_ERROR, dark_text=p.TEXT_PRIMARY, light_text="#FFFFFF")
     
-    # Base stylesheet
+    # Base stylesheet - KILL OUTLINES GLOBALLY
     qss = f"""
+* {{
+    outline: none;
+}}
+
+QWidget {{
+    font-family: {APP_FONT_STACK};
+}}
+
 QWidget#MainBox {{
     background-color: {p.SURFACE_PRIMARY};
     color: {p.TEXT_PRIMARY};
@@ -27,37 +43,41 @@ QMainWindow {{
 }}
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   CARDS & CONTAINERS (Using Object Names)
+   CARDS & CONTAINERS
    ═══════════════════════════════════════════════════════════════════════════ */
 
-QFrame#CardFrame, QWidget#Card, #HomeViewerCard, #HomeRightSection, #CardFrameElevated, ClickableFrame {{
-    background-color: {p.GLASS_BG};
-    border: 1px solid {p.BORDER_LIGHT};
-    border-radius: 20px;
+QFrame#CardFrame, QWidget#Card, #HomeViewerCard, #HomeRightSection, #CardFrameElevated, ClickableFrame, #VanguardCardOuter {{
+    background-color: {p.SURFACE_TERTIARY};
+    border: 1px solid {p.BORDER};
+    border-radius: {CARD_RADIUS};
 }}
 
-#HomeViewerSurface {{
-    background-color: {p.GLASS_BG_STRONG};
+#VanguardCardInner, #HomeViewerSurface {{
+    background-color: {p.SURFACE_PRIMARY};
     border: none;
-    border-radius: 18px;
+    border-radius: 12px;
 }}
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   BUTTONS
+   BUTTONS - NO OUTLINES
    ═══════════════════════════════════════════════════════════════════════════ */
 
 QPushButton {{
-    background-color: {p.GLASS_BG_STRONG};
-    color: {p.TEXT_SECONDARY};
-    border: 1px solid {p.GLASS_EDGE};
-    border-radius: 12px;
-    padding: 6px 16px;
+    background-color: {p.SURFACE_TERTIARY};
+    color: {p.TEXT_PRIMARY};
+    border: 1px solid {p.BORDER};
+    border-radius: {BTN_RADIUS};
+    padding: 8px 20px;
     font-weight: 600;
 }}
 
 QPushButton:hover {{
     background-color: {p.HOVER_BG};
-    color: {p.PRIMARY};
+    border-color: {p.PRIMARY};
+}}
+
+QPushButton:focus {{
+    border: 2px solid {p.PRIMARY};
 }}
 
 QPushButton#btn_primary, QPushButton#btn_start, QPushButton#btn_record {{
@@ -68,7 +88,7 @@ QPushButton#btn_primary, QPushButton#btn_start, QPushButton#btn_record {{
 
 QPushButton#btn_stop, QPushButton#btn_danger {{
     background-color: {p.STATUS_ERROR};
-    color: {on_status_error};
+    color: {p.STATUS_ERROR_TEXT};
     border: none;
 }}
 
@@ -77,51 +97,55 @@ QPushButton#btn_stop, QPushButton#btn_danger {{
    ═══════════════════════════════════════════════════════════════════════════ */
 
 QLineEdit, QComboBox, QSpinBox {{
-    background-color: {p.GLASS_BG_STRONG};
+    background-color: {p.SURFACE_PRIMARY};
     color: {p.TEXT_PRIMARY};
-    border: 1px solid {p.BORDER_LIGHT};
-    border-radius: 8px;
-    padding: 6px 12px;
+    border: 1px solid {p.BORDER};
+    border-radius: {INPUT_RADIUS};
+    padding: 8px 12px;
+}}
+
+QLineEdit:focus, QComboBox:focus {{
+    border: 2px solid {p.PRIMARY};
 }}
 
 QComboBox::drop-down {{ border: none; }}
 
 QListWidget {{
-    background-color: {p.GLASS_BG_STRONG};
+    background-color: transparent;
     border: none;
-    border-radius: 16px;
     outline: none;
 }}
 
 QListWidget::item {{
-    padding: 10px;
+    padding: 12px;
     border-radius: 8px;
-    margin: 2px 8px;
+    margin: 4px 8px;
     color: {p.TEXT_PRIMARY};
+    background-color: {p.SURFACE_TERTIARY};
+    border: 1px solid {p.BORDER};
 }}
 
 QListWidget::item:selected {{
-    background-color: {p.HOVER_BG};
-    color: {p.TEXT_PRIMARY};
-    border-left: 4px solid {p.PRIMARY};
+    background-color: {p.PRIMARY};
+    color: {p.SURFACE_PRIMARY};
+    border: none;
 }}
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   MAC SHELL (sidebar / toolbar) — follows palette for dark mode
+   MAC SHELL
    ═══════════════════════════════════════════════════════════════════════════ */
 
 QWidget#StemChrome {{
-    background-color: {p.SURFACE_PRIMARY};
-    border: none;
-    border-radius: 14px;
+    background-color: {p.SURFACE_SECONDARY};
 }}
 
 QWidget#StemToolbar {{
     background-color: {p.SURFACE_PRIMARY};
-    border-bottom: 1px solid {p.BORDER_LIGHT};
+    border-bottom: 1px solid {p.BORDER};
 }}
 
 QLabel#StemToolbarTitle {{
+    font-family: {TITLE_FONT_STACK};
     color: {p.TEXT_PRIMARY};
     font-size: 20px;
     font-weight: 700;
@@ -129,76 +153,54 @@ QLabel#StemToolbarTitle {{
 
 QLabel#StemToolbarSubtitle {{
     color: {p.TEXT_SECONDARY};
-    font-size: 12px;
-    font-weight: 500;
-}}
-
-QLabel#StemNavHint {{
-    color: {p.TEXT_TERTIARY};
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 500;
 }}
 
 QWidget#StemSidebar {{
-    background-color: {p.SURFACE_SECONDARY};
-    border-right: 1px solid {p.BORDER_LIGHT};
-}}
-
-QLabel#StemNavSectionLabel {{
-    color: {p.TEXT_TERTIARY};
-    font-size: 11px;
-    font-weight: 700;
-}}
-
-QLabel#StemBrandTitle {{
-    color: {p.TEXT_PRIMARY};
-    font-size: 12px;
-    font-weight: 800;
-}}
-
-QLabel#StemBrandSubtitle {{
-    color: {p.TEXT_TERTIARY};
-    font-size: 10px;
-    font-weight: 600;
+    background-color: {p.SURFACE_TERTIARY};
+    border-right: 1px solid {p.BORDER};
 }}
 
 QToolButton#StemNavBtn {{
-    color: {p.TEXT_SECONDARY};
+    color: {p.TEXT_PRIMARY};
     background-color: transparent;
-    border: 1px solid transparent;
-    border-radius: 14px;
-    padding: 8px 10px;
-    font-size: 12px;
-    font-weight: 600;
+    border: none;
+    border-radius: {BTN_RADIUS};
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    margin: 2px 8px;
 }}
 
 QToolButton#StemNavBtn:hover {{
     background-color: {p.HOVER_BG};
-    color: {p.PRIMARY};
-    border: 1px solid {p.BORDER};
-    border-radius: 14px;
 }}
 
 QToolButton#StemNavBtn[active="true"] {{
     background-color: {p.PRIMARY};
-    color: {on_primary};
-    border: 1px solid {p.PRIMARY};
-    border-radius: 14px;
+    color: {p.SURFACE_PRIMARY};
+    font-weight: 700;
 }}
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   SCROLLBARS
+   SCROLLBARS - MODERN & VISIBLE
    ═══════════════════════════════════════════════════════════════════════════ */
 
 QScrollBar:vertical {{
     background: transparent;
-    width: 8px;
+    width: 10px;
+    margin: 0px;
 }}
 
 QScrollBar::handle:vertical {{
     background: {p.TEXT_TERTIARY};
-    border-radius: 4px;
-    min-height: 20px;
+    border-radius: 5px;
+    min-height: 30px;
+}}
+
+QScrollBar::handle:vertical:hover {{
+    background: {p.PRIMARY};
 }}
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -208,10 +210,11 @@ QScrollBar::handle:vertical {{
 QTextEdit, QPlainTextEdit {{
     background-color: {p.TERM_BG};
     color: {p.TERM_FG};
-    border-radius: 12px;
-    font-family: "Consolas", monospace;
-    font-size: 11px;
-    padding: 10px;
+    border-radius: {INPUT_RADIUS};
+    font-family: {MONO_FONT_STACK};
+    font-size: 12px;
+    padding: 12px;
+    border: 1px solid {p.BORDER};
 }}
 """
     return qss
