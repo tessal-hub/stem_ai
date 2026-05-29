@@ -1,4 +1,9 @@
-"""Presenter dùng chung cho trạng thái kết nối serial/bluetooth."""
+"""
+ui/wand_panels/connection_presenter.py — Trình hiển thị trạng thái kết nối.
+
+Cung cấp logic hiển thị thống nhất cho trạng thái kết nối đũa phép (Wand),
+bao gồm việc cập nhật màu sắc nhãn trạng thái và nội dung nút bấm.
+"""
 
 from __future__ import annotations
 
@@ -7,15 +12,16 @@ from dataclasses import dataclass
 from PyQt6.QtWidgets import QLabel, QPushButton
 
 from ui.i18n_bridge import tr_ui
-from ui.tokens import DANGER, STATUS_LABEL_STYLE_TEMPLATE, SUCCESS
 
 
 @dataclass(frozen=True)
 class ConnectionStatusPresenter:
-    """Apply a consistent connected/disconnected presentation state."""
+    """
+    Điều phối việc hiển thị trạng thái Kết nối/Ngắt kết nối trên giao diện.
+    """
 
-    connected_color: str = SUCCESS
-    disconnected_color: str = DANGER
+    connected_color: str = "success"
+    disconnected_color: str = "error"
 
     def apply(
         self,
@@ -26,22 +32,41 @@ class ConnectionStatusPresenter:
         connected: bool,
         device_label: str,
     ) -> None:
-        if connected:
-            label = str(device_label).strip().upper()
-            if label:
-                status_label.setText(tr_ui("wand_status_connected_port", port=label))
-            else:
-                status_label.setText(tr_ui("wand_status_connected"))
-            status_label.setStyleSheet(
-                STATUS_LABEL_STYLE_TEMPLATE.format(color=self.connected_color)
-            )
-            connect_btn.setText(tr_ui("wand_disconnect"))
-            scan_btn.setEnabled(False)
-            return
+        """
+        Áp dụng trạng thái kết nối hiện tại lên các widget UI.
 
-        status_label.setText(tr_ui("wand_status_disconnected"))
-        status_label.setStyleSheet(
-            STATUS_LABEL_STYLE_TEMPLATE.format(color=self.disconnected_color)
-        )
-        connect_btn.setText(tr_ui("wand_connect"))
-        scan_btn.setEnabled(True)
+        Args:
+            status_label: Nhãn hiển thị trạng thái chữ.
+            connect_btn: Nút bấm Kết nối/Ngắt.
+            scan_btn: Nút bấm Quét thiết bị.
+            connected: Trạng thái kết nối hiện tại.
+            device_label: Tên thiết bị hoặc cổng COM.
+        """
+        if connected:
+            self._apply_connected(status_label, connect_btn, scan_btn, device_label)
+        else:
+            self._apply_disconnected(status_label, connect_btn, scan_btn)
+
+    # ── Private methods ─────────────────────────
+
+    def _apply_connected(self, lbl: QLabel, btn_c: QPushButton, btn_s: QPushButton, device: str) -> None:
+        """Hiển thị trạng thái đã kết nối."""
+        port = str(device).strip().upper()
+        text = tr_ui("wand_status_connected_port", port=port) if port else tr_ui("wand_status_connected")
+        lbl.setText(text)
+        lbl.setProperty("type", "status_label")
+        lbl.setProperty("status", self.connected_color)
+        lbl.style().unpolish(lbl)
+        lbl.style().polish(lbl)
+        btn_c.setText(tr_ui("wand_disconnect"))
+        btn_s.setEnabled(False)
+
+    def _apply_disconnected(self, lbl: QLabel, btn_c: QPushButton, btn_s: QPushButton) -> None:
+        """Hiển thị trạng thái chưa kết nối."""
+        lbl.setText(tr_ui("wand_status_disconnected"))
+        lbl.setProperty("type", "status_label")
+        lbl.setProperty("status", self.disconnected_color)
+        lbl.style().unpolish(lbl)
+        lbl.style().polish(lbl)
+        btn_c.setText(tr_ui("wand_connect"))
+        btn_s.setEnabled(True)

@@ -49,23 +49,7 @@ _Z_ESP32_CENTER = 0.50   # centre of ESP32 along Z
 _Z_STICK_BOT    = 1.00   # stick starts here
 _Z_MPU_CENTER   = 4.50   # centre of MPU along Z
 
-# ---------------------------------------------------------------------------
-# Styling
-# ---------------------------------------------------------------------------
-_STYLE_RESET_BTN = (
-    "QPushButton {"
-    "  background-color: #f3f4f6;"
-    "  border: 1px solid #d1d5db;"
-    "  border-radius: 5px;"
-    "  font-size: 10px;"
-    "  font-weight: bold;"
-    "  color: #374151;"
-    "}"
-    "QPushButton:hover {"
-    "  background-color: #e5e7eb;"
-    "  border-color: #9ca3af;"
-    "}"
-)
+
 
 # ---------------------------------------------------------------------------
 # Mesh helpers
@@ -211,7 +195,7 @@ class Wand3DWidget(QWidget):
         self.btn_reset = QPushButton("⌂ HOME")
         self.btn_reset.setFixedSize(70, 24)
         self.btn_reset.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_reset.setStyleSheet(_STYLE_RESET_BTN)
+        self.btn_reset.setProperty("type", "small")
         self.btn_reset.clicked.connect(self.reset_camera)
         top_bar.addWidget(self.btn_reset)
         outer.addLayout(top_bar)

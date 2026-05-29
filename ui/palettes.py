@@ -1,109 +1,85 @@
 """
-ui/palettes.py — High-end color palette definitions for Vanguard Studio.
+ui/palettes.py — Định nghĩa bảng màu cao cấp cho ứng dụng.
+
+Cung cấp các lớp dữ liệu Palette và hai bộ màu mặc định: Sáng (Light) và Tối (Dark).
+Tuân thủ chuẩn thiết kế Vanguard Editorial Luxury.
 """
 
 from dataclasses import dataclass
 
+
 @dataclass(frozen=True)
 class Palette:
-    PRIMARY: str
-    PRIMARY_LIGHT: str
-    PRIMARY_DARK: str
+    """Lớp lưu trữ các giá trị màu sắc và hiệu ứng thị giác."""
+
+    PRIMARY: str           # Màu chủ đạo
+    PRIMARY_LIGHT: str     # Màu chủ đạo nhạt
+    PRIMARY_DARK: str      # Màu chủ đạo đậm
     
-    SURFACE_PRIMARY: str   # Pure high-contrast (White/Deep Black)
-    SURFACE_SECONDARY: str # Background canvas (Cream/Obsidian)
-    SURFACE_TERTIARY: str  # Staggered paper/card depth
+    SURFACE_PRIMARY: str   # Nền thẻ (Trắng)
+    SURFACE_SECONDARY: str # Nền chính của ứng dụng (Canvas)
+    SURFACE_TERTIARY: str  # Nền lớp thứ 3 (Input)
     
-    TEXT_PRIMARY: str      # Pure ink
-    TEXT_SECONDARY: str    # Lead/Muted
-    TEXT_TERTIARY: str     # Ghost
+    TEXT_PRIMARY: str      # Chữ chính
+    TEXT_SECONDARY: str    # Chữ phụ
+    TEXT_TERTIARY: str     # Chữ mờ
     
-    BORDER: str
-    BORDER_LIGHT: str
+    BORDER: str            # Viền chuẩn
+    BORDER_LIGHT: str      # Viền mờ
     
-    STATUS_SUCCESS: str
-    STATUS_WARNING: str
-    STATUS_ERROR: str
+    STATUS_SUCCESS: str    # Trạng thái thành công
+    STATUS_WARNING: str    # Trạng thái cảnh báo
+    STATUS_ERROR: str      # Trạng thái lỗi
     STATUS_SUCCESS_TEXT: str
     STATUS_ERROR_TEXT: str
     STATUS_WARNING_TEXT: str
     
-    HOVER_BG: str
-    TERM_BG: str
-    TERM_FG: str
+    HOVER_BG: str          # Nền khi di chuột
+    TERM_BG: str           # Nền terminal
+    TERM_FG: str           # Chữ terminal
     
-    GLASS_BG: str
-    GLASS_BG_STRONG: str
-    GLASS_EDGE: str
+    GLASS_BG: str          # Nền hiệu ứng kính
+    GLASS_BG_STRONG: str   # Nền kính đậm
+    GLASS_EDGE: str        # Viền kính
     
-    SHADOW_COLOR: str
+    SHADOW_COLOR: str      # Màu đổ bóng
 
-# Vanguard Editorial Luxury (Light)
+
+# ── Bảng màu Claude Aesthetic (Light) ───────────────────────────────────────
 LIGHT_PALETTE = Palette(
-    PRIMARY="#1A1918",
-    PRIMARY_LIGHT="#3D3C3A",
+    PRIMARY="#1C1C1E",           # Monochrome accent
+    PRIMARY_LIGHT="#3A3A3C",
     PRIMARY_DARK="#000000",
-    
-    SURFACE_PRIMARY="#FFFFFF",
-    SURFACE_SECONDARY="#FDFBF7",
-    SURFACE_TERTIARY="#F9F7F2",
-    
-    TEXT_PRIMARY="#1A1918",
-    TEXT_SECONDARY="#6B6A67",
-    TEXT_TERTIARY="#72716D",
-    
-    BORDER="rgba(26, 25, 24, 0.08)",
-    BORDER_LIGHT="rgba(26, 25, 24, 0.04)",
-    
-    STATUS_SUCCESS="#EDF3EC",
-    STATUS_WARNING="#FBF3DB",
-    STATUS_ERROR="#FDEBEC",
-    STATUS_SUCCESS_TEXT="#346538",
-    STATUS_ERROR_TEXT="#9F2F2D",
-    STATUS_WARNING_TEXT="#956400",
-    
-    HOVER_BG="rgba(26, 25, 24, 0.05)",
-    TERM_BG="#F9F7F2",
-    TERM_FG="#1A1918",
-    
-    GLASS_BG="rgba(255, 255, 255, 0.7)",
-    GLASS_BG_STRONG="rgba(255, 255, 255, 0.9)",
-    GLASS_EDGE="rgba(0, 0, 0, 0.05)",
-    
-    SHADOW_COLOR="rgba(15, 23, 42, 0.12)"
+
+    SURFACE_PRIMARY="#FFFFFF",   # Nền thẻ
+    SURFACE_SECONDARY="#F5F5F7", # Nền chính của ứng dụng
+    SURFACE_TERTIARY="#F5F5F7",  # Nền lớp ngoài/Input
+
+    TEXT_PRIMARY="#1C1C1E",
+    TEXT_SECONDARY="#636366",
+    TEXT_TERTIARY="#8E8E93",
+
+    BORDER="rgba(0, 0, 0, 0.12)",
+    BORDER_LIGHT="rgba(0, 0, 0, 0.08)",
+
+    STATUS_SUCCESS="#10B981",
+    STATUS_WARNING="#F59E0B",
+    STATUS_ERROR="#EF4444",
+    STATUS_SUCCESS_TEXT="#FFFFFF",
+    STATUS_ERROR_TEXT="#FFFFFF",
+    STATUS_WARNING_TEXT="#FFFFFF",
+
+    HOVER_BG="rgba(0, 0, 0, 0.04)",
+    TERM_BG="#FFFFFF",
+    TERM_FG="#1C1C1E",
+
+    GLASS_BG="rgba(255, 255, 255, 0.8)",
+    GLASS_BG_STRONG="rgba(255, 255, 255, 0.95)",
+    GLASS_EDGE="rgba(0, 0, 0, 0.08)",
+
+    SHADOW_COLOR="rgba(0, 0, 0, 0.04)"
 )
 
-# Vanguard Obsidian (Dark)
-DARK_PALETTE = Palette(
-    PRIMARY="#EAEAEA",
-    PRIMARY_LIGHT="#FFFFFF",
-    PRIMARY_DARK="#A1A1AA",
-    
-    SURFACE_PRIMARY="#050505",    # Deep Black
-    SURFACE_SECONDARY="#09090B",  # Obsidian
-    SURFACE_TERTIARY="#121214",   # Depth
-    
-    TEXT_PRIMARY="#EAEAEA",
-    TEXT_SECONDARY="#A1A1AA",
-    TEXT_TERTIARY="#7D7D86",
-    
-    BORDER="rgba(255, 255, 255, 0.1)",
-    BORDER_LIGHT="rgba(255, 255, 255, 0.05)",
-    
-    STATUS_SUCCESS="#064E3B",
-    STATUS_WARNING="#78350F",
-    STATUS_ERROR="#7F1D1D",
-    STATUS_SUCCESS_TEXT="#34D399",
-    STATUS_ERROR_TEXT="#F87171",
-    STATUS_WARNING_TEXT="#F59E0B",
-    
-    HOVER_BG="rgba(255, 255, 255, 0.08)",
-    TERM_BG="#050505",
-    TERM_FG="#EAEAEA",
-    
-    GLASS_BG="rgba(9, 9, 11, 0.7)",
-    GLASS_BG_STRONG="rgba(5, 5, 5, 0.9)",
-    GLASS_EDGE="rgba(255, 255, 255, 0.1)",
-    
-    SHADOW_COLOR="rgba(0, 0, 0, 0.4)"
-)
+
+# ── Dark palette được bỏ qua (mapping về Light để tránh nhầm lẫn) ──────────────
+DARK_PALETTE = LIGHT_PALETTE

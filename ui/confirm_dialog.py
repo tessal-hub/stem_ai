@@ -4,22 +4,11 @@ from __future__ import annotations
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QPushButton, QVBoxLayout
-from ui.tokens import (
-    ACCENT,
-    ACCENT_TEXT,
-    BG_WHITE,
-    BORDER,
-    DANGER,
-    TEXT_BODY,
-    TEXT_MUTED,
-    TEXT_PRIMARY,
-    APP_FONT_STACK,
-    BTN_RADIUS,
-    CARD_RADIUS,
-)
 
 
 class ConfirmDialog(QDialog):
+    """Hộp thoại xác nhận cho các hành động phá hủy hoặc quan trọng."""
+
     def __init__(
         self,
         parent=None,
@@ -41,15 +30,12 @@ class ConfirmDialog(QDialog):
         layout.setSpacing(16)
 
         title_label = QLabel(title)
-        title_label.setStyleSheet(
-            f"color: {TEXT_BODY}; font-size: 16px; font-weight: 700; font-family: {APP_FONT_STACK};"
-        )
+        title_label.setProperty("type", "dialog_title")
+
         body_label = QLabel(message)
         body_label.setWordWrap(True)
         body_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        body_label.setStyleSheet(
-            f"color: {TEXT_PRIMARY}; font-size: 13px; line-height: 1.5; font-family: {APP_FONT_STACK};"
-        )
+        body_label.setProperty("type", "dialog_body")
 
         button_box = QDialogButtonBox()
         self.cancel_button = QPushButton(cancel_text)
@@ -58,20 +44,12 @@ class ConfirmDialog(QDialog):
         self.confirm_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.cancel_button.setFixedHeight(36)
         self.confirm_button.setFixedHeight(36)
-        
-        common_btn_style = f"font-family: {APP_FONT_STACK}; font-size: 12px; font-weight: 600; padding: 4px 20px; border-radius: {BTN_RADIUS};"
-        
-        self.cancel_button.setStyleSheet(
-            f"{common_btn_style} background-color: {BG_WHITE}; color: {TEXT_BODY}; border: 1px solid {BORDER};"
-        )
+
+        self.cancel_button.setProperty("type", "outline")
         if danger:
-            self.confirm_button.setStyleSheet(
-                f"{common_btn_style} background-color: {DANGER}; color: {ACCENT_TEXT}; border: none;"
-            )
+            self.confirm_button.setProperty("type", "danger")
         else:
-            self.confirm_button.setStyleSheet(
-                f"{common_btn_style} background-color: {ACCENT}; color: {ACCENT_TEXT}; border: none;"
-            )
+            self.confirm_button.setProperty("type", "primary")
 
         button_box.addButton(self.cancel_button, QDialogButtonBox.ButtonRole.RejectRole)
         button_box.addButton(self.confirm_button, QDialogButtonBox.ButtonRole.AcceptRole)
@@ -82,19 +60,16 @@ class ConfirmDialog(QDialog):
         layout.addWidget(body_label)
         layout.addWidget(button_box)
 
-        self.setStyleSheet(
-            f"QDialog#ConfirmDialog {{ background-color: {BG_WHITE}; border: 1px solid {BORDER}; border-radius: {CARD_RADIUS}; }}"
-        )
-
 
 def confirm_destructive(
     parent,
     *,
     title: str,
     message: str,
-    confirm_text: str,
+    confirm_text: str = "Confirm",
     cancel_text: str = "Cancel",
 ) -> bool:
+    """Hiển thị dialog xác nhận và trả về True nếu người dùng đồng ý."""
     dialog = ConfirmDialog(
         parent,
         title=title,

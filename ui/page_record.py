@@ -1,18 +1,16 @@
 """
-PageRecord — Timeline and recording view with LIVE Plotting, 3D Wand, & Snipping.
+ui/page_record.py — Trang thu thập và xử lý mẫu cử chỉ thời gian thực.
 
-Architecture compliance (docs/01_ARCHITECTURE/OVERVIEW.md and docs/06_CONTRACTS/UI_CONTRACTS.md):
-    - This file is PURE VIEW. No data processing, no direct DataStore calls.
-    - Receives plot data via update_plot_data(buffer_snapshot) called by Handler.
-    - Emits sig_data_cropped(list, str) with 6D data + spell name for Handler to save.
-    - Emits sig_spell_selected(str) when user clicks a spell.
-    - MUST NOT import anything from /logic.
+Cung cấp giao diện trực quan hóa dữ liệu IMU, cho phép người dùng ghi lại,
+cắt (snip) và lưu trữ các mẫu cử chỉ vào dataset.
 """
+
 from __future__ import annotations
 
 import logging
 
-from PyQt6.QtCore import QTime, QTimer, Qt, pyqtSignal
+from PyQt6.QtCore import QTime, QTimer, Qt, pyqtSignal, QSize
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QComboBox,
     QFormLayout,
@@ -34,26 +32,24 @@ import numpy as np
 import pyqtgraph as pg
 
 from constants import canonical_system_spell, is_system_spell
+from logic.theme_manager import theme_manager
+from ui.asset_utils import resolve_asset_path
 from ui.component_factory import (
+    IconButton,
     make_button,
+    make_card,
     make_checkbox,
-    make_card_frame,
+    make_empty_state_card,
     make_hint,
     make_section_label,
 )
-from ui.color_utils import readable_text_on
 from ui.confirm_dialog import confirm_destructive
 from ui.i18n_bridge import tr_ui
-from ui.mac_material import apply_soft_shadow
-from ui.modern_layout import (
-    MARGIN_COMFORTABLE,
-    SPACING_LG,
-    SPACING_MD,
-    SPACING_SM,
-)
+from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_LG, SPACING_MD, SPACING_SM
 from ui.tokens import (
     ACCENT,
     ACCENT_TEXT,
+    APP_FONT_STACK,
     BTN_H,
     CROP_REGION,
     DANGER,
@@ -67,81 +63,58 @@ from ui.tokens import (
     RECORD_GRAPH_MIN_H,
     RECORD_LIST_MIN_H,
     RIGHT_MAX_W,
+    RIGHT_MIN_W,
     SPELL_BTN_H,
-    STYLE_BTN_BACK,
-    STYLE_BTN_BASE,
-    STYLE_BTN_DANGER_OUTLINE,
-    STYLE_BTN_SNIP,
-    STYLE_BTN_START,
-    STYLE_BTN_STOP,
-    STYLE_RECORD_COMBO,
-    STYLE_RECORD_CURRENT_SPELL,
-    STYLE_RECORD_FIELD_LABEL,
-    STYLE_RECORD_GRAPH_CARD,
-    STYLE_RECORD_LIST,
-    STYLE_RECORD_MAIN_CONTAINER,
-    STYLE_RECORD_METRIC_VALUE,
-    STYLE_RECORD_STATUS_TEMPLATE,
+    RIGHT_MIN_W,
+    SPELL_BTN_H,
     SUCCESS,
     TEXT_BODY,
     TEXT_MUTED,
+    TITLE_FONT_STACK,
     WARNING,
-    CARD_RADIUS,
-    BTN_RADIUS,
-    INPUT_RADIUS,
-    APP_FONT_STACK,
 )
-from logic.theme_manager import theme_manager
+
 
 log = logging.getLogger(__name__)
 
+# Hằng số cấu hình nội bộ
 _EMPTY_SPELL_LIST = "__STEM_EMPTY_SPELL_LIST__"
-_RECORDING_TIMER_INTERVAL_MS = 1000
-_PLOT_TIMER_INTERVAL_MS = 33
-_DEFAULT_CROP_REGION_START = 30
-_DEFAULT_CROP_REGION_END = 120
-_AUTO_CROP_TAIL_SAMPLE_COUNT = 200
+_TIMER_INTERVAL_MS = 1000
+_PLOT_REFRESH_MS = 33
+_DEFAULT_CROP_START = 30
+_DEFAULT_CROP_END = 120
+_AUTO_CROP_TAIL = 200
 
-
-# ════════════════════════════════════════════════════════════════════════
-#  PageRecord
-# ════════════════════════════════════════════════════════════════════════
 
 class PageRecord(QWidget):
-    """Trang thu thập mẫu cử chỉ — vẽ đồ thị IMU reаl-time, snip và lưu mẫu."""
+    """
+    Trang thu thập mẫu cử chỉ.
+    Tương tác với sensor thông qua Handler và hiển thị đồ thị real-time.
+    """
 
-    # ── Outbound signals (consumed by Handler) ──────────────────────────
-    sig_start_record   = pyqtSignal(str)
-    sig_stop_record    = pyqtSignal()
-    sig_snip_record    = pyqtSignal()
-    sig_sample_opened  = pyqtSignal(str)
+    # ── Signal xuất bản ───────────────────────────
+    sig_start_record = pyqtSignal(str)
+    sig_stop_record = pyqtSignal()
+    sig_snip_record = pyqtSignal()
+    sig_sample_opened = pyqtSignal(str)
     sig_sample_deleted = pyqtSignal(str)
-    sig_delete_latest_sample = pyqtSignal(str)  # spell name
-    sig_data_cropped   = pyqtSignal(list, str)  # (6D data, spell_name)
-    sig_spell_selected = pyqtSignal(str)        # spell name when user clicks
-    sig_spell_deleted  = pyqtSignal(str)        # spell name when user deletes
-    sig_clear_buffer   = pyqtSignal()           # clear recorded samples
-    sig_export_csv     = pyqtSignal()           # export samples to CSV
-
-    # Widget type hints
-    btn_start: QPushButton
-    btn_stop:  QPushButton
-    btn_snip:  QPushButton
+    sig_delete_latest_sample = pyqtSignal(str)
+    sig_data_cropped = pyqtSignal(list, str)
+    sig_spell_selected = pyqtSignal(str)
+    sig_spell_deleted = pyqtSignal(str)
+    sig_clear_buffer = pyqtSignal()
+    sig_export_csv = pyqtSignal()
 
     def __init__(self, data_store) -> None:
         super().__init__()
         self.store = data_store
-        # Initial spell-count snapshot at startup for static list rendering.
-        self._initial_spell_counts = dict(getattr(data_store, "spell_counts", {}))
+        self._initial_counts = dict(getattr(data_store, "spell_counts", {}))
+        self.is_live = True
+        self.current_spell_name = ""
+        self._sample_sentinel = "__STEM_EMPTY_SAMPLES__"
 
-        self.is_live: bool = True
-        self.current_spell_name: str = ""
-        self._sample_list_empty_sentinel = "__STEM_EMPTY_SAMPLES__"
-
-        # Recording timer for duration tracking
-        self.recording_timer = QTimer()
-        self.recording_timer.timeout.connect(self._update_recording_duration)
-        self.recording_start_time = QTime()
+        self._recording_timer = QTimer()
+        self._recording_start_time = QTime()
 
         self._init_ui()
         self._setup_plots()
@@ -149,149 +122,127 @@ class PageRecord(QWidget):
         self._configure_accessibility()
         self._load_data()
 
-        log.debug("[PageRecord] Khởi tạo xong - is_live=True, QTimer render plot đang chạy")
+    def _init_ui(self) -> None:
+        """Khởi tạo giao diện và bố cục (Requirement 10: padding-bottom 80px)."""
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
 
-    def keyPressEvent(self, event) -> None:
-        """Xử lý phím tắt bàn phím cho các thao tác recording."""
-        if event.key() == Qt.Key.Key_S and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
-            if self.btn_start.isEnabled():
-                self._on_btn_start_clicked()
-        elif event.key() == Qt.Key.Key_T and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
-            if self.btn_stop.isEnabled():
-                self._on_btn_stop_clicked()
-        elif event.key() == Qt.Key.Key_X and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
-            if self.btn_snip.isEnabled():
-                self._on_btn_snip_clicked()
-        else:
-            super().keyPressEvent(event)
+        self.main_container = QFrame()
+        self.main_container.setObjectName("MainBox")
 
-    # ── Public methods (called by Handler via signals/slots) ────────────
+        inner = QVBoxLayout(self.main_container)
+        # Requirement 10: padding-bottom 80px
+        inner.setContentsMargins(MARGIN_COMFORTABLE, 18, MARGIN_COMFORTABLE, 92)
+        inner.setSpacing(SPACING_LG)
 
-    def update_plot_data(self, buffer_snapshot: list) -> None:
-        """Receive latest sensor buffer snapshot from DataStore signal."""
-        if self.is_live:
-            if len(buffer_snapshot) > 0:
-                log.debug(
-                    "[PageRecord.update_plot_data] Received %d samples, latest: %s",
-                    len(buffer_snapshot),
-                    buffer_snapshot[-1],
-                )
+        content = QHBoxLayout()
+        content.setSpacing(SPACING_LG)
+        content.addWidget(self._build_left_column(), stretch=7)
+        content.addWidget(self._build_right_column(), stretch=3)
+        
+        inner.addLayout(content)
+        outer.addWidget(self.main_container)
+
+    def _init_signals(self) -> None:
+        """Kết nối toàn bộ signal và slot."""
+        self.btn_start.clicked.connect(self._on_btn_start_clicked)
+        self.btn_stop.clicked.connect(self._on_btn_stop_clicked)
+        self.btn_snip.clicked.connect(self._on_btn_snip_clicked)
+        self.btn_zoom_in.clicked.connect(self._on_zoom_in_clicked)
+        self.btn_zoom_out.clicked.connect(self._on_zoom_out_clicked)
+        self.btn_zoom_fit.clicked.connect(self._on_zoom_fit_clicked)
+        self.btn_delete_latest_sample.clicked.connect(self._on_btn_delete_latest_clicked)
+        self.btn_clear_samples.clicked.connect(self._on_btn_clear_clicked)
+        self.btn_export_csv.clicked.connect(self._on_btn_export_clicked)
+        self.btn_back_spells.clicked.connect(self._on_btn_back_clicked)
+        self.btn_delete_spell.clicked.connect(self._on_btn_delete_spell_clicked)
+        self.spell_list.itemClicked.connect(self._on_spell_item_clicked)
+        self.chk_graph1.toggled.connect(self.graph1.setVisible)
+        self.chk_graph2.toggled.connect(self.graph2.setVisible)
+        self._recording_timer.timeout.connect(self._update_recording_duration)
+
+        self._plot_timer = QTimer(self)
+        self._plot_timer.timeout.connect(self._render_plots)
+        self._plot_timer.start(_PLOT_REFRESH_MS)
+
+    def _load_data(self) -> None:
+        """Nạp danh sách spell ban đầu."""
+        self.load_spell_list(self._initial_counts)
+
+    # ── Public methods ──────────────────────────
 
     def set_wand_ready(self, is_ready: bool) -> None:
+        """Cập nhật trạng thái sẵn sàng của thiết bị."""
         if is_ready:
             self.lbl_wand_status.setText(tr_ui('record_ready'))
-            self.lbl_wand_status.setStyleSheet(
-                STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
-            )
+            self.lbl_wand_status.setProperty("status", "success")
         else:
             self.lbl_wand_status.setText(tr_ui('record_not_ready'))
-            self.lbl_wand_status.setStyleSheet(
-                STYLE_RECORD_STATUS_TEMPLATE.format(color=DANGER)
-            )
-
-    def refresh_styles(self) -> None:
-        """Re-apply styles based on current theme."""
-        p = theme_manager.get_palette()
-        # Update Plot Styles
-        for plot in [self.graph1, self.graph2]:
-            plot.setBackground("transparent")
-            plot.getAxis("left").setPen(p.TEXT_TERTIARY)
-            plot.getAxis("bottom").setPen(p.TEXT_TERTIARY)
-        # Update Library
-        self.spell_list.setStyleSheet(f"""
-            QListWidget {{ background-color: transparent; border: none; color: {p.TEXT_PRIMARY}; }}
-            QListWidget::item {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: {CARD_RADIUS}; margin-bottom: 6px; padding: 12px; }}
-            QListWidget::item:selected {{ background-color: {p.PRIMARY}; color: {p.SURFACE_PRIMARY}; border: none; }}
-        """)
+            self.lbl_wand_status.setProperty("status", "error")
+        self.lbl_wand_status.style().unpolish(self.lbl_wand_status)
+        self.lbl_wand_status.style().polish(self.lbl_wand_status)
 
     def set_recording_state(self, recording: bool) -> None:
+        """Thiết lập trạng thái UI khi đang ghi dữ liệu."""
         self.btn_start.setEnabled(not recording)
         self.btn_stop.setEnabled(recording)
         self.combo_spell.setEnabled(not recording)
-        if hasattr(self, "btn_delete_latest_sample"):
-            self.btn_delete_latest_sample.setEnabled(not recording)
+        self.btn_delete_latest_sample.setEnabled(not recording)
 
         status = tr_ui('record_recording_short') if recording else tr_ui('record_ready')
-        color = ACCENT if recording else SUCCESS
         self.lbl_wand_status.setText(status)
-        self.lbl_wand_status.setStyleSheet(
-            STYLE_RECORD_STATUS_TEMPLATE.format(color=color)
-        )
-
-    def _update_recording_duration(self) -> None:
-        """Update the recording duration display."""
-        if self.recording_timer.isActive():
-            elapsed = self.recording_start_time.elapsed()
-            minutes = elapsed // 60000
-            seconds = (elapsed % 60000) // 1000
-            self.lbl_record_duration.setText(f"{minutes:02d}:{seconds:02d}")
-
-    def update_record_count(self, count: int) -> None:
-        """Update the recording sample count display."""
-        if self.is_live:
-            self.lbl_record_count.setText(str(count))
-        # When not live, _on_crop_region_changed handles the display
-
-    def set_save_status(self, spell_name: str) -> None:
-        """Visual feedback after a successful crop-save."""
-        self.lbl_wand_status.setText(tr_ui('record_status_saved', name=spell_name))
-        self.lbl_wand_status.setStyleSheet(
-            STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
-        )
+        self.lbl_wand_status.setProperty("status", "accent" if recording else "success")
+        self.lbl_wand_status.style().unpolish(self.lbl_wand_status)
+        self.lbl_wand_status.style().polish(self.lbl_wand_status)
 
     def load_spell_list(self, spells: list[str] | dict[str, int]) -> None:
+        """Nạp và hiển thị danh sách các câu thần chú (Requirement 3: Empty State)."""
         if isinstance(spells, dict):
-            spell_counts = {
-                str(name): int(count)
-                for name, count in spells.items()
-                if str(name).strip()
-            }
+            spell_counts = {str(k): int(v) for k, v in spells.items() if str(k).strip()}
         else:
-            spell_counts = {
-                str(name): int(getattr(self.store, "spell_counts", {}).get(str(name), 0))
-                for name in spells
-                if str(name).strip()
-            }
-
-        spell_names = list(spell_counts.keys())
+            spell_counts = {str(s): int(getattr(self.store, "spell_counts", {}).get(str(s), 0)) for s in spells if str(s).strip()}
 
         self.spell_list.clear()
-        if spell_names:
-            for spell_name in spell_names:
-                count = spell_counts.get(spell_name, 0)
-                item = QListWidgetItem(f"{spell_name} ({count})")
-                item.setData(Qt.ItemDataRole.UserRole, spell_name)
+        names = sorted(list(spell_counts.keys()))
+        if names:
+            self.spell_stack.setCurrentIndex(0)
+            for name in names:
+                item = QListWidgetItem(f"{name} ({spell_counts[name]})")
+                item.setData(Qt.ItemDataRole.UserRole, name)
                 self.spell_list.addItem(item)
         else:
-            empty_item = QListWidgetItem(tr_ui("record_list_empty"))
-            empty_item.setData(Qt.ItemDataRole.UserRole, _EMPTY_SPELL_LIST)
-            self.spell_list.addItem(empty_item)
+            # Requirement 3: Empty State
+            self.spell_stack.setCurrentIndex(1)
 
-        # Also update the spell combo box
-        current_text = self.combo_spell.currentText()
-        self.combo_spell.clear()
-        self.combo_spell.addItems(spell_names)
-        if current_text:
-            idx = self.combo_spell.findText(current_text)
-            if idx >= 0:
-                self.combo_spell.setCurrentIndex(idx)
+        self._update_combo_box(names)
 
     def load_samples_for_spell(self, spell_name: str, samples: list[str]) -> None:
+        """Hiển thị danh sách mẫu cho một câu thần chú cụ thể."""
         self.current_spell_name = spell_name
         self.lbl_current_spell.setText(tr_ui("record_spell_samples", name=spell_name))
         self.sample_list.clear()
         if samples:
+            self.sample_stack.setCurrentIndex(0)
             self.sample_list.addItems(samples)
         else:
-            empty_item = QListWidgetItem(tr_ui("record_sample_empty"))
-            empty_item.setData(Qt.ItemDataRole.UserRole, self._sample_list_empty_sentinel)
-            self.sample_list.addItem(empty_item)
+            self.sample_stack.setCurrentIndex(1)
         self.stacked_spells.setCurrentIndex(1)
 
-    # ── Plot Setup & Rendering ──────────────────────────────────────────
+    def refresh_styles(self) -> None:
+        """Làm mới giao diện theo theme hiện tại."""
+        p = theme_manager.get_palette()
+        for g in [self.graph1, self.graph2]:
+            g.setBackground("transparent")
+            g.getAxis("left").setPen(p.TEXT_TERTIARY)
+            g.getAxis("bottom").setPen(p.TEXT_TERTIARY)
+        
+        pass
+
+    # ── Private methods ─────────────────────────
 
     def _setup_plots(self) -> None:
-        log.debug("[PageRecord._setup_plots] Starting plot setup...")
+        """Cấu hình các đối tượng đồ thị pyqtgraph."""
         for plot in [self.graph1, self.graph2]:
             plot.setBackground("transparent")
             plot.showGrid(x=True, y=True, alpha=0.1)
@@ -299,811 +250,364 @@ class PageRecord(QWidget):
             plot.getAxis("bottom").setPen(TEXT_MUTED)
             plot.setMenuEnabled(False)
             plot.setMouseEnabled(x=False, y=True)
-            plot_item = plot.getPlotItem()
-            plot_item.setClipToView(True)
-            plot_item.setDownsampling(auto=True, mode="peak")
+            plot.getPlotItem().setClipToView(True)
+            plot.getPlotItem().setDownsampling(auto=True, mode="peak")
 
-        # Graph 1: Acceleration Axes (aX, aY, aZ)
         self.curve_ax = self.graph1.plot(pen=pg.mkPen(PLOT_AX_COLOR, width=2), name="aX")
         self.curve_ay = self.graph1.plot(pen=pg.mkPen(PLOT_AY_COLOR, width=2), name="aY")
         self.curve_az = self.graph1.plot(pen=pg.mkPen(PLOT_AZ_COLOR, width=2), name="aZ")
-
-        # Graph 2: Gyroscope Axes (gX, gY, gZ)
         self.curve_gx = self.graph2.plot(pen=pg.mkPen(PLOT_GX_COLOR, width=2), name="gX")
         self.curve_gy = self.graph2.plot(pen=pg.mkPen(PLOT_GY_COLOR, width=2), name="gY")
         self.curve_gz = self.graph2.plot(pen=pg.mkPen(PLOT_GZ_COLOR, width=2), name="gZ")
 
-        log.debug(
-            "[PageRecord._setup_plots] Created 6 curves: ax=%s, ay=%s, az=%s, gx=%s, gy=%s, gz=%s",
-            self.curve_ax,
-            self.curve_ay,
-            self.curve_az,
-            self.curve_gx,
-            self.curve_gy,
-            self.curve_gz,
-        )
-
-        # Add legend to both graphs
         self.graph1.addLegend()
         self.graph2.addLegend()
-        
-        # Set Y-axis labels
-        self.graph1.setLabel("left", tr_ui("record_axis_accel_left"), color=TEXT_BODY)
-        self.graph1.setLabel("bottom", tr_ui("record_axis_bottom"), color=TEXT_BODY)
-        self.graph2.setLabel("left", tr_ui("record_axis_gyro_left"), color=TEXT_BODY)
-        self.graph2.setLabel("bottom", tr_ui("record_axis_bottom"), color=TEXT_BODY)
+        self._add_crop_overlay()
 
-        # Crop region overlay on graph1 — LARGER handles for easier drag
-        self.crop_region = pg.LinearRegionItem(
-            [_DEFAULT_CROP_REGION_START, _DEFAULT_CROP_REGION_END],
-            brush=CROP_REGION,
-        )
+    def _add_crop_overlay(self) -> None:
+        """Thêm vùng chọn (crop) vào đồ thị gia tốc."""
+        self.crop_region = pg.LinearRegionItem([_DEFAULT_CROP_START, _DEFAULT_CROP_END], brush=CROP_REGION)
         self.crop_region.setZValue(10)
-        # Make handles bigger and more visible
         for handle in self.crop_region.lines:
             handle.setPen(pg.mkPen(ACCENT, width=3))
             handle.setHoverPen(pg.mkPen(PLOT_HANDLE_HOVER_COLOR, width=4))
         self.crop_region.hide()
         self.crop_region.sigRegionChanged.connect(self._on_crop_region_changed)
         self.graph1.addItem(self.crop_region)
-        log.debug("[PageRecord._setup_plots] Plot setup complete!")
-
-    def _on_crop_region_changed(self) -> None:
-        """Cập nhật số mẫu đang chọn khi vùng crop thay đổi.
-
-        Returns:
-            None.
-        """
-        if not self.crop_region.isVisible():
-            return
-        
-        region = self.crop_region.getRegion()
-        min_x = int(region[0])
-        max_x = int(region[1])
-        sample_count = max(0, max_x - min_x)
-        
-        self.lbl_record_count.setText(tr_ui("record_selected_samples", n=sample_count))
 
     def _render_plots(self) -> None:
-        """Render đồ thị live theo timer, chỉ xử lý hiển thị và không đổi dữ liệu nguồn.
-
-        Returns:
-            None.
-        """
-        # Skip rendering when this widget is not visible (e.g. user is on a
-        # different page) to avoid doing unnecessary GPU/CPU work.
-        if not self.isVisible():
+        """Vẽ dữ liệu cảm biến thời gian thực."""
+        if not self.isVisible() or not self.is_live:
             return
-
-        if not self.is_live:
-            return  # Guard: only render during live recording
-
-        plot_buffer = self.store.get_live_buffer_snapshot()
-        if not plot_buffer:
-            return  # Guard against empty buffer
-
+        
+        buf = self.store.get_live_buffer_snapshot()
+        if not buf:
+            return
+        
         try:
-            # Single numpy conversion — avoids 6× list comprehensions over
-            # potentially 500 rows (≈30 000 Python object accesses/second at 60 fps).
-            arr = np.asarray(plot_buffer, dtype=np.float32)
-            if arr.ndim != 2 or arr.shape[1] < 6:
-                return
-
-            # Update accel curves (graph1)
-            if self.graph1.isVisible():
+            arr = np.asarray(buf, dtype=np.float32)
+            if arr.ndim == 2 and arr.shape[1] >= 6:
                 self.curve_ax.setData(arr[:, 0])
                 self.curve_ay.setData(arr[:, 1])
                 self.curve_az.setData(arr[:, 2])
-
-            # Update gyro curves (graph2)
-            if self.graph2.isVisible():
                 self.curve_gx.setData(arr[:, 3])
                 self.curve_gy.setData(arr[:, 4])
                 self.curve_gz.setData(arr[:, 5])
-
-            if len(plot_buffer) % 50 == 0:  # Print every 50 samples (~1 second)
-                log.debug("[PageRecord._render_plots] Rendering %d samples", len(plot_buffer))
-        except Exception as e:
-            log.warning("_render_plots failed: %s: %s", type(e).__name__, e)
-
-
-
-    # ── Toolbar Actions ─────────────────────────────────────────────────
-
-    def _on_btn_start_clicked(self) -> None:
-        """START: Begin recording and send command to device."""
-        spell_name = self.combo_spell.currentText().strip()
-        if not spell_name:
-            self.lbl_wand_status.setText(f"⚠ {tr_ui('record_select_spell')}")
-            self.lbl_wand_status.setStyleSheet(
-                STYLE_RECORD_STATUS_TEMPLATE.format(color=DANGER)
-            )
-            return
-
-        self.is_live = True
-        self.crop_region.hide()
-        self.btn_start.setEnabled(False)
-        self.btn_stop.setEnabled(True)
-        self.btn_snip.setEnabled(False)
-        self.btn_delete_latest_sample.setEnabled(False)
-        self.combo_spell.setEnabled(False)
-        self.lbl_wand_status.setText(f"● {tr_ui('record_recording')}")
-        self.lbl_wand_status.setStyleSheet(
-            STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
-        )
-        
-        # Start recording timer
-        self.recording_start_time.start()
-        self.recording_timer.start(_RECORDING_TIMER_INTERVAL_MS)
-        
-        self.sig_start_record.emit(spell_name)
-
-    def _on_btn_stop_clicked(self) -> None:
-        """STOP: cease recording buffer and finalize file."""
-        self.is_live = False
-        self.crop_region.show()
-        
-        # Auto-select a reasonable crop region (last 2 seconds of data, or full if shorter)
-        buf_len = len(self.store.get_live_buffer_snapshot())
-        if buf_len > 0:
-            # Aim for last 2 seconds (assuming 50Hz = 100 samples/second)
-            crop_start = max(0, buf_len - _AUTO_CROP_TAIL_SAMPLE_COUNT)
-            self.crop_region.setRegion([crop_start, buf_len])
-        
-        self.btn_start.setEnabled(True)
-        self.btn_stop.setEnabled(False)
-        self.btn_snip.setEnabled(True)
-        self.btn_delete_latest_sample.setEnabled(True)
-        self.combo_spell.setEnabled(True)
-
-        self.lbl_wand_status.setText(f"● {tr_ui('record_stopped_snip')}")
-        self.lbl_wand_status.setStyleSheet(
-            STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
-        )
-        
-        # Stop recording timer
-        self.recording_timer.stop()
-        self.lbl_record_duration.setText("00:00")
-        
-        self.sig_stop_record.emit()
-
-    def _on_btn_snip_clicked(self) -> None:
-        """SNIP: Cut the selected region and emit with spell name."""
-        if not self.crop_region.isVisible():
-            return
-
-        # Get spell name from combo
-        spell_name = self.combo_spell.currentText().strip()
-        if not spell_name:
-            self.lbl_wand_status.setText(f"⚠ {tr_ui('record_enter_spell')}")
-            self.lbl_wand_status.setStyleSheet(
-                STYLE_RECORD_STATUS_TEMPLATE.format(color=DANGER)
-            )
-            return
-
-        region = self.crop_region.getRegion()
-        if len(region) < 2:
-            self.lbl_wand_status.setText(f"⚠ {tr_ui('record_invalid_crop')}")
-            self.lbl_wand_status.setStyleSheet(
-                STYLE_RECORD_STATUS_TEMPLATE.format(color=DANGER)
-            )
-            return
-
-        def _to_float(val):
-            if isinstance(val, (list, tuple)) and val:
-                val = val[0]
-            try:
-                if isinstance(val, (int, float)):
-                    return float(val)
-                elif isinstance(val, str) and val.replace('.', '').replace('-', '').isdigit():
-                    return float(val)
-                else:
-                    return 0.0
-            except Exception:
-                return 0.0
-
-        min_x = _to_float(region[0])
-        max_x = _to_float(region[1])
-
-        buf = self.store.get_live_buffer_snapshot()
-        min_idx = max(0, int(min_x))
-        max_idx = min(len(buf), int(max_x))
-
-        if min_idx < max_idx:
-            cropped_6d = buf[min_idx:max_idx]
-            self.sig_data_cropped.emit(cropped_6d, spell_name)
-            self.lbl_wand_status.setText(
-                tr_ui("record_snipped", n=max_idx - min_idx, name=spell_name)
-            )
-            self.lbl_wand_status.setStyleSheet(
-                STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
-            )
-        else:
-            self.lbl_wand_status.setText(f"⚠ {tr_ui('record_invalid_range')}")
-            self.lbl_wand_status.setStyleSheet(
-                STYLE_RECORD_STATUS_TEMPLATE.format(color=DANGER)
-            )
-
-        self.sig_snip_record.emit()
-
-    def _on_btn_zoom_in_clicked(self) -> None:
-        """Zoom in on both plots."""
-        for plot in [self.graph1, self.graph2]:
-            if plot.isVisible():
-                plot.getViewBox().scaleBy((0.8, 0.8))
-
-    def _on_btn_zoom_out_clicked(self) -> None:
-        """Zoom out on both plots."""
-        for plot in [self.graph1, self.graph2]:
-            if plot.isVisible():
-                plot.getViewBox().scaleBy((1.25, 1.25))
-
-    def _on_btn_zoom_fit_clicked(self) -> None:
-        """Fit both plots to show all data."""
-        for plot in [self.graph1, self.graph2]:
-            if plot.isVisible():
-                plot.getViewBox().autoRange()
-
-    def _on_btn_clear_samples_clicked(self) -> None:
-        """Clear all recorded samples from current buffer."""
-        if not confirm_destructive(
-            self,
-            title=tr_ui("record_clear_title"),
-            message=tr_ui("record_clear_msg"),
-            confirm_text=tr_ui("record_clear_confirm"),
-            cancel_text=tr_ui("record_clear_cancel"),
-        ):
-            return
-        
-        # Emit signal to Handler for actual clearing
-        self.sig_clear_buffer.emit()
-        # Update UI
-        self.lbl_record_count.setText("0")
-        self.crop_region.setRegion([_DEFAULT_CROP_REGION_START, _DEFAULT_CROP_REGION_END])
-        self.is_live = True
-        self.crop_region.hide()
-        self.lbl_wand_status.setText(f"✔ {tr_ui('record_cleared')}")
-        self.lbl_wand_status.setStyleSheet(
-            STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
-        )
-
-    def _on_btn_export_csv_clicked(self) -> None:
-        """Export current recorded samples to CSV file."""
-        buf = self.store.get_live_buffer_snapshot()
-        if not buf:
-            self.lbl_wand_status.setText(f"⚠ {tr_ui('record_no_export')}")
-            self.lbl_wand_status.setStyleSheet(
-                STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
-            )
-            return
-
-        self.sig_export_csv.emit()
-        self.lbl_wand_status.setText(tr_ui("record_exporting", n=len(buf)))
-        self.lbl_wand_status.setStyleSheet(
-            STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
-        )
-
-    def _on_btn_delete_latest_sample_clicked(self) -> None:
-        """Quick-delete the newest recorded CSV sample for the active spell."""
-        spell_name = self.current_spell_name.strip() or self.combo_spell.currentText().strip()
-        if not spell_name:
-            self.lbl_wand_status.setText(f"⚠ {tr_ui('record_select_delete_spell')}")
-            self.lbl_wand_status.setStyleSheet(
-                STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
-            )
-            return
-
-        samples = self.store.get_samples_for_spell(spell_name)
-        if not samples:
-            self.lbl_wand_status.setText(f"⚠ {tr_ui('record_no_samples_spell', name=spell_name)}")
-            self.lbl_wand_status.setStyleSheet(
-                STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
-            )
-            return
-
-        self.sig_delete_latest_sample.emit(spell_name)
-        self.lbl_wand_status.setText(tr_ui("record_deleting_latest", name=spell_name))
-        self.lbl_wand_status.setStyleSheet(
-            STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
-        )
-
-    def set_quick_delete_feedback(self, success: bool, message: str) -> None:
-        """Display status feedback after quick sample deletion."""
-        if success:
-            self.lbl_wand_status.setText(f"✔ {tr_ui('record_deleted_latest')}")
-            self.lbl_wand_status.setStyleSheet(
-                STYLE_RECORD_STATUS_TEMPLATE.format(color=SUCCESS)
-            )
-            return
-        self.lbl_wand_status.setText(f"⚠ {message}")
-        self.lbl_wand_status.setStyleSheet(
-            STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
-        )
-
-    def _on_spell_list_item_clicked(self, item) -> None:
-        """Handle spell list item click: auto-select spell in combo and emit signal."""
-        if item.data(Qt.ItemDataRole.UserRole) == _EMPTY_SPELL_LIST:
-            return
-        spell_name = str(item.data(Qt.ItemDataRole.UserRole) or item.text())
-        if is_system_spell(spell_name):
-            self.btn_delete_spell.setToolTip(tr_ui("record_tt_standby"))
-        else:
-            self.btn_delete_spell.setToolTip(tr_ui("record_tt_delete_spell"))
-        # Auto-select in combo box
-        idx = self.combo_spell.findText(spell_name)
-        if idx >= 0:
-            self.combo_spell.setCurrentIndex(idx)
-        # Emit signal for handler
-        self.sig_spell_selected.emit(spell_name)
-
-    def _on_btn_delete_spell_clicked(self) -> None:
-        """Handle spell deletion with 2-step verification."""
-        # Get selected spell
-        current_item = self.spell_list.currentItem()
-        if not current_item:
-            QMessageBox.critical(
-                self,
-                tr_ui("record_no_selection_title"),
-                tr_ui("record_no_selection_msg"),
-            )
-            return
-
-        if current_item.data(Qt.ItemDataRole.UserRole) == _EMPTY_SPELL_LIST:
-            return
-        spell_name = str(current_item.data(Qt.ItemDataRole.UserRole) or current_item.text())
-        if is_system_spell(spell_name):
-            self.show_protected_spell_warning(canonical_system_spell(spell_name))
-            return
-        
-        # First confirmation dialog
-        if not confirm_destructive(
-            self,
-            title=tr_ui("record_del_step1_title"),
-            message=tr_ui("record_del_step1_msg", name=spell_name),
-            confirm_text=tr_ui("record_del_continue"),
-            cancel_text=tr_ui("record_del_keep"),
-        ):
-            return
-
-        if confirm_destructive(
-            self,
-            title=tr_ui("record_del_step2_title"),
-            message=tr_ui("record_del_step2_msg", name=spell_name),
-            confirm_text=tr_ui("record_del_final"),
-            cancel_text=tr_ui("record_del_abort"),
-        ):
-            self.sig_spell_deleted.emit(spell_name)
-
-    def _on_btn_back_spells_clicked(self) -> None:
-        """Quay về danh sách spell từ trang chi tiết sample."""
-        self.stacked_spells.setCurrentIndex(0)
-
-    def show_protected_spell_warning(self, spell_name: str) -> None:
-        """Display clear UX feedback when a protected spell deletion is blocked."""
-        canonical_name = canonical_system_spell(spell_name)
-        QMessageBox.warning(
-            self,
-            tr_ui("record_protected_title"),
-            tr_ui("record_protected_msg", name=canonical_name),
-        )
-        self.lbl_wand_status.setText(f"⚠ {tr_ui('record_spell_protected', name=canonical_name)}")
-        self.lbl_wand_status.setStyleSheet(
-            STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
-        )
-
-    # ── UI Construction ─────────────────────────────────────────────────
-
-    def refresh_styles(self) -> None:
-        """Re-apply styles based on current theme."""
-        p = theme_manager.get_palette()
-        
-        # 1. Update Plot Styles
-        for plot in [self.graph1, self.graph2]:
-            plot.setBackground("transparent")
-            plot.getAxis("left").setPen(p.TEXT_TERTIARY)
-            plot.getAxis("bottom").setPen(p.TEXT_TERTIARY)
-            
-        # 2. Update Layout Cards
-        self.main_container.setStyleSheet(f"background-color: transparent;")
-        
-        # 3. Update Sidebar Library
-        self.spell_list.setStyleSheet(f"""
-            QListWidget {{ background-color: transparent; border: none; color: {p.TEXT_PRIMARY}; font-family: {APP_FONT_STACK}; }}
-            QListWidget::item {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: {CARD_RADIUS}; margin-bottom: 6px; padding: 12px; }}
-            QListWidget::item:selected {{ background-color: {p.PRIMARY}; color: {ACCENT_TEXT}; border: none; }}
-        """)
-        self.sample_list.setStyleSheet(f"""
-            QListWidget {{ background-color: transparent; border: none; color: {p.TEXT_PRIMARY}; font-family: {APP_FONT_STACK}; }}
-            QListWidget::item {{ background-color: {p.SURFACE_TERTIARY}; border: 1px solid {p.BORDER}; border-radius: {CARD_RADIUS}; margin-bottom: 6px; padding: 12px; }}
-            QListWidget::item:selected {{ background-color: {p.PRIMARY}; color: {ACCENT_TEXT}; border: none; }}
-        """)
-
-    def _init_ui(self) -> None:
-        """Xây dựng layout chính gồm 2 cột: plot bên trái, controls bên phải."""
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
-
-        self.main_container = QFrame()
-        self.main_container.setObjectName("MainBox")
-        self.main_container.setFrameShape(QFrame.Shape.NoFrame)
-        self.main_container.setFrameShadow(QFrame.Shadow.Plain)
-        self.main_container.setStyleSheet(STYLE_RECORD_MAIN_CONTAINER)
-
-        inner = QVBoxLayout(self.main_container)
-        # Use modern breathing room: 16px margins and 12px spacing
-        inner.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
-        inner.setSpacing(SPACING_LG)
-
-        content = QHBoxLayout()
-        # Increased spacing between columns
-        content.setSpacing(SPACING_LG)
-        content.setContentsMargins(0, 0, 0, 0)
-        content.addWidget(self._build_left_column(), stretch=5)
-        content.addWidget(self._build_right_column(), stretch=2)
-        inner.addLayout(content)
-        outer.addWidget(self.main_container)
+        except Exception as exc:
+            log.warning("PageRecord: Render plots failed: %s", exc)
 
     def _build_left_column(self) -> QWidget:
+        """Xây dựng cột chứa đồ thị."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_LG)
 
-        # Status row
-        top_row = QHBoxLayout()
-        top_row.setContentsMargins(0, 0, 0, 0)
-        top_row.setSpacing(SPACING_MD)
+        header = QHBoxLayout()
         self.lbl_wand_status = QLabel(f"● {tr_ui('record_wait_serial')}")
-        self.lbl_wand_status.setStyleSheet(
-            STYLE_RECORD_STATUS_TEMPLATE.format(color=WARNING)
-        )
+        self.lbl_wand_status.setProperty("type", "status_label")
+        self.lbl_wand_status.setProperty("status", "warning")
         self.lbl_timeline = make_section_label(tr_ui("record_timeline"), accent=True)
-        self.lbl_timeline.setAlignment(
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-        )
-        top_row.addWidget(self.lbl_wand_status)
-        top_row.addWidget(self.lbl_timeline)
-        layout.addLayout(top_row)
+        self.lbl_timeline.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        header.addWidget(self.lbl_wand_status)
+        header.addWidget(self.lbl_timeline)
+        layout.addLayout(header)
 
-        # Graph card - modern card with shadow
-        graph_card = QFrame()
-        graph_card.setObjectName("CardFrame")
-        graph_card.setStyleSheet(STYLE_RECORD_GRAPH_CARD)
-        apply_soft_shadow(graph_card, blur_radius=22, y_offset=4, color="rgba(15, 23, 42, 0.14)")
-        graph_layout = QVBoxLayout(graph_card)
-        graph_layout.setContentsMargins(
-            MARGIN_COMFORTABLE,
-            MARGIN_COMFORTABLE,
-            MARGIN_COMFORTABLE,
-            MARGIN_COMFORTABLE,
-        )
-        graph_layout.setSpacing(SPACING_MD)
+        card, card_layout = make_card(margins=(20, 20, 20, 20), spacing=SPACING_MD)
+        
         self.graph1 = pg.PlotWidget()
         self.graph2 = pg.PlotWidget()
         self.graph1.setMinimumHeight(RECORD_GRAPH_MIN_H)
         self.graph2.setMinimumHeight(RECORD_GRAPH_MIN_H)
-        graph_layout.addWidget(self.graph1)
-        graph_layout.addWidget(self.graph2, stretch=1)
-        layout.addWidget(graph_card, stretch=1)
+        card_layout.addWidget(self.graph1)
+        card_layout.addWidget(self.graph2, stretch=1)
+        layout.addWidget(card, stretch=1)
 
-        # Checkboxes row
-        bottom_row = QHBoxLayout()
-        bottom_row.setContentsMargins(0, 0, 0, 0)
-        bottom_row.setSpacing(SPACING_MD)
+        layout.addLayout(self._build_left_controls())
+        return widget
+
+    def _build_left_controls(self) -> QHBoxLayout:
+        """Các nút điều khiển đồ thị."""
+        row = QHBoxLayout()
         self.chk_graph1 = make_checkbox(tr_ui("record_show_accel"), checked=True)
         self.chk_graph2 = make_checkbox(tr_ui("record_show_gyro"), checked=True)
         
-        # Add zoom controls
-        self.btn_zoom_in = make_button("🔍+", STYLE_BTN_BASE, BTN_H)
-        self.btn_zoom_out = make_button("🔍-", STYLE_BTN_BASE, BTN_H)
-        self.btn_zoom_fit = make_button("🔍□", STYLE_BTN_BASE, BTN_H)
-        self.btn_zoom_in.setToolTip(tr_ui("record_tt_zoom_in"))
-        self.btn_zoom_out.setToolTip(tr_ui("record_tt_zoom_out"))
-        self.btn_zoom_fit.setToolTip(tr_ui("record_tt_fit"))
+        self.btn_zoom_in = IconButton("assets/icon/cooliocns SVG/Interface/Magnifying_Glass_Plus.svg", height=BTN_H)
+        self.btn_zoom_out = IconButton("assets/icon/cooliocns SVG/Interface/Magnifying_Glass_Minus.svg", height=BTN_H)
+        self.btn_zoom_fit = IconButton("assets/icon/cooliocns SVG/Arrow/Expand.svg", height=BTN_H)
         
-        bottom_row.addWidget(self.chk_graph1, stretch=1)
-        bottom_row.addWidget(self.chk_graph2, stretch=1)
-        bottom_row.addStretch()
-        bottom_row.addWidget(self.btn_zoom_in)
-        bottom_row.addWidget(self.btn_zoom_out)
-        bottom_row.addWidget(self.btn_zoom_fit)
-        layout.addLayout(bottom_row)
-
-        return widget
+        row.addWidget(self.chk_graph1, stretch=1)
+        row.addWidget(self.chk_graph2, stretch=1)
+        row.addStretch()
+        row.addWidget(self.btn_zoom_in)
+        row.addWidget(self.btn_zoom_out)
+        row.addWidget(self.btn_zoom_fit)
+        return row
 
     def _build_right_column(self) -> QWidget:
-        """Xây dựng cột phải gồm details, controls, danh sách spell và batch actions."""
+        """Xây dựng cột chứa workflow điều khiển."""
         widget = QWidget()
+        widget.setMinimumWidth(RIGHT_MIN_W)
         widget.setMaximumWidth(RIGHT_MAX_W)
         widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(SPACING_LG)
+        layout.setSpacing(SPACING_MD)
 
-        self._section_toolbar = make_section_label(tr_ui("record_toolbar"), accent=True)
-        layout.addWidget(self._section_toolbar)
+        layout.addWidget(make_section_label(tr_ui("record_toolbar"), accent=True))
         layout.addWidget(self._build_detail_card())
         layout.addWidget(self._build_controls_card())
 
-        # ── Spell list stack ───────────────────────────────────────
         self.stacked_spells = QStackedWidget()
         self.stacked_spells.addWidget(self._build_spell_list_page())
         self.stacked_spells.addWidget(self._build_sample_list_page())
         layout.addWidget(self.stacked_spells, stretch=1)
 
         layout.addWidget(self._build_batch_card())
-
         return widget
 
     def _build_detail_card(self) -> QFrame:
-        """Xây dựng card chứa spell selector và chỉ số recorded/duration."""
-        detail_card = make_card_frame()
-        detail_layout = QVBoxLayout(detail_card)
-        detail_layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
-        detail_layout.setSpacing(SPACING_MD)
-
-        detail_form = QFormLayout()
-        detail_form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        detail_form.setFormAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-        detail_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
-        detail_form.setHorizontalSpacing(SPACING_SM)
-        detail_form.setVerticalSpacing(SPACING_SM)
-
+        """Card chọn câu thần chú và thông số ghi."""
+        card, layout = make_card(margins=(20, 20, 20, 20), spacing=SPACING_MD)
+        
+        form = QFormLayout()
         self.combo_spell = QComboBox()
         self.combo_spell.setEditable(True)
-        self.combo_spell.setStyleSheet(STYLE_RECORD_COMBO)
-        self.combo_spell.setPlaceholderText(tr_ui("record_spell_placeholder"))
         self.combo_spell.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        lbl = QLabel(tr_ui("record_spell_label"))
+        lbl.setProperty("type", "record_field_label")
+        form.addRow(lbl, self.combo_spell)
+        layout.addLayout(form)
 
-        self._lbl_spell = QLabel(tr_ui("record_spell_label"))
-        self._lbl_spell.setStyleSheet(STYLE_RECORD_FIELD_LABEL)
-        detail_form.addRow(self._lbl_spell, self.combo_spell)
-        detail_layout.addLayout(detail_form)
-
-        count_grid = QGridLayout()
-        count_grid.setHorizontalSpacing(SPACING_MD)
-        count_grid.setVerticalSpacing(SPACING_SM)
-        self._hint_recorded = make_hint(tr_ui("record_hint_recorded"), color=TEXT_MUTED)
-        self._hint_duration = make_hint(tr_ui("record_hint_duration"), color=TEXT_MUTED)
-        count_grid.addWidget(self._hint_recorded, 0, 0)
-        count_grid.addWidget(self._hint_duration, 0, 1)
-
+        stats = QGridLayout()
         self.lbl_record_count = QLabel("0")
-        self.lbl_record_count.setStyleSheet(STYLE_RECORD_METRIC_VALUE)
+        self.lbl_record_count.setProperty("type", "record_metric_value")
         self.lbl_record_duration = QLabel("00:00")
-        self.lbl_record_duration.setStyleSheet(STYLE_RECORD_METRIC_VALUE)
-        count_grid.addWidget(self.lbl_record_count, 1, 0)
-        count_grid.addWidget(self.lbl_record_duration, 1, 1)
-        detail_layout.addLayout(count_grid)
-        return detail_card
+        self.lbl_record_duration.setProperty("type", "record_metric_value")
+        stats.addWidget(make_hint(tr_ui("record_hint_recorded")), 0, 0)
+        stats.addWidget(make_hint(tr_ui("record_hint_duration")), 0, 1)
+        stats.addWidget(self.lbl_record_count, 1, 0)
+        stats.addWidget(self.lbl_record_duration, 1, 1)
+        layout.addLayout(stats)
+        return card
 
     def _build_controls_card(self) -> QFrame:
-        """Xây dựng card chứa nút START/STOP/SNIP và hint thao tác."""
-        controls_card = make_card_frame()
-        ctrl_layout = QVBoxLayout(controls_card)
-        ctrl_layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
-        ctrl_layout.setSpacing(SPACING_MD)
-
-        btn_row = QGridLayout()
-        btn_row.setHorizontalSpacing(SPACING_SM)
-        btn_row.setVerticalSpacing(SPACING_SM)
-        self.btn_start = make_button(tr_ui("record_btn_start"), STYLE_BTN_START, BTN_H)
-        self.btn_stop = make_button(tr_ui("record_btn_stop"), STYLE_BTN_STOP, BTN_H)
-        self.btn_snip = make_button(tr_ui("record_btn_snip"), STYLE_BTN_SNIP, BTN_H)
+        """Card chứa các nút tác vụ ghi (Start/Stop/Snip)."""
+        card, layout = make_card(margins=(20, 20, 20, 20), spacing=SPACING_MD)
+        
+        # Sắp xếp nút Start/Stop cạnh nhau, Snip chiếm trọn hàng để dễ thao tác
+        row1 = QHBoxLayout()
+        self.btn_start = make_button(tr_ui("record_btn_start"), "start", BTN_H)
+        self.btn_stop = make_button(tr_ui("record_btn_stop"), "stop", BTN_H)
         self.btn_stop.setEnabled(False)
-        self.btn_snip.setEnabled(False)
-        self.btn_start.setToolTip(tr_ui("record_tt_start"))
-        self.btn_stop.setToolTip(tr_ui("record_tt_stop"))
-        self.btn_snip.setToolTip(tr_ui("record_tt_snip"))
-        btn_row.addWidget(self.btn_start, 0, 0)
-        btn_row.addWidget(self.btn_stop, 0, 1)
-        btn_row.addWidget(self.btn_snip, 0, 2)
-        ctrl_layout.addLayout(btn_row)
+        row1.addWidget(self.btn_start)
+        row1.addWidget(self.btn_stop)
+        layout.addLayout(row1)
 
-        self._hint_controls = make_hint(tr_ui("record_hint_controls"))
-        ctrl_layout.addWidget(self._hint_controls)
-        return controls_card
+        self.btn_snip = make_button(tr_ui("record_btn_snip"), "snip", BTN_H)
+        self.btn_snip.setEnabled(False)
+        layout.addWidget(self.btn_snip)
+        
+        hint = make_hint(tr_ui("record_hint_controls"))
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+        return card
 
     def _build_batch_card(self) -> QFrame:
-        """Xây dựng card batch operations: delete latest, clear, export."""
-        batch_card = make_card_frame()
-        batch_layout = QVBoxLayout(batch_card)
-        batch_layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
-        batch_layout.setSpacing(SPACING_MD)
-
-        self._section_batch = make_section_label(tr_ui("record_batch"), accent=False)
-        batch_layout.addWidget(self._section_batch)
-
-        batch_btn_row = QGridLayout()
-        batch_btn_row.setHorizontalSpacing(SPACING_SM)
-        batch_btn_row.setVerticalSpacing(SPACING_SM)
-        self.btn_clear_samples = make_button(tr_ui("record_btn_clear"), STYLE_BTN_DANGER_OUTLINE, BTN_H)
-        self.btn_clear_samples.setToolTip(tr_ui("record_tt_clear"))
-        self.btn_export_csv = make_button(tr_ui("record_btn_export"), STYLE_BTN_BASE, BTN_H)
-        self.btn_export_csv.setToolTip(tr_ui("record_tt_export"))
-        self.btn_delete_latest_sample = make_button(
-            tr_ui("record_btn_delete_latest"),
-            STYLE_BTN_DANGER_OUTLINE,
-            BTN_H,
-        )
-        self.btn_delete_latest_sample.setToolTip(tr_ui("record_tt_delete_latest"))
-        batch_btn_row.addWidget(self.btn_delete_latest_sample, 0, 0)
-        batch_btn_row.addWidget(self.btn_clear_samples, 0, 1)
-        batch_btn_row.addWidget(self.btn_export_csv, 0, 2)
-        batch_layout.addLayout(batch_btn_row)
-        return batch_card
+        """Card chứa các tác vụ hàng loạt theo chiều dọc để tránh mất chữ."""
+        card, layout = make_card(margins=(20, 20, 20, 20), spacing=SPACING_MD)
+        layout.addWidget(make_section_label(tr_ui("record_batch"), accent=False))
+        
+        self.btn_delete_latest_sample = make_button(tr_ui("record_btn_delete_latest"), "danger_outline", BTN_H)
+        self.btn_clear_samples = make_button(tr_ui("record_btn_clear"), "danger_outline", BTN_H)
+        self.btn_export_csv = make_button(tr_ui("record_btn_export"), "base", BTN_H)
+        
+        layout.addWidget(self.btn_delete_latest_sample)
+        layout.addWidget(self.btn_clear_samples)
+        layout.addWidget(self.btn_export_csv)
+        return card
 
     def _build_spell_list_page(self) -> QWidget:
+        """Trang hiển thị danh sách câu thần chú (Requirement 3: Empty State)."""
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(SPACING_MD)
-        self._section_spell_library = make_section_label(tr_ui("record_spell_list"), accent=False)
-        layout.addWidget(self._section_spell_library)
+        layout.setSpacing(SPACING_SM)
+        layout.addWidget(make_section_label(tr_ui("record_spell_list"), accent=False))
         
-        # Spell list
+        self.spell_stack = QStackedWidget()
+        
+        # Thư viện thực
+        lib_page = QWidget()
+        lib_lay = QVBoxLayout(lib_page)
+        lib_lay.setContentsMargins(0, 0, 0, 0)
         self.spell_list = QListWidget()
-        self.spell_list.setStyleSheet(STYLE_RECORD_LIST)
-        self.spell_list.setMinimumHeight(RECORD_LIST_MIN_H)
-        layout.addWidget(self.spell_list)
+        lib_lay.addWidget(self.spell_list)
+        self.spell_list.setProperty("type", "record_list")
+        self.btn_delete_spell = make_button(tr_ui("record_delete_spell_btn"), "danger_outline", SPELL_BTN_H)
+        lib_lay.addWidget(self.btn_delete_spell)
         
-        # Delete button at bottom
-        self.btn_delete_spell = make_button(
-            tr_ui("record_delete_spell_btn"), STYLE_BTN_DANGER_OUTLINE, SPELL_BTN_H
-        )
-        self.btn_delete_spell.setToolTip(tr_ui("record_tt_delete_spell"))
-        layout.addWidget(self.btn_delete_spell)
+        self.spell_stack.addWidget(lib_page)
+        
+        # Requirement 3: Empty state
+        empty_card, _ = self._make_empty_state()
+        self.spell_stack.addWidget(empty_card)
+        
+        layout.addWidget(self.spell_stack)
         return page
 
     def _build_sample_list_page(self) -> QWidget:
+        """Trang hiển thị danh sách mẫu đã thu thập."""
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(SPACING_MD)
-        top_row = QHBoxLayout()
-        top_row.setContentsMargins(0, 0, 0, 0)
-        top_row.setSpacing(SPACING_SM)
-        self.btn_back_spells = make_button(tr_ui("record_btn_back"), STYLE_BTN_BACK, SPELL_BTN_H)
-        self.lbl_current_spell = QLabel(tr_ui("record_spell_samples", name="…"))
-        self.lbl_current_spell.setStyleSheet(
-            STYLE_RECORD_CURRENT_SPELL
-        )
+        layout.setSpacing(SPACING_SM)
+        top = QHBoxLayout()
+        self.btn_back_spells = make_button(tr_ui("record_btn_back"), "back", SPELL_BTN_H)
+        self.lbl_current_spell = QLabel("…")
+        self.lbl_current_spell.setProperty("type", "record_current_spell")
         self.lbl_current_spell.setWordWrap(True)
-        top_row.addWidget(self.btn_back_spells)
-        top_row.addWidget(self.lbl_current_spell)
-        layout.addLayout(top_row)
+        top.addWidget(self.btn_back_spells)
+        top.addWidget(self.lbl_current_spell)
+        layout.addLayout(top)
         self.sample_list = QListWidget()
-        self.sample_list.setStyleSheet(STYLE_RECORD_LIST)
-        self.sample_list.setMinimumHeight(RECORD_LIST_MIN_H)
-        layout.addWidget(self.sample_list)
+        self.sample_list.setProperty("type", "record_list")
+        self.sample_stack = QStackedWidget()
+        self.sample_stack.addWidget(self.sample_list)
+        empty_card, _ = make_empty_state_card()
+        self.sample_stack.addWidget(empty_card)
+        layout.addWidget(self.sample_stack)
         return page
 
-    # ── Internal Signal Wiring ──────────────────────────────────────────
+    def _make_empty_state(self) -> tuple[QFrame, QVBoxLayout]:
+        """Requirement 3: Centered empty state with icon."""
+        return make_empty_state_card()
 
-    def _init_signals(self) -> None:
-        """Kết nối toàn bộ signal và slot của trang recording."""
-        # Toolbar buttons
-        self.btn_start.clicked.connect(self._on_btn_start_clicked)
-        self.btn_stop.clicked.connect(self._on_btn_stop_clicked)
-        self.btn_snip.clicked.connect(self._on_btn_snip_clicked)
-
-        # Graph visibility toggles
-        self.chk_graph1.toggled.connect(self.graph1.setVisible)
-        self.chk_graph2.toggled.connect(self.graph2.setVisible)
-        
-        # Zoom controls
-        self.btn_zoom_in.clicked.connect(self._on_btn_zoom_in_clicked)
-        self.btn_zoom_out.clicked.connect(self._on_btn_zoom_out_clicked)
-        self.btn_zoom_fit.clicked.connect(self._on_btn_zoom_fit_clicked)
-
-        # Batch operations
-        self.btn_delete_latest_sample.clicked.connect(self._on_btn_delete_latest_sample_clicked)
-        self.btn_clear_samples.clicked.connect(self._on_btn_clear_samples_clicked)
-        self.btn_export_csv.clicked.connect(self._on_btn_export_csv_clicked)
-
-        # Spell list navigation
-        self.btn_back_spells.clicked.connect(self._on_btn_back_spells_clicked)
-        self.spell_list.itemClicked.connect(self._on_spell_list_item_clicked)
-        self.btn_delete_spell.clicked.connect(self._on_btn_delete_spell_clicked)
-
-        # Plot refresh timer — throttled for high-throughput stability
-        self._plot_timer = QTimer(self)
-        self._plot_timer.timeout.connect(self._render_plots)
-        self._plot_timer.start(_PLOT_TIMER_INTERVAL_MS)
-
-    def apply_ui_language(self) -> None:
-        """Refresh visible strings after app language change."""
-        self.lbl_timeline.setText(tr_ui("record_timeline"))
-        self._section_toolbar.setText(tr_ui("record_toolbar"))
-        self._lbl_spell.setText(tr_ui("record_spell_label"))
-        self.combo_spell.setPlaceholderText(tr_ui("record_spell_placeholder"))
-        self._hint_recorded.setText(tr_ui("record_hint_recorded"))
-        self._hint_duration.setText(tr_ui("record_hint_duration"))
-        self.chk_graph1.setText(tr_ui("record_show_accel"))
-        self.chk_graph2.setText(tr_ui("record_show_gyro"))
-        self.btn_zoom_in.setToolTip(tr_ui("record_tt_zoom_in"))
-        self.btn_zoom_out.setToolTip(tr_ui("record_tt_zoom_out"))
-        self.btn_zoom_fit.setToolTip(tr_ui("record_tt_fit"))
-        self.btn_start.setText(tr_ui("record_btn_start"))
-        self.btn_stop.setText(tr_ui("record_btn_stop"))
-        self.btn_snip.setText(tr_ui("record_btn_snip"))
-        self.btn_start.setToolTip(tr_ui("record_tt_start"))
-        self.btn_stop.setToolTip(tr_ui("record_tt_stop"))
-        self.btn_snip.setToolTip(tr_ui("record_tt_snip"))
-        self._hint_controls.setText(tr_ui("record_hint_controls"))
-        self._section_batch.setText(tr_ui("record_batch"))
-        self.btn_clear_samples.setText(tr_ui("record_btn_clear"))
-        self.btn_clear_samples.setToolTip(tr_ui("record_tt_clear"))
-        self.btn_export_csv.setText(tr_ui("record_btn_export"))
-        self.btn_export_csv.setToolTip(tr_ui("record_tt_export"))
-        self.btn_delete_latest_sample.setText(tr_ui("record_btn_delete_latest"))
-        self.btn_delete_latest_sample.setToolTip(tr_ui("record_tt_delete_latest"))
-        self._section_spell_library.setText(tr_ui("record_spell_list"))
-        self.btn_delete_spell.setText(tr_ui("record_delete_spell_btn"))
-        self.btn_delete_spell.setToolTip(tr_ui("record_tt_delete_spell"))
-        self.btn_back_spells.setText(tr_ui("record_btn_back"))
-        self.graph1.setLabel("left", tr_ui("record_axis_accel_left"), color=TEXT_BODY)
-        self.graph1.setLabel("bottom", tr_ui("record_axis_bottom"), color=TEXT_BODY)
-        self.graph2.setLabel("left", tr_ui("record_axis_gyro_left"), color=TEXT_BODY)
-        self.graph2.setLabel("bottom", tr_ui("record_axis_bottom"), color=TEXT_BODY)
-        for i in range(self.spell_list.count()):
-            it = self.spell_list.item(i)
-            if it is not None and it.data(Qt.ItemDataRole.UserRole) == _EMPTY_SPELL_LIST:
-                it.setText(tr_ui("record_list_empty"))
-                break
-        for i in range(self.sample_list.count()):
-            it = self.sample_list.item(i)
-            if it is not None and it.data(Qt.ItemDataRole.UserRole) == self._sample_list_empty_sentinel:
-                it.setText(tr_ui("record_sample_empty"))
-                break
-        if self.current_spell_name:
-            self.lbl_current_spell.setText(tr_ui("record_spell_samples", name=self.current_spell_name))
+    def _update_combo_box(self, names: list[str]) -> None:
+        """Cập nhật dữ liệu cho combo box chọn spell."""
+        curr = self.combo_spell.currentText()
+        self.combo_spell.clear()
+        self.combo_spell.addItems(names)
+        if curr:
+            idx = self.combo_spell.findText(curr)
+            if idx >= 0:
+                self.combo_spell.setCurrentIndex(idx)
 
     def _configure_accessibility(self) -> None:
-        """Đặt accessible names và thứ tự tab traversal cho các control."""
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-
-        self.graph1.setAccessibleName("Accelerometer live plot (aX, aY, aZ)")
-        self.graph2.setAccessibleName("Gyroscope live plot (gX, gY, gZ)")
-        self.lbl_wand_status.setAccessibleName("Recording status")
-        self.lbl_wand_status.setAccessibleDescription(
-            "Dynamic status indicator showing current recording or connection state"
-        )
-        self.combo_spell.setAccessibleName("Spell label selector")
-        self.btn_start.setAccessibleName("Start recording (Ctrl+S)")
-        self.btn_stop.setAccessibleName("Stop recording (Ctrl+T)")
-        self.btn_snip.setAccessibleName("Snip selected range (Ctrl+X)")
-        self.btn_zoom_in.setAccessibleName("Zoom in timeline")
-        self.btn_zoom_out.setAccessibleName("Zoom out timeline")
-        self.btn_zoom_fit.setAccessibleName("Fit timeline to data")
-        self.spell_list.setAccessibleName("Spell list")
-        self.btn_delete_spell.setAccessibleName("Delete spell")
-        self.btn_back_spells.setAccessibleName("Back to spell list")
-        self.sample_list.setAccessibleName("Sample list")
-        self.btn_delete_latest_sample.setAccessibleName("Quick delete latest sample")
-        self.btn_clear_samples.setAccessibleName("Clear recorded samples")
-        self.btn_export_csv.setAccessibleName("Export samples to CSV file")
-
+        """Cấu hình các thuộc tính trợ năng."""
+        self.btn_start.setAccessibleName("Bắt đầu ghi cử chỉ")
+        self.btn_stop.setAccessibleName("Dừng ghi cử chỉ")
+        self.btn_snip.setAccessibleName("Cắt vùng chọn làm mẫu")
         self.setTabOrder(self.combo_spell, self.btn_start)
         self.setTabOrder(self.btn_start, self.btn_stop)
         self.setTabOrder(self.btn_stop, self.btn_snip)
-        self.setTabOrder(self.btn_snip, self.btn_zoom_in)
-        self.setTabOrder(self.btn_zoom_in, self.btn_zoom_out)
-        self.setTabOrder(self.btn_zoom_out, self.btn_zoom_fit)
-        self.setTabOrder(self.btn_zoom_fit, self.btn_delete_latest_sample)
-        self.setTabOrder(self.btn_delete_latest_sample, self.btn_clear_samples)
-        self.setTabOrder(self.btn_clear_samples, self.btn_export_csv)
-        self.setTabOrder(self.btn_export_csv, self.spell_list)
-        self.setTabOrder(self.spell_list, self.btn_delete_spell)
-        self.setTabOrder(self.btn_delete_spell, self.btn_back_spells)
-        self.setTabOrder(self.btn_back_spells, self.sample_list)
 
-    # ── Load initial data ────────────────────────────────────────────────
+    # ── Slots ───────────────────────────────────
 
-    def _load_data(self) -> None:
-        """Nạp danh sách spell ban đầu vào combo và list."""
-        self.load_spell_list(self._initial_spell_counts)
+    def _on_btn_start_clicked(self) -> None:
+        """Bắt đầu quá trình ghi dữ liệu."""
+        spell = self.combo_spell.currentText().strip()
+        if not spell:
+            self.lbl_wand_status.setText(f"⚠ {tr_ui('record_select_spell')}")
+            return
+        self.is_live = True
+        self.btn_snip.setEnabled(False)
+        self.crop_region.hide()
+        self.set_recording_state(True)
+        self._recording_start_time.start()
+        self._recording_timer.start(_TIMER_INTERVAL_MS)
+        self.sig_start_record.emit(spell)
 
-    # ── Static helpers ──────────────────────────────────────────────────
+    def _on_btn_stop_clicked(self) -> None:
+        """Dừng quá trình ghi và hiển thị vùng chọn snip."""
+        self.is_live = False
+        self.set_recording_state(False)
+        self.btn_snip.setEnabled(True)
+        self.crop_region.show()
+        buf_len = len(self.store.get_live_buffer_snapshot())
+        if buf_len > 0:
+            start = max(0, buf_len - _AUTO_CROP_TAIL)
+            self.crop_region.setRegion([start, buf_len])
+        self._recording_timer.stop()
+        self.lbl_record_duration.setText("00:00")
+        self.sig_stop_record.emit()
 
+    def _on_btn_snip_clicked(self) -> None:
+        """Cắt vùng dữ liệu đã chọn và gửi signal lưu trữ."""
+        if not self.crop_region.isVisible():
+            return
+        spell = self.combo_spell.currentText().strip()
+        region = self.crop_region.getRegion()
+        buf = self.store.get_live_buffer_snapshot()
+        idx_min, idx_max = max(0, int(region[0])), min(len(buf), int(region[1]))
+        if idx_min < idx_max:
+            self.sig_data_cropped.emit(buf[idx_min:idx_max], spell)
+            self.lbl_wand_status.setText(tr_ui("record_snipped", n=idx_max-idx_min, name=spell))
+        self.sig_snip_record.emit()
+
+    def _on_crop_region_changed(self) -> None:
+        """Cập nhật số mẫu đang được chọn trong vùng snip."""
+        if not self.crop_region.isVisible():
+            return
+        r = self.crop_region.getRegion()
+        n = max(0, int(r[1]) - int(r[0]))
+        self.lbl_record_count.setText(tr_ui("record_selected_samples", n=n))
+
+    def _update_recording_duration(self) -> None:
+        """Cập nhật thời gian đã ghi trên giao diện."""
+        if self._recording_timer.isActive():
+            ms = self._recording_start_time.elapsed()
+            self.lbl_record_duration.setText(f"{ms//60000:02d}:{(ms%60000)//1000:02d}")
+
+    def _on_zoom_in_clicked(self) -> None:
+        for g in [self.graph1, self.graph2]: g.getViewBox().scaleBy((0.8, 0.8))
+
+    def _on_zoom_out_clicked(self) -> None:
+        for g in [self.graph1, self.graph2]: g.getViewBox().scaleBy((1.25, 1.25))
+
+    def _on_zoom_fit_clicked(self) -> None:
+        for g in [self.graph1, self.graph2]: g.getViewBox().autoRange()
+
+    def _on_btn_clear_clicked(self) -> None:
+        """Xóa sạch bộ đệm dữ liệu tạm thời."""
+        if confirm_destructive(self, title=tr_ui("record_clear_title"), message=tr_ui("record_clear_msg")):
+            self.sig_clear_buffer.emit()
+            self.lbl_record_count.setText("0")
+            self.is_live = True
+            self.crop_region.hide()
+
+    def _on_btn_export_clicked(self) -> None:
+        """Xuất dữ liệu thô ra file CSV."""
+        if self.store.get_live_buffer_snapshot():
+            self.sig_export_csv.emit()
+
+    def _on_btn_delete_latest_clicked(self) -> None:
+        """Xóa mẫu ghi gần nhất của spell đang chọn."""
+        spell = self.combo_spell.currentText().strip()
+        if spell and self.store.get_samples_for_spell(spell):
+            self.sig_delete_latest_sample.emit(spell)
+
+    def _on_spell_item_clicked(self, item: QListWidgetItem) -> None:
+        """Khi chọn một spell từ danh sách thư viện."""
+        name = item.data(Qt.ItemDataRole.UserRole)
+        if name != _EMPTY_SPELL_LIST:
+            idx = self.combo_spell.findText(name)
+            if idx >= 0: self.combo_spell.setCurrentIndex(idx)
+            self.sig_spell_selected.emit(name)
+
+    def _on_btn_delete_spell_clicked(self) -> None:
+        """Xóa vĩnh viễn một câu thần chú cùng toàn bộ dataset của nó."""
+        item = self.spell_list.currentItem()
+        if not item or item.data(Qt.ItemDataRole.UserRole) == _EMPTY_SPELL_LIST:
+            return
+        name = item.data(Qt.ItemDataRole.UserRole)
+        if is_system_spell(name):
+            QMessageBox.warning(self, tr_ui("record_protected_title"), tr_ui("record_protected_msg", name=name))
+            return
+        if confirm_destructive(self, title=tr_ui("record_del_step1_title"), message=tr_ui("record_del_step1_msg", name=name)):
+            if confirm_destructive(self, title=tr_ui("record_del_step2_title"), message=tr_ui("record_del_step2_msg", name=name)):
+                self.sig_spell_deleted.emit(name)
+
+    def _on_btn_back_clicked(self) -> None:
+        """Quay lại danh sách câu thần chú."""
+        self.stacked_spells.setCurrentIndex(0)

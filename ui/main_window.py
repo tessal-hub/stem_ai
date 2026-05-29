@@ -1,11 +1,11 @@
 """
-Cửa sổ chính của ứng dụng STEM Spell Book.
+ui/main_window.py — Cửa sổ chính của ứng dụng STEM Spell Book.
 
 Trách nhiệm:
-    - Tạo page stack và topbar (MacShell).
-    - Sở hữu UdpWorker (nguồn dữ liệu phụ).
-    - Chuyển tiếp dữ liệu UDP tới DataStore (cùng pattern với SerialWorker trong Handler).
-    KHÔNG xử lý dữ liệu — chỉ chuyển tiếp tới DataStore.
+    - Quản lý navigation giữa các trang thông qua MacShell.
+    - Khởi tạo và điều phối các trang giao diện con.
+    - Sở hữu UdpWorker để thu thập dữ liệu không dây.
+    - Chuyển tiếp dữ liệu từ các nguồn tới DataStore.
 """
 
 from __future__ import annotations
@@ -15,18 +15,18 @@ import logging
 from PyQt6.QtGui import QCloseEvent, QIcon
 from PyQt6.QtWidgets import QMainWindow, QStackedWidget, QWidget
 
-from ui.mac_shell import MacShell
-from ui.asset_utils import resolve_asset_path
-from ui.page_home import PageHome
-from ui.page_record import PageRecord
-from ui.page_statistics import PageStatistics
-from ui.page_primitive_collect import PagePrimitiveCollect
-from ui.page_wand import PageWand
-from ui.page_setting import PageSetting
-from ui.i18n_bridge import tr_ui
-from logic.udp_worker import UdpWorker
 from logic.locale_manager import locale_manager
 from logic.theme_manager import theme_manager
+from logic.udp_worker import UdpWorker
+from ui.asset_utils import resolve_asset_path
+from ui.i18n_bridge import tr_ui
+from ui.mac_shell import MacShell
+from ui.page_home import PageHome
+from ui.page_primitive_collect import PagePrimitiveCollect
+from ui.page_record import PageRecord
+from ui.page_setting import PageSetting
+from ui.page_wand import PageWand
+
 
 log = logging.getLogger(__name__)
 
@@ -37,8 +37,7 @@ _SENSOR_KEYS = ("accel_x", "accel_y", "accel_z", "gyro_x", "gyro_y", "gyro_z")
 class MainWindow(QMainWindow):
     """
     Cửa sổ chính của ứng dụng.
-    Quản lý navigation giữa các trang, khởi tạo UdpWorker,
-    và chuyển tiếp dữ liệu từ các nguồn tới DataStore.
+    Điều phối luồng dữ liệu và quản lý trạng thái hiển thị các trang.
     """
 
     def __init__(self, data_store) -> None:
@@ -52,26 +51,21 @@ class MainWindow(QMainWindow):
         self._load_data()
         self._apply_ui_language()
 
-    # ------------------------------------------------------------------
-    # Khởi tạo giao diện
-    # ------------------------------------------------------------------
-
     def _init_ui(self) -> None:
-        """Khởi tạo cửa sổ, tạo các trang và page stack."""
+        """Khởi tạo giao diện và bố cục widget."""
         self.setWindowTitle("STEM Spell Book")
         self.setWindowIcon(QIcon(resolve_asset_path("assets/icon/cooliocns SVG/Interface/Book_Open.svg")))
         self.resize(1100, 850)
         self.setMinimumSize(1000, 700)
-        self.setStyleSheet("QMainWindow { background-color: transparent; }")
 
-        # ── Shell chính ─────────────────────────────────────────────────
+
+        # 1. Khởi tạo Shell điều hướng
         self.shell = MacShell("STEM Spell Book")
         self.setCentralWidget(self.shell)
 
-        # ── Các trang (Thứ tự phải khớp với NAV_ITEMS trong MacShell) ────
+        # 2. Khởi tạo các trang nội dung
         self.page_home = PageHome(self.data_store)
         self.page_primitive_collect = PagePrimitiveCollect(self.data_store)
-        self.page_statistics = PageStatistics(self.data_store)
         self.page_record = PageRecord(self.data_store)
         self.page_wand = PageWand(self.data_store)
         self.page_setting = PageSetting(self.data_store)
@@ -79,123 +73,84 @@ class MainWindow(QMainWindow):
         self._pages: list[QWidget] = [
             self.page_home,
             self.page_primitive_collect,
-            self.page_statistics,
             self.page_record,
             self.page_wand,
             self.page_setting,
         ]
 
-        # ── Page stack ──────────────────────────────────────────────────
+        # 3. Quản lý StackedWidget
         self.stack = QStackedWidget()
-        self.stack.setStyleSheet("QStackedWidget { border: none; background: transparent; }")
+
         for page in self._pages:
             self.stack.addWidget(page)
         self.shell.content_layout.addWidget(self.stack, stretch=1)
 
-        # ── UDP Worker (nguồn dữ liệu phụ) ─────────────────────────────
+        # 4. Worker nền
         self.udp_worker = UdpWorker(port=5555)
 
-    # ------------------------------------------------------------------
-    # Kết nối signal/slot
-    # ------------------------------------------------------------------
-
     def _init_signals(self) -> None:
-        """Kết nối toàn bộ signal và slot của cửa sổ chính."""
-        # Navigation
+        """Kết nối toàn bộ signal và slot."""
+        # Điều hướng
         self.shell.nav_requested.connect(self._on_shell_nav_requested)
 
-        # Settings
+        # Cài đặt
         self.page_setting.sig_settings_saved.connect(self._on_settings_saved)
 
-        # UDP Worker
+        # Dữ liệu UDP
         self.udp_worker.sig_data_received.connect(self._on_udp_data_received)
         self.udp_worker.sig_status_change.connect(self._on_udp_status_changed)
         self.udp_worker.sig_health_update.connect(self._on_udp_health_updated)
 
-        # DataStore → UI
-        self.data_store.sig_connection_state_updated.connect(
-            self.page_home.set_connection_status
-        )
-        self.data_store.sig_live_features_updated.connect(
-            self.page_statistics.update_live_features
-        )
-        self.data_store.sig_live_buffer_updated.connect(
-            self.page_primitive_collect.update_signal_preview
-        )
-        # Mô phỏng 3D wand: truyền dữ liệu cảm biến real-time tới viewer trang Home
-        self.data_store.sig_sensor_data_updated.connect(
-            self._on_sensor_data_for_3d
-        )
+        # Cập nhật từ DataStore
+        self.data_store.sig_connection_state_updated.connect(self.page_home.set_connection_status)
+        self.data_store.sig_live_buffer_updated.connect(self.page_primitive_collect.update_signal_preview)
+        self.data_store.sig_sensor_data_updated.connect(self._on_sensor_data_for_3d)
 
+        # Hệ thống
         locale_manager.language_changed.connect(self._apply_ui_language)
-        theme_manager.theme_changed.connect(self._apply_theme)
-
-    def _apply_theme(self, theme_name: str) -> None:
-        """Refresh styles across all components when theme changes."""
-        log.info("Applying theme: %s", theme_name)
-        for page in self._pages:
-            if hasattr(page, "refresh_styles"):
-                page.refresh_styles()
-
-    # ------------------------------------------------------------------
-    # Nạp dữ liệu ban đầu
-    # ------------------------------------------------------------------
+        theme_manager.theme_changed.connect(self._on_theme_changed)
 
     def _load_data(self) -> None:
-        """Nạp trạng thái ban đầu và khởi động UDP worker."""
+        """Nạp dữ liệu ban đầu từ DataStore."""
         self._set_page(0)
 
-        # Đồng bộ trạng thái kết nối hiện tại vào UI
-        connected, _ = self.data_store.get_connection_state()
-        self.page_home.set_connection_status(connected)
+        # Đồng bộ trạng thái kết nối
+        is_connected, _ = self.data_store.get_connection_state()
+        self.page_home.set_connection_status(is_connected)
 
+        # Cập nhật thống kê dataset ban đầu
         if hasattr(self.data_store, "get_primitive_collection_stats"):
-            self.page_primitive_collect.update_collection_stats(
-                self.data_store.get_primitive_collection_stats()
-            )
+            stats = self.data_store.get_primitive_collection_stats()
+            self.page_primitive_collect.update_collection_stats(stats)
 
-        # Khởi động UDP listener
+        # Khởi động listener UDP
         self.udp_worker.start()
 
-    # ------------------------------------------------------------------
-    # Public methods
-    # ------------------------------------------------------------------
+    # ── Public methods ──────────────────────────
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        """Xử lý sự kiện đóng cửa sổ, dọn dẹp tài nguyên."""
-        log.info("Ứng dụng đang đóng.")
+        """Xử lý khi đóng ứng dụng."""
+        log.info("MainWindow: Ứng dụng đang đóng...")
         handler = getattr(self, "handler", None)
         if handler is not None:
             try:
                 handler.shutdown()
             except Exception as exc:
-                log.warning("Handler shutdown trong closeEvent thất bại: %s", exc)
+                log.warning("MainWindow: Handler shutdown thất bại: %s", exc)
+        
         if self.udp_worker.isRunning():
             self.udp_worker.stop()
         event.accept()
 
-    # ------------------------------------------------------------------
-    # Private methods
-    # ------------------------------------------------------------------
+    # ── Private methods ─────────────────────────
 
     def _set_page(self, index: int) -> None:
-        """Chuyển trang hiển thị và cập nhật sidebar active state.
-
-        Args:
-            index: Chỉ số trang cần hiển thị.
-        """
+        """Chuyển đổi trang hiển thị trên stack."""
         self.stack.setCurrentIndex(index)
         self.shell.set_active_index(index)
 
     def _extract_esp_stats(self, data: dict) -> dict[str, str]:
-        """Trích xuất thông tin phần cứng ESP32 từ payload UDP.
-
-        Args:
-            data: Payload UDP dạng dict.
-
-        Returns:
-            Dict chứa các thông số ESP32 đã format.
-        """
+        """Trích xuất và format thông tin ESP32."""
         esp_update: dict[str, str] = {}
         if "battery" in data:
             esp_update["Battery"] = f"{data['battery']}%"
@@ -205,53 +160,53 @@ class MainWindow(QMainWindow):
             esp_update["RSSI"] = f"{data['rssi']} dBm"
         return esp_update
 
-    # ------------------------------------------------------------------
-    # Slots
-    # ------------------------------------------------------------------
+    def _apply_ui_language(self, _lang: str | None = None) -> None:
+        """Cập nhật văn bản hiển thị cho toàn bộ UI."""
+        self.setWindowTitle(tr_ui("win_title"))
+        self.shell.apply_ui_language()
+        for page in self._pages:
+            if hasattr(page, "apply_ui_language"):
+                page.apply_ui_language()
+
+    # ── Slots ───────────────────────────────────
 
     def _on_shell_nav_requested(self, index: int) -> None:
-        """Xử lý yêu cầu chuyển trang từ sidebar navigation."""
+        """Xử lý khi người dùng chọn menu điều hướng."""
         self._set_page(index)
 
     def _on_udp_data_received(self, data: dict) -> None:
-        """Chuyển tiếp dữ liệu UDP tới DataStore. Không xử lý tại đây."""
-        # Payload cảm biến → DataStore
+        """Xử lý dữ liệu nhận được từ UDP worker."""
+        # 1. Dữ liệu cảm biến
         if _SENSOR_KEYS[0] in data:
             values = [float(data.get(k, 0.0)) for k in _SENSOR_KEYS]
-            self.data_store.update_sensor_data(
-                {
-                    "ax": values[0],
-                    "ay": values[1],
-                    "az": values[2],
-                    "gx": values[3],
-                    "gy": values[4],
-                    "gz": values[5],
-                }
-            )
+            self.data_store.update_sensor_data({
+                "ax": values[0], "ay": values[1], "az": values[2],
+                "gx": values[3], "gy": values[4], "gz": values[5],
+            })
             if self.page_record.is_live:
                 self.data_store.add_live_sample(values, emit=True)
 
-        # Text thô → terminal wand (throttle để tránh quá tải UI)
+        # 2. Log terminal (Throttle)
         self._udp_log_count += 1
         if self._udp_log_count % 25 == 0:
             self.page_wand.append_terminal_text(f">> UDP: {data}")
 
-        # Thống kê phần cứng → DataStore
+        # 3. Thống kê phần cứng
         esp_update = self._extract_esp_stats(data)
         if esp_update:
             self.data_store.update_esp_stats(esp_update)
 
     def _on_udp_status_changed(self, active: bool) -> None:
-        """Xử lý thay đổi trạng thái UDP — tách biệt khỏi trạng thái kết nối wand."""
+        """Thông báo trạng thái kết nối UDP."""
         if active:
             self.page_wand.append_terminal_text(">> UDP telemetry received.")
 
     def _on_udp_health_updated(self, health: dict) -> None:
-        """Cập nhật thống kê sức khỏe kết nối UDP vào DataStore."""
+        """Cập nhật sức khỏe kết nối vào DataStore."""
         self.data_store.update_udp_health(health)
 
     def _on_sensor_data_for_3d(self, buffers: dict) -> None:
-        """Truyền mẫu IMU mới nhất tới widget 3D wand trên trang Home."""
+        """Cập nhật hướng 3D cho wand viewer."""
         try:
             ax = buffers["ax"][-1] if buffers.get("ax") else 0.0
             ay = buffers["ay"][-1] if buffers.get("ay") else 0.0
@@ -261,19 +216,15 @@ class MainWindow(QMainWindow):
             gz = buffers["gz"][-1] if buffers.get("gz") else 0.0
             self.page_home.wand_3d.update_orientation(ax, ay, az, gx, gy, gz)
         except Exception:
-            log.debug("Bỏ qua cập nhật hướng 3D", exc_info=True)
+            log.debug("MainWindow: Bỏ qua cập nhật 3D", exc_info=True)
 
     def _on_settings_saved(self, config: dict) -> None:
-        """Lưu settings qua DataStore khi người dùng bấm Save."""
+        """Lưu cấu hình ứng dụng."""
         self.data_store.save_settings(config)
 
-    def _apply_ui_language(self, _lang: str | None = None) -> None:
-        """Refresh window chrome and all pages after locale change."""
-        self.setWindowTitle(tr_ui("win_title"))
-        self.shell.apply_ui_language()
-        self.page_home.apply_ui_language()
-        self.page_record.apply_ui_language()
-        self.page_statistics.apply_ui_language()
-        self.page_primitive_collect.apply_ui_language()
-        self.page_wand.apply_ui_language()
-        self.page_setting.apply_ui_language()
+    def _on_theme_changed(self, theme_name: str) -> None:
+        """Làm mới style của tất cả các trang khi theme đổi."""
+        log.info("MainWindow: Đang áp dụng theme %s", theme_name)
+        for page in self._pages:
+            if hasattr(page, "refresh_styles"):
+                page.refresh_styles()

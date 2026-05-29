@@ -26,4 +26,5 @@ The application is a PyQt desktop system with a UI layer, handler orchestration,
 
 1. Avoid direct UI to worker coupling.
 2. Keep thread boundaries explicit.
+3. UI layer strictly adheres to `CODING_STANDARD.md`. Inline stylesheets (`setStyleSheet`) are banned; all styling must use centralized QSS properties and tokens.
 3. Keep public signal and method names backward-compatible unless contract is updated.
