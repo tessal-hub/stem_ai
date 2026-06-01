@@ -73,9 +73,9 @@ class WandFlashPanel(QWidget):
 
     def _init_signals(self) -> None:
         """Kết nối signal/slot nội bộ."""
-        self.btn_build_tflite.clicked.connect(self.sig_build_tflite_clicked.emit)
-        self.btn_build_cc.clicked.connect(self.sig_build_cc_clicked.emit)
-        self.btn_upload.clicked.connect(self.sig_upload_clicked.emit)
+        self.btn_build_tflite.clicked.connect(lambda _: self.sig_build_tflite_clicked.emit())
+        self.btn_build_cc.clicked.connect(lambda _: self.sig_build_cc_clicked.emit())
+        self.btn_upload.clicked.connect(lambda _: self.sig_upload_clicked.emit())
 
     # ── Public methods ──────────────────────────
 

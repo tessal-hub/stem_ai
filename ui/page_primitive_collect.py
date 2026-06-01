@@ -246,7 +246,7 @@ class PagePrimitiveCollect(QWidget):
         
         self.btn_train_encoder = make_button("TRAIN ENCODER", "primary")
         self.btn_train_encoder.setEnabled(False)
-        self.btn_train_encoder.clicked.connect(self.sig_train_encoder_requested.emit)
+        self.btn_train_encoder.clicked.connect(lambda _: self.sig_train_encoder_requested.emit())
         
         self.train_progress = QProgressBar()
         self.train_progress.setRange(0, 100)

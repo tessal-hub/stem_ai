@@ -428,22 +428,29 @@ class Handler(QObject):
         pass
         
     def on_train_encoder_requested(self) -> None:
-        from .encoder_trainer import EncoderTrainerWorker
-        
-        primitive_names = [
-            "SWIPE_RIGHT", "SWIPE_UP", "THRUST",
-            "CIRCLE_CW", "CIRCLE_CCW", "WRIST_FLICK",
-            "ZIGZAG", "STAND_BY"
-        ]
-        
-        self.encoder_trainer = EncoderTrainerWorker(
-            dataset_dir=self.store.dataset_dir,
-            primitive_names=primitive_names
-        )
-        self.encoder_trainer.sig_status.connect(self.ui_primitive_collect.on_encoder_training_status)
-        self.encoder_trainer.sig_progress.connect(self.ui_primitive_collect.on_encoder_training_progress)
-        self.encoder_trainer.sig_finished.connect(self._on_encoder_training_finished)
-        self.encoder_trainer.start()
+        print("[DEBUG] on_train_encoder_requested CALLED")
+        try:
+            from .encoder_trainer import EncoderTrainerWorker
+            print("[DEBUG] EncoderTrainerWorker imported successfully")
+            
+            primitive_names = [
+                "SWIPE_RIGHT", "SWIPE_UP", "THRUST",
+                "CIRCLE_CW", "CIRCLE_CCW", "WRIST_FLICK",
+                "ZIGZAG", "STAND_BY"
+            ]
+            
+            self.encoder_trainer = EncoderTrainerWorker(
+                dataset_dir=self.store.dataset_dir,
+                primitive_names=primitive_names
+            )
+            print("[DEBUG] EncoderTrainerWorker initialized")
+            self.encoder_trainer.sig_status.connect(self.ui_primitive_collect.on_encoder_training_status)
+            self.encoder_trainer.sig_progress.connect(self.ui_primitive_collect.on_encoder_training_progress)
+            self.encoder_trainer.sig_finished.connect(self._on_encoder_training_finished)
+            print("[DEBUG] Starting encoder_trainer")
+            self.encoder_trainer.start()
+        except Exception as e:
+            print(f"[DEBUG] ERROR in on_train_encoder_requested: {e}")
 
     def _on_encoder_training_finished(self, success: bool, message: str) -> None:
         if success:

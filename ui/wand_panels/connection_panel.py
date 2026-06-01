@@ -52,7 +52,7 @@ class WandConnectionPanel(QWidget):
 
     def _init_signals(self) -> None:
         """Kết nối signal/slot nội bộ."""
-        self.btn_serial_scan.clicked.connect(self.sig_serial_scan.emit)
+        self.btn_serial_scan.clicked.connect(lambda _: self.sig_serial_scan.emit())
         self.btn_serial_connect.clicked.connect(self._on_btn_serial_connect_clicked)
 
     # ── Public methods ──────────────────────────

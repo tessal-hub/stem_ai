@@ -80,6 +80,12 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
         }}
         QPushButton[type="outline"]:hover, QPushButton[type="snip"]:hover {{ background-color: {FILL_SECONDARY}; color: {TEXT_PRIMARY}; }}
 
+        QPushButton:disabled {{
+            background-color: {FILL_SECONDARY};
+            color: {TEXT_TERTIARY};
+            border: 1px solid {BORDER_COLOR};
+        }}
+
         /* ── Inputs ── */
         QLineEdit, QComboBox, QSpinBox, QTimeEdit, QDateEdit {{
             background-color: {SURFACE_0};
