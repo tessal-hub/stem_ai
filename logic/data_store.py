@@ -11,10 +11,8 @@ from __future__ import annotations
 
 import collections
 import csv
-import json
 import logging
 import os
-import shutil
 import time
 from datetime import datetime
 from pathlib import Path
@@ -24,10 +22,11 @@ from typing import Any, Mapping
 from PyQt6.QtCore import QObject, QSettings, pyqtSignal
 
 from config import DATASET_DIR, DEFAULT_MODEL_PATH, ensure_data_dir
-from constants import SYSTEM_SPELL_NAMES, is_system_spell
-from .dataset_layout import discover_class_directories, spell_write_dir, storage_dirs_for_spell
-from .frame_protocol import FrameValidationError, validate_six_axis_values
+from constants import SYSTEM_SPELL_NAMES
 
+from .dataset_layout import (discover_class_directories, spell_write_dir,
+                             storage_dirs_for_spell)
+from .frame_protocol import FrameValidationError, validate_six_axis_values
 
 log = logging.getLogger(__name__)
 SCHEMA_VERSION = 1
@@ -97,12 +96,15 @@ class SettingsStore:
         return str(self._settings.value(key, default))
 
     def get_int(self, key: str, default: int) -> int:
-        try: return int(self._settings.value(key, default))
-        except: return default
+        try:
+            return int(self._settings.value(key, default))
+        except:
+            return default
 
     def get_bool(self, key: str, default: bool) -> bool:
         val = self._settings.value(key, default)
-        if isinstance(val, bool): return val
+        if isinstance(val, bool):
+            return val
         return str(val).lower() in {"true", "1", "yes"}
 
 
@@ -126,7 +128,7 @@ class DataStore(QObject):
         super().__init__(parent)
         ensure_data_dir()
         self.dataset_dir = str(Path(dataset_dir) if dataset_dir else DATASET_DIR)
-        
+
         self._state_lock = Lock()
         self._buffer_lock = Lock()
         self._db_write_lock = Lock()
@@ -140,7 +142,7 @@ class DataStore(QObject):
         self.esp32_stats = {"Battery": "--", "Chip": "ESP32-S3", "RAM Free": "8MB"}
         self.settings_store = SettingsStore()
         self.settings = self.settings_store.load()
-        
+
         self.is_connected = False
         self.current_mode = "IDLE"
         self.is_recording = False
@@ -149,7 +151,7 @@ class DataStore(QObject):
 
         self.sensor_buffers = {k: collections.deque(maxlen=100) for k in ['ax', 'ay', 'az', 'gx', 'gy', 'gz']}
         self.live_buffer = collections.deque(maxlen=500)
-        
+
         self._last_sensor_emit = 0.0
         self._last_live_emit = 0.0
 
@@ -161,17 +163,19 @@ class DataStore(QObject):
         snapshot = None
         with self._buffer_lock:
             for k, v in data.items():
-                if k in self.sensor_buffers: self.sensor_buffers[k].append(v)
+                if k in self.sensor_buffers:
+                    self.sensor_buffers[k].append(v)
             if now - self._last_sensor_emit >= 0.1:
                 self._last_sensor_emit = now
                 snapshot = {k: list(v) for k, v in self.sensor_buffers.items()}
-        if snapshot: self.sig_sensor_data_updated.emit(snapshot)
+        if snapshot:
+            self.sig_sensor_data_updated.emit(snapshot)
 
     def add_live_sample(self, sample: list[float], *, emit: bool = True) -> None:
         """Thêm mẫu dữ liệu vào bộ đệm hiển thị đồ thị."""
-        try: 
+        try:
             valid_sample = validate_six_axis_values(sample)
-        except FrameValidationError: 
+        except FrameValidationError:
             return
 
         now = time.perf_counter()
@@ -247,7 +251,15 @@ class DataStore(QObject):
         if os.path.exists(self.dataset_dir):
             class_map = discover_class_directories(Path(self.dataset_dir))
             for name, paths in class_map.items():
-                self.spell_counts[name] = sum(len(list(p.glob("*.csv"))) for p in paths)
+                count = 0
+                for p in paths:
+                    for f in p.glob("*.csv"):
+                        count += 1
+                        parts = f.name.split("_sample_")
+                        if len(parts) == 2 and parts[0]:
+                            group_key = f"{name}::{parts[0]}"
+                            self.spell_counts[group_key] = self.spell_counts.get(group_key, 0) + 1
+                self.spell_counts[name] = count
 
         for name in SYSTEM_SPELL_NAMES:
             self.spell_counts.setdefault(name, 0)
@@ -255,19 +267,44 @@ class DataStore(QObject):
         self.sig_db_updated.emit(self.spell_counts)
         self.sig_primitive_stats_updated.emit(self.get_primitive_collection_stats())
 
+    def refresh_primitive_stats(self) -> None:
+        """Force re-emit sig_primitive_stats_updated with current filesystem state.
+
+        Called when the Primitives page becomes visible to ensure stale
+        zero-initialized stats are replaced with the real sample counts,
+        regardless of whether a save/delete event has occurred.
+
+        This is a lightweight emit — it does not re-scan the filesystem,
+        it reads the already-current spell_counts dict.
+        """
+        self.sig_primitive_stats_updated.emit(self.get_primitive_collection_stats())
+
     def get_primitive_collection_stats(self) -> dict[str, int]:
         """Lấy thống kê riêng cho các cử chỉ cơ bản (primitives)."""
         names = ["SWIPE_RIGHT", "SWIPE_UP", "THRUST", "CIRCLE_CW", "CIRCLE_CCW", "WRIST_FLICK", "ZIGZAG"]
         stats = {n: self.spell_counts.get(n, 0) for n in names}
-        stats["STAND_BY"] = self.spell_counts.get("STAND BY", self.spell_counts.get("STAND_BY", 0))
+        # Check all known folder name variants for STAND BY
+        stand_by_count = (
+            self.spell_counts.get("STAND BY", 0)
+            or self.spell_counts.get("STAND_BY", 0)
+            or self.spell_counts.get("Stand By", 0)
+        )
+        stats["STAND_BY"] = stand_by_count
+        
+        # Include group counts
+        for k, v in self.spell_counts.items():
+            if "::" in k:
+                stats[k] = v
+                
         return stats
 
     def save_cropped_data(self, spell: str, data: list[list[float]]) -> bool:
         """Lưu vùng dữ liệu đã cắt vào file CSV mới."""
-        if not data or not spell.strip(): return False
+        if not data or not spell.strip():
+            return False
         folder = spell_write_dir(Path(self.dataset_dir), spell)
         folder.mkdir(parents=True, exist_ok=True)
-        
+
         path = folder / f"sample_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.csv"
         try:
             with open(path, mode="w", newline="") as f:

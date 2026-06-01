@@ -7,29 +7,17 @@ của firmware. Hỗ trợ hiển thị độ hiếm (rarity) dựa trên số l
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QSize, Qt
-from PyQt6.QtWidgets import (
-    QHBoxLayout,
-    QLabel,
-    QListWidget,
-    QListWidgetItem,
-    QSizePolicy,
-    QVBoxLayout,
-    QWidget,
-    QFrame,
-)
+from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QListWidget,
+                             QListWidgetItem, QVBoxLayout, QWidget)
 
 from logic.rarity_utils import RARITY_TIERS, RarityTier
 from logic.theme_manager import theme_manager
 from ui.component_factory import make_rarity_badge_wand
 from ui.i18n_bridge import tr_ui
-from ui.modern_layout import MARGIN_STANDARD, SPACING_SM
-from ui.tokens import (
-    APP_FONT_STACK,
-    CARD_RADIUS,
-    TITLE_FONT_STACK,
-    WAND_SPELL_LIST_MIN_H,
-)
+from ui.modern_layout import SPACING_SM
+from ui.tokens import WAND_SPELL_LIST_MIN_H
+
 from .shared import make_section_label
 
 
@@ -43,7 +31,7 @@ class WandSpellPayloadPanel(QWidget):
         self._spell_order: list[str] = []
         self._selected_spells: set[str] = set()
         self._spell_counts: dict[str, int] = {}
-        
+
         self._init_ui()
         self._init_signals()
         self.refresh_styles()
@@ -70,13 +58,14 @@ class WandSpellPayloadPanel(QWidget):
 
         self.list_selected_spells = QListWidget()
         self.list_selected_spells.setMinimumHeight(WAND_SPELL_LIST_MIN_H)
+        self.list_selected_spells.setSpacing(4)
         left_layout.addWidget(self.list_selected_spells, stretch=1)
 
         # Requirement 7: Subtle 1px border divider
         self._divider = QFrame()
         self._divider.setFrameShape(QFrame.Shape.NoFrame)
         self._divider.setFixedWidth(1)
-        
+
         # Cột phải: Khả dụng
         right_col = QWidget()
         right_layout = QVBoxLayout(right_col)
@@ -86,12 +75,13 @@ class WandSpellPayloadPanel(QWidget):
 
         self.list_available_spells = QListWidget()
         self.list_available_spells.setMinimumHeight(WAND_SPELL_LIST_MIN_H)
+        self.list_available_spells.setSpacing(4)
         right_layout.addWidget(self.list_available_spells, stretch=1)
 
         content_row.addWidget(left_col, stretch=1)
         content_row.addWidget(self._divider)
         content_row.addWidget(right_col, stretch=1)
-        
+
         layout.addLayout(content_row, stretch=1)
 
         # Alias cho Handler
@@ -127,7 +117,7 @@ class WandSpellPayloadPanel(QWidget):
         self._hdr_payload.setProperty("type", "settings_section_label")
         self._left_title.setProperty("type", "settings_section_label")
         self._right_title.setProperty("type", "settings_section_label")
-        
+
         self.list_selected_spells.setProperty("type", "wand_list")
         self.list_available_spells.setProperty("type", "wand_list")
         p = theme_manager.get_palette()
@@ -155,23 +145,23 @@ class WandSpellPayloadPanel(QWidget):
         """Tạo và thêm một hàng spell tùy chỉnh vào danh sách."""
         item = QListWidgetItem(list_widget)
         item.setData(Qt.ItemDataRole.UserRole, name)
-        p = theme_manager.get_palette()
+        theme_manager.get_palette()
 
         widget = QWidget()
-        widget.setProperty("type", "statistics_card")
-        widget.setMinimumHeight(42)
+        widget.setStyleSheet("background-color: transparent;")
         row = QHBoxLayout(widget)
-        row.setContentsMargins(12, 8, 12, 8)
+        row.setContentsMargins(12, 0, 12, 0)
+        row.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         name_lbl = QLabel(name)
         name_lbl.setProperty("type", "wand_spell_name")
-        
+
         rarity = self._resolve_rarity(count)
         badge = make_rarity_badge_wand(rarity.label, rarity.color)
 
         row.addWidget(name_lbl, stretch=1)
         row.addWidget(badge)
-        item.setSizeHint(QSize(0, 44))
+        item.setSizeHint(QSize(0, 48))
         list_widget.setItemWidget(item, widget)
 
     def _add_empty_row(self, list_widget: QListWidget, text: str) -> None:

@@ -3,7 +3,9 @@ logic/theme_manager.py — Quản lý theme ứng dụng (chỉ Light Mode).
 """
 
 from PyQt6.QtCore import QObject, pyqtSignal
+
 from ui.palettes import LIGHT_PALETTE, Palette
+
 
 class ThemeManager(QObject):
     """
@@ -11,7 +13,7 @@ class ThemeManager(QObject):
     Phát signal khi có yêu cầu đổi theme hợp lệ.
     """
     theme_changed = pyqtSignal(str)
-    
+
     def __init__(self):
         super().__init__()
         self._current_theme = "light"
@@ -29,6 +31,7 @@ class ThemeManager(QObject):
 
     def get_palette(self) -> Palette:
         return LIGHT_PALETTE
+
 
 # Singleton instance for the application
 theme_manager = ThemeManager()

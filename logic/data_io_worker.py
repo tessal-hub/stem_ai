@@ -30,8 +30,11 @@ from datetime import datetime
 from pathlib import Path
 
 from PyQt6.QtCore import QThread, pyqtSignal
+
 from constants import is_system_spell
-from .dataset_layout import discover_class_directories, spell_write_dir, storage_dirs_for_spell
+
+from .dataset_layout import (discover_class_directories, spell_write_dir,
+                             storage_dirs_for_spell)
 
 log = logging.getLogger(__name__)
 
@@ -44,10 +47,10 @@ class DataIOWorker(QThread):
 
     # ── Result signals (emitted in the worker thread, delivered to the main
     #    thread via Qt's automatic QueuedConnection cross-thread dispatch) ──
-    sig_save_done    = pyqtSignal(bool, str)   # (success, message)
-    sig_delete_done  = pyqtSignal(bool, str)   # (success, message)
+    sig_save_done = pyqtSignal(bool, str)   # (success, message)
+    sig_delete_done = pyqtSignal(bool, str)   # (success, message)
     sig_delete_sample_done = pyqtSignal(bool, str)  # (success, message)
-    sig_export_done  = pyqtSignal(bool, str)   # (success, message)
+    sig_export_done = pyqtSignal(bool, str)   # (success, message)
     sig_queue_warning = pyqtSignal(str)        # queue drop/backpressure warnings
     # Emitted after any operation that changes the dataset directory layout.
     sig_db_refreshed = pyqtSignal(dict)        # spell_counts: {name: int}

@@ -6,7 +6,6 @@ from typing import Callable, Sequence
 import numpy as np
 
 from ..dataset_layout import discover_class_directories, folder_name_match_key
-
 from .pipeline import _read_csv_rows, _windowize
 
 

@@ -19,13 +19,9 @@ import serial
 import serial.tools.list_ports
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from .frame_protocol import (
-    DEFAULT_SCALE_PROFILE,
-    FrameValidationError,
-    SensorScaleProfile,
-    parse_prediction_frame,
-    parse_sensor_csv_frame,
-)
+from .frame_protocol import (DEFAULT_SCALE_PROFILE, FrameValidationError,
+                             SensorScaleProfile, parse_prediction_frame,
+                             parse_sensor_csv_frame)
 
 log = logging.getLogger(__name__)
 
@@ -37,16 +33,16 @@ class SerialWorker(QThread):
 
     # ── Signals ─────────────────────────────────────────────────────────
     # sig_ prefix is consistent with the rest of the codebase.
-    sig_data_received       = pyqtSignal(list)         # [ax, ay, az, gx, gy, gz] normalised
+    sig_data_received = pyqtSignal(list)         # [ax, ay, az, gx, gy, gz] normalised
     sig_prediction_received = pyqtSignal(str, float)   # (label, confidence)
-    sig_connection_status   = pyqtSignal(bool, str)    # (is_connected, message)
-    sig_raw_line_received   = pyqtSignal(str)          # every decoded line -> terminal
-    sig_error               = pyqtSignal(str)          # standardized worker error channel
-    sig_finished            = pyqtSignal(bool, str)    # standardized worker completion channel
+    sig_connection_status = pyqtSignal(bool, str)    # (is_connected, message)
+    sig_raw_line_received = pyqtSignal(str)          # every decoded line -> terminal
+    sig_error = pyqtSignal(str)          # standardized worker error channel
+    sig_finished = pyqtSignal(bool, str)    # standardized worker completion channel
 
     def __init__(self, port: str = "") -> None:
         super().__init__()
-        self.port     = port
+        self.port = port
         self._serial: serial.Serial | None = None
         self._running = False
         self._outbound_commands: queue.Queue[str] = queue.Queue()
@@ -98,7 +94,7 @@ class SerialWorker(QThread):
         success = False
         message = "Disconnected"
         try:
-            self._serial  = serial.Serial(self.port, _BAUD, timeout=1.0)
+            self._serial = serial.Serial(self.port, _BAUD, timeout=1.0)
             self._running = True
             self.sig_connection_status.emit(
                 True, f"Connected to {self.port} at {_BAUD} baud"
@@ -175,7 +171,7 @@ class SerialWorker(QThread):
                 self._serial.close()
             except Exception:
                 log.exception("SerialWorker: error closing port")
-        self._serial  = None
+        self._serial = None
         self._running = False
         self.sig_connection_status.emit(False, "Disconnected")
 

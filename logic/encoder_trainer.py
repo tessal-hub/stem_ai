@@ -4,14 +4,11 @@ import numpy as np
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from config import APP_DATA_DIR, ensure_data_dir
-from logic.tensorflow.encoder_pipeline import (
-    augment_dataset,
-    build_encoder,
-    build_triplet_model,
-    generate_triplets,
-    load_primitive_dataset,
-    triplet_loss,
-)
+from logic.tensorflow.encoder_pipeline import (augment_dataset, build_encoder,
+                                               build_triplet_model,
+                                               generate_triplets,
+                                               load_primitive_dataset,
+                                               triplet_loss)
 
 
 class EncoderTrainerWorker(QThread):
@@ -147,7 +144,7 @@ class EncoderTrainerWorker(QThread):
             def _representative_dataset():
                 step = max(1, len(X_aug) // 200)
                 for idx in range(0, len(X_aug), step):
-                    yield [X_aug[idx : idx + 1]]
+                    yield [X_aug[idx: idx + 1]]
 
             converter = tf.lite.TFLiteConverter.from_keras_model(encoder)
             converter.optimizations = [tf.lite.Optimize.DEFAULT]

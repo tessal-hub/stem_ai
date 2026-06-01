@@ -4,7 +4,7 @@ ALL-IN-ONE STEM AI TRAINING PIPELINE
 Tự động tải dữ liệu, huấn luyện, lượng tử hóa INT8 và xuất ra file C++ cho ESP32.
 """
 
-import argparse
+import tensorflow as tf
 import csv
 import logging
 import os
@@ -21,7 +21,7 @@ os.environ["KMP_WARNINGS"] = "0"
 logging.getLogger("tensorflow").setLevel(logging.ERROR)
 logging.getLogger("absl").setLevel(logging.ERROR)
 
-import tensorflow as tf
+
 tf.get_logger().setLevel('ERROR')
 tf.autograph.set_verbosity(3)
 
@@ -46,7 +46,8 @@ def read_csv_rows(file_path: Path) -> list[list[float]]:
         reader = csv.reader(handle)
         header_skipped = False
         for raw in reader:
-            if not raw: continue
+            if not raw:
+                continue
             if not header_skipped:
                 header_skipped = True
                 try:
@@ -65,9 +66,10 @@ def read_csv_rows(file_path: Path) -> list[list[float]]:
 def windowize(rows: list[list[float]], window_size: int, step: int) -> list[list[list[float]]]:
     """Cắt chuỗi dữ liệu thành các cửa sổ (windows) trượt."""
     windows = []
-    if len(rows) < window_size: return windows
+    if len(rows) < window_size:
+        return windows
     for i in range(0, len(rows) - window_size + 1, step):
-        windows.append(rows[i : i + window_size])
+        windows.append(rows[i: i + window_size])
     return windows
 
 
@@ -151,10 +153,13 @@ def main():
         n_train = n_total - n_val
 
         if n_train == 0:
-            for rows in shuffled: train_file_rows.append((class_index, rows))
+            for rows in shuffled:
+                train_file_rows.append((class_index, rows))
         else:
-            for rows in shuffled[:n_train]: train_file_rows.append((class_index, rows))
-            for rows in shuffled[n_train:]: val_file_rows.append((class_index, rows))
+            for rows in shuffled[:n_train]:
+                train_file_rows.append((class_index, rows))
+            for rows in shuffled[n_train:]:
+                val_file_rows.append((class_index, rows))
 
     print(f"  -> Tổng số file Train: {len(train_file_rows)} | Tổng số file Validation: {len(val_file_rows)}")
 
@@ -182,15 +187,15 @@ def main():
             val_labels.append(class_index)
 
     if val_features:
-         X_val = np.clip(np.stack(val_features, axis=0), -2.0, 2.0)
-         y_val_cat = tf.keras.utils.to_categorical(np.asarray(val_labels, dtype=np.int32), num_classes=len(class_names))
-         print(f"  -> Cửa sổ Train: {len(X_train)} | Cửa sổ Validation: {len(X_val)}")
+        X_val = np.clip(np.stack(val_features, axis=0), -2.0, 2.0)
+        y_val_cat = tf.keras.utils.to_categorical(np.asarray(val_labels, dtype=np.int32), num_classes=len(class_names))
+        print(f"  -> Cửa sổ Train: {len(X_train)} | Cửa sổ Validation: {len(X_val)}")
     else:
-         print("  -> CẢNH BÁO: Tập Validation trống. Sẽ sử dụng 10% tập train làm validation.")
-         split_idx = int(len(X_train) * 0.9)
-         X_val, y_val_cat = X_train[split_idx:], y_train_cat[split_idx:]
-         X_train, y_train_cat = X_train[:split_idx], y_train_cat[:split_idx]
-         print(f"  -> Cửa sổ Train: {len(X_train)} | Cửa sổ Validation: {len(X_val)}")
+        print("  -> CẢNH BÁO: Tập Validation trống. Sẽ sử dụng 10% tập train làm validation.")
+        split_idx = int(len(X_train) * 0.9)
+        X_val, y_val_cat = X_train[split_idx:], y_train_cat[split_idx:]
+        X_train, y_train_cat = X_train[:split_idx], y_train_cat[:split_idx]
+        print(f"  -> Cửa sổ Train: {len(X_train)} | Cửa sổ Validation: {len(X_val)}")
 
     print(f"\n[3/6] XÂY DỰNG & HUẤN LUYỆN MÔ HÌNH CNN 1D")
     model = tf.keras.Sequential([
@@ -232,11 +237,12 @@ def main():
 
     print(f"\n[4/6] ĐÁNH GIÁ ĐỘ CHÍNH XÁC (HONEST EVALUATION)")
     y_pred_prob = model.predict(X_val, verbose=0)
-    y_pred_idx  = np.argmax(y_pred_prob, axis=1)
-    y_true_idx  = np.argmax(y_val_cat, axis=1)
+    y_pred_idx = np.argmax(y_pred_prob, axis=1)
+    y_true_idx = np.argmax(y_val_cat, axis=1)
 
     cm = np.zeros((len(class_names), len(class_names)), dtype=np.int32)
-    for t, p in zip(y_true_idx, y_pred_idx): cm[t, p] += 1
+    for t, p in zip(y_true_idx, y_pred_idx):
+        cm[t, p] += 1
 
     print("\n--- MA TRẬN NHẦM LẪN (Dòng: Thực tế | Cột: Dự đoán) ---")
     header = "             " + "  ".join(f"{n[:8]:>8}" for n in class_names)
@@ -252,10 +258,11 @@ def main():
     print(f"\n=> TỔNG ĐỘ CHÍNH XÁC (Validation Accuracy): {correct}/{total} = {correct/total:.2%}")
 
     print(f"\n[5/6] LƯỢNG TỬ HÓA INT8 (QUANTIZATION) & CHUYỂN ĐỔI TFLITE")
+
     def representative_dataset():
         step_val = max(1, len(X_train) // 200)
         for i in range(0, len(X_train), step_val):
-            yield [X_train[i : i + 1]]
+            yield [X_train[i: i + 1]]
 
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
@@ -263,14 +270,14 @@ def main():
     converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
     converter.inference_input_type = tf.int8
     converter.inference_output_type = tf.int8
-    
+
     tflite_model = converter.convert()
 
     print(f"\n[6/6] XUẤT FILE MODEL")
     tflite_path = output_root / "gesture_model.tflite"
     cc_path = output_root / "gesture_model.cc"
     h5_path = output_root / "gesture_model.h5"
-    
+
     model.save(str(h5_path))
     tflite_path.write_bytes(tflite_model)
     write_c_array(tflite_model, cc_path)
@@ -280,6 +287,7 @@ def main():
     print(f"   -> Thư mục: {output_root.absolute()}")
     print(f"   -> Classes: {', '.join(class_names)}")
     print("==================================================")
+
 
 if __name__ == "__main__":
     main()

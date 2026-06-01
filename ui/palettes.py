@@ -15,52 +15,52 @@ class Palette:
     PRIMARY: str           # Màu chủ đạo
     PRIMARY_LIGHT: str     # Màu chủ đạo nhạt
     PRIMARY_DARK: str      # Màu chủ đạo đậm
-    
+
     SURFACE_PRIMARY: str   # Nền thẻ (Trắng)
-    SURFACE_SECONDARY: str # Nền chính của ứng dụng (Canvas)
+    SURFACE_SECONDARY: str  # Nền chính của ứng dụng (Canvas)
     SURFACE_TERTIARY: str  # Nền lớp thứ 3 (Input)
-    
+
     TEXT_PRIMARY: str      # Chữ chính
     TEXT_SECONDARY: str    # Chữ phụ
     TEXT_TERTIARY: str     # Chữ mờ
-    
+
     BORDER: str            # Viền chuẩn
     BORDER_LIGHT: str      # Viền mờ
-    
+
     STATUS_SUCCESS: str    # Trạng thái thành công
     STATUS_WARNING: str    # Trạng thái cảnh báo
     STATUS_ERROR: str      # Trạng thái lỗi
     STATUS_SUCCESS_TEXT: str
     STATUS_ERROR_TEXT: str
     STATUS_WARNING_TEXT: str
-    
+
     HOVER_BG: str          # Nền khi di chuột
     TERM_BG: str           # Nền terminal
     TERM_FG: str           # Chữ terminal
-    
+
     GLASS_BG: str          # Nền hiệu ứng kính
     GLASS_BG_STRONG: str   # Nền kính đậm
     GLASS_EDGE: str        # Viền kính
-    
+
     SHADOW_COLOR: str      # Màu đổ bóng
 
 
 # ── Bảng màu Claude Aesthetic (Light) ───────────────────────────────────────
 LIGHT_PALETTE = Palette(
-    PRIMARY="#1C1C1E",           # Monochrome accent
-    PRIMARY_LIGHT="#3A3A3C",
-    PRIMARY_DARK="#000000",
+    PRIMARY="#9BB8D7",           # Soft Pastel Blue (Muted)
+    PRIMARY_LIGHT="#C9DDF0",     # Very Light Blue
+    PRIMARY_DARK="#7395B8",      # Deeper Muted Blue
 
-    SURFACE_PRIMARY="#FFFFFF",   # Nền thẻ
-    SURFACE_SECONDARY="#F5F5F7", # Nền chính của ứng dụng
-    SURFACE_TERTIARY="#F5F5F7",  # Nền lớp ngoài/Input
+    SURFACE_PRIMARY="#FFFFFF",   # Nền thẻ (Raised)
+    SURFACE_SECONDARY="#FBF9F6",  # Nền chính của ứng dụng
+    SURFACE_TERTIARY="#F3F0E9",  # Nền lớp ngoài/Input
 
-    TEXT_PRIMARY="#1C1C1E",
-    TEXT_SECONDARY="#636366",
-    TEXT_TERTIARY="#8E8E93",
+    TEXT_PRIMARY="#1D1D1D",      # Darker grey for readability
+    TEXT_SECONDARY="#6B6B6B",
+    TEXT_TERTIARY="#9C9C9C",
 
-    BORDER="rgba(0, 0, 0, 0.12)",
-    BORDER_LIGHT="rgba(0, 0, 0, 0.08)",
+    BORDER="rgba(0, 0, 0, 0.08)",
+    BORDER_LIGHT="rgba(0, 0, 0, 0.04)",
 
     STATUS_SUCCESS="#10B981",
     STATUS_WARNING="#F59E0B",
@@ -69,9 +69,9 @@ LIGHT_PALETTE = Palette(
     STATUS_ERROR_TEXT="#FFFFFF",
     STATUS_WARNING_TEXT="#FFFFFF",
 
-    HOVER_BG="rgba(0, 0, 0, 0.04)",
+    HOVER_BG="rgba(115, 149, 184, 0.08)",  # Subtle blue tint for hover
     TERM_BG="#FFFFFF",
-    TERM_FG="#1C1C1E",
+    TERM_FG="#1D1D1D",
 
     GLASS_BG="rgba(255, 255, 255, 0.8)",
     GLASS_BG_STRONG="rgba(255, 255, 255, 0.95)",

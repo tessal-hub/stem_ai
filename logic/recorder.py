@@ -19,8 +19,11 @@ from datetime import datetime
 from pathlib import Path
 
 from PyQt6.QtCore import QThread, pyqtSignal
+
 from config import DATASET_DIR, ensure_data_dir
-from constants import canonical_system_spell, is_system_spell, normalize_spell_name
+from constants import (canonical_system_spell, is_system_spell,
+                       normalize_spell_name)
+
 from .dataset_layout import spell_write_dir
 
 
@@ -40,7 +43,7 @@ class DataRecorder(QThread):
         ensure_data_dir()
         resolved_dataset_dir = Path(dataset_dir) if dataset_dir else DATASET_DIR
         self.dataset_dir = str(resolved_dataset_dir)
-        
+
         # Ensure dataset directory exists
         try:
             Path(self.dataset_dir).mkdir(parents=True, exist_ok=True)
@@ -94,12 +97,13 @@ class DataRecorder(QThread):
         # Ensure name is not empty
         return name or "unknown"
 
-    def start_recording(self, label_name: str) -> bool:
+    def start_recording(self, label_name: str, group_name: str = "") -> bool:
         """
         Start recording a new CSV file for the given label.
 
         Args:
             label_name: Spell/action name (will be sanitized)
+            group_name: Optional subgroup identifier (e.g. A_standard)
 
         Returns:
             bool: True if recording started successfully, False otherwise
@@ -112,6 +116,7 @@ class DataRecorder(QThread):
         try:
             # Sanitize the label name for filesystem safety
             label = self._sanitize_label(label_name)
+            group = self._sanitize_label(group_name) if group_name else ""
 
             if not self.isRunning():
                 self._stop_requested = False
@@ -119,7 +124,7 @@ class DataRecorder(QThread):
 
             self._start_pending = True
             self._pending_label = label
-            self._command_queue.put(("start", label))
+            self._command_queue.put(("start", (label, group)))
             return True
 
         except Exception as e:
@@ -186,7 +191,10 @@ class DataRecorder(QThread):
                 return
 
             if cmd == "start" and payload is not None:
-                self._open_recording(payload)
+                if isinstance(payload, tuple):
+                    self._open_recording(payload)
+                else:
+                    self._open_recording((payload, ""))
             elif cmd == "stop":
                 self._close_recording(success=True)
 
@@ -218,18 +226,20 @@ class DataRecorder(QThread):
             self.sig_error.emit(message)
             self._close_recording(success=False, error_message=message)
 
-    def _open_recording(self, label: str) -> None:
+    def _open_recording(self, payload: tuple[str, str]) -> None:
         self._start_pending = False
         if self._is_recording:
             self.sig_status_text.emit("[WARN] Already recording")
             return
 
         try:
+            label, group = payload
             folder = spell_write_dir(Path(self.dataset_dir), label)
             folder.mkdir(parents=True, exist_ok=True)
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-            file_path = folder / f"sample_{timestamp}.csv"
+            prefix = f"{group}_" if group else ""
+            file_path = folder / f"{prefix}sample_{timestamp}.csv"
 
             self._file = open(file_path, mode="w", newline="", encoding="utf-8")
             self._writer = csv.writer(self._file)
@@ -292,4 +302,3 @@ class DataRecorder(QThread):
                 else:
                     fail_message = error_message or "Recorder stopped with error"
                     self.sig_finished.emit(False, fail_message)
-

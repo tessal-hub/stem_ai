@@ -10,11 +10,12 @@ Checks for:
 import csv
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List
 
 import numpy as np
 
 from .dataset_layout import discover_class_directories
+
 
 @dataclass
 class SampleAudit:
@@ -28,6 +29,7 @@ class SampleAudit:
     is_flat: bool
     score: float = 1.0  # 0.0 (bad) to 1.0 (good)
 
+
 @dataclass
 class ClassAudit:
     spell_name: str
@@ -38,6 +40,7 @@ class ClassAudit:
     status: str = "OK"  # "OK", "IMBALANCED", "EMPTY", "HEALTHY"
     samples: List[SampleAudit] = field(default_factory=list)
 
+
 @dataclass
 class DatasetReport:
     total_samples: int
@@ -46,14 +49,15 @@ class DatasetReport:
     outlier_samples: List[SampleAudit]
     system_health_score: float  # 0-100
 
+
 class DatasetAuditor:
     """Performs deep analysis of the CSV dataset files."""
 
     def __init__(self, dataset_dir: str):
         self.dataset_dir = Path(dataset_dir)
         self.min_length = 20  # ~400ms at 50Hz
-        self.max_length = 200 # ~4s
-        self.min_variance = 0.001 # Flat detection
+        self.max_length = 200  # ~4s
+        self.min_variance = 0.001  # Flat detection
 
     def run_audit(self) -> DatasetReport:
         """Execute full scan of the dataset directory."""
@@ -62,7 +66,7 @@ class DatasetAuditor:
 
         class_audits: Dict[str, ClassAudit] = {}
         all_samples: List[SampleAudit] = []
-        
+
         class_dir_map = discover_class_directories(self.dataset_dir)
 
         # 1. Individual sample analysis
@@ -98,7 +102,7 @@ class DatasetAuditor:
         # 2. Dataset-wide imbalance check
         counts = [a.sample_count for a in class_audits.values() if a.sample_count > 0]
         avg_count = np.mean(counts) if counts else 0
-        
+
         imbalanced_classes = []
         for audit in class_audits.values():
             if avg_count > 0:
@@ -115,7 +119,8 @@ class DatasetAuditor:
 
         # 4. Calculate health score
         health_score = 100.0
-        if avg_count < 10: health_score -= 20
+        if avg_count < 10:
+            health_score -= 20
         health_score -= len(imbalanced_classes) * 5
         health_score -= len(outliers) * 2
         health_score = max(0, min(100, health_score))
@@ -134,7 +139,7 @@ class DatasetAuditor:
         try:
             with open(file_path, 'r') as f:
                 reader = csv.reader(f)
-                next(reader) # skip header
+                next(reader)  # skip header
                 for row in reader:
                     if len(row) >= 6:
                         rows.append([float(x) for x in row[:6]])
@@ -143,25 +148,28 @@ class DatasetAuditor:
 
         data = np.array(rows)
         length = len(data)
-        
+
         if length == 0:
             return SampleAudit(str(file_path), spell_name, 0, 0, False, True, False, True, 0.0)
 
         # Variance check (across all axes)
         var = float(np.mean(np.var(data, axis=0)))
-        
+
         # Clipping check (assume normalized -1.0 to 1.0 or similar)
-        is_clipping = bool(np.any(np.abs(data) >= 1.95)) # Threshold near 2.0 (scaled)
-        
+        is_clipping = bool(np.any(np.abs(data) >= 1.95))  # Threshold near 2.0 (scaled)
+
         is_too_short = length < self.min_length
         is_too_long = length > self.max_length
         is_flat = var < self.min_variance
-        
+
         # Heuristic score
         score = 1.0
-        if is_too_short: score -= 0.5
-        if is_flat: score -= 0.8
-        if is_clipping: score -= 0.3
+        if is_too_short:
+            score -= 0.5
+        if is_flat:
+            score -= 0.8
+        if is_clipping:
+            score -= 0.3
         score = max(0.0, score)
 
         return SampleAudit(

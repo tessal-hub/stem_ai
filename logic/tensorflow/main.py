@@ -6,14 +6,16 @@ import tensorflow as tf
 # 1. CẤU HÌNH
 # ==========================================
 WINDOW_SIZE = 50
-CHANNELS    = 6
-CLASSES     = ["circle", "call", "point", "idle"]
+CHANNELS = 6
+CLASSES = ["circle", "call", "point", "idle"]
 NUM_CLASSES = len(CLASSES)
 MAX_SIZE_KB = 1024
 
 # ==========================================
 # 2. TẢI DỮ LIỆU (pipeline gọn)
 # ==========================================
+
+
 def load_data(file_name, label, is_idle=False):
     df = pd.read_csv(file_name)
     data = df.values
@@ -25,6 +27,7 @@ def load_data(file_name, label, is_idle=False):
         X.append(window)
         y.append(label)
     return np.array(X, dtype=np.float32), np.array(y)
+
 
 print("Đang tải và lọc dữ liệu...")
 Xs, ys = zip(*[load_data(f, l, i) for f, l, i in [
@@ -73,6 +76,7 @@ model.fit(X, y_cat, epochs=100, batch_size=32, validation_split=0.2)
 split = int(len(X) * 0.8)
 X_val, y_val = X[split:], y_cat[split:]
 
+
 def evaluate_tflite(model_bytes):
     interp = tf.lite.Interpreter(model_content=model_bytes)
     interp.allocate_tensors()
@@ -97,18 +101,22 @@ def evaluate_tflite(model_bytes):
 # ==========================================
 # 6. LƯỢNG TỬ HÓA — THỬ 3 BIẾN THỂ
 # ==========================================
+
+
 def representative_dataset():
     for i in range(0, len(X), 10):
         yield [X[i:i+1].astype(np.float32)]
+
 
 def convert_int8():
     c = tf.lite.TFLiteConverter.from_keras_model(model)
     c.optimizations = [tf.lite.Optimize.DEFAULT]
     c.representative_dataset = representative_dataset
     c.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
-    c.inference_input_type  = tf.int8
+    c.inference_input_type = tf.int8
     c.inference_output_type = tf.int8
     return c.convert()
+
 
 def convert_float16():
     c = tf.lite.TFLiteConverter.from_keras_model(model)
@@ -116,10 +124,12 @@ def convert_float16():
     c.target_spec.supported_types = [tf.float16]
     return c.convert()
 
+
 def convert_dynamic():
     c = tf.lite.TFLiteConverter.from_keras_model(model)
     c.optimizations = [tf.lite.Optimize.DEFAULT]
     return c.convert()
+
 
 print("\n" + "="*52)
 print(f"{'Biến thể':<16} {'Size (KB)':>10} {'Accuracy':>10} {'Trạng thái':>12}")
@@ -131,9 +141,9 @@ for name, fn in [("INT8",         convert_int8),
                  ("DynamicRange", convert_dynamic)]:
     try:
         model_bytes = fn()
-        size_kb     = len(model_bytes) / 1024
-        acc         = evaluate_tflite(model_bytes)
-        ok          = size_kb <= MAX_SIZE_KB
+        size_kb = len(model_bytes) / 1024
+        acc = evaluate_tflite(model_bytes)
+        ok = size_kb <= MAX_SIZE_KB
         print(f"{name:<16} {size_kb:>9.1f}  {acc:>9.1f}%  {'✅ Hợp lệ' if ok else '❌ Quá lớn':>12}")
         if ok:
             candidates.append((name, model_bytes, size_kb, acc))
@@ -154,6 +164,7 @@ print(f"\n🏆 Tự động chọn: {best_name}  —  {best_kb:.1f} KB  —  Acc
 with open("gesture_model.tflite", "wb") as f:
     f.write(best_bytes)
 
+
 def save_cc(data, path="gesture_model.cc", var="gesture_model"):
     rows = "\n  ".join(
         ", ".join(f"0x{b:02x}" for b in data[i:i+12])
@@ -163,6 +174,7 @@ def save_cc(data, path="gesture_model.cc", var="gesture_model"):
         f.write(f"#include <stdint.h>\n\n"
                 f"alignas(8) const uint8_t {var}[] = {{\n  {rows}\n}};\n"
                 f"const int {var}_len = {len(data)};\n")
+
 
 save_cc(best_bytes)
 print(f"THÀNH CÔNG! Đã lưu gesture_model.tflite ({best_kb:.1f} KB)")

@@ -9,71 +9,28 @@ from __future__ import annotations
 
 import logging
 
-from PyQt6.QtCore import QTime, QTimer, Qt, pyqtSignal, QSize
-from PyQt6.QtGui import QIcon
-from PyQt6.QtWidgets import (
-    QComboBox,
-    QFormLayout,
-    QFrame,
-    QGridLayout,
-    QHBoxLayout,
-    QLabel,
-    QListWidget,
-    QListWidgetItem,
-    QMessageBox,
-    QPushButton,
-    QSizePolicy,
-    QStackedWidget,
-    QVBoxLayout,
-    QWidget,
-)
-
 import numpy as np
 import pyqtgraph as pg
+from PyQt6.QtCore import Qt, QElapsedTimer, QTime, QTimer, pyqtSignal
+from PyQt6.QtWidgets import (QComboBox, QFormLayout, QFrame, QGridLayout,
+                             QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
+                             QMessageBox, QSizePolicy, QStackedWidget,
+                             QVBoxLayout, QWidget)
 
-from constants import canonical_system_spell, is_system_spell
+from constants import is_system_spell
 from logic.theme_manager import theme_manager
-from ui.asset_utils import resolve_asset_path
-from ui.component_factory import (
-    IconButton,
-    make_button,
-    make_card,
-    make_checkbox,
-    make_empty_state_card,
-    make_hint,
-    make_section_label,
-)
+from ui.component_factory import (IconButton, make_button, make_card,
+                                  make_checkbox, make_empty_state_card,
+                                  make_hint, make_section_label)
 from ui.confirm_dialog import confirm_destructive
 from ui.i18n_bridge import tr_ui
-from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_LG, SPACING_MD, SPACING_SM
-from ui.tokens import (
-    ACCENT,
-    ACCENT_TEXT,
-    APP_FONT_STACK,
-    BTN_H,
-    CROP_REGION,
-    DANGER,
-    PLOT_AX_COLOR,
-    PLOT_AY_COLOR,
-    PLOT_AZ_COLOR,
-    PLOT_GX_COLOR,
-    PLOT_GY_COLOR,
-    PLOT_GZ_COLOR,
-    PLOT_HANDLE_HOVER_COLOR,
-    RECORD_GRAPH_MIN_H,
-    RECORD_LIST_MIN_H,
-    RIGHT_MAX_W,
-    RIGHT_MIN_W,
-    SPELL_BTN_H,
-    RIGHT_MIN_W,
-    SPELL_BTN_H,
-    SUCCESS,
-    TEXT_BODY,
-    TEXT_MUTED,
-    TITLE_FONT_STACK,
-    WARNING,
-)
-
+from ui.modern_layout import (MARGIN_COMFORTABLE, SPACING_LG, SPACING_MD,
+                              SPACING_SM)
+from ui.tokens import (ACCENT, BTN_H, CROP_REGION, PLOT_AX_COLOR,
+                       PLOT_AY_COLOR, PLOT_AZ_COLOR, PLOT_GX_COLOR,
+                       PLOT_GY_COLOR, PLOT_GZ_COLOR, PLOT_HANDLE_HOVER_COLOR,
+                       RECORD_GRAPH_MIN_H, RIGHT_MAX_W, RIGHT_MIN_W,
+                       SPELL_BTN_H, TEXT_MUTED)
 
 log = logging.getLogger(__name__)
 
@@ -114,7 +71,7 @@ class PageRecord(QWidget):
         self._sample_sentinel = "__STEM_EMPTY_SAMPLES__"
 
         self._recording_timer = QTimer()
-        self._recording_start_time = QTime()
+        self._recording_start_time = QElapsedTimer()
 
         self._init_ui()
         self._setup_plots()
@@ -132,15 +89,15 @@ class PageRecord(QWidget):
         self.main_container.setObjectName("MainBox")
 
         inner = QVBoxLayout(self.main_container)
-        # Requirement 10: padding-bottom 80px
-        inner.setContentsMargins(MARGIN_COMFORTABLE, 18, MARGIN_COMFORTABLE, 92)
+        # Bỏ padding-bottom cứng để nội dung được bung hết cỡ
+        inner.setContentsMargins(MARGIN_COMFORTABLE, 18, MARGIN_COMFORTABLE, 18)
         inner.setSpacing(SPACING_LG)
 
         content = QHBoxLayout()
         content.setSpacing(SPACING_LG)
         content.addWidget(self._build_left_column(), stretch=7)
         content.addWidget(self._build_right_column(), stretch=3)
-        
+
         inner.addLayout(content)
         outer.addWidget(self.main_container)
 
@@ -201,7 +158,8 @@ class PageRecord(QWidget):
         if isinstance(spells, dict):
             spell_counts = {str(k): int(v) for k, v in spells.items() if str(k).strip()}
         else:
-            spell_counts = {str(s): int(getattr(self.store, "spell_counts", {}).get(str(s), 0)) for s in spells if str(s).strip()}
+            spell_counts = {str(s): int(getattr(self.store, "spell_counts", {}).get(str(s), 0))
+                            for s in spells if str(s).strip()}
 
         self.spell_list.clear()
         names = sorted(list(spell_counts.keys()))
@@ -236,8 +194,6 @@ class PageRecord(QWidget):
             g.setBackground("transparent")
             g.getAxis("left").setPen(p.TEXT_TERTIARY)
             g.getAxis("bottom").setPen(p.TEXT_TERTIARY)
-        
-        pass
 
     # ── Private methods ─────────────────────────
 
@@ -279,11 +235,11 @@ class PageRecord(QWidget):
         """Vẽ dữ liệu cảm biến thời gian thực."""
         if not self.isVisible() or not self.is_live:
             return
-        
+
         buf = self.store.get_live_buffer_snapshot()
         if not buf:
             return
-        
+
         try:
             arr = np.asarray(buf, dtype=np.float32)
             if arr.ndim == 2 and arr.shape[1] >= 6:
@@ -314,7 +270,7 @@ class PageRecord(QWidget):
         layout.addLayout(header)
 
         card, card_layout = make_card(margins=(20, 20, 20, 20), spacing=SPACING_MD)
-        
+
         self.graph1 = pg.PlotWidget()
         self.graph2 = pg.PlotWidget()
         self.graph1.setMinimumHeight(RECORD_GRAPH_MIN_H)
@@ -331,11 +287,11 @@ class PageRecord(QWidget):
         row = QHBoxLayout()
         self.chk_graph1 = make_checkbox(tr_ui("record_show_accel"), checked=True)
         self.chk_graph2 = make_checkbox(tr_ui("record_show_gyro"), checked=True)
-        
+
         self.btn_zoom_in = IconButton("assets/icon/cooliocns SVG/Interface/Magnifying_Glass_Plus.svg", height=BTN_H)
         self.btn_zoom_out = IconButton("assets/icon/cooliocns SVG/Interface/Magnifying_Glass_Minus.svg", height=BTN_H)
         self.btn_zoom_fit = IconButton("assets/icon/cooliocns SVG/Arrow/Expand.svg", height=BTN_H)
-        
+
         row.addWidget(self.chk_graph1, stretch=1)
         row.addWidget(self.chk_graph2, stretch=1)
         row.addStretch()
@@ -368,8 +324,8 @@ class PageRecord(QWidget):
 
     def _build_detail_card(self) -> QFrame:
         """Card chọn câu thần chú và thông số ghi."""
-        card, layout = make_card(margins=(20, 20, 20, 20), spacing=SPACING_MD)
-        
+        card, layout = make_card(margins=(10, 10, 10, 10), spacing=SPACING_SM)
+
         form = QFormLayout()
         self.combo_spell = QComboBox()
         self.combo_spell.setEditable(True)
@@ -393,8 +349,8 @@ class PageRecord(QWidget):
 
     def _build_controls_card(self) -> QFrame:
         """Card chứa các nút tác vụ ghi (Start/Stop/Snip)."""
-        card, layout = make_card(margins=(20, 20, 20, 20), spacing=SPACING_MD)
-        
+        card, layout = make_card(margins=(10, 10, 10, 10), spacing=SPACING_SM)
+
         # Sắp xếp nút Start/Stop cạnh nhau, Snip chiếm trọn hàng để dễ thao tác
         row1 = QHBoxLayout()
         self.btn_start = make_button(tr_ui("record_btn_start"), "start", BTN_H)
@@ -407,7 +363,7 @@ class PageRecord(QWidget):
         self.btn_snip = make_button(tr_ui("record_btn_snip"), "snip", BTN_H)
         self.btn_snip.setEnabled(False)
         layout.addWidget(self.btn_snip)
-        
+
         hint = make_hint(tr_ui("record_hint_controls"))
         hint.setWordWrap(True)
         layout.addWidget(hint)
@@ -415,13 +371,13 @@ class PageRecord(QWidget):
 
     def _build_batch_card(self) -> QFrame:
         """Card chứa các tác vụ hàng loạt theo chiều dọc để tránh mất chữ."""
-        card, layout = make_card(margins=(20, 20, 20, 20), spacing=SPACING_MD)
+        card, layout = make_card(margins=(10, 10, 10, 10), spacing=SPACING_SM)
         layout.addWidget(make_section_label(tr_ui("record_batch"), accent=False))
-        
+
         self.btn_delete_latest_sample = make_button(tr_ui("record_btn_delete_latest"), "danger_outline", BTN_H)
         self.btn_clear_samples = make_button(tr_ui("record_btn_clear"), "danger_outline", BTN_H)
         self.btn_export_csv = make_button(tr_ui("record_btn_export"), "base", BTN_H)
-        
+
         layout.addWidget(self.btn_delete_latest_sample)
         layout.addWidget(self.btn_clear_samples)
         layout.addWidget(self.btn_export_csv)
@@ -434,9 +390,9 @@ class PageRecord(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_SM)
         layout.addWidget(make_section_label(tr_ui("record_spell_list"), accent=False))
-        
+
         self.spell_stack = QStackedWidget()
-        
+
         # Thư viện thực
         lib_page = QWidget()
         lib_lay = QVBoxLayout(lib_page)
@@ -446,13 +402,13 @@ class PageRecord(QWidget):
         self.spell_list.setProperty("type", "record_list")
         self.btn_delete_spell = make_button(tr_ui("record_delete_spell_btn"), "danger_outline", SPELL_BTN_H)
         lib_lay.addWidget(self.btn_delete_spell)
-        
+
         self.spell_stack.addWidget(lib_page)
-        
+
         # Requirement 3: Empty state
         empty_card, _ = self._make_empty_state()
         self.spell_stack.addWidget(empty_card)
-        
+
         layout.addWidget(self.spell_stack)
         return page
 
@@ -557,16 +513,19 @@ class PageRecord(QWidget):
         """Cập nhật thời gian đã ghi trên giao diện."""
         if self._recording_timer.isActive():
             ms = self._recording_start_time.elapsed()
-            self.lbl_record_duration.setText(f"{ms//60000:02d}:{(ms%60000)//1000:02d}")
+            self.lbl_record_duration.setText(f"{ms//60000:02d}:{(ms % 60000)//1000:02d}")
 
     def _on_zoom_in_clicked(self) -> None:
-        for g in [self.graph1, self.graph2]: g.getViewBox().scaleBy((0.8, 0.8))
+        for g in [self.graph1, self.graph2]:
+            g.getViewBox().scaleBy((0.8, 0.8))
 
     def _on_zoom_out_clicked(self) -> None:
-        for g in [self.graph1, self.graph2]: g.getViewBox().scaleBy((1.25, 1.25))
+        for g in [self.graph1, self.graph2]:
+            g.getViewBox().scaleBy((1.25, 1.25))
 
     def _on_zoom_fit_clicked(self) -> None:
-        for g in [self.graph1, self.graph2]: g.getViewBox().autoRange()
+        for g in [self.graph1, self.graph2]:
+            g.getViewBox().autoRange()
 
     def _on_btn_clear_clicked(self) -> None:
         """Xóa sạch bộ đệm dữ liệu tạm thời."""
@@ -592,7 +551,8 @@ class PageRecord(QWidget):
         name = item.data(Qt.ItemDataRole.UserRole)
         if name != _EMPTY_SPELL_LIST:
             idx = self.combo_spell.findText(name)
-            if idx >= 0: self.combo_spell.setCurrentIndex(idx)
+            if idx >= 0:
+                self.combo_spell.setCurrentIndex(idx)
             self.sig_spell_selected.emit(name)
 
     def _on_btn_delete_spell_clicked(self) -> None:

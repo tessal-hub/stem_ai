@@ -8,7 +8,6 @@ from pathlib import Path
 
 from constants import canonical_system_spell, normalize_spell_name
 
-
 _TEMPLATE_ENUM = "{{SPELL_ENUM_BLOCK}}"
 _TEMPLATE_NAMES = "{{SPELL_NAME_TABLE_BLOCK}}"
 _TEMPLATE_SWITCH = "{{SPELL_SWITCH_BLOCK}}"

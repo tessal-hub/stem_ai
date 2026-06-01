@@ -8,15 +8,13 @@ và nạp dữ liệu/mô hình vào đũa phép Magic Wand.
 from __future__ import annotations
 
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import QHBoxLayout, QLabel, QProgressBar, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QLabel, QProgressBar, QVBoxLayout, QWidget
 
 from ui.i18n_bridge import tr_ui
-from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_MD, SPACING_SM, SPACING_XS
-from ui.tokens import (
-    BTN_H,
-    INPUT_RADIUS,
-    PROGRESS_H,
-)
+from ui.modern_layout import (MARGIN_COMFORTABLE, SPACING_MD, SPACING_SM,
+                              SPACING_XS)
+from ui.tokens import BTN_H, PROGRESS_H
+
 from .shared import make_button, make_card, make_section_label
 
 
@@ -55,7 +53,7 @@ class WandFlashPanel(QWidget):
         self.btn_build_tflite = make_button(tr_ui("wand_build_tflite"), "outline", height=BTN_H)
         self.btn_build_cc = make_button(tr_ui("wand_build_cc"), "outline", height=BTN_H)
         self.btn_upload = make_button(tr_ui("wand_upload_model"), "primary", height=BTN_H)
-        
+
         btn_layout.addWidget(self.btn_build_tflite)
         btn_layout.addWidget(self.btn_build_cc)
         btn_layout.addWidget(self.btn_upload)

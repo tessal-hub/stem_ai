@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 from typing import Mapping, Sequence
-
 
 ACCEL_LSB_BY_SCALE: dict[str, float] = {
     "+-2g": 16_384.0,
@@ -45,13 +44,11 @@ class FrameValidationError(ValueError):
     """Raised when an inbound frame fails protocol validation."""
 
 
-
 def _normalize_scale_label(raw_value: object) -> str:
     label = str(raw_value).strip()
     # Support both unicode and ASCII plus/minus spellings from settings/UI.
     label = label.replace("±", "+-")
     return label
-
 
 
 def _resolve_scale_value(
@@ -63,7 +60,6 @@ def _resolve_scale_value(
     if not key:
         return default_value
     return float(mapping.get(key, default_value))
-
 
 
 def build_scale_profile(settings: Mapping[str, object] | None) -> SensorScaleProfile:
@@ -82,7 +78,6 @@ def build_scale_profile(settings: Mapping[str, object] | None) -> SensorScalePro
         DEFAULT_SCALE_PROFILE.gyro_lsb_per_dps,
     )
     return SensorScaleProfile(accel_lsb_per_g=accel, gyro_lsb_per_dps=gyro)
-
 
 
 def validate_six_axis_values(values: Sequence[object]) -> list[float]:
@@ -111,7 +106,6 @@ def validate_six_axis_values(values: Sequence[object]) -> list[float]:
     return parsed
 
 
-
 def normalize_sensor_values(
     raw_values: Sequence[object],
     profile: SensorScaleProfile = DEFAULT_SCALE_PROFILE,
@@ -126,7 +120,6 @@ def normalize_sensor_values(
         values[4] / profile.gyro_lsb_per_dps,
         values[5] / profile.gyro_lsb_per_dps,
     ]
-
 
 
 def parse_sensor_csv_frame(
@@ -144,7 +137,6 @@ def parse_sensor_csv_frame(
         )
 
     return normalize_sensor_values(parts, profile)
-
 
 
 def parse_prediction_frame(frame: str) -> tuple[str, float]:

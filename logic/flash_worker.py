@@ -14,8 +14,8 @@ Architecture:
 """
 
 import re
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
 from PyQt6.QtCore import QThread, pyqtSignal
@@ -31,9 +31,9 @@ class FlashWorker(QThread):
     """Flash firmware to ESP32-S3 via esptool in background thread."""
 
     # ── Signals ──────────────────────────────────────────────────────────
-    log_msg      = pyqtSignal(str)           # Real-time console output
+    log_msg = pyqtSignal(str)           # Real-time console output
     sig_progress = pyqtSignal(int)           # 0-100 progress percent
-    sig_error    = pyqtSignal(str)           # error message
+    sig_error = pyqtSignal(str)           # error message
     sig_finished = pyqtSignal(bool, str)     # (success, message)
 
     def __init__(self) -> None:

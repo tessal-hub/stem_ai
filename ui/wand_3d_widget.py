@@ -23,9 +23,9 @@ import time
 
 import numpy as np
 import pyqtgraph.opengl as gl
-from pyqtgraph import Transform3D
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
+from pyqtgraph import Transform3D
 
 log = logging.getLogger(__name__)
 
@@ -34,21 +34,20 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 _CLR_STICK = (0.45, 0.30, 0.18, 1.0)   # dark wood brown
 _CLR_ESP32 = (0.05, 0.45, 0.15, 1.0)   # green PCB
-_CLR_MPU   = (0.10, 0.30, 0.70, 1.0)   # blue PCB
-_CLR_CHIP  = (0.15, 0.15, 0.15, 1.0)   # dark IC chip
-_CLR_PIN   = (0.75, 0.75, 0.20, 1.0)   # gold pins
-_CLR_USB   = (0.60, 0.60, 0.60, 1.0)   # silver USB port
+_CLR_MPU = (0.10, 0.30, 0.70, 1.0)   # blue PCB
+_CLR_CHIP = (0.15, 0.15, 0.15, 1.0)   # dark IC chip
+_CLR_PIN = (0.75, 0.75, 0.20, 1.0)   # gold pins
+_CLR_USB = (0.60, 0.60, 0.60, 1.0)   # silver USB port
 
 # ---------------------------------------------------------------------------
 # Wand geometry constants  (1 GL unit ≈ 5 cm)
 # ---------------------------------------------------------------------------
-_ESP32_W,  _ESP32_D,  _ESP32_H  = 0.50, 0.28, 1.00
-_STICK_R,  _STICK_H,  _STICK_N  = 0.10, 3.20, 16
-_MPU_W,    _MPU_D,    _MPU_H    = 0.36, 0.25, 0.60
+_ESP32_W,  _ESP32_D,  _ESP32_H = 0.50, 0.28, 1.00
+_STICK_R,  _STICK_H,  _STICK_N = 0.10, 3.20, 16
+_MPU_W,    _MPU_D,    _MPU_H = 0.36, 0.25, 0.60
 _Z_ESP32_CENTER = 0.50   # centre of ESP32 along Z
-_Z_STICK_BOT    = 1.00   # stick starts here
-_Z_MPU_CENTER   = 4.50   # centre of MPU along Z
-
+_Z_STICK_BOT = 1.00   # stick starts here
+_Z_MPU_CENTER = 4.50   # centre of MPU along Z
 
 
 # ---------------------------------------------------------------------------
@@ -76,12 +75,12 @@ def _make_box(
         [cx+hx, cy+hy, cz+hz], [cx-hx, cy+hy, cz+hz],
     ], dtype=np.float32)
     faces = np.array([
-        [0,1,2],[0,2,3],  # bottom
-        [4,6,5],[4,7,6],  # top
-        [0,4,5],[0,5,1],  # front
-        [2,6,7],[2,7,3],  # back
-        [0,3,7],[0,7,4],  # left
-        [1,5,6],[1,6,2],  # right
+        [0, 1, 2], [0, 2, 3],  # bottom
+        [4, 6, 5], [4, 7, 6],  # top
+        [0, 4, 5], [0, 5, 1],  # front
+        [2, 6, 7], [2, 7, 3],  # back
+        [0, 3, 7], [0, 7, 4],  # left
+        [1, 5, 6], [1, 6, 2],  # right
     ], dtype=np.uint32)
     return gl.GLMeshItem(
         vertexes=verts,
@@ -149,7 +148,7 @@ def _euler_to_transform(
     rot = np.array([
         [cy*cp,  cy*sp*sr - sy*cr,  cy*sp*cr + sy*sr],
         [sy*cp,  sy*sp*sr + cy*cr,  sy*sp*cr - cy*sr],
-        [-sp,    cp*sr,             cp*cr            ],
+        [-sp,    cp*sr,             cp*cr],
     ], dtype=np.float32)
 
     M = np.eye(4, dtype=np.float32)
@@ -227,9 +226,9 @@ class Wand3DWidget(QWidget):
         self._build_wand()
 
         # ── Orientation state ─────────────────────────────────────────
-        self._roll  = 0.0   # degrees
+        self._roll = 0.0   # degrees
         self._pitch = 0.0   # degrees
-        self._yaw   = 0.0   # degrees
+        self._yaw = 0.0   # degrees
         self._last_update_ts: float | None = None
 
     # ------------------------------------------------------------------
@@ -269,12 +268,12 @@ class Wand3DWidget(QWidget):
         self._last_update_ts = now
 
         # ── 1. Gyro integration  (gx ↔ gz swapped: Z now drives roll, X drives yaw)
-        self._roll  += gz * dt
+        self._roll += gz * dt
         self._pitch += gy * dt
-        self._yaw   += gx * dt
+        self._yaw += gx * dt
 
         # ── 2. Accel-derived roll & pitch  (ax ↔ az swapped)
-        accel_roll  = math.degrees(math.atan2(ay, ax))
+        accel_roll = math.degrees(math.atan2(ay, ax))
         accel_pitch = math.degrees(
             math.atan2(-az, math.hypot(ay, ax) + 1e-6)
         )
@@ -318,7 +317,7 @@ class Wand3DWidget(QWidget):
         self._add(_make_box(0,     0.05, z,      0.22,     0.04,     0.30,     _CLR_CHIP))
         self._add(_make_box(0,     0,    0.05,   0.18,     0.10,     0.10,     _CLR_USB))
         self._add(_make_box(-0.22, 0,    z,      0.04,     0.04,     0.80,     _CLR_PIN))
-        self._add(_make_box( 0.22, 0,    z,      0.04,     0.04,     0.80,     _CLR_PIN))
+        self._add(_make_box(0.22, 0,    z,      0.04,     0.04,     0.80,     _CLR_PIN))
 
         # Stick shaft ──────────────────────────────────────────────────
         self._add(_make_cylinder(0, 0, _Z_STICK_BOT, _STICK_R, _STICK_H, _STICK_N, _CLR_STICK))

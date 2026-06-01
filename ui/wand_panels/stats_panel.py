@@ -10,16 +10,14 @@ from __future__ import annotations
 import numpy as np
 import pyqtgraph as pg
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor
-from PyQt6.QtWidgets import QGridLayout, QLabel, QVBoxLayout, QWidget, QFrame, QStackedWidget
+from PyQt6.QtWidgets import (QGridLayout, QLabel, QStackedWidget, QVBoxLayout,
+                             QWidget)
 
 from logic.theme_manager import theme_manager
 from ui.i18n_bridge import tr_ui
 from ui.layout_utils import clear_layout
 from ui.modern_layout import SPACING_LG, SPACING_SM, SPACING_XS
-from ui.tokens import (
-    TITLE_FONT_STACK,
-)
+
 from .shared import make_card, make_section_label
 
 
@@ -67,7 +65,7 @@ class WandStatsPanel(QWidget):
         self.chart_stack.addWidget(self.stats_plot)
         card_layout.addWidget(self.chart_stack, stretch=1)
         layout.addWidget(card, stretch=1)
-        
+
         # Requirement 3: Empty state handling inside update_spell_chart
         self.refresh_styles()
 
@@ -77,7 +75,7 @@ class WandStatsPanel(QWidget):
         """Cập nhật các nhãn thông số từ ESP32."""
         clear_layout(self.layout_stats)
         palette = theme_manager.get_palette()
-        
+
         if not stats:
             lbl = QLabel(tr_ui("wand_stats_waiting"))
             lbl.setProperty("type", "settings_hint")
@@ -97,10 +95,10 @@ class WandStatsPanel(QWidget):
         palette = theme_manager.get_palette()
         ax_bottom = self.stats_plot.getAxis("bottom")
         ax_left = self.stats_plot.getAxis("left")
-        
+
         ax_left.setPen(palette.TEXT_SECONDARY)
         ax_bottom.setPen(palette.TEXT_SECONDARY)
-        
+
         spells = list(spell_counts.keys())
         counts = list(spell_counts.values())
 

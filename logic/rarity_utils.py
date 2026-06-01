@@ -6,7 +6,8 @@ PageWand and PageStatistics.
 
 from dataclasses import dataclass
 
-from ui.tokens import RARITY_NONE, RARITY_COM, RARITY_UNC, RARITY_RARE, RARITY_EPIC
+from ui.tokens import (RARITY_COM, RARITY_EPIC, RARITY_NONE, RARITY_RARE,
+                       RARITY_UNC)
 
 
 @dataclass(frozen=True)
@@ -29,10 +30,10 @@ RARITY_TIERS: tuple[RarityTier, ...] = (
 def resolve_rarity(count: int) -> RarityTier:
     """
     Return the highest tier whose min_count does not exceed count.
-    
+
     Args:
         count: Number of times the rarity tier was achieved.
-    
+
     Returns:
         RarityTier: The appropriate tier for the given count.
     """

@@ -3,9 +3,10 @@ logic/idf_worker.py — Background worker for ESP-IDF build operations.
 """
 
 import subprocess
-import os
 from pathlib import Path
+
 from PyQt6.QtCore import QThread, pyqtSignal
+
 
 class IDFBuildWorker(QThread):
     """Executes idf.py build in a separate thread."""
@@ -20,12 +21,12 @@ class IDFBuildWorker(QThread):
     def run(self):
         try:
             self.sig_log.emit(f"[BUILD] Starting ESP-IDF build in {self.project_dir}...")
-            
+
             # Check if idf.py exists in path
             # On Windows, idf.py usually runs via idf.py.exe or python idf.py
             # We assume the user has run the export script or has it in PATH
             cmd = ["idf.py", "build"]
-            
+
             process = subprocess.Popen(
                 cmd,
                 cwd=str(self.project_dir),
@@ -39,9 +40,9 @@ class IDFBuildWorker(QThread):
             if process.stdout:
                 for line in process.stdout:
                     self.sig_log.emit(line.strip())
-            
+
             process.wait()
-            
+
             if process.returncode == 0:
                 bin_path = self.project_dir / "build" / "mpu6050.bin"
                 self.sig_finished.emit(True, str(bin_path))

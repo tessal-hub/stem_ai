@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 
-
 _HEX_RE = re.compile(r"^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$")
 _RGBA_RE = re.compile(
     r"^rgba?\(\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})(?:\s*,\s*([0-9]*\.?[0-9]+))?\s*\)$"
@@ -89,4 +88,3 @@ def readable_text_on(
     dark_ratio = contrast_ratio(dark_text, bg_color)
     light_ratio = contrast_ratio(light_text, bg_color)
     return dark_text if dark_ratio >= light_ratio else light_text
-

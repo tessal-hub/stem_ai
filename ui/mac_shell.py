@@ -12,27 +12,15 @@ from dataclasses import dataclass
 from PyQt6.QtCore import QEvent, QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QIcon, QPainter, QPixmap
 from PyQt6.QtSvg import QSvgRenderer
-from PyQt6.QtWidgets import (
-    QFrame,
-    QGestureEvent,
-    QHBoxLayout,
-    QLabel,
-    QSizePolicy,
-    QSwipeGesture,
-    QToolButton,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtWidgets import (QFrame, QGestureEvent, QHBoxLayout, QLabel,
+                             QSizePolicy, QSwipeGesture, QToolButton,
+                             QVBoxLayout, QWidget)
 
 from logic.theme_manager import theme_manager
 from ui.asset_utils import resolve_asset_path
 from ui.i18n_bridge import tr_ui
-from ui.tokens import (
-    SHELL_BRAND_H,
-    SHELL_BRAND_ICON,
-    SHELL_NAV_H,
-    SHELL_SIDEBAR_W,
-)
+from ui.tokens import (SHELL_BRAND_H, SHELL_BRAND_ICON, SHELL_NAV_H,
+                       SHELL_SIDEBAR_W)
 
 
 @dataclass(frozen=True)
@@ -119,7 +107,6 @@ class MacShell(QWidget):
 
     def _load_data(self) -> None:
         """Không có dữ liệu ban đầu cần nạp."""
-        pass
 
     # ── Public methods ──────────────────────────
 
@@ -127,7 +114,7 @@ class MacShell(QWidget):
         """Chuyển trang hiển thị và cập nhật trạng thái menu."""
         if not (0 <= index < len(NAV_ITEMS)):
             return
-            
+
         if index == self._active_index and self._buttons[index].property("active"):
             return
 
@@ -161,7 +148,6 @@ class MacShell(QWidget):
 
     def refresh_styles(self) -> None:
         """Làm mới toàn bộ stylesheet theo theme."""
-        pass
 
     def event(self, event: QEvent) -> bool:
         """Xử lý sự kiện chung, bao gồm cử chỉ."""
@@ -170,8 +156,6 @@ class MacShell(QWidget):
         return super().event(event)
 
     # ── Private methods ─────────────────────────
-
-
 
     def _build_sidebar(self) -> QWidget:
         """Xây dựng thanh điều hướng (Requirement 2: Fixed 320px)."""

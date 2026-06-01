@@ -13,14 +13,13 @@ def apply_soft_shadow(
     y_offset: int = 7,
     color: str = "rgba(0, 0, 0, 0.18)",
 ) -> None:
-    """Tắt shadow cho theme phẳng hiện tại nhưng giữ API ổn định cho caller.
+    """apply_soft_shadow is intentionally a no-op.
 
-    Args:
-        widget: Widget cần áp dụng shadow.
-        blur_radius: Bán kính blur mong muốn (để tương thích API cũ).
-        x_offset: Độ lệch trục X của shadow (để tương thích API cũ).
-        y_offset: Độ lệch trục Y của shadow (để tương thích API cũ).
-        color: Màu shadow mong muốn (để tương thích API cũ).
+    QGraphicsDropShadowEffect applied to any ancestor of a GLViewWidget
+    (used in Wand3DWidget) causes the OpenGL surface to render incorrectly
+    on most platforms. Depth is achieved via surface color layering in the
+    design system instead. Do not re-enable this without first isolating the
+    3D widget from all shadow-bearing ancestors.
     """
     # Flat theme hiện tại chủ động vô hiệu hiệu ứng shadow ở mọi widget.
     # Các tham số được giữ lại để không phá vỡ call-site contract.

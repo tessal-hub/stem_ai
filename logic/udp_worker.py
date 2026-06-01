@@ -29,9 +29,9 @@ class UdpWorker(QThread):
     # Outbound signals (Cross-thread safe)
     sig_data_received = pyqtSignal(dict)  # Emits parsed JSON payload
     sig_status_change = pyqtSignal(bool)  # Emits True when receiving, False if timeout/disconnected
-    sig_error         = pyqtSignal(str)
+    sig_error = pyqtSignal(str)
     sig_health_update = pyqtSignal(dict)
-    sig_finished      = pyqtSignal(bool, str)
+    sig_finished = pyqtSignal(bool, str)
 
     def __init__(self, host: str = "0.0.0.0", port: int = 5555, parent=None) -> None:
         super().__init__(parent)

@@ -8,12 +8,13 @@ Cung cấp phản hồi trạng thái kết nối trực quan cho người dùng
 from __future__ import annotations
 
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import QComboBox, QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel,
+                             QVBoxLayout, QWidget)
 
-from logic.theme_manager import theme_manager
 from ui.i18n_bridge import tr_ui
 from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_SM
 from ui.tokens import SETTINGS_INPUT_H
+
 from .connection_presenter import ConnectionStatusPresenter
 from .shared import make_button, make_card, make_section_label
 

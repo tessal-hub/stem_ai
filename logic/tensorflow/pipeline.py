@@ -1,4 +1,7 @@
 from __future__ import annotations
+from ..dataset_layout import (discover_class_directories,
+                              filter_selected_class_names)
+from config import APP_DATA_DIR, DEFAULT_MODEL_PATH, WORKSPACE_ROOT
 
 import csv
 import logging
@@ -22,6 +25,8 @@ logging.getLogger("tensorflow").setLevel(logging.ERROR)
 logging.getLogger("absl").setLevel(logging.ERROR)
 
 # A context manager to completely mute stdout/stderr for noisy TF functions
+
+
 @contextmanager
 def suppress_stdout_stderr():
     with open(os.devnull, "w") as devnull:
@@ -40,6 +45,7 @@ def suppress_stdout_stderr():
 if typing.TYPE_CHECKING:
     class QThread:
         def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None: ...
+
     def pyqtSignal(*args: typing.Any, **kwargs: typing.Any) -> typing.Any: ...
 else:
     try:
@@ -54,10 +60,6 @@ else:
                 def emit(self, *emit_args, **emit_kwargs):
                     return None
             return _DummySignal()
-
-from config import APP_DATA_DIR, DEFAULT_MODEL_PATH, GESTURE_MODEL_CC_OUTPUT, WORKSPACE_ROOT
-
-from ..dataset_layout import discover_class_directories, filter_selected_class_names
 
 
 StatusCallback = Callable[[str], None]
@@ -113,7 +115,7 @@ def _windowize(rows: list[list[float]], *, window_size: int, step: int) -> list[
 
     windows: list[list[list[float]]] = []
     for i in range(0, len(rows) - window_size + 1, step):
-        windows.append(rows[i : i + window_size])
+        windows.append(rows[i: i + window_size])
     return windows
 
 
@@ -182,7 +184,7 @@ def build_gesture_model(
     status_cb: StatusCallback | None = None,
     progress_cb: ProgressCallback | None = None,
     epochs: int = 100,
-    window_size: int = 40,
+    window_size: int = 64,
     step: int = 2,
     selected_spells: list[str] | None = None,
     output_mode: Literal["tflite", "cc", "both"] = "both",
@@ -276,7 +278,7 @@ def build_gesture_model(
             "consider recording more sessions per class for honest evaluation.",
         )
     else:
-        val_count = len(val_file_rows) 
+        val_count = len(val_file_rows)
         _emit_status(
             status_cb,
             f"[TRAIN] File-level split: "
@@ -464,11 +466,11 @@ def build_gesture_model(
     if validation_data is not None and validation_data[1] is not None:
         X_val_cm = validation_data[0]
         y_val_cm = validation_data[1]
-        
+
         y_pred_prob = model.predict(X_val_cm, verbose=0)
-        y_pred_idx  = np.argmax(y_pred_prob, axis=1)
-        y_true_idx  = np.argmax(y_val_cm,    axis=1)
-        n_classes   = len(class_names)
+        y_pred_idx = np.argmax(y_pred_prob, axis=1)
+        y_true_idx = np.argmax(y_val_cm,    axis=1)
+        n_classes = len(class_names)
 
         cm = np.zeros((n_classes, n_classes), dtype=np.int32)
         for t, p in zip(y_true_idx, y_pred_idx):
@@ -480,8 +482,8 @@ def build_gesture_model(
 
         for true_i, true_name in enumerate(class_names):
             row_counts = "  ".join(f"{cm[true_i, pred_i]:>8d}" for pred_i in range(n_classes))
-            total      = cm[true_i].sum()
-            recall     = cm[true_i, true_i] / total if total > 0 else 0.0
+            total = cm[true_i].sum()
+            recall = cm[true_i, true_i] / total if total > 0 else 0.0
             _emit_status(
                 status_cb,
                 f"[EVAL] {true_name[:12]:>12s}  {row_counts}   recall={recall:.2%}",
@@ -498,7 +500,7 @@ def build_gesture_model(
             )
 
         correct = int(np.trace(cm))
-        total   = int(cm.sum())
+        total = int(cm.sum())
         _emit_status(
             status_cb,
             f"[EVAL] Overall val accuracy: {correct}/{total} = {correct/total:.2%}",
@@ -518,7 +520,7 @@ def build_gesture_model(
         def _representative_dataset():
             step_val = max(1, len(X_train) // 200)
             for i in range(0, len(X_train), step_val):
-                yield [X_train[i : i + 1]]
+                yield [X_train[i: i + 1]]
 
         converter = tf.lite.TFLiteConverter.from_keras_model(model)
         lite_optimize = getattr(getattr(tf, "lite", None), "Optimize", None)
@@ -526,7 +528,7 @@ def build_gesture_model(
         if lite_opt_default is not None:
             converter.optimizations = [lite_opt_default]
         converter.representative_dataset = _representative_dataset
-        
+
         # Ép kiểu I/O về INT8 để tương thích với C++
         lite_ops_set = getattr(getattr(tf, "lite", None), "OpsSet", None)
         lite_builtin_int8 = getattr(lite_ops_set, "TFLITE_BUILTINS_INT8", None)
@@ -536,7 +538,7 @@ def build_gesture_model(
         if tf_int8 is not None:
             converter.inference_input_type = tf_int8
             converter.inference_output_type = tf_int8
-        
+
         tflite_model = converter.convert()
 
     tflite_path, cc_path = _resolve_output_paths(output_root)
@@ -580,7 +582,7 @@ class GestureModelBuildWorker(QThread):
     ) -> None:
         super().__init__()
         self.dataset_dir = dataset_dir
-        self.output_mode: Literal["tflite", "cc", "both"] = output_mode 
+        self.output_mode: Literal["tflite", "cc", "both"] = output_mode
         self.selected_spells = selected_spells or []
         self.build_result: BuildResult | None = None
 

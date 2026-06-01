@@ -15,11 +15,9 @@ from PyQt6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 from ui.i18n_bridge import tr_ui
 from ui.modern_layout import SPACING_SM
 from ui.terminal_widget import TerminalWidget
-from ui.tokens import (
-    BTN_SMALL_H,
-)
-from .shared import make_section_label
+from ui.tokens import BTN_SMALL_H
 
+from .shared import make_section_label
 
 # Tần suất làm mới terminal (ms)
 _FLUSH_INTERVAL_MS = 100
@@ -36,7 +34,7 @@ class WandTerminalPanel(QWidget):
         super().__init__()
         self._pending_lines = collections.deque()
         self._flush_timer = QTimer(self)
-        
+
         self._init_ui()
         self._init_signals()
         self._start_timer()
@@ -89,7 +87,6 @@ class WandTerminalPanel(QWidget):
     def refresh_styles(self) -> None:
         """Làm mới style theo theme hiện tại."""
         # Theme handling is mostly done via inline stylesheet for Requirement 4
-        pass
 
     # ── Private methods ─────────────────────────
 

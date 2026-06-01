@@ -8,15 +8,8 @@ Cung cấp helpers cho:
   - Xây dựng spacer items
 """
 
-from PyQt6.QtWidgets import (
-    QFrame,
-    QHBoxLayout,
-    QSizePolicy,
-    QSpacerItem,
-    QVBoxLayout,
-    QWidget,
-)
-from ui.mac_material import apply_soft_shadow
+from PyQt6.QtWidgets import (QFrame, QHBoxLayout, QSizePolicy, QSpacerItem,
+                             QVBoxLayout, QWidget)
 
 # Modern spacing values (in pixels) - Claude web aesthetic
 SPACING_XS = 8       # Minimal spacing between tightly grouped items
@@ -41,12 +34,12 @@ def create_modern_card(
 ) -> tuple[QFrame, QVBoxLayout | QHBoxLayout]:
     """
     Create a modern card/panel with proper spacing and styling.
-    
+
     Args:
         margin: Margin inside card (pixels)
         spacing: Spacing between items (pixels)
         orientation: "vertical" for QVBoxLayout, "horizontal" for QHBoxLayout
-    
+
     Returns:
         Tuple of (frame, layout) ready for addWidget/addLayout calls
     """
@@ -54,15 +47,15 @@ def create_modern_card(
     card.setFrameShape(QFrame.Shape.NoFrame)
     card.setFrameShadow(QFrame.Shadow.Plain)
     card.setObjectName("ModernCard")
-    
+
     if orientation.lower() == "horizontal":
         layout = QHBoxLayout(card)
     else:
         layout = QVBoxLayout(card)
-    
+
     layout.setContentsMargins(margin, margin, margin, margin)
     layout.setSpacing(spacing)
-    
+
     return card, layout
 
 
@@ -73,14 +66,10 @@ def add_card_shadow(
     offset_y: float = 4,
     color: str = "rgba(0, 0, 0, 0.12)",
 ) -> None:
-    """Apply a subtle shadow to improve card depth."""
-    apply_soft_shadow(
-        widget,
-        blur_radius=int(max(0, blur_radius)),
-        x_offset=int(offset_x),
-        y_offset=int(offset_y),
-        color=color,
-    )
+    """Apply a subtle shadow to improve card depth.
+    (Currently a no-op to comply with Apple HIG flat aesthetics)
+    """
+    pass
 
 
 def create_spacer(
@@ -89,11 +78,11 @@ def create_spacer(
 ) -> QSpacerItem:
     """
     Create a spacer item for layout spacing.
-    
+
     Args:
         horizontal: If True, create horizontal spacer; else vertical
         size: Minimum size of spacer (pixels)
-    
+
     Returns:
         QSpacerItem ready to add to layout
     """
@@ -116,10 +105,10 @@ def create_spacer(
 def create_expandable_spacer(horizontal: bool = False) -> QSpacerItem:
     """
     Create an expandable spacer that grows to fill available space.
-    
+
     Args:
         horizontal: If True, create horizontal; else vertical
-    
+
     Returns:
         QSpacerItem that expands to fill space
     """
@@ -146,7 +135,7 @@ def set_layout_spacing(
 ) -> None:
     """
     Set modern spacing on a layout.
-    
+
     Args:
         layout: Layout to configure
         margin: Margin around edges
@@ -163,20 +152,20 @@ def create_section_container(
 ) -> tuple[QFrame, QVBoxLayout]:
     """
     Create a card-based section with optional title.
-    
+
     Args:
         title_widget: Optional title widget to add at top
         margin: Internal margin
         spacing: Item spacing
-    
+
     Returns:
         Tuple of (card_frame, layout)
     """
     card, layout = create_modern_card(margin=margin, spacing=spacing)
-    
+
     if title_widget:
         layout.addWidget(title_widget)
-    
+
     return card, layout
 
 
@@ -188,13 +177,13 @@ def create_elevated_panel(
 ) -> tuple[QFrame, QVBoxLayout]:
     """
     Create an elevated panel container.
-    
+
     Args:
         shadow_blur: Unused in no-shadow mode; kept for compatibility
         shadow_offset_y: Unused in no-shadow mode; kept for compatibility
         margin: Internal margin
         spacing: Item spacing
-    
+
     Returns:
         Tuple of (elevated_panel, layout)
     """
@@ -228,7 +217,7 @@ def create_row_layout(
 def apply_card_styling(widget: QWidget, with_shadow: bool = True) -> None:
     """
     Apply standard card styling to a widget.
-    
+
     Args:
         widget: Widget to style
         with_shadow: Unused in no-shadow mode; kept for compatibility

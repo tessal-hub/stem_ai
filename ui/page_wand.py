@@ -7,8 +7,8 @@ hiển thị terminal UART và thống kê tài nguyên thiết bị.
 
 from __future__ import annotations
 
-from PyQt6.QtCore import pyqtSignal, Qt
-from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget, QGridLayout, QSizePolicy
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import QGridLayout, QVBoxLayout, QWidget
 
 from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_LG
 from ui.tokens import SPACE_32
@@ -49,8 +49,8 @@ class PageWand(QWidget):
     def _init_ui(self) -> None:
         """Khởi tạo giao diện (Requirement 2: 2-column grid, Requirement 10: padding 80px)."""
         layout = QVBoxLayout(self)
-        # Requirement 10: padding-bottom 80px
-        layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, 80)
+        # Bỏ padding-bottom cứng để nội dung được bung hết cỡ
+        layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
         layout.setSpacing(SPACING_LG)
 
         # Requirement 2: 2-column layout, gap 32px
@@ -80,7 +80,7 @@ class PageWand(QWidget):
 
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
-        
+
         layout.addLayout(grid, stretch=1)
 
     def _init_signals(self) -> None:

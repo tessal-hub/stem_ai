@@ -7,39 +7,16 @@ giúp duy trì tính nhất quán của giao diện và hỗ trợ chuyển đ�
 
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtGui import QIcon
-from PyQt6.QtWidgets import (
-    QCheckBox,
-    QComboBox,
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QSpinBox,
-    QToolButton,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtWidgets import (QCheckBox, QFrame, QLabel, QPushButton,
+                             QToolButton, QVBoxLayout, QWidget)
 
 from logic.theme_manager import theme_manager
 from ui.asset_utils import resolve_asset_path
 from ui.color_utils import readable_text_on
-from ui.tokens import (
-    APP_FONT_STACK,
-    BADGE_RADIUS,
-    BTN_H,
-    BTN_RADIUS,
-    CARD_BEZEL,
-    INPUT_RADIUS,
-    SETTINGS_BTN_H,
-    SETTINGS_INPUT_H,
-    SPACING_LG,
-    SPACING_MD,
-    SPACING_SM,
-    SPACING_XS,
-    TITLE_FONT_STACK,
-)
+from ui.tokens import (APP_FONT_STACK, BADGE_RADIUS, BTN_H, SPACING_MD,
+                       SPACING_SM)
 
 
 def _p():
@@ -68,7 +45,7 @@ def make_card(
     """Tạo một thẻ (Card) tiêu chuẩn đồng bộ với theme."""
     card = QFrame()
     card.setObjectName("Card")
-    
+
     layout = QVBoxLayout(card)
     layout.setContentsMargins(*margins)
     layout.setSpacing(spacing)
@@ -77,9 +54,9 @@ def make_card(
 
 def make_card_frame() -> QFrame:
     """Tạo khung viền Card đơn giản."""
-    palette = _p()
+    _p()
     frame = QFrame()
-    frame.setObjectName("CardFrame") # Cho phép theme.py style
+    frame.setObjectName("CardFrame")  # Cho phép theme.py style
     return frame
 
 
@@ -143,18 +120,18 @@ def make_empty_state_card(
     card.setMinimumHeight(220)
     layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
     layout.setSpacing(10)
-    
+
     icon = QLabel("📊")
     icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
     icon.setProperty("type", "empty_state_icon")
-    
+
     lbl_title = QLabel(title)
     lbl_title.setProperty("type", "state_empty_title")
     lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    
+
     layout.addWidget(icon)
     layout.addWidget(lbl_title)
-    
+
     if body:
         lbl_body = QLabel(body)
         lbl_body.setWordWrap(True)
@@ -171,11 +148,11 @@ def make_error_state_card(title: str, body: str) -> tuple[QFrame, QVBoxLayout]:
     lbl_title = QLabel(title)
     lbl_title.setProperty("type", "state_empty_title")
     lbl_title.setProperty("status", "error")
-    
+
     lbl_body = QLabel(body)
     lbl_body.setWordWrap(True)
     lbl_body.setProperty("type", "state_empty_body")
-    
+
     layout.addWidget(lbl_title)
     layout.addWidget(lbl_body)
     return card, layout

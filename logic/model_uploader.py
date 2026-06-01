@@ -13,8 +13,10 @@ Architecture:
 """
 
 import os
+
 import serial
 from PyQt6.QtCore import QThread, pyqtSignal
+
 from config import DEFAULT_MODEL_PATH
 
 
@@ -22,9 +24,9 @@ class ModelUploader(QThread):
     """Handles chunked binary uploads to ESP32."""
 
     # ── Signals ─────────────────────────────────────────────────────────
-    status_msg   = pyqtSignal(str)
+    status_msg = pyqtSignal(str)
     sig_progress = pyqtSignal(int)         # 0-100 progress percent
-    sig_error    = pyqtSignal(str)         # error message
+    sig_error = pyqtSignal(str)         # error message
     sig_finished = pyqtSignal(bool, str)   # (success, message)
 
     def __init__(self, port: str = "") -> None:

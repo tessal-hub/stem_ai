@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import argparse
-import sys
-import os
 import logging
+import os
+import sys
 from pathlib import Path
 
 # --- NUCLEAR LOGGING SUPPRESSION ---
@@ -25,11 +25,13 @@ from logic.tensorflow.pipeline import build_gesture_model  # noqa: E402
 
 DEFAULT_OUTPUT_DIR = APP_DATA_DIR / "standalone_gesture_model"
 
+
 def _parse_spells(raw_value: str | None) -> list[str] | None:
     if raw_value is None:
         return None
     values = [item.strip() for item in raw_value.split(",") if item.strip()]
     return values or None
+
 
 def build_from_args(args: argparse.Namespace) -> int:
     ensure_data_dir()
@@ -57,6 +59,7 @@ def build_from_args(args: argparse.Namespace) -> int:
     print(f"mode: {result.output_mode}")
     return 0
 
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Build gesture_model artifacts from the main app dataset.",
@@ -67,12 +70,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Dataset root (default: <workspace>/dataset; scans spells/ and primitives/).",
     )
     # INCREASED EPOCHS slightly to give the bigger model more time to learn
-    parser.add_argument("--epochs", type=int, default=100) 
-    
+    parser.add_argument("--epochs", type=int, default=100)
+
     # TWEAKED PARAMETERS (STEP 3)
-    parser.add_argument("--window-size", type=int, default=40) # Changed from 64 to 40 (0.8 seconds)
+    parser.add_argument("--window-size", type=int, default=64)  # Changed to 64 to match firmware
     parser.add_argument("--step", type=int, default=2)         # Changed from 4 to 2 for more data overlapping
-    
+
     parser.add_argument(
         "--output-mode",
         choices=("tflite", "cc", "both"),
@@ -91,10 +94,12 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     return parser
 
+
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
     return build_from_args(args)
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

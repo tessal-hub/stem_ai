@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -24,4 +23,3 @@ def resolve_asset_path(asset_path: str) -> str:
             return str(png_fallback)
 
     return str(resolved)
-

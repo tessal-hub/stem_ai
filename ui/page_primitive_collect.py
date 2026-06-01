@@ -9,51 +9,20 @@ from __future__ import annotations
 
 import numpy as np
 import pyqtgraph as pg
-from PyQt6.QtCore import QEvent, Qt, pyqtSignal
-from PyQt6.QtWidgets import (
-    QFrame,
-    QGridLayout,
-    QHBoxLayout,
-    QLabel,
-    QProgressBar,
-    QScrollArea,
-    QStackedWidget,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QProgressBar,
+                             QScrollArea, QStackedWidget, QVBoxLayout, QWidget)
 
 from logic.locale_manager import locale_manager
 from logic.primitive_i18n import get_primitive_catalog
 from logic.theme_manager import theme_manager
-from ui.component_factory import (
-    make_button,
-    make_hint,
-    make_section_label,
-)
+from ui.component_factory import make_button, make_hint, make_section_label
 from ui.i18n_bridge import tr_ui
 from ui.layout_utils import clear_layout
-from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_LG, SPACING_MD, SPACING_SM
-from ui.tokens import (
-    ACCENT_TEXT,
-    APP_FONT_STACK,
-    BTN_H,
-    BTN_RADIUS,
-    CARD_RADIUS,
-    DANGER,
-    INPUT_RADIUS,
-    PLOT_AX_COLOR,
-    PLOT_AY_COLOR,
-    PLOT_AZ_COLOR,
-    PLOT_GX_COLOR,
-    PLOT_GY_COLOR,
-    PLOT_GZ_COLOR,
-    RIGHT_MAX_W,
-    RIGHT_MIN_W,
-    RIGHT_MIN_W,
-    SUCCESS,
-    TEXT_MUTED,
-    WARNING,
-)
+from ui.modern_layout import (MARGIN_COMFORTABLE, SPACING_LG, SPACING_MD,
+                              SPACING_SM)
+from ui.tokens import (PLOT_AX_COLOR, PLOT_AY_COLOR, PLOT_AZ_COLOR,
+                       RIGHT_MAX_W, RIGHT_MIN_W)
 
 
 class PagePrimitiveCollect(QWidget):
@@ -86,15 +55,15 @@ class PagePrimitiveCollect(QWidget):
     def _init_ui(self) -> None:
         """Khởi tạo giao diện trang thu thập mẫu gốc."""
         layout = QVBoxLayout(self)
-        # Requirement 10: padding-bottom 80px
-        layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, 80)
+        # Bỏ padding-bottom cứng để nội dung được bung hết cỡ
+        layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
         layout.setSpacing(SPACING_LG)
 
         content = QHBoxLayout()
         content.setSpacing(SPACING_LG)
         content.addWidget(self._build_monitor_column(), stretch=3)
         content.addWidget(self._build_catalog_column(), stretch=2)
-        
+
         layout.addLayout(content)
         self.refresh_styles()
 
@@ -106,7 +75,23 @@ class PagePrimitiveCollect(QWidget):
 
     def _load_data(self) -> None:
         """Nạp trạng thái dữ liệu ban đầu."""
-        self.update_collection_stats(self._stats)
+        if hasattr(self.store, "get_primitive_collection_stats"):
+            stats = self.store.get_primitive_collection_stats()
+        else:
+            stats = {}
+        self.update_collection_stats(stats)
+
+    def showEvent(self, event) -> None:
+        """Refresh primitive stats every time this page becomes visible.
+
+        This ensures samples recorded via the regular Record page
+        (and any other path) are reflected without requiring a
+        save/delete event to trigger the signal.
+        """
+        super().showEvent(event)
+        if hasattr(self.store, "sig_primitive_stats_updated"):
+            if hasattr(self.store, "refresh_primitive_stats"):
+                self.store.refresh_primitive_stats()
 
     # ── Public methods ──────────────────────────
 
@@ -115,7 +100,8 @@ class PagePrimitiveCollect(QWidget):
         self._catalog = get_primitive_catalog(locale_manager.current_language)
         self._rebuild_cards()
         self._sec_preview.setText(tr_ui("primitive_signal_preview"))
-        self._sec_quality.setText(tr_ui("primitive_quality"))
+        if hasattr(self, '_sec_training'):
+            self._sec_training.setText("ENCODER TRAINING")
 
     def refresh_styles(self) -> None:
         """Làm mới style theo theme hiện tại."""
@@ -128,7 +114,6 @@ class PagePrimitiveCollect(QWidget):
         """Vẽ lại đồ thị sensor thời gian thực."""
         if not snapshot:
             self.preview_stack.setCurrentIndex(0)
-            self.quality_stack.setCurrentIndex(0)
             return
         self.preview_stack.setCurrentIndex(1)
         arr = np.asarray(snapshot, dtype=np.float32)
@@ -136,24 +121,42 @@ class PagePrimitiveCollect(QWidget):
             self.curve_ax.setData(arr[:, 0])
             self.curve_ay.setData(arr[:, 1])
             self.curve_az.setData(arr[:, 2])
-            self.update_quality_assessment(snapshot)
 
     def update_collection_stats(self, stats: dict) -> None:
         """Cập nhật tiến độ thu thập cho từng cử chỉ."""
+        self._stats = stats  # Lưu lại để dùng khi rebuild UI
+        gestures_ready = 0
         for name, widgets in self._card_widgets.items():
             count = int(stats.get(name, 0))
-            target = int(self._catalog[name]["target_samples"])
+            int(self._catalog[name]["target_samples"])
             widgets["progress"].setValue(count)
+            if count >= 100:
+                gestures_ready += 1
             self._update_group_buttons(name, count, widgets["groups"])
+            
+        if hasattr(self, 'btn_train_encoder'):
+            self.btn_train_encoder.setEnabled(gestures_ready >= 6)
 
-    def _update_group_buttons(self, gesture_name: str, total_count: int, buttons: dict[str, QPushButton]) -> None:
+    def _update_group_buttons(self, gesture_name: str, total_count: int, buttons: dict) -> None:
         """Cập nhật nhãn và style cho các nút bấm nhóm cử chỉ."""
         group_counts = self._compute_group_counts(gesture_name, total_count)
+        
+        # Check if the new prefix system is used for this gesture
+        has_specific_groups = False
+        if hasattr(self, '_stats'):
+            has_specific_groups = any(k.startswith(f"{gesture_name}::") for k in self._stats)
+            
         for g_name, btn in buttons.items():
             target = int(self._catalog[gesture_name]["groups"][g_name]["count"])
-            current = int(group_counts.get(g_name, 0))
-            btn.setText(f"{g_name[0]}: {current}/{target}")
             
+            if has_specific_groups:
+                current = int(self._stats.get(f"{gesture_name}::{g_name}", 0))
+            else:
+                current = int(group_counts.get(g_name, 0))
+                
+            display_name = self._get_group_display_name(g_name)
+            btn.setText(f"{display_name}: {current}/{target}")
+
             if current >= target:
                 btn.setProperty("status", "success")
                 btn.setProperty("type", "base")
@@ -177,15 +180,44 @@ class PagePrimitiveCollect(QWidget):
             remaining -= current
         return result
 
-    def update_quality_assessment(self, snapshot: list) -> None:
-        """Đánh giá chất lượng mẫu sensor dựa trên các tiêu chí kỹ thuật."""
-        # Logic đánh giá chất lượng (giản lược để tuân thủ giới hạn dòng)
-        if not snapshot:
-            self.quality_stack.setCurrentIndex(0)
-            return
-        self.quality_stack.setCurrentIndex(1)
-        self.lbl_quality_status.setText(f"OK ({len(snapshot)} samples)")
-        self.quality_score.setValue(min(100, int(len(snapshot) / 1.2)))
+    def _get_group_display_name(self, g_name: str) -> str:
+        lang = locale_manager.current_language
+        mapping = {
+            "A_standard": "A (Chuẩn)" if lang == "vi" else "A (Standard)",
+            "B_speed": "B (Tốc độ)" if lang == "vi" else "B (Speed)",
+            "C_variant": "C (Biến thể)" if lang == "vi" else "C (Variant)",
+            "A_still": "A (Đứng yên)" if lang == "vi" else "A (Still)",
+            "B_small_move": "B (Cử động nhẹ)" if lang == "vi" else "B (Small Move)",
+            "C_transition": "C (Chuyển tiếp)" if lang == "vi" else "C (Transition)"
+        }
+        if g_name in mapping:
+            return mapping[g_name]
+        parts = g_name.split("_", 1)
+        return f"{parts[0]} ({parts[1].title()})" if len(parts) > 1 else g_name
+
+    def on_encoder_training_status(self, message: str) -> None:
+        if hasattr(self, 'lbl_train_status'):
+            self.lbl_train_status.setText(message)
+            
+    def on_encoder_training_progress(self, value: int) -> None:
+        if hasattr(self, 'train_progress'):
+            self.train_progress.setValue(value)
+            
+    def on_encoder_training_finished(self, success: bool, message: str) -> None:
+        if success:
+            self.lbl_train_status.setText("Training completed.")
+            # Parse the summary string for metrics
+            # Expected format: "... distance_ratio=1.23, fewshot5=0.85, fewshot10=0.90, fewshot20=0.92 ..."
+            parts = message.split(',')
+            for part in parts:
+                if 'distance_ratio=' in part:
+                    self.lbl_distance_ratio.setText(f"Distance Ratio: {part.split('=')[1].strip()}")
+                elif 'fewshot5=' in part:
+                    self.lbl_fewshot_5.setText(f"Few-shot 5-sample: {part.split('=')[1].strip()}")
+                elif 'fewshot10=' in part:
+                    self.lbl_fewshot_10.setText(f"Few-shot 10-sample: {part.split('=')[1].strip()}")
+        else:
+            self.lbl_train_status.setText(f"Error: {message}")
 
     # ── Private methods ─────────────────────────
 
@@ -196,6 +228,7 @@ class PagePrimitiveCollect(QWidget):
         lay.setSpacing(SPACING_LG)
 
         from ui.component_factory import make_card
+
         # 1. Preview
         card_p, lay_p = make_card(margins=(20, 20, 20, 20), spacing=SPACING_MD)
         self._sec_preview = make_section_label(tr_ui("primitive_signal_preview"))
@@ -207,24 +240,32 @@ class PagePrimitiveCollect(QWidget):
         lay_p.addWidget(self.preview_stack)
         lay.addWidget(card_p, stretch=3)
 
-        # 2. Quality
-        card_q, lay_q = make_card(margins=(20, 20, 20, 20), spacing=SPACING_MD)
-        self._sec_quality = make_section_label(tr_ui("primitive_quality"))
-        self.lbl_quality_status = QLabel(tr_ui("primitive_quality_none"))
-        self.quality_score = QProgressBar()
-        quality_body = QWidget()
-        quality_layout = QVBoxLayout(quality_body)
-        quality_layout.setContentsMargins(0, 0, 0, 0)
-        quality_layout.setSpacing(SPACING_SM)
-        quality_layout.addWidget(self.lbl_quality_status)
-        quality_layout.addWidget(self.quality_score)
-        self.quality_stack = QStackedWidget()
-        self.quality_stack.addWidget(self._make_empty_state_widget())
-        self.quality_stack.addWidget(quality_body)
-        lay_q.addWidget(self._sec_quality)
-        lay_q.addWidget(self.quality_stack)
-        lay.addWidget(card_q, stretch=2)
+        # 2. Encoder Training
+        card_t, lay_t = make_card(margins=(20, 20, 20, 20), spacing=SPACING_MD)
+        self._sec_training = make_section_label("ENCODER TRAINING")
         
+        self.btn_train_encoder = make_button("TRAIN ENCODER", "primary")
+        self.btn_train_encoder.setEnabled(False)
+        self.btn_train_encoder.clicked.connect(self.sig_train_encoder_requested.emit)
+        
+        self.train_progress = QProgressBar()
+        self.train_progress.setRange(0, 100)
+        self.train_progress.setValue(0)
+        self.lbl_train_status = QLabel("Ready to train")
+        
+        self.lbl_distance_ratio = QLabel("Distance Ratio: --")
+        self.lbl_fewshot_5 = QLabel("Few-shot 5-sample: --")
+        self.lbl_fewshot_10 = QLabel("Few-shot 10-sample: --")
+        
+        lay_t.addWidget(self._sec_training)
+        lay_t.addWidget(self.btn_train_encoder)
+        lay_t.addWidget(self.train_progress)
+        lay_t.addWidget(self.lbl_train_status)
+        lay_t.addWidget(self.lbl_distance_ratio)
+        lay_t.addWidget(self.lbl_fewshot_5)
+        lay_t.addWidget(self.lbl_fewshot_10)
+        lay.addWidget(card_t, stretch=2)
+
         return col
 
     def _build_catalog_column(self) -> QWidget:
@@ -234,11 +275,12 @@ class PagePrimitiveCollect(QWidget):
         col.setMaximumWidth(RIGHT_MAX_W)
         lay = QVBoxLayout(col)
         lay.setSpacing(SPACING_MD)
-        
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll_content = QWidget()
+        scroll_content.setObjectName("StemContentHost")
         self.cards_layout = QVBoxLayout(scroll_content)
         scroll.setWidget(scroll_content)
         lay.addWidget(scroll, stretch=1)
@@ -246,19 +288,19 @@ class PagePrimitiveCollect(QWidget):
         # Sắp xếp nút điều khiển theo chiều dọc để tránh mất chữ
         actions = QVBoxLayout()
         actions.setSpacing(SPACING_MD)
-        
+
         row1 = QHBoxLayout()
         self.btn_start_collect = make_button(tr_ui("record_btn_start"), "start")
         self.btn_stop_collect = make_button(tr_ui("record_btn_stop"), "stop")
         row1.addWidget(self.btn_start_collect)
         row1.addWidget(self.btn_stop_collect)
-        
+
         self.btn_capture_collect = make_button(tr_ui("primitive_btn_capture"), "snip")
-        
+
         actions.addLayout(row1)
         actions.addWidget(self.btn_capture_collect)
         lay.addLayout(actions)
-        
+
         self.lbl_instruction = make_hint(tr_ui("primitive_flow_hint"))
         lay.addWidget(self.lbl_instruction)
         return col
@@ -278,6 +320,9 @@ class PagePrimitiveCollect(QWidget):
             card = self._create_gesture_card(name, info)
             self.cards_layout.addWidget(card)
         self.cards_layout.addStretch()
+        # Áp dụng lại số liệu đếm
+        if hasattr(self, '_stats'):
+            self.update_collection_stats(self._stats)
 
     def _make_empty_state_widget(self) -> QWidget:
         widget = QWidget()
@@ -300,25 +345,27 @@ class PagePrimitiveCollect(QWidget):
         card = QFrame()
         card.setProperty("type", "statistics_card")
         lay = QVBoxLayout(card)
-        
+
         title = QLabel(name)
         title.setProperty("type", "gesture_card_title")
         prog = QProgressBar()
         prog.setRange(0, int(info["target_samples"]))
-        
+
         lay.addWidget(title)
         lay.addWidget(QLabel(info["description"]))
         lay.addWidget(prog)
-        
+
         group_btns = {}
         row = QHBoxLayout()
         for g_name in info["groups"]:
-            btn = make_button(g_name[0], "base", height=32)
+            display_name = self._get_group_display_name(g_name)
+            btn = make_button(display_name, "base", height=32)
+            btn.setToolTip(info["groups"][g_name].get("instruction", ""))
             btn.clicked.connect(lambda _b, g=name, gn=g_name: self._on_group_selected(g, gn))
             row.addWidget(btn)
             group_btns[g_name] = btn
         lay.addLayout(row)
-        
+
         self._card_widgets[name] = {"progress": prog, "groups": group_btns}
         return card
 
@@ -337,6 +384,26 @@ class PagePrimitiveCollect(QWidget):
 
     def _on_group_selected(self, gesture: str, group: str) -> None:
         """Xử lý khi người dùng chọn một nhóm cử chỉ."""
+        if self._collecting:
+            return
         self._selected_gesture = gesture
         self._selected_group = group
-        self.lbl_instruction.setText(f"Ghi: {gesture} - {group}")
+        
+        # Lấy instruction từ catalog
+        instruction_text = self._catalog[gesture]["groups"][group].get("instruction", "")
+        display_name = self._get_group_display_name(group)
+        
+        self.lbl_instruction.setText(f"Đang chọn: {gesture} ➜ {display_name}\n\nHướng dẫn: {instruction_text}")
+        self.btn_start_collect.setEnabled(True)
+        self.refresh_styles()
+
+    def set_collection_state(self, collecting: bool) -> None:
+        self._collecting = collecting
+        self.btn_start_collect.setEnabled(not collecting and self._selected_gesture is not None)
+        self.btn_stop_collect.setEnabled(collecting)
+        
+    def update_collection_progress(self, gesture_name: str, count: int) -> None:
+        # Check if we hit 30-sample marks or 50-sample group completions.
+        # This will be handled by Handler, so we just update UI.
+        pass
+

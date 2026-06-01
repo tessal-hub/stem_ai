@@ -10,16 +10,10 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
-from logic.theme_manager import theme_manager
-from ui.color_utils import readable_text_on
-from ui.component_factory import make_card, make_empty_state_card, make_section_label
+from ui.component_factory import (make_card, make_empty_state_card,
+                                  make_section_label)
 from ui.i18n_bridge import tr_ui
-from ui.tokens import (
-    MARGIN_COMFORTABLE,
-    SPACING_LG,
-    SPACING_MD,
-    SPACING_XS,
-)
+from ui.tokens import MARGIN_COMFORTABLE, SPACING_LG, SPACING_XS
 from ui.wand_3d_widget import Wand3DWidget
 
 
@@ -33,7 +27,7 @@ class PageHome(QWidget):
         self.data_store = data_store
         self._connected = False
         self._current_mode = "IDLE"
-        
+
         self._init_ui()
         self._init_signals()
         self._configure_accessibility()
@@ -94,7 +88,6 @@ class PageHome(QWidget):
 
     def _init_signals(self) -> None:
         """Kết nối signal/slot."""
-        pass
 
     def _load_data(self) -> None:
         """Nạp dữ liệu ban đầu từ store."""
@@ -109,7 +102,7 @@ class PageHome(QWidget):
         self.status_bar.setText(tr_ui(status_key))
         if hasattr(self, "_status_chip"):
             self._status_chip.setText(tr_ui(status_key))
-        
+
         self.status_bar.setProperty("status", "success" if connected else "error")
         if hasattr(self, "_status_chip"):
             self._status_chip.setProperty("status", "success" if connected else "error")
@@ -148,9 +141,9 @@ class PageHome(QWidget):
 
         self.sim_view = Wand3DWidget()
         self.sim_view.setObjectName("HomeViewerSurface")
-        self.wand_3d = self.sim_view 
+        self.wand_3d = self.sim_view
         viewer_layout.addWidget(self.sim_view)
-        
+
         col.addWidget(self.viewer_card, stretch=1)
         return col
 

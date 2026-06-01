@@ -120,9 +120,9 @@ class FeatureWorker(QThread):
 
             window = 256 if len(arr) >= 256 else len(arr)
             accel = arr[-window:, 0:3]
-            gyro  = arr[-window:, 3:6]
+            gyro = arr[-window:, 3:6]
             accel_mag = np.linalg.norm(accel, axis=1)
-            gyro_mag  = np.linalg.norm(gyro,  axis=1)
+            gyro_mag = np.linalg.norm(gyro,  axis=1)
 
             features: dict = {
                 "accel_mean": float(np.mean(accel_mag)),
@@ -136,12 +136,12 @@ class FeatureWorker(QThread):
 
             sample_rate_hz = self._sample_rate_hz
             fft_values = np.fft.rfft(accel_mag * np.hanning(len(accel_mag)))
-            fft_mags   = np.abs(fft_values)
-            fft_freqs  = np.fft.rfftfreq(len(accel_mag), d=1.0 / sample_rate_hz)
+            fft_mags = np.abs(fft_values)
+            fft_freqs = np.fft.rfftfreq(len(accel_mag), d=1.0 / sample_rate_hz)
 
             max_bins = 128
             if len(fft_mags) > max_bins:
-                fft_mags  = fft_mags[:max_bins]
+                fft_mags = fft_mags[:max_bins]
                 fft_freqs = fft_freqs[:max_bins]
 
             features.update(

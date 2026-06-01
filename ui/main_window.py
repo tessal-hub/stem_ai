@@ -27,7 +27,6 @@ from ui.page_record import PageRecord
 from ui.page_setting import PageSetting
 from ui.page_wand import PageWand
 
-
 log = logging.getLogger(__name__)
 
 # Các key dùng để trích xuất dữ liệu cảm biến từ payload UDP
@@ -57,7 +56,6 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(QIcon(resolve_asset_path("assets/icon/cooliocns SVG/Interface/Book_Open.svg")))
         self.resize(1100, 850)
         self.setMinimumSize(1000, 700)
-
 
         # 1. Khởi tạo Shell điều hướng
         self.shell = MacShell("STEM Spell Book")
@@ -97,7 +95,7 @@ class MainWindow(QMainWindow):
         self.page_setting.sig_settings_saved.connect(self._on_settings_saved)
 
         # Dữ liệu UDP
-        self.udp_worker.sig_data_received.connect(self._on_udp_data_received)
+        self.udp_worker.sig_data_received.connect(self._on_udp_sensor_dispatch)
         self.udp_worker.sig_status_change.connect(self._on_udp_status_changed)
         self.udp_worker.sig_health_update.connect(self._on_udp_health_updated)
 
@@ -137,7 +135,7 @@ class MainWindow(QMainWindow):
                 handler.shutdown()
             except Exception as exc:
                 log.warning("MainWindow: Handler shutdown thất bại: %s", exc)
-        
+
         if self.udp_worker.isRunning():
             self.udp_worker.stop()
         event.accept()
@@ -148,6 +146,9 @@ class MainWindow(QMainWindow):
         """Chuyển đổi trang hiển thị trên stack."""
         self.stack.setCurrentIndex(index)
         self.shell.set_active_index(index)
+        # Refresh primitive stats when user navigates to that page (index 1 is primitives)
+        if index == 1 and hasattr(self.data_store, "refresh_primitive_stats"):
+            self.data_store.refresh_primitive_stats()
 
     def _extract_esp_stats(self, data: dict) -> dict[str, str]:
         """Trích xuất và format thông tin ESP32."""
@@ -174,27 +175,35 @@ class MainWindow(QMainWindow):
         """Xử lý khi người dùng chọn menu điều hướng."""
         self._set_page(index)
 
-    def _on_udp_data_received(self, data: dict) -> None:
-        """Xử lý dữ liệu nhận được từ UDP worker."""
-        # 1. Dữ liệu cảm biến
-        if _SENSOR_KEYS[0] in data:
-            values = [float(data.get(k, 0.0)) for k in _SENSOR_KEYS]
-            self.data_store.update_sensor_data({
-                "ax": values[0], "ay": values[1], "az": values[2],
-                "gx": values[3], "gy": values[4], "gz": values[5],
-            })
-            if self.page_record.is_live:
-                self.data_store.add_live_sample(values, emit=True)
+    def _on_udp_sensor_dispatch(self, data: dict) -> None:
+        """Dispatch UDP payload to Handler for standard routing.
 
-        # 2. Log terminal (Throttle)
+        Extracts 6-axis sensor values and hardware stats then delegates
+        to Handler, which applies the same guards and routing as serial.
+        """
+        handler = getattr(self, "handler", None)
+        if handler is None:
+            return
+
+        sensor_keys = ("accel_x", "accel_y", "accel_z",
+                        "gyro_x", "gyro_y", "gyro_z")
+        if sensor_keys[0] in data:
+            values = [float(data.get(k, 0.0)) for k in sensor_keys]
+            handler.on_udp_sensor_data(values)
+
+        esp_update: dict[str, str] = {}
+        if "battery" in data:
+            esp_update["Battery"] = f"{data['battery']}%"
+        if "free_ram" in data:
+            esp_update["RAM Free"] = f"{data['free_ram']} KB"
+        if "rssi" in data:
+            esp_update["RSSI"] = f"{data['rssi']} dBm"
+        if esp_update:
+            handler.on_udp_esp_stats(esp_update)
+
         self._udp_log_count += 1
         if self._udp_log_count % 25 == 0:
             self.page_wand.append_terminal_text(f">> UDP: {data}")
-
-        # 3. Thống kê phần cứng
-        esp_update = self._extract_esp_stats(data)
-        if esp_update:
-            self.data_store.update_esp_stats(esp_update)
 
     def _on_udp_status_changed(self, active: bool) -> None:
         """Thông báo trạng thái kết nối UDP."""
