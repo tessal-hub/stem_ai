@@ -55,8 +55,23 @@ class ModelUploader(QThread):
             if not self._validate_upload_inputs():
                 return
             self._perform_upload()
+        except serial.SerialException as e:
+            message = f"Serial Port Error: {e}"
+            self.status_msg.emit(message)
+            self.sig_error.emit(message)
+            self.sig_finished.emit(False, message)
+        except FileNotFoundError as e:
+            message = f"File Not Found: {e}"
+            self.status_msg.emit(message)
+            self.sig_error.emit(message)
+            self.sig_finished.emit(False, message)
+        except PermissionError as e:
+            message = f"File Permission Error: {e}"
+            self.status_msg.emit(message)
+            self.sig_error.emit(message)
+            self.sig_finished.emit(False, message)
         except Exception as e:
-            message = f"Fatal Error: {e}"
+            message = f"Fatal Error: {type(e).__name__}: {e}"
             self.status_msg.emit(message)
             self.sig_error.emit(message)
             self.sig_finished.emit(False, message)

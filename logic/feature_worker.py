@@ -83,7 +83,13 @@ class FeatureWorker(QThread):
             self._queue.put_nowait(None)
         except queue.Full:
             pass
-        if not self.wait(2000):
+
+        import time
+        start_time = time.perf_counter()
+        while self.isRunning() and (time.perf_counter() - start_time < 2.0):
+            time.sleep(0.01)
+
+        if self.isRunning():
             log.warning("FeatureWorker: thread did not exit within 2 s")
 
     # ------------------------------------------------------------------

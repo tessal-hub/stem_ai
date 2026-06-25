@@ -43,8 +43,9 @@ def _remove_legacy_demo_spell_folders(data_store: DataStore) -> None:
 def main():
     """Khởi chạy ứng dụng STEM Spell Book."""
     app = QApplication(sys.argv)
-    app_font = QFont(app.font())
+    app_font = app.font()
     if app_font.pointSize() <= 0:
+        app_font = QFont()
         app_font.setPointSize(10)
     app.setFont(app_font)
 

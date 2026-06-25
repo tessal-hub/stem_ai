@@ -1,7 +1,7 @@
 from __future__ import annotations
 from ..dataset_layout import (discover_class_directories,
                               filter_selected_class_names)
-from config import APP_DATA_DIR, DEFAULT_MODEL_PATH, WORKSPACE_ROOT
+from config import APP_DATA_DIR, DEFAULT_MODEL_PATH, WORKSPACE_ROOT, GESTURE_MODEL_CC_OUTPUT
 
 import csv
 import logging

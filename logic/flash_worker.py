@@ -73,6 +73,18 @@ class FlashWorker(QThread):
             finished_message = "Timeout"
             if self._process:
                 self._process.kill()
+        except FileNotFoundError as e:
+            self.log_msg.emit(f"[ERROR] Executable or binary not found: {e}")
+            self.sig_error.emit("Tool or binary not found")
+            finished_message = "FileNotFound"
+        except PermissionError as e:
+            self.log_msg.emit(f"[ERROR] Permission denied: {e}")
+            self.sig_error.emit("Permission denied executing esptool")
+            finished_message = "PermissionError"
+        except subprocess.SubprocessError as e:
+            self.log_msg.emit(f"[ERROR] Subprocess error during flash: {e}")
+            self.sig_error.emit("Subprocess execution failed")
+            finished_message = "SubprocessError"
         except Exception as e:
             self.log_msg.emit(f"[ERROR] Flash exception: {type(e).__name__}: {e}")
             self.sig_error.emit(f"Flash exception: {type(e).__name__}: {e}")

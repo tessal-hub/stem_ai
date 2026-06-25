@@ -73,7 +73,10 @@ class UdpWorker(QThread):
                 except json.JSONDecodeError:
                     self.sig_error.emit("Received malformed JSON from ESP32.")
                 except Exception as exc:
-                    raise RuntimeError(f"UDP runtime error: {exc}") from exc
+                    if self._is_running:
+                        raise RuntimeError(f"UDP runtime error: {exc}") from exc
+                    else:
+                        break
         except Exception as exc:
             run_success = False
             run_message = str(exc)
@@ -88,7 +91,18 @@ class UdpWorker(QThread):
     def stop(self) -> None:
         """Gracefully asks the thread to terminate."""
         self._is_running = False
-        if not self.wait(_STOP_WAIT_TIMEOUT_MS):
+        if self._sock:
+            try:
+                self._sock.close()
+            except Exception:
+                pass
+
+        import time
+        start_time = time.perf_counter()
+        while self.isRunning() and (time.perf_counter() - start_time < 2.0):
+            time.sleep(0.01)
+
+        if self.isRunning():
             logging.getLogger(__name__).warning(
                 "UdpWorker: thread did not exit within 2 s after stop()"
             )

@@ -9,11 +9,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QSize
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QFormLayout,
                              QFrame, QGridLayout, QHBoxLayout, QLabel,
                              QLineEdit, QProgressBar, QPushButton, QSizePolicy,
                              QSpinBox, QVBoxLayout, QWidget)
+from ui.asset_utils import resolve_asset_path
 
 from logic.locale_manager import locale_manager
 from logic.ui_i18n import normalize_ui_language, tr
@@ -266,17 +268,44 @@ class PageSetting(QWidget):
         lay.addWidget(self._make_section_label_i18n("section_paths"))
 
         card, c_lay = self._make_card(margins=(16, 16, 16, 16), spacing=SPACING_SM)
+        
+        form = self._make_form_layout()
+        
+        folder_icon = QIcon(resolve_asset_path("assets/icon/cooliocns SVG/File/Folder_Open.svg"))
+
         self.txt_idf_main_dir = QLineEdit()
         self.txt_idf_main_dir.setFixedHeight(28)
-
-        self.btn_browse_idf_main = QPushButton("...")
+        self.btn_browse_idf_main = QPushButton()
+        self.btn_browse_idf_main.setIcon(folder_icon)
+        self.btn_browse_idf_main.setIconSize(QSize(16, 16))
         self.btn_browse_idf_main.setFixedSize(28, 28)
+        
+        idf_container = QWidget()
+        idf_row = QHBoxLayout(idf_container)
+        idf_row.setContentsMargins(0, 0, 0, 0)
+        idf_row.setSpacing(8)
+        idf_row.addWidget(self.txt_idf_main_dir)
+        idf_row.addWidget(self.btn_browse_idf_main)
+        
+        self._add_i18n_form_row(form, "label_idf_main", idf_container)
 
-        row = QHBoxLayout()
-        row.setSpacing(8)
-        row.addWidget(self.txt_idf_main_dir)
-        row.addWidget(self.btn_browse_idf_main)
-        c_lay.addLayout(row)
+        self.txt_dataset_dir = QLineEdit()
+        self.txt_dataset_dir.setFixedHeight(28)
+        self.btn_browse_dataset = QPushButton()
+        self.btn_browse_dataset.setIcon(folder_icon)
+        self.btn_browse_dataset.setIconSize(QSize(16, 16))
+        self.btn_browse_dataset.setFixedSize(28, 28)
+        
+        dataset_container = QWidget()
+        dataset_row = QHBoxLayout(dataset_container)
+        dataset_row.setContentsMargins(0, 0, 0, 0)
+        dataset_row.setSpacing(8)
+        dataset_row.addWidget(self.txt_dataset_dir)
+        dataset_row.addWidget(self.btn_browse_dataset)
+        
+        self._add_i18n_form_row(form, "label_dataset_dir", dataset_container)
+
+        c_lay.addLayout(form)
         lay.addWidget(card)
         return col
 
@@ -288,6 +317,7 @@ class PageSetting(QWidget):
         self.btn_flash_collect.clicked.connect(self._on_btn_flash_collect_clicked)
         self.btn_flash_ai.clicked.connect(self._on_btn_flash_ai_clicked)
         self.btn_browse_idf_main.clicked.connect(self._on_btn_browse_clicked)
+        self.btn_browse_dataset.clicked.connect(self._on_btn_browse_dataset_clicked)
         self.combo_ui_language.currentIndexChanged.connect(self._on_ui_language_changed)
         self.btn_scan_quality.clicked.connect(self._on_btn_scan_quality_clicked)
         self.btn_stop_scan.clicked.connect(self._on_btn_stop_scan_clicked)
@@ -312,6 +342,8 @@ class PageSetting(QWidget):
             "window_overlap": self.spin_window_overlap,
             "project_name": self.txt_project_name,
             "auto_save": self.chk_auto_save,
+            "idf_main_dir": self.txt_idf_main_dir,
+            "dataset_dir": self.txt_dataset_dir,
         }
         for key, w in widgets.items():
             if key in config:
@@ -442,6 +474,8 @@ class PageSetting(QWidget):
             "theme": "light",
             "ui_language": self.combo_ui_language.currentData(),
             "auto_save": self.chk_auto_save.isChecked(),
+            "idf_main_dir": self.txt_idf_main_dir.text().strip(),
+            "dataset_dir": self.txt_dataset_dir.text().strip(),
         }
         self.sig_settings_saved.emit(config)
 
@@ -468,6 +502,12 @@ class PageSetting(QWidget):
         path = QFileDialog.getExistingDirectory(self, "Chọn thư mục dự án")
         if path:
             self.txt_idf_main_dir.setText(path)
+
+    def _on_btn_browse_dataset_clicked(self) -> None:
+        """Mở hộp thoại chọn thư mục dataset."""
+        path = QFileDialog.getExistingDirectory(self, "Chọn thư mục Dataset")
+        if path:
+            self.txt_dataset_dir.setText(path)
 
     def _on_btn_scan_quality_clicked(self) -> None:
         """Bắt đầu quét chất lượng dataset primitive."""

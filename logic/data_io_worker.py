@@ -61,6 +61,14 @@ class DataIOWorker(QThread):
         self._job_queue: queue.Queue[tuple] = queue.Queue(maxsize=_QUEUE_MAXSIZE)
         self._running = False
 
+    @property
+    def dataset_dir(self) -> str:
+        return self._dataset_dir
+
+    @dataset_dir.setter
+    def dataset_dir(self, value: str) -> None:
+        self._dataset_dir = value
+
     def _warn_if_queue_pressure(self) -> None:
         qsize = self._job_queue.qsize()
         if qsize >= _QUEUE_WARN_THRESHOLD:
@@ -139,7 +147,13 @@ class DataIOWorker(QThread):
             self._job_queue.put_nowait(("_stop",))
         except queue.Full:
             pass  # Worker will exit via _running=False on its next timeout.
-        if not self.wait(2000):
+
+        import time
+        start_time = time.perf_counter()
+        while self.isRunning() and (time.perf_counter() - start_time < 2.0):
+            time.sleep(0.01)
+
+        if self.isRunning():
             log.warning("DataIOWorker: thread did not exit within 2 s")
 
     # ------------------------------------------------------------------

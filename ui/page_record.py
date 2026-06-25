@@ -156,24 +156,49 @@ class PageRecord(QWidget):
     def load_spell_list(self, spells: list[str] | dict[str, int]) -> None:
         """Nạp và hiển thị danh sách các câu thần chú (Requirement 3: Empty State)."""
         if isinstance(spells, dict):
-            spell_counts = {str(k): int(v) for k, v in spells.items() if str(k).strip()}
+            self._current_spell_counts = {str(k): int(v) for k, v in spells.items() if str(k).strip()}
         else:
-            spell_counts = {str(s): int(getattr(self.store, "spell_counts", {}).get(str(s), 0))
+            self._current_spell_counts = {str(s): int(getattr(self.store, "spell_counts", {}).get(str(s), 0))
                             for s in spells if str(s).strip()}
 
-        self.spell_list.clear()
+        self._refresh_spell_list()
+
+    def _refresh_spell_list(self) -> None:
+        if not hasattr(self, "_current_spell_counts"):
+            return
+
+        spell_counts = self._current_spell_counts
         names = sorted(list(spell_counts.keys()))
-        if names:
+        display_names = [n for n in names if "::" not in n]
+
+        self.spell_list.clear()
+        if display_names:
             self.spell_stack.setCurrentIndex(0)
-            for name in names:
-                item = QListWidgetItem(f"{name} ({spell_counts[name]})")
+            
+            filter_mode = self.filter_combo.currentText() if hasattr(self, "filter_combo") else "All"
+            for name in display_names:
+                normalized = name.replace("_", " ").strip().upper()
+                is_prim = normalized in {"SWIPE RIGHT", "SWIPE UP", "THRUST", "CIRCLE CW", "CIRCLE CCW", "WRIST FLICK", "ZIGZAG", "STAND BY", "STAND_BY"}
+                
+                if filter_mode == "Primitives" and not is_prim:
+                    continue
+                if filter_mode == "Spells" and is_prim:
+                    continue
+                
+                prefix = "[P] " if is_prim and filter_mode == "All" else ("[S] " if not is_prim and filter_mode == "All" else "")
+                
+                item = QListWidgetItem(f"{prefix}{name} ({spell_counts[name]})")
                 item.setData(Qt.ItemDataRole.UserRole, name)
                 self.spell_list.addItem(item)
         else:
             # Requirement 3: Empty State
             self.spell_stack.setCurrentIndex(1)
 
-        self._update_combo_box(names)
+        filtered_names = sorted(list({n for n in names if "::" not in n}))
+        self._update_combo_box(filtered_names)
+
+    def _on_filter_changed(self) -> None:
+        self._refresh_spell_list()
 
     def load_samples_for_spell(self, spell_name: str, samples: list[str]) -> None:
         """Hiển thị danh sách mẫu cho một câu thần chú cụ thể."""
@@ -397,6 +422,18 @@ class PageRecord(QWidget):
         lib_page = QWidget()
         lib_lay = QVBoxLayout(lib_page)
         lib_lay.setContentsMargins(0, 0, 0, 0)
+        lib_lay.setSpacing(SPACING_SM)
+
+        # Filter UI
+        filter_row = QHBoxLayout()
+        filter_lbl = QLabel("Filter:")
+        self.filter_combo = QComboBox()
+        self.filter_combo.addItems(["All", "Primitives", "Spells"])
+        self.filter_combo.currentIndexChanged.connect(self._on_filter_changed)
+        filter_row.addWidget(filter_lbl)
+        filter_row.addWidget(self.filter_combo, stretch=1)
+        lib_lay.addLayout(filter_row)
+
         self.spell_list = QListWidget()
         lib_lay.addWidget(self.spell_list)
         self.spell_list.setProperty("type", "record_list")

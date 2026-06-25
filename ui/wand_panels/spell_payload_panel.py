@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QListWidget,
-                             QListWidgetItem, QVBoxLayout, QWidget)
+                             QListWidgetItem, QVBoxLayout, QWidget, QComboBox)
 
 from logic.rarity_utils import RARITY_TIERS, RarityTier
 from logic.theme_manager import theme_manager
@@ -42,8 +42,15 @@ class WandSpellPayloadPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_SM)
 
+        # Top row with header and filter
+        top_row = QHBoxLayout()
         self._hdr_payload = make_section_label(tr_ui("wand_section_payload"))
-        layout.addWidget(self._hdr_payload)
+        self.wand_filter_combo = QComboBox()
+        self.wand_filter_combo.addItems(["All", "Primitives", "Spells"])
+        self.wand_filter_combo.currentIndexChanged.connect(self._refresh_lists)
+        top_row.addWidget(self._hdr_payload, stretch=1)
+        top_row.addWidget(self.wand_filter_combo)
+        layout.addLayout(top_row)
 
         # Requirement 7: Use QHBoxLayout with 24px gap instead of thick splitter
         content_row = QHBoxLayout()
@@ -136,12 +143,27 @@ class WandSpellPayloadPanel(QWidget):
             self._add_empty_row(self.list_available_spells, tr_ui("wand_wait_avail"))
             return
 
-        for name in self._spell_order:
-            count = int(self._spell_counts.get(name, 0))
-            target_list = self.list_selected_spells if name in self._selected_spells else self.list_available_spells
-            self._add_spell_row(target_list, name, count)
+        filter_text = self.wand_filter_combo.currentText() if hasattr(self, "wand_filter_combo") else "All"
 
-    def _add_spell_row(self, list_widget: QListWidget, name: str, count: int) -> None:
+        for name in self._spell_order:
+            if "::" in name:
+                continue
+            normalized = name.replace("_", " ").strip().upper()
+            is_prim = normalized in {"SWIPE RIGHT", "SWIPE UP", "THRUST", "CIRCLE CW", "CIRCLE CCW", "WRIST FLICK", "ZIGZAG", "STAND BY", "STAND_BY"}
+            
+            if filter_text == "Primitives" and not is_prim:
+                continue
+            if filter_text == "Spells" and is_prim:
+                continue
+
+            target_list = self.list_selected_spells if name in self._selected_spells else self.list_available_spells
+            count = int(self._spell_counts.get(name, 0))
+            
+            prefix = "[P] " if is_prim and filter_text == "All" else ("[S] " if not is_prim and filter_text == "All" else "")
+            
+            self._add_spell_row(target_list, name, count, prefix)
+
+    def _add_spell_row(self, list_widget: QListWidget, name: str, count: int, prefix: str = "") -> None:
         """Tạo và thêm một hàng spell tùy chỉnh vào danh sách."""
         item = QListWidgetItem(list_widget)
         item.setData(Qt.ItemDataRole.UserRole, name)
@@ -153,7 +175,7 @@ class WandSpellPayloadPanel(QWidget):
         row.setContentsMargins(12, 0, 12, 0)
         row.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
-        name_lbl = QLabel(name)
+        name_lbl = QLabel(f"{prefix}{name}")
         name_lbl.setProperty("type", "wand_spell_name")
 
         rarity = self._resolve_rarity(count)
