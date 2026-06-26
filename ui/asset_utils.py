@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if getattr(sys, "frozen", False):
+    _PROJECT_ROOT = Path(sys._MEIPASS)
+else:
+    _PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
 
 
 def resolve_asset_path(asset_path: str) -> str:

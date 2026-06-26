@@ -17,6 +17,9 @@ from PyQt6.QtCore import QObject, Qt, QTimer
 
 from config import APP_DATA_DIR, WORKSPACE_ROOT
 from constants import is_system_spell, canonical_system_spell
+from ui.asset_utils import resolve_asset_path
+from pathlib import Path
+
 
 from .data_io_worker import DataIOWorker
 from .data_store import DataStore
@@ -743,7 +746,7 @@ class Handler(QObject):
                 return
 
         filename = "collect.bin" if bin_type == "data" else "inference.bin"
-        bin_path = self._project_root / "assets" / "firmware" / filename
+        bin_path = Path(resolve_asset_path(f"assets/firmware/{filename}"))
 
         if not self._validate_required_file(bin_path):
             if self.ui_setting:

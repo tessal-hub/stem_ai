@@ -169,6 +169,8 @@ class HomeStub(QObject):
 class SettingStub(QObject):
     sig_flash_data_firmware = pyqtSignal()
     sig_flash_inference_firmware = pyqtSignal()
+    sig_settings_saved = pyqtSignal(dict)
+
 
     def __init__(self) -> None:
         super().__init__()

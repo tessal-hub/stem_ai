@@ -8,9 +8,14 @@ tồn tại trước khi ứng dụng chạy I/O.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
-WORKSPACE_ROOT = Path(__file__).resolve().parent
+if getattr(sys, "frozen", False):
+    WORKSPACE_ROOT = Path(sys.executable).resolve().parent
+else:
+    WORKSPACE_ROOT = Path(__file__).resolve().parent
+
 
 
 def _detect_workspace_file() -> Path:

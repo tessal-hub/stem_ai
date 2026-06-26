@@ -59,7 +59,13 @@ class SettingsStore:
     }
 
     def __init__(self) -> None:
-        self._settings = QSettings(self._ORG_NAME, self._APP_NAME)
+        import sys
+        if "pytest" in sys.modules:
+            self._settings = QSettings("test_settings.ini", QSettings.Format.IniFormat)
+            self._settings.clear()
+        else:
+            self._settings = QSettings(self._ORG_NAME, self._APP_NAME)
+
 
     def load(self) -> dict[str, Any]:
         """Tải toàn bộ cấu hình đã lưu với giá trị mặc định."""
@@ -137,10 +143,13 @@ class DataStore(QObject):
         self._init_state()
 
         saved_dataset_dir = self.settings.get("dataset_dir")
-        if saved_dataset_dir:
+        if dataset_dir and Path(dataset_dir).resolve() != DATASET_DIR.resolve():
+            self.dataset_dir = str(Path(dataset_dir))
+        elif saved_dataset_dir:
             self.dataset_dir = str(Path(saved_dataset_dir))
         else:
             self.dataset_dir = str(Path(dataset_dir) if dataset_dir else DATASET_DIR)
+
 
         self._legacy_meta_migration_prepared = False
         self._prepare_legacy_meta_migration()
