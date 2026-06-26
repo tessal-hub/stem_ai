@@ -25,10 +25,3 @@ Do not hardcode visual constants directly in page files.
 1. Reuse existing token names where possible.
 2. Add new tokens in centralized modules only.
 3. When introducing a new component style, document the token and intended usage in this file and DESIGN_SYSTEM.md.
-
-## Legacy Mapping
-
-The historical theme references were archived and merged into this token guide:
-
-- ../ARCHIVE/2026-04/MODERN_THEME_IMPLEMENTATION_2026-04.md
-- ../ARCHIVE/2026-04/MODERN_THEME_COLOR_REFERENCE_2026-04.md

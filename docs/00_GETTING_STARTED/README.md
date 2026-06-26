@@ -19,5 +19,4 @@ This section provides onboarding context for contributors working on desktop UI,
 ## Documentation Workflow
 
 1. Update canonical page first.
-2. If a note is temporary or historical, place it under ARCHIVE with date in filename.
-3. Keep title and section names stable when possible.
+2. Keep title and section names stable when possible.

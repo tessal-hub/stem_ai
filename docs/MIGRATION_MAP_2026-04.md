@@ -7,10 +7,10 @@ Last Updated: 2026-04-21
 
 ## Root Documents
 
-- ARCHITECTURE_AUDIT_REPORT.md -> ARCHIVE/2026-04/ARCHITECTURE_AUDIT_REPORT_2026-04-03.md (archived)
-- CARD_BASED_REFACTORING_SUMMARY.md -> ARCHIVE/2026-04/CARD_BASED_UI_REFACTORING_SUMMARY_2026-04.md (archived)
-- MODERN_THEME_IMPLEMENTATION.md -> ARCHIVE/2026-04/MODERN_THEME_IMPLEMENTATION_2026-04.md (archived)
-- MODERN_THEME_COLOR_REFERENCE.md -> ARCHIVE/2026-04/MODERN_THEME_COLOR_REFERENCE_2026-04.md (archived)
+- ARCHITECTURE_AUDIT_REPORT.md -> Deleted (historical)
+- CARD_BASED_REFACTORING_SUMMARY.md -> Deleted (historical)
+- MODERN_THEME_IMPLEMENTATION.md -> Deleted (historical)
+- MODERN_THEME_COLOR_REFERENCE.md -> Deleted (historical)
 - TEST_DATA_PIPELINE.md -> 05_TESTING/DATA_PIPELINE_TESTING.md (active)
 
 ## Docs Folder Migration
@@ -20,11 +20,11 @@ Last Updated: 2026-04-21
 - docs/DESIGN_SYSTEM.md -> 02_DESIGN_SYSTEM/DESIGN_SYSTEM.md
 - docs/DATASET_AND_FILES.md -> 04_DATA_MANAGEMENT/DATASET_AND_FILES.md
 - docs/TESTING_GUIDE.md -> 05_TESTING/TESTING_GUIDE.md
-- docs/UI_CONTRACT.md -> ARCHIVE/2026-04/UI_CONTRACTS_LEGACY_2026-04.md
+- docs/UI_CONTRACT.md -> Deleted (historical)
 - docs/AGENT_GUIDE.md -> 07_FOR_AI_AGENTS/AGENT_GUIDE.md
-- docs/tinyml_info.md -> ARCHIVE/2026-04/tinyml_info_legacy_2026-04.md
-- docs/tf_tinyml_training.md -> ARCHIVE/2026-04/tf_tinyml_training_legacy_2026-04.md
-- docs/wand_interface_contract_freeze.md -> ARCHIVE/2026-04/wand_interface_contract_freeze_2026-04.md
+- docs/tinyml_info.md -> Deleted (historical)
+- docs/tf_tinyml_training.md -> Deleted (historical)
+- docs/wand_interface_contract_freeze.md -> Deleted (historical)
 
 ## New Canonical Files
 
@@ -36,4 +36,3 @@ Last Updated: 2026-04-21
 - 06_CONTRACTS/UI_CONTRACTS.md
 - 07_FOR_AI_AGENTS/SKILL_MANUAL.md
 - README.md
-- ARCHIVE/README.md

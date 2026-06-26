@@ -24,16 +24,6 @@ Signal and method names in this file are compatibility boundaries.
 3. Preserve backward-compat attributes required by handler wiring.
 4. Use deprecation path instead of silent contract breakage.
 
-## Canonical Definitions
-
-The detailed contract is preserved in the following archived source and remains in force:
-
-- ../ARCHIVE/2026-04/UI_CONTRACTS_LEGACY_2026-04.md
-
-The PageWand freeze document has been merged into this contract system and archived:
-
-- ../ARCHIVE/2026-04/wand_interface_contract_freeze_2026-04.md
-
 ## Compatibility Notes
 
 - combo_serial_ports remains a required compatibility attribute for existing handler logic.

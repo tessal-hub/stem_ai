@@ -19,14 +19,12 @@ Do not treat files under worktree snapshots as source of truth.
 - 06 Contracts: frozen UI and handler-facing interfaces.
 - 07 For AI Agents: AI operating guidance.
 - 08 ESP-IDF project: constructing and integrating the firmware tree with the app.
-- Archive: historical reports and superseded implementation notes.
 
 ## Canonical Rules
 
 1. One topic must have one canonical page.
-2. Historical implementation notes go to Archive only.
-3. New docs should include Status, Owner, and Last Updated fields.
-4. Worktree markdown files are non-authoritative snapshots.
+2. New docs should include Status, Owner, and Last Updated fields.
+3. Worktree markdown files are non-authoritative snapshots.
 
 ## Canonical Entry Points
 
@@ -39,4 +37,3 @@ Do not treat files under worktree snapshots as source of truth.
 - 06_CONTRACTS/UI_CONTRACTS.md
 - 07_FOR_AI_AGENTS/AGENT_GUIDE.md
 - 08_ESP_IDF_PROJECT/README.md
-- ARCHIVE/README.md

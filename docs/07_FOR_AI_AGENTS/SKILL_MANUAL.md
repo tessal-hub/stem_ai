@@ -18,4 +18,3 @@ The operational root-level skill entry remains available at repository root as s
 1. Preserve handler first architecture.
 2. Preserve signal and threading contracts.
 3. Avoid introducing direct coupling across UI and workers.
-4. Treat archived docs as historical context, not active constraints.
