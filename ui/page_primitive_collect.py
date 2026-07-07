@@ -128,8 +128,8 @@ class PagePrimitiveCollect(QWidget):
         gestures_ready = 0
         for name, widgets in self._card_widgets.items():
             count = int(stats.get(name, 0))
-            int(self._catalog[name]["target_samples"])
-            widgets["progress"].setValue(count)
+            target = int(self._catalog[name]["target_samples"])
+            widgets["progress"].setValue(min(count, target))
             if count >= 100:
                 gestures_ready += 1
             self._update_group_buttons(name, count, widgets["groups"])
@@ -401,7 +401,18 @@ class PagePrimitiveCollect(QWidget):
         self._collecting = collecting
         self.btn_start_collect.setEnabled(not collecting and self._selected_gesture is not None)
         self.btn_stop_collect.setEnabled(collecting)
-        
+
+    def set_capture_ready(self, ready: bool) -> None:
+        self._capture_ready = ready
+        self.btn_capture_collect.setEnabled(ready)
+
+    def on_capture_saved(self, success: bool, message: str) -> None:
+        if success:
+            self.set_capture_ready(False)
+            self.lbl_instruction.setText(f"Đã lưu thành công: {message}")
+        else:
+            self.lbl_instruction.setText(f"Lỗi khi lưu: {message}")
+
     def update_collection_progress(self, gesture_name: str, count: int) -> None:
         # Check if we hit 30-sample marks or 50-sample group completions.
         # This will be handled by Handler, so we just update UI.

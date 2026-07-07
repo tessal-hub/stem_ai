@@ -158,10 +158,18 @@ class EncoderTrainerWorker(QThread):
 
             self._check_cancel()
             self.sig_status.emit("[ENCODER] Computing evaluation metrics...")
-            distance_ratio = self._compute_distance_ratio(encoder, X_base, y_base)
-            fewshot_5 = self._few_shot_eval(encoder, X_base, y_base, n_support=5)
-            fewshot_10 = self._few_shot_eval(encoder, X_base, y_base, n_support=10)
-            fewshot_20 = self._few_shot_eval(encoder, X_base, y_base, n_support=20)
+            try:
+                from .encoder_evaluation import full_encoder_evaluation
+                save_path = APP_DATA_DIR / "embedding_space.png"
+                distance_ratio, fewshot_5, fewshot_10, fewshot_20 = full_encoder_evaluation(
+                    encoder, X_base, y_base, class_names, save_path=str(save_path)
+                )
+            except Exception as eval_err:
+                print(f"Lỗi khi đánh giá encoder: {eval_err}")
+                distance_ratio = self._compute_distance_ratio(encoder, X_base, y_base)
+                fewshot_5 = self._few_shot_eval(encoder, X_base, y_base, n_support=5)
+                fewshot_10 = self._few_shot_eval(encoder, X_base, y_base, n_support=10)
+                fewshot_20 = self._few_shot_eval(encoder, X_base, y_base, n_support=20)
             self.evaluation_metrics = {
                 "distance_ratio": float(distance_ratio),
                 "fewshot_5": float(fewshot_5),

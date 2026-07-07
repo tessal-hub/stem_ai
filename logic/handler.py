@@ -205,6 +205,7 @@ class Handler(QObject):
             self.store.update_prediction, type=Qt.ConnectionType.QueuedConnection)
 
         self.data_io_worker.sig_save_done.connect(self._on_io_done)
+        self.data_io_worker.sig_db_refreshed.connect(self.store.update_counts_from_worker)
         self.data_io_worker.sig_queue_warning.connect(
             self.ui_wand.append_terminal_text, type=Qt.ConnectionType.QueuedConnection)
         self.feature_worker.sig_features_ready.connect(self.store.update_live_features)
@@ -414,7 +415,11 @@ class Handler(QObject):
         if path.exists():
             try:
                 import tensorflow as tf
-                encoder = tf.keras.models.load_model(str(path), compile=False)
+                from logic.tensorflow.encoder_pipeline import L2NormalizeLayer
+                encoder = tf.keras.models.load_model(
+                    str(path), compile=False,
+                    custom_objects={"L2NormalizeLayer": L2NormalizeLayer},
+                )
                 self.spell_recognizer = PrototypicalRecognizer(encoder)
                 
                 if proto_path.exists():
@@ -667,7 +672,7 @@ class Handler(QObject):
         folder_name = self._primitive_folder_name(gesture_name)
         self._pending_save_spell = folder_name
         self._pending_save_context = "primitive"
-        self.data_io_worker.enqueue_save(folder_name, snapshot)
+        self.data_io_worker.enqueue_save(folder_name, snapshot, prefix=group_name)
         self.ui_wand.append_terminal_text(
             f">> Capturing primitive sample: {folder_name}/{group_name} ({len(snapshot)} frames)"
         )
@@ -853,6 +858,7 @@ class Handler(QObject):
     def on_train_encoder_requested(self) -> None:
         log.debug("on_train_encoder_requested CALLED")
         try:
+            import tensorflow as tf  # Fix: import in main thread to avoid QThread crash
             from .encoder_trainer import EncoderTrainerWorker
             log.debug("EncoderTrainerWorker imported successfully")
             

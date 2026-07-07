@@ -86,10 +86,11 @@ class DataIOWorker(QThread):
         self,
         spell_name: str,
         data: list[list[float]],
+        prefix: str = "",
     ) -> None:
         """Schedule a cropped sample write (non-blocking)."""
         try:
-            self._job_queue.put_nowait(("save", spell_name, data))
+            self._job_queue.put_nowait(("save", spell_name, data, prefix))
             self._warn_if_queue_pressure()
         except queue.Full:
             msg = f"DataIOWorker queue full: save job dropped for spell '{spell_name}'"
@@ -172,8 +173,12 @@ class DataIOWorker(QThread):
             if kind == "_stop":
                 break
             elif kind == "save":
-                _, spell_name, data = job
-                self._do_save(spell_name, data)
+                if len(job) == 4:
+                    _, spell_name, data, prefix = job
+                else:
+                    _, spell_name, data = job
+                    prefix = ""
+                self._do_save(spell_name, data, prefix)
             elif kind == "delete":
                 _, spell_name = job
                 self._do_delete(spell_name)
@@ -192,13 +197,14 @@ class DataIOWorker(QThread):
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _do_save(self, spell_name: str, data: list[list[float]]) -> None:
+    def _do_save(self, spell_name: str, data: list[list[float]], prefix: str = "") -> None:
         try:
             folder = spell_write_dir(Path(self._dataset_dir), spell_name)
             folder.mkdir(parents=True, exist_ok=True)
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-            file_path = folder / f"sample_{timestamp}.csv"
+            filename = f"{prefix}_sample_{timestamp}.csv" if prefix else f"sample_{timestamp}.csv"
+            file_path = folder / filename
 
             with open(file_path, mode="w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)

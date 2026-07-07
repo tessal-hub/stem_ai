@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 import numpy as np
+import tensorflow as tf
 
 from ..dataset_layout import discover_class_directories, folder_name_match_key
 from .pipeline import _read_csv_rows, _windowize
@@ -17,6 +18,35 @@ def _require_tensorflow():
     return tf
 
 
+class L2NormalizeLayer(tf.keras.layers.Layer):
+    """Normalize embeddings to unit sphere.
+
+    Replaces Lambda(l2_normalize) so the model can be
+    serialized and deserialized safely — Lambda stores
+    Python bytecode which Keras refuses to load by default.
+    """
+
+    def call(self, inputs):
+        return tf.math.l2_normalize(inputs, axis=-1)
+
+    def get_config(self):
+        return super().get_config()
+
+
+class TripletStackLayer(tf.keras.layers.Layer):
+    """Stack anchor/positive/negative embeddings along axis=1.
+
+    Same rationale as L2NormalizeLayer — avoid Lambda for
+    serialization safety.
+    """
+
+    def call(self, inputs):
+        return tf.stack(inputs, axis=1)
+
+    def get_config(self):
+        return super().get_config()
+
+
 def build_encoder(
     window_size: int = 64,
     channels: int = 6,
@@ -25,23 +55,13 @@ def build_encoder(
     tf = _require_tensorflow()
 
     inputs = tf.keras.layers.Input(shape=(window_size, channels), name="imu_window")
-    x = tf.keras.layers.Conv1D(64, 5, padding="same")(inputs)
-    x = tf.keras.layers.BatchNormalization()(x)
-    x = tf.keras.layers.ReLU()(x)
-    x = tf.keras.layers.Conv1D(64, 3, padding="same")(x)
-    x = tf.keras.layers.BatchNormalization()(x)
-    x = tf.keras.layers.ReLU()(x)
+    x = tf.keras.layers.Conv1D(16, 5, activation="relu", padding="same")(inputs)
     x = tf.keras.layers.MaxPooling1D(2)(x)
-    x = tf.keras.layers.Dropout(0.20)(x)
-    x = tf.keras.layers.LSTM(128, return_sequences=True)(x)
-    x = tf.keras.layers.LSTM(64)(x)
-    x = tf.keras.layers.Dropout(0.20)(x)
-    x = tf.keras.layers.Dense(64, activation="relu")(x)
+    x = tf.keras.layers.Conv1D(32, 5, activation="relu", padding="same")(x)
+    x = tf.keras.layers.GlobalAveragePooling1D()(x)
+    x = tf.keras.layers.Dense(32, activation="relu")(x)
     x = tf.keras.layers.Dense(embedding_dim)(x)
-    outputs = tf.keras.layers.Lambda(
-        lambda tensor: tf.math.l2_normalize(tensor, axis=-1),
-        name="l2_embedding",
-    )(x)
+    outputs = L2NormalizeLayer(name="l2_embedding")(x)
     return tf.keras.Model(inputs=inputs, outputs=outputs, name="gesture_encoder")
 
 
@@ -77,10 +97,7 @@ def build_triplet_model(encoder):
     emb_p = encoder(positive_in)
     emb_n = encoder(negative_in)
 
-    stacked = tf.keras.layers.Lambda(
-        lambda embeddings: tf.stack(embeddings, axis=1),
-        name="triplet_stack",
-    )([emb_a, emb_p, emb_n])
+    stacked = TripletStackLayer(name="triplet_stack")([emb_a, emb_p, emb_n])
 
     return tf.keras.Model(
         inputs=[anchor_in, positive_in, negative_in],

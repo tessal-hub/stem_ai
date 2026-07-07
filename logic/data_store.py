@@ -330,6 +330,14 @@ class DataStore(QObject):
         self.sig_db_updated.emit(self.spell_counts)
         self.sig_primitive_stats_updated.emit(self.get_primitive_collection_stats())
 
+    def update_counts_from_worker(self, counts: dict) -> None:
+        """Nhận thống kê từ DataIOWorker thay vì quét lại."""
+        self.spell_counts = counts
+        for name in SYSTEM_SPELL_NAMES:
+            self.spell_counts.setdefault(name, 0)
+        self.sig_db_updated.emit(self.spell_counts)
+        self.sig_primitive_stats_updated.emit(self.get_primitive_collection_stats())
+
     def refresh_primitive_stats(self) -> None:
         """Force re-emit sig_primitive_stats_updated with current filesystem state."""
         self.sig_primitive_stats_updated.emit(self.get_primitive_collection_stats())
