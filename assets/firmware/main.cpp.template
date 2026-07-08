@@ -40,7 +40,7 @@ namespace spellbook {
 #endif
 
 #ifndef STEM_TFLM_ARENA_BYTES
-#define STEM_TFLM_ARENA_BYTES (60 * 1024)
+#define STEM_TFLM_ARENA_BYTES (100 * 1024)
 #endif
 
 #ifndef STEM_INFERENCE_INTERVAL_MS
@@ -50,7 +50,8 @@ namespace spellbook {
 #define MPU6050_ADDR 0x68
 #define WINDOW_SIZE 64
 #define CHANNELS 6
-#define IMU_SCALE 32768.0f
+#define ACCEL_SCALE 16384.0f
+#define GYRO_SCALE 131.0f
 #define BUFFER_LENGTH (WINDOW_SIZE * CHANNELS)
 
 enum class SpellId {
@@ -195,12 +196,12 @@ static bool ReadImuFrame(ImuFrame* out) {
     return false;
   }
 
-  out->ax = static_cast<int16_t>((data[0] << 8) | data[1]) / IMU_SCALE;
-  out->ay = static_cast<int16_t>((data[2] << 8) | data[3]) / IMU_SCALE;
-  out->az = static_cast<int16_t>((data[4] << 8) | data[5]) / IMU_SCALE;
-  out->gx = static_cast<int16_t>((data[8] << 8) | data[9]) / IMU_SCALE;
-  out->gy = static_cast<int16_t>((data[10] << 8) | data[11]) / IMU_SCALE;
-  out->gz = static_cast<int16_t>((data[12] << 8) | data[13]) / IMU_SCALE;
+  out->ax = static_cast<int16_t>((data[0] << 8) | data[1]) / ACCEL_SCALE;
+  out->ay = static_cast<int16_t>((data[2] << 8) | data[3]) / ACCEL_SCALE;
+  out->az = static_cast<int16_t>((data[4] << 8) | data[5]) / ACCEL_SCALE;
+  out->gx = static_cast<int16_t>((data[8] << 8) | data[9]) / GYRO_SCALE;
+  out->gy = static_cast<int16_t>((data[10] << 8) | data[11]) / GYRO_SCALE;
+  out->gz = static_cast<int16_t>((data[12] << 8) | data[13]) / GYRO_SCALE;
   return true;
 }
 
@@ -241,6 +242,31 @@ static SpellId RunInference(const ImuFrame& frame) {
   }
 
   if (s_sample_count < WINDOW_SIZE || s_cooldown > 0) {
+    return SpellId::UNKNOWN;
+  }
+
+  // Tính phương sai gia tốc trong cửa sổ trượt để nhận biết khoảng nghỉ
+  float sum_ax = 0, sum_ay = 0, sum_az = 0;
+  for (int i = 0; i < WINDOW_SIZE; ++i) {
+    sum_ax += s_input_buffer[i * CHANNELS + 0];
+    sum_ay += s_input_buffer[i * CHANNELS + 1];
+    sum_az += s_input_buffer[i * CHANNELS + 2];
+  }
+  float mean_ax = sum_ax / WINDOW_SIZE;
+  float mean_ay = sum_ay / WINDOW_SIZE;
+  float mean_az = sum_az / WINDOW_SIZE;
+
+  float var_sum = 0;
+  for (int i = 0; i < WINDOW_SIZE; ++i) {
+    float dx = s_input_buffer[i * CHANNELS + 0] - mean_ax;
+    float dy = s_input_buffer[i * CHANNELS + 1] - mean_ay;
+    float dz = s_input_buffer[i * CHANNELS + 2] - mean_az;
+    var_sum += (dx * dx + dy * dy + dz * dz);
+  }
+  var_sum /= WINDOW_SIZE;
+
+  // Nếu không có chuyển động đáng kể (khoảng nghỉ), bỏ qua chạy AI
+  if (var_sum < 0.01f) {
     return SpellId::UNKNOWN;
   }
 

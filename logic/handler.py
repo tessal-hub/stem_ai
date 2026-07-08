@@ -319,11 +319,11 @@ class Handler(QObject):
 
     def on_build_tflite(self, spell_names: list[str]) -> None:
         """Kích hoạt tiến trình xây dựng mô hình .tflite."""
-        self._start_model_build(spell_names, mode="tflite")
+        self._start_model_build(spell_names, mode="both")
 
     def on_build_cc(self, spell_names: list[str]) -> None:
         """Kích hoạt tiến trình xây dựng mô hình .cc (C++ Header)."""
-        self._start_model_build(spell_names, mode="cc")
+        self._start_model_build(spell_names, mode="both")
 
     def _start_model_build(self, spell_names: list[str], mode: str) -> None:
         """Khởi tạo worker huấn luyện mô hình."""
