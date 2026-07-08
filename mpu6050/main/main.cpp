@@ -7,6 +7,9 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "driver/i2c_master.h"
+#include "driver/uart.h"
+#include "esp_spiffs.h"
+#include "esp_system.h"
 
 // TFLite Micro Headers
 #include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
@@ -28,7 +31,8 @@ static const char* TAG = "STEM_AI_BASIC";
 #define STEM_TFLM_ARENA_BYTES (80 * 1024)
 #define MPU6050_ADDR 0x68
 
-#define WINDOW_SIZE 40
+// Đổi WINDOW_SIZE từ 40 sang 64 để đồng bộ với model encoder mới
+#define WINDOW_SIZE 64
 #define CHANNELS 6
 #define BUFFER_LENGTH (WINDOW_SIZE * CHANNELS)
 #define IMU_SCALE 32768.0f 
@@ -53,6 +57,9 @@ static tflite::MicroInterpreter* s_interpreter = nullptr;
 static TfLiteTensor* s_input = nullptr;
 static TfLiteTensor* s_output = nullptr;
 static tflite::MicroMutableOpResolver<13> s_resolver;
+
+// Buffer chứa model nạp động từ SPIFFS
+static uint8_t* s_dynamic_model_buf = nullptr;
 
 struct ImuFrame { float ax, ay, az, gx, gy, gz; };
 
@@ -96,10 +103,51 @@ static bool ReadImuFrame(ImuFrame* out) {
   return true;
 }
 
+// --- HÀM KHỞI TẠO SPIFFS ---
+static bool InitSpiffs() {
+  esp_vfs_spiffs_conf_t conf = {
+      .base_path = "/storage",
+      .partition_label = "storage",
+      .max_files = 5,
+      .format_if_mount_failed = true
+  };
+  esp_err_t ret = esp_vfs_spiffs_register(&conf);
+  if (ret != ESP_OK) {
+      ESP_LOGE(TAG, "Mount SPIFFS failed (%s)", esp_err_to_name(ret));
+      return false;
+  }
+  ESP_LOGI(TAG, "SPIFFS Mounted successfully");
+  return true;
+}
+
 // --- HÀM KHỞI TẠO AI ---
 static bool InitAI() {
   tflite::InitializeTarget();
-  const tflite::Model* model = tflite::GetModel(g_model);
+
+  const tflite::Model* model = nullptr;
+
+  // Thử nạp model động từ SPIFFS trước
+  FILE* f = fopen("/storage/model.tflite", "rb");
+  if (f != nullptr) {
+      fseek(f, 0, SEEK_END);
+      long size = ftell(f);
+      fseek(f, 0, SEEK_SET);
+      s_dynamic_model_buf = (uint8_t*) malloc(size);
+      if (s_dynamic_model_buf != nullptr) {
+          fread(s_dynamic_model_buf, 1, size, f);
+          model = tflite::GetModel(s_dynamic_model_buf);
+          ESP_LOGI(TAG, "Loaded dynamic model from SPIFFS (%ld bytes)", size);
+      } else {
+          ESP_LOGE(TAG, "Failed to allocate memory for dynamic model (%ld bytes)", size);
+      }
+      fclose(f);
+  }
+
+  // Fallback về model tĩnh nếu không tìm thấy hoặc lỗi memory
+  if (model == nullptr) {
+      model = tflite::GetModel(g_model);
+      ESP_LOGI(TAG, "Using static fallback model");
+  }
 
   s_resolver.AddConv2D();
   s_resolver.AddDepthwiseConv2D();
@@ -179,8 +227,106 @@ static SpellId RunAI(const ImuFrame& frame) {
   return SpellId::UNKNOWN;
 }
 
+// --- TASK NHẬN MODEL QUA SERIAL (115200 baud) ---
+void model_upload_task(void *pvParameters) {
+    const uart_port_t uart_num = UART_NUM_0;
+    uart_config_t uart_config = {
+        .baud_rate = 115200,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_DEFAULT,
+    };
+    
+    // Cấu hình UART0 buffer lớn để tránh tràn bộ đệm
+    uart_driver_install(uart_num, 8192, 0, 0, NULL, 0);
+    uart_param_config(uart_num, &uart_config);
+
+    uint8_t* dtmp = (uint8_t*) malloc(4096);
+    char line_buf[128];
+    int line_idx = 0;
+
+    ESP_LOGI(TAG, "Model Upload Listener Task Started (115200 baud)");
+
+    while (1) {
+        uint8_t ch;
+        int len = uart_read_bytes(uart_num, &ch, 1, portMAX_DELAY);
+        if (len <= 0) continue;
+
+        if (ch == '\n' || ch == '\r') {
+            line_buf[line_idx] = '\0';
+            int file_size = 0;
+            if (sscanf(line_buf, "CMD:UPLOAD_MODEL:%d", &file_size) == 1) {
+                ESP_LOGI(TAG, "Entering Upload Mode. Target size: %d bytes", file_size);
+                
+                FILE* f = fopen("/storage/model.tflite", "wb");
+                if (f == nullptr) {
+                    ESP_LOGE(TAG, "Failed to open model.tflite for writing");
+                    uart_write_bytes(uart_num, "ACK:FAIL_OPEN\n", 14);
+                    line_idx = 0;
+                    continue;
+                }
+                
+                // Trả về ACK:READY báo cho PC biết đã sẵn sàng nhận
+                uart_write_bytes(uart_num, "ACK:READY\n", 10);
+
+                int remaining = file_size;
+                bool success = true;
+
+                while (remaining > 0) {
+                    int chunk_to_read = (remaining > 4096) ? 4096 : remaining;
+                    int bytes_read = 0;
+                    
+                    // Đọc đủ block 4096 bytes (hoặc block cuối)
+                    while (bytes_read < chunk_to_read) {
+                        int r = uart_read_bytes(uart_num, dtmp + bytes_read, 
+                                                chunk_to_read - bytes_read, pdMS_TO_TICKS(5000));
+                        if (r <= 0) {
+                            success = false;
+                            break; // Timeout
+                        }
+                        bytes_read += r;
+                    }
+                    if (!success) break;
+
+                    fwrite(dtmp, 1, chunk_to_read, f);
+                    remaining -= chunk_to_read;
+                    
+                    uart_write_bytes(uart_num, "ACK:CHUNK_RECEIVED\n", 19);
+                }
+
+                fclose(f);
+
+                if (success) {
+                    uart_write_bytes(uart_num, "ACK:UPLOAD_COMPLETE\n", 20);
+                    vTaskDelay(pdMS_TO_TICKS(1500));
+                    esp_restart(); // Restart chip để chạy model mới
+                } else {
+                    ESP_LOGE(TAG, "Upload failed due to serial timeout");
+                }
+            }
+            line_idx = 0;
+        } else {
+            if (line_idx < 127) {
+                line_buf[line_idx++] = ch;
+            }
+        }
+    }
+    
+    free(dtmp);
+    vTaskDelete(NULL);
+}
+
 // --- VÒNG LẶP CHÍNH ---
 extern "C" void app_main(void) {
+  // 1. Khởi động hệ thống file SPIFFS
+  InitSpiffs();
+
+  // 2. Chạy Thread nhận dạng model ngầm
+  xTaskCreate(model_upload_task, "model_upload_task", 8192, NULL, 5, NULL);
+
+  // 3. Khởi tạo cảm biến MPU6050 & AI
   if (!InitMpu6050() || !InitAI()) {
     ESP_LOGE(TAG, "Loi khoi tao phan cung hoac AI!");
     return;
@@ -189,16 +335,13 @@ extern "C" void app_main(void) {
   ImuFrame frame{};
   SpellId last_spell = SpellId::UNKNOWN;
 
-  // Dùng vTaskDelayUntil để đảm bảo chu kỳ 50Hz (20ms) chính xác
   TickType_t xLastWakeTime = xTaskGetTickCount();
 
   while (1) {
     if (ReadImuFrame(&frame)) {
       SpellId current_spell = RunAI(frame);
 
-      // Chỉ in ra nếu kết quả khác với UNKNOWN và khác với động tác liền trước đó
       if (current_spell != SpellId::UNKNOWN && current_spell != last_spell) {
-          
           if (current_spell == SpellId::STAND_BY) {
               ESP_LOGI(TAG, "=> STAND_BY");
           } 
@@ -208,11 +351,9 @@ extern "C" void app_main(void) {
           else if (current_spell == SpellId::WAVE) {
               ESP_LOGW(TAG, "=> WAVE");
           }
-          
           last_spell = current_spell;
       }
     }
-    
     vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(20));
   }
 }

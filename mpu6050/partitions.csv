@@ -1,5 +1,7 @@
-# Name,   Type, SubType, Offset,   Size,     Flags
-nvs,      data, nvs,     0x9000,   0x6000,
-phy_init, data, phy,     0xf000,   0x1000,
-factory,  app,  factory, 0x10000,  0x300000,
-storage,  data, spiffs,  0x310000, 0xCF0000,
+# Name,   Type, SubType, Offset,   Size
+# Tong = 0x400000 (4MB). Neu board dung flash 8MB/16MB,
+# tang size cua "storage" tuong ung va sua CONFIG_ESPTOOLPY_FLASHSIZE trong sdkconfig.
+nvs,      data, nvs,     0x9000,   0x5000
+phy_init, data, phy,     0xf000,   0x1000
+factory,  app,  factory, 0x10000,  0x180000
+storage,  data, spiffs,  0x190000, 0xE70000

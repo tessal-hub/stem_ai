@@ -98,7 +98,8 @@ class ModelUploader(QThread):
     def _perform_upload(self) -> None:
         """Open serial port, handshake, stream chunks, and confirm completion."""
         import time
-        self._serial = serial.Serial(self.port, 115200, timeout=5)
+        # Đồng bộ Baud rate 115200 ổn định và timeout 10.0s cho handshake ban đầu
+        self._serial = serial.Serial(self.port, 115200, timeout=10.0)
         self._is_running = True
 
         # Cho ESP32-S3 hoàn thành quá trình reset phần cứng sau khi mở Serial
@@ -120,7 +121,8 @@ class ModelUploader(QThread):
         if not self._send_chunks(file_size):
             return
 
-        self._serial.timeout = 5.0
+        # Đặt timeout 10.0s chờ ACK hoàn tất ghi flash
+        self._serial.timeout = 10.0
         final_ack = self._serial.readline().decode("utf-8", errors="ignore").strip()
         if final_ack != "ACK:UPLOAD_COMPLETE":
             self._fail("Error: All chunks sent but final confirmation failed.")
@@ -150,7 +152,8 @@ class ModelUploader(QThread):
                 self._serial.write(chunk)
                 self._serial.flush()
 
-                self._serial.timeout = 2.0
+                # Timeout 5.0s cho mỗi chunk ACK
+                self._serial.timeout = 5.0
                 chunk_ack = self._serial.readline().decode("utf-8", errors="ignore").strip()
                 if chunk_ack != "ACK:CHUNK_RECEIVED":
                     self._fail(
