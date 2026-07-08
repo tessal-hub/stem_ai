@@ -114,6 +114,10 @@ class MainWindow(QMainWindow):
         """Nạp dữ liệu ban đầu từ DataStore."""
         self._set_page(0)
 
+        settings = self.data_store.get_settings_snapshot()
+        show_prim = settings.get("show_primitives_menu", True)
+        self.shell.set_nav_item_visible(1, show_prim)
+
         # Đồng bộ trạng thái kết nối
         is_connected, _ = self.data_store.get_connection_state()
         self.page_home.set_connection_status(is_connected)
@@ -232,6 +236,8 @@ class MainWindow(QMainWindow):
     def _on_settings_saved(self, config: dict) -> None:
         """Lưu cấu hình ứng dụng."""
         self.data_store.save_settings(config)
+        show_prim = config.get("show_primitives_menu", True)
+        self.shell.set_nav_item_visible(1, show_prim)
 
     def _on_theme_changed(self, theme_name: str) -> None:
         """Làm mới style của tất cả các trang khi theme đổi."""

@@ -56,6 +56,7 @@ class SettingsStore:
         "demo_spell_cleanup_done": False,
         "theme": "light",
         "ui_language": "en",
+        "show_primitives_menu": True,
     }
 
     def __init__(self) -> None:
@@ -91,6 +92,7 @@ class SettingsStore:
             "demo_spell_cleanup_done": self.get_bool("demo_spell_cleanup_done", False),
             "theme": self.get_str("theme", "light"),
             "ui_language": self.get_str("ui_language", "en"),
+            "show_primitives_menu": self.get_bool("show_primitives_menu", self._DEFAULTS["show_primitives_menu"]),
         }
 
     def save(self, config: Mapping[str, Any]) -> dict[str, Any]:
@@ -168,6 +170,7 @@ class DataStore(QObject):
         self.prediction_confidence = 0.0
         self.is_recording = False
         self.spell_counts: dict[str, int] = {}
+        self.registered_prototypes: set[str] = set()
         self.udp_health = {"udp_rate_hz": 0.0, "udp_loss_pct": 0.0}
         self.live_features: dict[str, float] = {}
 

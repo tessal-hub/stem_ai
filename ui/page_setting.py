@@ -178,11 +178,16 @@ class PageSetting(QWidget):
         self.combo_ui_language = self._make_combo([])
         self.txt_project_name = QLineEdit()
         self.chk_auto_save = QCheckBox()
+        self.chk_show_primitives = QCheckBox()
 
         form = self._make_form_layout()
         self._add_i18n_form_row(form, "label_ui_language", self.combo_ui_language)
         self._add_i18n_form_row(form, "label_project_name", self.txt_project_name)
         form.addRow(QLabel("Auto Save"), self.chk_auto_save)
+        
+        self.lbl_show_primitives = QLabel("Hiển thị menu Primitives" if self._lang == "vi" else "Show Primitives Menu")
+        form.addRow(self.lbl_show_primitives, self.chk_show_primitives)
+        
         a_lay.addLayout(form)
         lay.addWidget(card)
         return col
@@ -344,6 +349,7 @@ class PageSetting(QWidget):
             "auto_save": self.chk_auto_save,
             "idf_main_dir": self.txt_idf_main_dir,
             "dataset_dir": self.txt_dataset_dir,
+            "show_primitives_menu": self.chk_show_primitives,
         }
         for key, w in widgets.items():
             if key in config:
@@ -443,6 +449,9 @@ class PageSetting(QWidget):
         for w, key, prefix in self._i18n_text:
             w.setText(prefix + tr(lang, key))
 
+        if hasattr(self, "lbl_show_primitives"):
+            self.lbl_show_primitives.setText("Hiển thị menu Primitives" if lang == "vi" else "Show Primitives Menu")
+
         # Preserve the currently selected language
         current_data = self.combo_ui_language.currentData()
         if not current_data:
@@ -476,6 +485,7 @@ class PageSetting(QWidget):
             "auto_save": self.chk_auto_save.isChecked(),
             "idf_main_dir": self.txt_idf_main_dir.text().strip(),
             "dataset_dir": self.txt_dataset_dir.text().strip(),
+            "show_primitives_menu": self.chk_show_primitives.isChecked(),
         }
         self.sig_settings_saved.emit(config)
 

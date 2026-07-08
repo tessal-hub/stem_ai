@@ -10,7 +10,9 @@ Trách nhiệm:
 
 from __future__ import annotations
 
+import csv
 import logging
+import numpy as np
 from threading import Lock
 
 from PyQt6.QtCore import QObject, Qt, QTimer
@@ -157,12 +159,16 @@ class Handler(QObject):
         self.ui_record.sig_spell_selected.connect(self.on_spell_selected)
         self.ui_record.sig_spell_deleted.connect(self.on_spell_deleted)
 
-        if hasattr(self, 'on_delete_latest_sample'):
+        if hasattr(self.ui_record, 'sig_delete_latest_sample') and hasattr(self, 'on_delete_latest_sample'):
             self.ui_record.sig_delete_latest_sample.connect(self.on_delete_latest_sample)
         if hasattr(self, 'on_clear_buffer'):
             self.ui_record.sig_clear_buffer.connect(self.on_clear_buffer)
         if hasattr(self, 'on_export_csv'):
             self.ui_record.sig_export_csv.connect(self.on_export_csv)
+
+        sig_reg = getattr(self.ui_record, 'sig_register_prototype', None)
+        if sig_reg is not None:
+            sig_reg.connect(self.on_register_spell_prototype)
 
         if hasattr(self, 'on_build_tflite'):
             self.ui_wand.sig_train_build_tflite_requested.connect(self.on_build_tflite)
@@ -206,6 +212,7 @@ class Handler(QObject):
 
         self.data_io_worker.sig_save_done.connect(self._on_io_done)
         self.data_io_worker.sig_db_refreshed.connect(self.store.update_counts_from_worker)
+        self.data_io_worker.sig_delete_sample_done.connect(self._on_io_delete_sample_done)
         self.data_io_worker.sig_queue_warning.connect(
             self.ui_wand.append_terminal_text, type=Qt.ConnectionType.QueuedConnection)
         self.feature_worker.sig_features_ready.connect(self.store.update_live_features)
@@ -283,6 +290,8 @@ class Handler(QObject):
     def on_data_cropped(self, data: list, spell: str) -> None:
         """Gửi yêu cầu lưu dữ liệu đã cắt vào dataset."""
         if data and spell.strip():
+            self._pending_save_context = "record"
+            self._pending_save_spell = spell
             self.data_io_worker.enqueue_save(spell, data)
 
     def on_udp_sensor_data(self, values: list[float]) -> None:
@@ -340,6 +349,11 @@ class Handler(QObject):
         if success:
             self.ui_wand.append_terminal_text(f">> [DONE] Build success: {msg}")
             self.ui_wand.update_flash_progress(100, "Success")
+            if self._model_build_worker and self._model_build_worker.build_result:
+                tflite_path = self._model_build_worker.build_result.tflite_path
+                if tflite_path:
+                    self.store.save_settings({"model_path": str(tflite_path)})
+                    self.ui_wand.append_terminal_text(f">> Updated settings: model_path={tflite_path}")
         else:
             self.ui_wand.append_terminal_text(f">> [FAIL] Build failed: {msg}")
             self.ui_wand.update_flash_progress(0, "Failed")
@@ -416,14 +430,22 @@ class Handler(QObject):
             try:
                 import tensorflow as tf
                 from logic.tensorflow.encoder_pipeline import L2NormalizeLayer
-                encoder = tf.keras.models.load_model(
-                    str(path), compile=False,
-                    custom_objects={"L2NormalizeLayer": L2NormalizeLayer},
-                )
+                try:
+                    encoder = tf.keras.models.load_model(
+                        str(path), compile=False,
+                        custom_objects={"L2NormalizeLayer": L2NormalizeLayer},
+                    )
+                except Exception:
+                    # Legacy model with Lambda layer — load with safe_mode=False
+                    log.warning("Loading legacy Lambda encoder — retrain to upgrade.")
+                    encoder = tf.keras.models.load_model(
+                        str(path), compile=False, safe_mode=False,
+                    )
                 self.spell_recognizer = PrototypicalRecognizer(encoder)
                 
                 if proto_path.exists():
                     self.spell_recognizer.load(str(proto_path))
+                    self.store.registered_prototypes = set(self.spell_recognizer.prototypes.keys())
                 log.info(f"Loaded encoder and {len(self.spell_recognizer.prototypes) if self.spell_recognizer else 0} prototypes.")
             except Exception as e:
                 log.error(f"Failed to load encoder: {e}")
@@ -432,6 +454,122 @@ class Handler(QObject):
         """Cập nhật dữ liệu từ DB vào các trang UI."""
         self.ui_record.load_spell_list(counts)
         self.ui_wand.load_spell_payload_list(counts)
+        self._update_spell_prototypes()
+
+        # Reload selected spell samples and re-run consistency analysis
+        current_spell = getattr(self.ui_record, 'current_spell_name', None)
+        if current_spell:
+            samples = self.store.get_samples_for_spell(current_spell)
+            self.ui_record.load_samples_for_spell(current_spell, samples)
+            self._run_consistency_analysis(current_spell)
+
+    def _compute_spell_consistency(self, spell_name: str) -> float | str:
+        """Tính toán độ đồng nhất (consistency) của các mẫu trong spell.
+        
+        Trả về giá trị từ 0.0 đến 1.0, hoặc chuỗi trạng thái nếu không đủ dữ liệu/không có encoder.
+        """
+        if not self.spell_recognizer:
+            return "no_encoder"
+        if not spell_name:
+            return "need_samples"
+            
+        from logic.tensorflow.pipeline import _read_csv_rows, _windowize
+        from logic.dataset_layout import storage_dirs_for_spell
+        
+        dataset_root = Path(self.store.dataset_dir)
+        dirs = storage_dirs_for_spell(dataset_root, spell_name)
+        csv_files = []
+        for d in dirs:
+            csv_files.extend(sorted(d.glob("*.csv")))
+            
+        if len(csv_files) < 2:
+            return "need_samples"
+            
+        embeddings = []
+        for csv_file in csv_files:
+            rows = _read_csv_rows(csv_file)
+            if not rows:
+                continue
+            windows = _windowize(rows, window_size=64, step=4)
+            for window in windows:
+                data = np.asarray(window, dtype=np.float32)
+                data = np.clip(data, -2.0, 2.0)
+                emb = self.spell_recognizer.encoder.predict(np.expand_dims(data, axis=0), verbose=0)[0]
+                norm = np.linalg.norm(emb)
+                if norm > 0:
+                    emb = emb / norm
+                embeddings.append(emb)
+                
+        if len(embeddings) < 2:
+            return None
+            
+        embeddings = np.array(embeddings)
+        dot_matrix = np.dot(embeddings, embeddings.T)
+        
+        triu_indices = np.triu_indices(len(embeddings), k=1)
+        similarities = dot_matrix[triu_indices]
+        
+        if len(similarities) == 0:
+            return None
+            
+        mean_sim = float(np.mean(similarities))
+        consistency = max(0.0, min(1.0, (mean_sim - 0.5) / 0.5)) if mean_sim >= 0.5 else 0.0
+        return consistency
+
+    def _update_spell_prototypes(self) -> None:
+        """Cập nhật prototypes cho toàn bộ spell từ dataset hiện tại."""
+        if not self.spell_recognizer:
+            return
+
+        import os
+        from logic.tensorflow.pipeline import _read_csv_rows, _windowize
+        from logic.dataset_layout import storage_dirs_for_spell
+
+        dataset_root = Path(self.store.dataset_dir)
+        spells_dir = dataset_root / "spells"
+        
+        spell_names = []
+        if spells_dir.exists():
+            spell_names = [d.name for d in spells_dir.iterdir() if d.is_dir()]
+            
+        all_spells = set(spell_names) | set(self.spell_recognizer.prototypes.keys())
+        
+        updated_any = False
+        
+        for spell in all_spells:
+            dirs = storage_dirs_for_spell(dataset_root, spell)
+            csv_files = []
+            for d in dirs:
+                csv_files.extend(sorted(d.glob("*.csv")))
+            
+            samples = []
+            for csv_file in csv_files:
+                rows = _read_csv_rows(csv_file)
+                if not rows:
+                    continue
+                # Cắt windows
+                windows = _windowize(rows, window_size=64, step=4)
+                for window in windows:
+                    data = np.asarray(window, dtype=np.float32)
+                    data = np.clip(data, -2.0, 2.0)
+                    samples.append(data)
+            
+            if samples:
+                try:
+                    self.spell_recognizer.register_spell(spell, samples)
+                    updated_any = True
+                except Exception as e:
+                    log.error(f"Failed to register spell '{spell}': {e}")
+            else:
+                if spell in self.spell_recognizer.prototypes:
+                    self.spell_recognizer.remove_spell(spell)
+                    updated_any = True
+                    
+        if updated_any:
+            proto_path = APP_DATA_DIR / "spell_prototypes.json"
+            self.spell_recognizer.save(str(proto_path))
+            self.store.registered_prototypes = set(self.spell_recognizer.prototypes.keys())
+            log.info(f"Updated spell prototypes in {proto_path}")
 
     def _on_io_done(self, success: bool, msg: str) -> None:
         """Phản hồi sau khi thao tác I/O hoàn tất."""
@@ -526,6 +664,7 @@ class Handler(QObject):
         """Khi một spell được chọn từ thư viện."""
         samples = self.store.get_samples_for_spell(name)
         self.ui_record.load_samples_for_spell(name, samples)
+        self._run_consistency_analysis(name)
 
     def on_spell_deleted(self, name: str) -> None:
         """Yêu cầu xóa spell."""
@@ -541,6 +680,18 @@ class Handler(QObject):
             return
 
         self.data_io_worker.enqueue_delete(name)
+
+    def on_delete_latest_sample(self, spell_name: str) -> None:
+        """Yêu cầu xóa mẫu mới nhất của spell."""
+        if not spell_name.strip():
+            return
+        self.data_io_worker.enqueue_delete_latest_sample(spell_name)
+
+    def _on_io_delete_sample_done(self, success: bool, message: str) -> None:
+        """Sau khi xóa mẫu xong: re-run consistency nếu đang xem spell đó."""
+        current_spell = getattr(self.ui_record, 'current_spell_name', None)
+        if success and current_spell:
+            self._run_consistency_analysis(current_spell)
 
     def on_primitive_quality_scan_requested(self) -> None:
         """Start off-thread primitive dataset quality scan.
@@ -722,17 +873,158 @@ class Handler(QObject):
                 f"[WARN] Could not send mode command: {device_mode}."
             )
 
+    # ── Consistency Analysis ────────────────────────────────────────────
+
+    _PRIMITIVE_NAMES: frozenset[str] = frozenset([
+        "SWIPE_RIGHT", "SWIPE_UP", "THRUST", "CIRCLE_CW",
+        "CIRCLE_CCW", "WRIST_FLICK", "ZIGZAG", "STAND_BY", "STAND BY",
+    ])
+
+    def _load_samples_for_analysis(
+        self, spell_name: str, window_size: int = 64
+    ) -> list:
+        """Đọc tất cả CSV files của spell_name, trả về list ndarray (window_size, 6).
+        
+        Tìm window có phương sai (variance/năng lượng) lớn nhất để tự động căn chỉnh gesture
+        và loại bỏ các đoạn tĩnh (silence) ở đầu/cuối file.
+        """
+        from logic.dataset_layout import storage_dirs_for_spell
+
+        dataset_root = Path(self.store.dataset_dir)
+        dirs = storage_dirs_for_spell(dataset_root, spell_name)
+        csv_files: list[Path] = []
+        for d in dirs:
+            csv_files.extend(sorted(d.glob("*.csv")))
+
+        samples = []
+        for fpath in csv_files:
+            rows: list[list[float]] = []
+            try:
+                with open(fpath, "r", encoding="utf-8", newline="") as f:
+                    reader = csv.reader(f)
+                    header = next(reader, None)  # skip header
+                    for line in reader:
+                        if len(line) >= 6:
+                            try:
+                                rows.append([float(v) for v in line[:6]])
+                            except ValueError:
+                                continue
+            except Exception:
+                continue
+
+            if len(rows) < window_size:
+                continue
+
+            # Quét tìm window có tổng phương sai (biến động) lớn nhất
+            best_window = None
+            max_var = -1.0
+            
+            # Slide qua toàn bộ dữ liệu với bước nhảy = 1 hoặc 2 để quét chính xác
+            for start_idx in range(0, len(rows) - window_size + 1, 2):
+                window = np.asarray(rows[start_idx:start_idx + window_size], dtype=np.float32)
+                window = np.clip(window, -2.0, 2.0)
+                var_sum = float(np.sum(np.var(window, axis=0)))
+                if var_sum > max_var:
+                    max_var = var_sum
+                    best_window = window
+
+            if best_window is not None:
+                samples.append(best_window)
+
+        return samples
+
+    def _run_consistency_analysis(self, spell_name: str) -> None:
+        """Load mẫu, chạy analyze, đẩy kết quả lên UI."""
+        if not spell_name:
+            return
+        # Bỏ qua primitives — không hiển thị consistency cho chúng
+        norm = spell_name.replace("_", " ").strip().upper()
+        if norm in {n.replace("_", " ") for n in self._PRIMITIVE_NAMES}:
+            return
+
+        # Encoder input cố định 64 samples (shape=(None,64,6))
+        window_size = 64
+
+        def _do_analysis() -> None:
+            if self.spell_recognizer is None:
+                # Không có encoder — vẫn đẩy result lên để UI hiển thị thông báo
+                n = len(self._load_samples_for_analysis(spell_name, window_size))
+                result = dict(
+                    n_samples=n,
+                    ready_to_register=False,
+                    overall_consistency=None,
+                    per_sample_scores=[],
+                    worst_sample_idx=None,
+                    recommendation="⚙️ Encoder chưa được load. Train encoder trước để xem phân tích.",
+                )
+            else:
+                samples = self._load_samples_for_analysis(spell_name, window_size)
+                result = self.spell_recognizer.analyze_spell_samples(samples)
+            if hasattr(self.ui_record, 'update_consistency_display'):
+                self.ui_record.update_consistency_display(result)
+
+        # Non-blocking: defer to next event loop tick
+        QTimer.singleShot(0, _do_analysis)
+
+    def on_register_spell_prototype(self, spell_name: str) -> None:
+        """Đăng ký prototype khi user nhấn nút trên UI."""
+        if not self.spell_recognizer:
+            self.ui_wand.append_terminal_text(
+                "[ERROR] Encoder not loaded. Train encoder first."
+            )
+            return
+
+        # Encoder input cố định 64 samples
+        window_size = 64
+
+        samples = self._load_samples_for_analysis(spell_name, window_size)
+        if not samples:
+            self.ui_wand.append_terminal_text(
+                f"[ERROR] No valid samples found for '{spell_name}'."
+            )
+            return
+
+        try:
+            self.spell_recognizer.register_spell(spell_name, samples)
+        except Exception as exc:
+            self.ui_wand.append_terminal_text(
+                f"[ERROR] register_spell failed: {exc}"
+            )
+            return
+
+        proto_path = APP_DATA_DIR / "spell_prototypes.json"
+        self.spell_recognizer.save(str(proto_path))
+        n_protos = len(self.spell_recognizer.prototypes)
+        self.ui_wand.append_terminal_text(
+            f"[PROTO] '{spell_name}' registered. Prototypes saved: {n_protos} spells"
+        )
+
+        if hasattr(self.ui_record, 'on_spell_registered'):
+            self.ui_record.on_spell_registered(spell_name)
+
+        self.store.refresh_database(force=True)
+
+    # ── IO Save Done ──────────────────────────────────────────────────
+
     def _on_io_save_done(self, success: bool, message: str) -> None:
         """Called in the main thread when DataIOWorker finishes a save job."""
+        saved_spell = self._pending_save_spell
+        saved_context = self._pending_save_context
         if success:
-            if self._pending_save_context == "record":
-                self.ui_record.set_save_status(self._pending_save_spell)
-            elif self._pending_save_context == "primitive" and self.ui_primitive_collect:
+            if saved_context == "record":
+                self.on_spell_selected(saved_spell)
+                if hasattr(self.ui_record, 'set_save_status'):
+                    self.ui_record.set_save_status(saved_spell)
+            elif saved_context == "primitive" and self.ui_primitive_collect:
                 self.ui_primitive_collect.on_capture_saved(True, message)
-        elif self._pending_save_context == "primitive" and self.ui_primitive_collect:
+        elif saved_context == "primitive" and self.ui_primitive_collect:
             self.ui_primitive_collect.on_capture_saved(False, message)
         self._pending_save_context = ""
         self._pending_save_spell = ""
+
+        # Trigger consistency analysis sau khi save thành công
+        if success and saved_context == "record" and saved_spell:
+            self._run_consistency_analysis(saved_spell)
 
     def handle_firmware_flash(self, bin_type: str) -> None:
         """Common entry point for flashing firmware binaries."""

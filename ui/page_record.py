@@ -12,10 +12,11 @@ import logging
 import numpy as np
 import pyqtgraph as pg
 from PyQt6.QtCore import Qt, QElapsedTimer, QTime, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (QComboBox, QFormLayout, QFrame, QGridLayout,
                              QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-                             QMessageBox, QSizePolicy, QStackedWidget,
-                             QVBoxLayout, QWidget)
+                             QMessageBox, QProgressBar, QSizePolicy,
+                             QStackedWidget, QVBoxLayout, QWidget)
 
 from constants import is_system_spell
 from logic.theme_manager import theme_manager
@@ -26,11 +27,12 @@ from ui.confirm_dialog import confirm_destructive
 from ui.i18n_bridge import tr_ui
 from ui.modern_layout import (MARGIN_COMFORTABLE, SPACING_LG, SPACING_MD,
                               SPACING_SM)
-from ui.tokens import (ACCENT, BTN_H, CROP_REGION, PLOT_AX_COLOR,
+from ui.tokens import (ACCENT, BTN_H, CROP_REGION, DANGER, PLOT_AX_COLOR,
                        PLOT_AY_COLOR, PLOT_AZ_COLOR, PLOT_GX_COLOR,
                        PLOT_GY_COLOR, PLOT_GZ_COLOR, PLOT_HANDLE_HOVER_COLOR,
                        RECORD_GRAPH_MIN_H, RIGHT_MAX_W, RIGHT_MIN_W,
-                       SPELL_BTN_H, TEXT_MUTED)
+                       SPELL_BTN_H, STYLE_BTN_PRIMARY, SUCCESS, TEXT_MUTED,
+                       WARNING)
 
 log = logging.getLogger(__name__)
 
@@ -61,6 +63,7 @@ class PageRecord(QWidget):
     sig_spell_deleted = pyqtSignal(str)
     sig_clear_buffer = pyqtSignal()
     sig_export_csv = pyqtSignal()
+    sig_register_prototype = pyqtSignal(str)   # spell_name
 
     def __init__(self, data_store) -> None:
         super().__init__()
@@ -69,6 +72,9 @@ class PageRecord(QWidget):
         self.is_live = True
         self.current_spell_name = ""
         self._sample_sentinel = "__STEM_EMPTY_SAMPLES__"
+        self._current_samples: list[str] = []          # filenames in display order
+        self._per_sample_scores: dict[str, float] = {} # filename -> score
+        self._suggested_delete_fname: str = ""         # outlier filename from analysis
 
         self._recording_timer = QTimer()
         self._recording_start_time = QElapsedTimer()
@@ -118,6 +124,13 @@ class PageRecord(QWidget):
         self.chk_graph1.toggled.connect(self.graph1.setVisible)
         self.chk_graph2.toggled.connect(self.graph2.setVisible)
         self._recording_timer.timeout.connect(self._update_recording_duration)
+        self.btn_register_prototype.clicked.connect(
+            lambda: (
+                self.btn_register_prototype.setEnabled(False),
+                self.sig_register_prototype.emit(self.current_spell_name)
+            )
+        )
+        self.btn_delete_suggested.clicked.connect(self._on_btn_delete_suggested_clicked)
 
         self._plot_timer = QTimer(self)
         self._plot_timer.timeout.connect(self._render_plots)
@@ -153,8 +166,9 @@ class PageRecord(QWidget):
         self.lbl_wand_status.style().unpolish(self.lbl_wand_status)
         self.lbl_wand_status.style().polish(self.lbl_wand_status)
 
-    def load_spell_list(self, spells: list[str] | dict[str, int]) -> None:
+    def load_spell_list(self, spells: list[str] | dict[str, int], consistencies: dict[str, float | str] = None) -> None:
         """Nạp và hiển thị danh sách các câu thần chú (Requirement 3: Empty State)."""
+        self._current_consistencies = consistencies or {}
         if isinstance(spells, dict):
             self._current_spell_counts = {str(k): int(v) for k, v in spells.items() if str(k).strip()}
         else:
@@ -175,26 +189,37 @@ class PageRecord(QWidget):
         if display_names:
             self.spell_stack.setCurrentIndex(0)
             
-            filter_mode = self.filter_combo.currentText() if hasattr(self, "filter_combo") else "All"
             for name in display_names:
                 normalized = name.replace("_", " ").strip().upper()
                 is_prim = normalized in {"SWIPE RIGHT", "SWIPE UP", "THRUST", "CIRCLE CW", "CIRCLE CCW", "WRIST FLICK", "ZIGZAG", "STAND BY", "STAND_BY"}
                 
-                if filter_mode == "Primitives" and not is_prim:
-                    continue
-                if filter_mode == "Spells" and is_prim:
+                if is_prim:
                     continue
                 
-                prefix = "[P] " if is_prim and filter_mode == "All" else ("[S] " if not is_prim and filter_mode == "All" else "")
+                is_registered = name in getattr(self.store, "registered_prototypes", set())
+                suffix = " [Ready]" if is_registered else ""
                 
-                item = QListWidgetItem(f"{prefix}{name} ({spell_counts[name]})")
+                # Hiển thị độ đồng nhất hoặc gợi ý hành động ngay trên danh sách chính
+                consistency = getattr(self, "_current_consistencies", {}).get(name)
+                score_suffix = ""
+                if consistency == "no_encoder":
+                    score_suffix = " - Yêu cầu train Encoder"
+                elif consistency == "need_samples":
+                    score_suffix = " - Cần >= 2 mẫu"
+                elif isinstance(consistency, float):
+                    score_suffix = f" - Độ đồng nhất: {int(consistency * 100)}%"
+                
+                item = QListWidgetItem(f"{name} ({spell_counts[name]}){suffix}{score_suffix}")
                 item.setData(Qt.ItemDataRole.UserRole, name)
                 self.spell_list.addItem(item)
         else:
             # Requirement 3: Empty State
             self.spell_stack.setCurrentIndex(1)
 
-        filtered_names = sorted(list({n for n in names if "::" not in n}))
+        filtered_names = sorted(list({
+            n for n in display_names 
+            if n.replace("_", " ").strip().upper() not in {"SWIPE RIGHT", "SWIPE UP", "THRUST", "CIRCLE CW", "CIRCLE CCW", "WRIST FLICK", "ZIGZAG", "STAND BY", "STAND_BY"}
+        }))
         self._update_combo_box(filtered_names)
 
     def _on_filter_changed(self) -> None:
@@ -203,14 +228,131 @@ class PageRecord(QWidget):
     def load_samples_for_spell(self, spell_name: str, samples: list[str]) -> None:
         """Hiển thị danh sách mẫu cho một câu thần chú cụ thể."""
         self.current_spell_name = spell_name
+        self._current_samples = list(samples)
         self.lbl_current_spell.setText(tr_ui("record_spell_samples", name=spell_name))
         self.sample_list.clear()
         if samples:
             self.sample_stack.setCurrentIndex(0)
-            self.sample_list.addItems(samples)
+            scores = self._per_sample_scores
+            for fname in samples:
+                score = scores.get(fname)
+                if score is None:
+                    text = fname
+                    item = QListWidgetItem(text)
+                elif score >= 0.85:
+                    item = QListWidgetItem(f"{fname}  [{int(score*100)}%]")
+                    item.setForeground(QColor(SUCCESS))
+                elif score >= 0.70:
+                    item = QListWidgetItem(f"{fname}  [{int(score*100)}%]")
+                    item.setForeground(QColor(WARNING))
+                else:
+                    item = QListWidgetItem(f"{fname}  [{int(score*100)}%]")
+                    item.setForeground(QColor(DANGER))
+                    font = item.font()
+                    font.setBold(True)
+                    item.setFont(font)
+                self.sample_list.addItem(item)
         else:
             self.sample_stack.setCurrentIndex(1)
         self.stacked_spells.setCurrentIndex(1)
+
+    def update_consistency_display(self, result: dict) -> None:
+        """Đập kết quả từ analyze_spell_samples vào UI consistency section."""
+        # Chỉ hiển thị khi đang ở trang sample list
+        if self.stacked_spells.currentIndex() != 1:
+            return
+
+        n = result.get("n_samples", 0)
+        overall = result.get("overall_consistency")
+        rec = result.get("recommendation", "")
+        per_scores = result.get("per_sample_scores", [])
+        ready = result.get("ready_to_register", False)
+
+        # Update recommendation label
+        self.lbl_consistency.setVisible(True)
+        self.lbl_consistency.setText(rec)
+
+        # Update progress bar
+        if overall is not None:
+            pct = int(overall * 100)
+            self.consistency_bar.setValue(pct)
+            self.consistency_bar.setVisible(True)
+            if pct >= 85:
+                bar_color = SUCCESS
+            elif pct >= 70:
+                bar_color = WARNING
+            else:
+                bar_color = DANGER
+            self.consistency_bar.setStyleSheet(
+                f"QProgressBar::chunk {{ background-color: {bar_color}; }}"
+                "QProgressBar { border-radius: 4px; background: #E5E5EA; text-align: center; }"
+            )
+        else:
+            self.consistency_bar.setVisible(False)
+
+        # Map per_sample_scores to filenames
+        self._per_sample_scores = {}
+        for i, fname in enumerate(self._current_samples):
+            if i < len(per_scores):
+                self._per_sample_scores[fname] = per_scores[i]
+
+        # Re-render sample list with colors
+        samples_snapshot = list(self._current_samples)
+        if samples_snapshot:
+            self.sample_list.clear()
+            for fname in samples_snapshot:
+                score = self._per_sample_scores.get(fname)
+                if score is None:
+                    item = QListWidgetItem(fname)
+                elif score >= 0.85:
+                    item = QListWidgetItem(f"{fname}  [{int(score*100)}%]")
+                    item.setForeground(QColor(SUCCESS))
+                elif score >= 0.70:
+                    item = QListWidgetItem(f"{fname}  [{int(score*100)}%]")
+                    item.setForeground(QColor(WARNING))
+                else:
+                    item = QListWidgetItem(f"{fname}  [{int(score*100)}%]")
+                    item.setForeground(QColor(DANGER))
+                    font = item.font(); font.setBold(True); item.setFont(font)
+                self.sample_list.addItem(item)
+
+        # Show/hide suggested delete button
+        worst_idx = result.get("worst_sample_idx")
+        if worst_idx is not None and worst_idx < len(self._current_samples):
+            fname = self._current_samples[worst_idx]
+            self._suggested_delete_fname = fname
+            score = self._per_sample_scores.get(fname)
+            score_txt = f" [{int(score*100)}%]" if score is not None else ""
+            self.btn_delete_suggested.setText(f"🗑 Xóa mẫu #{worst_idx+1}{score_txt} (bất thường)")
+            self.btn_delete_suggested.setToolTip(
+                f"Mẫu bất thường: {fname}\n"
+                f"Điểm thấp nhất trong tập — gợi ý xóa để cải thiện độ đồng nhất."
+            )
+            self.btn_delete_suggested.setVisible(True)
+        else:
+            self._suggested_delete_fname = ""
+            self.btn_delete_suggested.setVisible(False)
+
+        # Show/hide register button
+        self.btn_register_prototype.setVisible(ready)
+        if ready:
+            self.btn_register_prototype.setEnabled(True)
+
+    def on_spell_registered(self, spell_name: str) -> None:
+        """Được gọi sau khi handler đăng ký prototype thành công."""
+        self.btn_register_prototype.setVisible(False)
+        self.btn_delete_suggested.setVisible(False)
+        self._suggested_delete_fname = ""
+        self.lbl_consistency.setText(
+            f"✅ '{spell_name}' đã đăng ký. Hiển thị [Ready] trong danh sách."
+        )
+        self.consistency_bar.setVisible(False)
+        self._per_sample_scores = {}
+
+    def set_consistency_score(self, score: float | str | None) -> None:
+        """Legacy fallback — vẫn giữ để tương thích ngược."""
+        # update_consistency_display đã xử lý đầy đủ hơn; method này không làm gì
+        pass
 
     def refresh_styles(self) -> None:
         """Làm mới giao diện theo theme hiện tại."""
@@ -395,17 +537,27 @@ class PageRecord(QWidget):
         return card
 
     def _build_batch_card(self) -> QFrame:
-        """Card chứa các tác vụ hàng loạt theo chiều dọc để tránh mất chữ."""
-        card, layout = make_card(margins=(10, 10, 10, 10), spacing=SPACING_SM)
+        """Card tác vụ hàng loạt — 3 nút xếp ngang."""
+        card, layout = make_card(margins=(8, 8, 8, 8), spacing=SPACING_SM)
         layout.addWidget(make_section_label(tr_ui("record_batch"), accent=False))
 
-        self.btn_delete_latest_sample = make_button(tr_ui("record_btn_delete_latest"), "danger_outline", BTN_H)
-        self.btn_clear_samples = make_button(tr_ui("record_btn_clear"), "danger_outline", BTN_H)
-        self.btn_export_csv = make_button(tr_ui("record_btn_export"), "base", BTN_H)
+        row = QHBoxLayout()
+        row.setSpacing(SPACING_SM)
 
-        layout.addWidget(self.btn_delete_latest_sample)
-        layout.addWidget(self.btn_clear_samples)
-        layout.addWidget(self.btn_export_csv)
+        self.btn_delete_latest_sample = make_button(
+            tr_ui("record_btn_delete_latest"), "danger_outline", BTN_H
+        )
+        self.btn_clear_samples = make_button(
+            tr_ui("record_btn_clear"), "danger_outline", BTN_H
+        )
+        self.btn_export_csv = make_button(
+            tr_ui("record_btn_export"), "base", BTN_H
+        )
+
+        row.addWidget(self.btn_delete_latest_sample, stretch=1)
+        row.addWidget(self.btn_clear_samples, stretch=1)
+        row.addWidget(self.btn_export_csv, stretch=1)
+        layout.addLayout(row)
         return card
 
     def _build_spell_list_page(self) -> QWidget:
@@ -423,16 +575,6 @@ class PageRecord(QWidget):
         lib_lay = QVBoxLayout(lib_page)
         lib_lay.setContentsMargins(0, 0, 0, 0)
         lib_lay.setSpacing(SPACING_SM)
-
-        # Filter UI
-        filter_row = QHBoxLayout()
-        filter_lbl = QLabel("Filter:")
-        self.filter_combo = QComboBox()
-        self.filter_combo.addItems(["All", "Primitives", "Spells"])
-        self.filter_combo.currentIndexChanged.connect(self._on_filter_changed)
-        filter_row.addWidget(filter_lbl)
-        filter_row.addWidget(self.filter_combo, stretch=1)
-        lib_lay.addLayout(filter_row)
 
         self.spell_list = QListWidget()
         lib_lay.addWidget(self.spell_list)
@@ -463,6 +605,12 @@ class PageRecord(QWidget):
         top.addWidget(self.btn_back_spells)
         top.addWidget(self.lbl_current_spell)
         layout.addLayout(top)
+
+        self.lbl_consistency = QLabel("")
+        self.lbl_consistency.setWordWrap(True)
+        self.lbl_consistency.setStyleSheet("margin: 5px 0px; font-size: 13px;")
+        layout.addWidget(self.lbl_consistency)
+
         self.sample_list = QListWidget()
         self.sample_list.setProperty("type", "record_list")
         self.sample_stack = QStackedWidget()
@@ -470,6 +618,35 @@ class PageRecord(QWidget):
         empty_card, _ = make_empty_state_card()
         self.sample_stack.addWidget(empty_card)
         layout.addWidget(self.sample_stack)
+
+        # ── Gợi ý xóa mẫu outlier ──────────────────────
+        self.btn_delete_suggested = make_button(
+            "🗑 Xóa mẫu bất thường", "danger_outline", BTN_H
+        )
+        self.btn_delete_suggested.setVisible(False)
+        self.btn_delete_suggested.setToolTip(
+            "Mẫu này có điểm thấp nhất trong tập — gợi ý nên xóa."
+        )
+        layout.addWidget(self.btn_delete_suggested)
+
+        # ── Consistency Analysis section ─────────────────────
+        self.consistency_bar = QProgressBar()
+        self.consistency_bar.setRange(0, 100)
+        self.consistency_bar.setValue(0)
+        self.consistency_bar.setTextVisible(True)
+        self.consistency_bar.setFixedHeight(18)
+        self.consistency_bar.setVisible(False)
+        layout.addWidget(self.consistency_bar)
+
+        self.btn_register_prototype = make_button(
+            "⚡ Đăng ký spell này", "primary", BTN_H
+        )
+        self.btn_register_prototype.setVisible(False)
+        self.btn_register_prototype.setToolTip(
+            "Prototype đã ốn định. Nhấn để đăng ký spell vào hệ thống nhận diện."
+        )
+        layout.addWidget(self.btn_register_prototype)
+
         return page
 
     def _make_empty_state(self) -> tuple[QFrame, QVBoxLayout]:
@@ -583,6 +760,36 @@ class PageRecord(QWidget):
         if spell and self.store.get_samples_for_spell(spell):
             self.sig_delete_latest_sample.emit(spell)
 
+    def _on_btn_delete_suggested_clicked(self) -> None:
+        """Xóa file mẫu outlier được gợi ý bởi consistency analysis."""
+        fname = self._suggested_delete_fname
+        spell = self.current_spell_name
+        if not fname or not spell:
+            return
+        if confirm_destructive(
+            self,
+            title="Xóa mẫu bất thường",
+            message=f"Xóa mẫu '{fname}' khỏi spell '{spell}'?\nHành động này không thể hoàn tác."
+        ):
+            from pathlib import Path
+            from logic.dataset_layout import storage_dirs_for_spell
+            dataset_root = Path(self.store.dataset_dir)
+            for d in storage_dirs_for_spell(dataset_root, spell):
+                fpath = d / fname
+                if fpath.exists():
+                    try:
+                        fpath.unlink()
+                        self._suggested_delete_fname = ""
+                        self.btn_delete_suggested.setVisible(False)
+                        # Refresh sample list
+                        samples = self.store.get_samples_for_spell(spell)
+                        self.load_samples_for_spell(spell, samples)
+                        # Trigger DB refresh for counts
+                        self.store.refresh_database(force=True)
+                    except Exception as exc:
+                        log.error("Delete suggested sample failed: %s", exc)
+                    return
+
     def _on_spell_item_clicked(self, item: QListWidgetItem) -> None:
         """Khi chọn một spell từ danh sách thư viện."""
         name = item.data(Qt.ItemDataRole.UserRole)
@@ -607,4 +814,7 @@ class PageRecord(QWidget):
 
     def _on_btn_back_clicked(self) -> None:
         """Quay lại danh sách câu thần chú."""
+        self.current_spell_name = ""
+        self.lbl_consistency.setText("")
+        self.lbl_consistency.setVisible(False)
         self.stacked_spells.setCurrentIndex(0)

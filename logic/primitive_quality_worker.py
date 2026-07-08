@@ -99,7 +99,63 @@ class PrimitiveQualityWorker(QThread):
                 f"⚠️  Need {6 - overall_ready} more gesture(s) with sufficient data"
             )
         self.sig_report_line.emit("=" * 60)
-        self.sig_finished.emit(True, f"{overall_ready}/{total} gestures ready")
+
+        # Check if encoder exists
+        from config import APP_DATA_DIR
+        keras_path = APP_DATA_DIR / "gesture_encoder.keras"
+        if not keras_path.exists():
+            self.sig_report_line.emit("⚠️ gesture_encoder.keras not found. Skipping model evaluation.")
+            self.sig_finished.emit(True, f"{overall_ready}/{total} gestures ready (no model)")
+            return
+            
+        self.sig_report_line.emit("Starting encoder evaluation...")
+        import sys
+        from io import StringIO
+        import tensorflow as tf
+        from logic.tensorflow.encoder_pipeline import L2NormalizeLayer, load_primitive_dataset
+        from logic.encoder_evaluation import full_encoder_evaluation
+
+        try:
+            encoder = tf.keras.models.load_model(
+                str(keras_path), compile=False,
+                custom_objects={"L2NormalizeLayer": L2NormalizeLayer},
+            )
+        except Exception:
+            encoder = tf.keras.models.load_model(
+                str(keras_path), compile=False, safe_mode=False,
+            )
+
+        primitive_names = list(_PRIMITIVE_TARGETS.keys())
+        try:
+            X_base, y_base, class_names = load_primitive_dataset(self._dataset_dir, primitive_names)
+        except Exception as e:
+            self.sig_report_line.emit(f"❌ Failed to load primitive dataset: {e}")
+            self.sig_finished.emit(True, f"{overall_ready}/{total} gestures ready (eval failed)")
+            return
+
+        save_path = APP_DATA_DIR / "embedding_space_scan.png"
+        
+        old_stdout = sys.stdout
+        sys.stdout = mystdout = StringIO()
+        
+        try:
+            dist_ratio, few5, few10, few20 = full_encoder_evaluation(
+                encoder, X_base, y_base, class_names, save_path=str(save_path)
+            )
+        except Exception as e:
+            sys.stdout = old_stdout
+            self.sig_report_line.emit(f"❌ Evaluation error: {e}")
+            self.sig_finished.emit(True, f"{overall_ready}/{total} gestures ready (eval error)")
+            return
+        finally:
+            if sys.stdout == mystdout:
+                sys.stdout = old_stdout
+                
+        report_lines = mystdout.getvalue().splitlines()
+        for line in report_lines:
+            self.sig_report_line.emit(line)
+            
+        self.sig_finished.emit(True, f"{overall_ready}/{total} gestures ready (Evaluation completed)")
 
     @staticmethod
     def _scan_folder(folder_path: Path) -> dict:

@@ -3,6 +3,8 @@ import numpy as np
 def inspect_embedding_space(encoder, X, y, class_names, save_path='embedding_space.png'):
     try:
         from sklearn.manifold import TSNE
+        import matplotlib
+        matplotlib.use('Agg')
         import matplotlib.pyplot as plt
     except ImportError:
         print("Cần cài đặt scikit-learn và matplotlib để vẽ TSNE.")
@@ -16,7 +18,7 @@ def inspect_embedding_space(encoder, X, y, class_names, save_path='embedding_spa
         n_components=2,
         perplexity=min(30, max(5, len(X) // 10)),
         random_state=42,
-        n_iter=1000
+        max_iter=1000
     )
     coords_2d = tsne.fit_transform(embeddings)
     

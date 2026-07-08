@@ -63,7 +63,7 @@ def main():
         n_components=2,
         perplexity=min(30, max(5, len(X_base) // 10)),
         random_state=42,
-        n_iter=1000
+        max_iter=1000
     )
     coords_2d = tsne.fit_transform(embeddings)
     

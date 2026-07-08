@@ -105,16 +105,19 @@ class RecordStub(QObject):
     sig_stop_record = pyqtSignal()
     sig_clear_buffer = pyqtSignal()
     sig_export_csv = pyqtSignal()
+    sig_register_prototype = pyqtSignal(str)
 
     def __init__(self) -> None:
         super().__init__()
         self.is_live = True
+        self.current_spell_name = ""
         self.record_count_events: list[int] = []
         self.recording_state_events: list[bool] = []
         self.wand_ready_events: list[bool] = []
         self.plot_updates: list[list] = []
         self.loaded_spell_lists: list[list[str]] = []
         self.protected_spell_warnings: list[str] = []
+        self.consistency_results: list[dict] = []
 
     def update_record_count(self, count: int) -> None:
         self.record_count_events.append(count)
@@ -128,15 +131,19 @@ class RecordStub(QObject):
     def update_plot_data(self, data: list) -> None:
         self.plot_updates.append(data)
 
-    def load_spell_list(self, names: list[str]) -> None:
+    def load_spell_list(self, names: list[str] | dict[str, int], consistencies: dict | None = None) -> None:
         self.loaded_spell_lists.append(list(names))
 
     def load_samples_for_spell(self, spell_name: str, samples: list[str]) -> None:
-        # No-op for test harness.
-        pass
+        self.current_spell_name = spell_name
 
     def set_save_status(self, spell_name: str) -> None:
-        # No-op for test harness.
+        pass
+
+    def update_consistency_display(self, result: dict) -> None:
+        self.consistency_results.append(result)
+
+    def on_spell_registered(self, spell_name: str) -> None:
         pass
 
     def show_protected_spell_warning(self, spell_name: str) -> None:
@@ -529,7 +536,7 @@ def test_primitive_capture_enqueues_save_and_notifies_ui(
     monkeypatch.setattr(
         harness.handler.data_io_worker,
         "enqueue_save",
-        lambda spell, data: enqueued.append((spell, data)),
+        lambda spell, data, **kwargs: enqueued.append((spell, data)),
     )
 
     harness.handler.on_primitive_collection_capture("SWIPE_RIGHT", "A_standard")

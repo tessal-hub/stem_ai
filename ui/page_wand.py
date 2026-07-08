@@ -142,8 +142,12 @@ class PageWand(QWidget):
 
     def load_spell_payload_list(self, counts: dict[str, int]) -> None:
         """Cập nhật danh sách spell vào chart và panel payload."""
-        self.stats_panel.update_spell_chart(counts)
-        self.payload_panel.load_spell_list(counts)
+        filtered_counts = {
+            k: v for k, v in counts.items()
+            if k.replace("_", " ").strip().upper() not in {"SWIPE RIGHT", "SWIPE UP", "THRUST", "CIRCLE CW", "CIRCLE CCW", "WRIST FLICK", "ZIGZAG", "STAND BY", "STAND_BY"}
+        }
+        self.stats_panel.update_spell_chart(filtered_counts)
+        self.payload_panel.load_spell_list(filtered_counts)
 
     # ── Private methods ─────────────────────────
 

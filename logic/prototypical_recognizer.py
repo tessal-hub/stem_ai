@@ -97,3 +97,97 @@ class PrototypicalRecognizer:
 
     def remove_spell(self, spell_name: str) -> None:
         self.prototypes.pop(spell_name, None)
+
+    def analyze_spell_samples(self, samples: list[np.ndarray]) -> dict:
+        """
+        Phân tích consistency của các mẫu đã thu cho một spell.
+        Chạy sau mỗi lần user save mẫu mới.
+
+        Args:
+            samples: list numpy arrays, mỗi array shape (window_size, 6),
+                     đã được normalize (float, không phải raw int16).
+
+        Returns dict với keys:
+            n_samples, ready_to_register, overall_consistency,
+            per_sample_scores, worst_sample_idx, recommendation
+        """
+        _empty = dict(
+            n_samples=len(samples),
+            ready_to_register=False,
+            overall_consistency=None,
+            per_sample_scores=[],
+            worst_sample_idx=None,
+            recommendation="",
+        )
+
+        if self.encoder is None:
+            _empty["recommendation"] = (
+                "Encoder chưa được load. Hãy train encoder trước."
+            )
+            return _empty
+
+        n = len(samples)
+        _empty["n_samples"] = n
+
+        if n < 2:
+            _empty["recommendation"] = "Thu thêm ít nhất 1 mẫu nữa."
+            return _empty
+
+        # --- embed batch ---
+        try:
+            batch = np.asarray(samples, dtype=np.float32)
+            if batch.ndim != 3 or batch.shape[2] != 6:
+                _empty["recommendation"] = "[Error] Kích thước mẫu không hợp lệ."
+                return _empty
+            raw_embs = self._embed_batch(batch)            # (n, dim)
+            embeddings = np.array(
+                [self._l2_normalize(e) for e in raw_embs], dtype=np.float32
+            )
+        except Exception as exc:
+            _empty["recommendation"] = f"[Error] Encoder predict thất bại: {exc}"
+            return _empty
+
+        # --- Metric B: centroid consistency ---
+        centroid = self._l2_normalize(np.mean(embeddings, axis=0))
+        per_sample_scores: list[float] = [
+            float(np.clip(np.dot(e, centroid), 0.0, 1.0))
+            for e in embeddings
+        ]
+        overall = float(np.mean(per_sample_scores))
+
+        # --- Metric C: prototype stability (only when n >= 3) ---
+        prototype_stable = False
+        if n >= 3:
+            proto_before = self._l2_normalize(np.mean(embeddings[:-1], axis=0))
+            proto_after = self._l2_normalize(np.mean(embeddings, axis=0))
+            shift = 1.0 - float(np.dot(proto_before, proto_after))
+            prototype_stable = shift < 0.02
+
+        # --- worst outlier ---
+        worst_idx: int | None = None
+        if overall < 0.70:
+            worst_idx = int(np.argmin(per_sample_scores))
+
+        # --- ready_to_register ---
+        ready = overall >= 0.85 and prototype_stable and n >= 3
+
+        # --- recommendation ---
+        if ready:
+            rec = f"✅ Prototype ổn định sau {n} mẫu. Sẵn sàng đăng ký."
+        elif overall >= 0.70:
+            rec = f"🟡 Đang tốt ({overall:.0%}). Thu thêm 1-2 mẫu để chắc chắn."
+        else:
+            wi = worst_idx if worst_idx is not None else 0
+            rec = (
+                f"🔴 Mẫu #{wi + 1} có thể không nhất quán "
+                f"({per_sample_scores[wi]:.0%}). Xem xét xóa."
+            )
+
+        return dict(
+            n_samples=n,
+            ready_to_register=ready,
+            overall_consistency=overall,
+            per_sample_scores=per_sample_scores,
+            worst_sample_idx=worst_idx,
+            recommendation=rec,
+        )

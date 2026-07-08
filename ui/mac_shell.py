@@ -130,6 +130,11 @@ class MacShell(QWidget):
 
         self.nav_requested.emit(index)
 
+    def set_nav_item_visible(self, index: int, visible: bool) -> None:
+        """Hiển thị hoặc ẩn nút menu điều hướng theo chỉ số."""
+        if 0 <= index < len(self._buttons):
+            self._buttons[index].setVisible(visible)
+
     def apply_ui_language(self) -> None:
         """Cập nhật ngôn ngữ hiển thị."""
         self._brand_title.setText(tr_ui("shell_brand_stem"))

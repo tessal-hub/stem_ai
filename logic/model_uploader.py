@@ -97,8 +97,13 @@ class ModelUploader(QThread):
 
     def _perform_upload(self) -> None:
         """Open serial port, handshake, stream chunks, and confirm completion."""
+        import time
         self._serial = serial.Serial(self.port, 115200, timeout=5)
         self._is_running = True
+
+        # Cho ESP32-S3 hoàn thành quá trình reset phần cứng sau khi mở Serial
+        time.sleep(2.0)
+        self._serial.reset_input_buffer()
 
         file_size = os.path.getsize(self.file_path)
         self.status_msg.emit(f"Flasher: Starting upload for {file_size} bytes...")
