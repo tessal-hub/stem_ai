@@ -293,8 +293,17 @@ class DataStore(QObject):
             return dict(self.settings)
 
     def update_prediction(self, action: str, confidence: float) -> None:
-        """Cập nhật kết quả suy luận AI mới nhất."""
+        """Cập nhật kết quả suy luận AI mới nhất. Hỗ trợ dịch chỉ số lớp thành tên spell."""
         with self._state_lock:
+            # Nếu action là số chỉ số lớp (index), dịch ngược thành tên spell
+            if action.isdigit():
+                idx = int(action)
+                # Lấy danh sách spell xếp alphabet
+                spells = [k for k in self.spell_counts.keys() if "::" not in k]
+                spells = sorted(spells)
+                if 0 <= idx < len(spells):
+                    action = spells[idx]
+
             self.last_prediction = action
             self.prediction_confidence = confidence
         self.sig_prediction_updated.emit(action, confidence)

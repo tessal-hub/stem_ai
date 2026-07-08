@@ -350,10 +350,31 @@ class Handler(QObject):
             self.ui_wand.append_terminal_text(f">> [DONE] Build success: {msg}")
             self.ui_wand.update_flash_progress(100, "Success")
             if self._model_build_worker and self._model_build_worker.build_result:
-                tflite_path = self._model_build_worker.build_result.tflite_path
+                result = self._model_build_worker.build_result
+                tflite_path = result.tflite_path
+                cc_path = result.cc_path
+                classes = result.classes
                 if tflite_path:
                     self.store.save_settings({"model_path": str(tflite_path)})
                     self.ui_wand.append_terminal_text(f">> Updated settings: model_path={tflite_path}")
+                if cc_path and classes:
+                    from logic.firmware_main_generator import sync_firmware_sources
+                    from config import WORKSPACE_ROOT
+                    idf_main_dir = WORKSPACE_ROOT / "mpu6050" / "main"
+                    template_path = WORKSPACE_ROOT / "assets" / "firmware" / "main.cpp.template"
+                    if idf_main_dir.exists() and template_path.exists():
+                        try:
+                            sync_res = sync_firmware_sources(
+                                idf_main_dir=idf_main_dir,
+                                generated_cc_path=Path(cc_path),
+                                class_names=classes,
+                                template_path=template_path
+                            )
+                            self.ui_wand.append_terminal_text(
+                                f">> Tailored main.cpp generated successfully with {sync_res.class_count} classes."
+                            )
+                        except Exception as e:
+                            log.error("Failed to sync firmware main.cpp: %s", e)
         else:
             self.ui_wand.append_terminal_text(f">> [FAIL] Build failed: {msg}")
             self.ui_wand.update_flash_progress(0, "Failed")
@@ -645,6 +666,7 @@ class Handler(QObject):
 
     def _on_upload_finished(self, success: bool, message: str) -> None:
         """Called when ModelUploader finishes uploading."""
+        port = self._pending_upload_port
         self._clear_pending_upload_context()
         self._set_port_owner(None)
         self._set_mode(self._MODE_IDLE)
@@ -652,6 +674,8 @@ class Handler(QObject):
         if success:
             self.ui_wand.append_terminal_text(f">> [DONE] Model upload COMPLETE: {message}")
             self.ui_wand.update_flash_progress(100, "Success")
+            if port:
+                self.on_serial_connect(port)
         else:
             self.ui_wand.append_terminal_text(f">> [FAIL] Model upload FAILED: {message}")
             self.ui_wand.update_flash_progress(0, "Failed")

@@ -272,6 +272,7 @@ static SpellId RunInference(const ImuFrame& frame) {
 
   if (max_prob > 0.85f && max_idx >= 0 && max_idx != kIdleClassIndex) {
     s_cooldown = WINDOW_SIZE;
+    printf("PREDICT:%s:%.2f\n", SpellNameFromIndex(max_idx), max_prob);
     return SpellFromIndex(max_idx);
   }
 

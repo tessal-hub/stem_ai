@@ -176,7 +176,7 @@ static bool InitAI() {
 }
 
 // --- HÀM CHẠY AI (Cốt lõi, không State Machine) ---
-static SpellId RunAI(const ImuFrame& frame) {
+static int RunAI(const ImuFrame& frame) {
   // 1. Dịch buffer sang trái và thêm data mới vào cuối (Window trượt)
   memmove(s_input_buffer, s_input_buffer + CHANNELS, (BUFFER_LENGTH - CHANNELS) * sizeof(float));
 
@@ -200,16 +200,17 @@ static SpellId RunAI(const ImuFrame& frame) {
   }
 
   // 3. Chạy model AI
-  if (s_interpreter->Invoke() != kTfLiteOk) return SpellId::UNKNOWN;
+  if (s_interpreter->Invoke() != kTfLiteOk) return -1;
 
   // 4. Đọc kết quả và tìm Class có xác suất cao nhất
   const float out_scale = s_output->params.scale;
   const int out_zp = s_output->params.zero_point;
   
+  int num_classes = s_output->dims->data[s_output->dims->size - 1];
   float max_prob = 0.0f;
   int max_idx = -1;
 
-  for (int i = 0; i < 3; ++i) {
+  for (int i = 0; i < num_classes; ++i) {
     float prob = (s_output->data.int8[i] - out_zp) * out_scale;
     if (prob > max_prob) {
       max_prob = prob;
@@ -217,27 +218,24 @@ static SpellId RunAI(const ImuFrame& frame) {
     }
   }
 
-  // Nếu AI chắc chắn trên 80% thì trả về kết quả
+  // Nếu AI chắc chắn trên 80% thì trả về index lớp
   if (max_prob > 0.80f) {
-      if (max_idx == 0) return SpellId::STAND_BY;
-      if (max_idx == 1) return SpellId::CIRCLE;
-      if (max_idx == 2) return SpellId::WAVE;
+      return max_idx;
   }
 
-  return SpellId::UNKNOWN;
+  return -1;
 }
 
 // --- TASK NHẬN MODEL QUA SERIAL (115200 baud) ---
 void model_upload_task(void *pvParameters) {
     const uart_port_t uart_num = UART_NUM_0;
-    uart_config_t uart_config = {
-        .baud_rate = 115200,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_DEFAULT,
-    };
+    uart_config_t uart_config = {};
+    uart_config.baud_rate = 115200;
+    uart_config.data_bits = UART_DATA_8_BITS;
+    uart_config.parity = UART_PARITY_DISABLE;
+    uart_config.stop_bits = UART_STOP_BITS_1;
+    uart_config.flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
+    uart_config.source_clk = UART_SCLK_DEFAULT;
     
     // Cấu hình UART0 buffer lớn để tránh tràn bộ đệm
     uart_driver_install(uart_num, 8192, 0, 0, NULL, 0);
@@ -247,7 +245,7 @@ void model_upload_task(void *pvParameters) {
     char line_buf[128];
     int line_idx = 0;
 
-    ESP_LOGI(TAG, "Model Upload Listener Task Started (115200 baud)");
+    // ESP_LOGI(TAG, "Model Upload Listener Task Started (115200 baud)");
 
     while (1) {
         uint8_t ch;
@@ -258,11 +256,13 @@ void model_upload_task(void *pvParameters) {
             line_buf[line_idx] = '\0';
             int file_size = 0;
             if (sscanf(line_buf, "CMD:UPLOAD_MODEL:%d", &file_size) == 1) {
-                ESP_LOGI(TAG, "Entering Upload Mode. Target size: %d bytes", file_size);
-                
+                // Tắt log ngay lập tức để không có gì khác ghi ra UART0
+                // trước khi gửi ACK, tránh làm hỏng giao thức nhị phân.
+                esp_log_level_set("*", ESP_LOG_NONE);
+
                 FILE* f = fopen("/storage/model.tflite", "wb");
                 if (f == nullptr) {
-                    ESP_LOGE(TAG, "Failed to open model.tflite for writing");
+                    esp_log_level_set("*", ESP_LOG_INFO);
                     uart_write_bytes(uart_num, "ACK:FAIL_OPEN\n", 14);
                     line_idx = 0;
                     continue;
@@ -303,7 +303,7 @@ void model_upload_task(void *pvParameters) {
                     vTaskDelay(pdMS_TO_TICKS(1500));
                     esp_restart(); // Restart chip để chạy model mới
                 } else {
-                    ESP_LOGE(TAG, "Upload failed due to serial timeout");
+                    // ESP_LOGE(TAG, "Upload failed due to serial timeout");
                 }
             }
             line_idx = 0;
@@ -333,25 +333,24 @@ extern "C" void app_main(void) {
   }
 
   ImuFrame frame{};
-  SpellId last_spell = SpellId::UNKNOWN;
+  int last_class_idx = -1;
 
   TickType_t xLastWakeTime = xTaskGetTickCount();
 
   while (1) {
     if (ReadImuFrame(&frame)) {
-      SpellId current_spell = RunAI(frame);
+      int current_class_idx = RunAI(frame);
 
-      if (current_spell != SpellId::UNKNOWN && current_spell != last_spell) {
-          if (current_spell == SpellId::STAND_BY) {
-              ESP_LOGI(TAG, "=> STAND_BY");
-          } 
-          else if (current_spell == SpellId::CIRCLE) {
-              ESP_LOGW(TAG, "=> CIRCLE");
-          } 
-          else if (current_spell == SpellId::WAVE) {
-              ESP_LOGW(TAG, "=> WAVE");
+      if (current_class_idx != -1) {
+          if (current_class_idx != last_class_idx) {
+              // Lấy xác suất của class chiến thắng
+              float prob = (s_output->data.int8[current_class_idx] - s_output->params.zero_point) * s_output->params.scale;
+              // In đúng định dạng giao thức để ứng dụng PC hiển thị thời gian thực (PREDICT:<label>:<confidence>)
+              printf("PREDICT:%d:%.2f\n", current_class_idx, prob);
+              last_class_idx = current_class_idx;
           }
-          last_spell = current_spell;
+      } else {
+          last_class_idx = -1; // Reset trạng thái khi đũa quay về tĩnh (idle)
       }
     }
     vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(20));
