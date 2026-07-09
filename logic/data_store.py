@@ -356,7 +356,7 @@ class DataStore(QObject):
 
     def get_primitive_collection_stats(self) -> dict[str, int]:
         """Lấy thống kê riêng cho các cử chỉ cơ bản (primitives)."""
-        names = ["SWIPE_RIGHT", "SWIPE_UP", "THRUST", "CIRCLE_CW", "CIRCLE_CCW", "WRIST_FLICK", "ZIGZAG"]
+        names = ["SWIPE_RIGHT", "SWIPE_UP", "THRUST", "CIRCLE_CW", "CIRCLE_CCW", "WRIST_FLICK", "ZIGZAG", "SWIPE_LEFT", "SWIPE_DOWN", "ROLL_WAND", "SHAKE_VIOLENT", "INFINITY_8", "V_SHAPE"]
         stats = {n: self.spell_counts.get(n, 0) for n in names}
         stand_by_count = (
             self.spell_counts.get("STAND BY", 0)

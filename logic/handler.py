@@ -903,6 +903,7 @@ class Handler(QObject):
     _PRIMITIVE_NAMES: frozenset[str] = frozenset([
         "SWIPE_RIGHT", "SWIPE_UP", "THRUST", "CIRCLE_CW",
         "CIRCLE_CCW", "WRIST_FLICK", "ZIGZAG", "STAND_BY", "STAND BY",
+        "SWIPE_LEFT", "SWIPE_DOWN", "ROLL_WAND", "SHAKE_VIOLENT", "INFINITY_8", "V_SHAPE"
     ])
 
     def _load_samples_for_analysis(
@@ -1182,7 +1183,8 @@ class Handler(QObject):
             primitive_names = [
                 "SWIPE_RIGHT", "SWIPE_UP", "THRUST",
                 "CIRCLE_CW", "CIRCLE_CCW", "WRIST_FLICK",
-                "ZIGZAG", "STAND_BY"
+                "ZIGZAG", "STAND_BY", "SWIPE_LEFT", "SWIPE_DOWN",
+                "ROLL_WAND", "SHAKE_VIOLENT", "INFINITY_8", "V_SHAPE"
             ]
             
             self.encoder_trainer = EncoderTrainerWorker(

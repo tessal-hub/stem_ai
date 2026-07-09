@@ -39,7 +39,8 @@ def main():
     primitive_names = [
         "SWIPE_RIGHT", "SWIPE_UP", "THRUST",
         "CIRCLE_CW", "CIRCLE_CCW", "WRIST_FLICK",
-        "ZIGZAG", "STAND_BY"
+        "ZIGZAG", "STAND_BY", "SWIPE_LEFT", "SWIPE_DOWN",
+        "ROLL_WAND", "SHAKE_VIOLENT", "INFINITY_8", "V_SHAPE"
     ]
 
     print(f"⏳ Đang nạp dữ liệu từ:\n   {DATASET_DIR} ...")

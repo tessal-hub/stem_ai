@@ -12,7 +12,7 @@ import logging
 import numpy as np
 import pyqtgraph as pg
 from PyQt6.QtCore import Qt, QElapsedTimer, QTime, QTimer, pyqtSignal
-from PyQt6.QtGui import QColor
+from PyQt6.QtGui import QColor, QShortcut, QKeySequence
 from PyQt6.QtWidgets import (QComboBox, QFormLayout, QFrame, QGridLayout,
                              QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
                              QMessageBox, QProgressBar, QSizePolicy,
@@ -130,11 +130,31 @@ class PageRecord(QWidget):
                 self.sig_register_prototype.emit(self.current_spell_name)
             )
         )
-        self.btn_delete_suggested.clicked.connect(self._on_btn_delete_suggested_clicked)
+        self.shortcut_start = QShortcut(QKeySequence("Ctrl+S"), self)
+        self.shortcut_start.activated.connect(self._trigger_start)
+
+        self.shortcut_stop = QShortcut(QKeySequence("Ctrl+T"), self)
+        self.shortcut_stop.activated.connect(self._trigger_stop)
+
+        self.shortcut_snip = QShortcut(QKeySequence("Ctrl+X"), self)
+        self.shortcut_snip.activated.connect(self._trigger_snip)
 
         self._plot_timer = QTimer(self)
         self._plot_timer.timeout.connect(self._render_plots)
         self._plot_timer.start(_PLOT_REFRESH_MS)
+        self.btn_delete_suggested.clicked.connect(self._on_btn_delete_suggested_clicked)
+
+    def _trigger_start(self) -> None:
+        if self.btn_start.isEnabled():
+            self.btn_start.click()
+
+    def _trigger_stop(self) -> None:
+        if self.btn_stop.isEnabled():
+            self.btn_stop.click()
+
+    def _trigger_snip(self) -> None:
+        if self.btn_snip.isEnabled():
+            self.btn_snip.click()
 
     def _load_data(self) -> None:
         """Nạp danh sách spell ban đầu."""
@@ -191,7 +211,7 @@ class PageRecord(QWidget):
             
             for name in display_names:
                 normalized = name.replace("_", " ").strip().upper()
-                is_prim = normalized in {"SWIPE RIGHT", "SWIPE UP", "THRUST", "CIRCLE CW", "CIRCLE CCW", "WRIST FLICK", "ZIGZAG", "STAND BY", "STAND_BY"}
+                is_prim = normalized in {"SWIPE RIGHT", "SWIPE UP", "THRUST", "CIRCLE CW", "CIRCLE CCW", "WRIST FLICK", "ZIGZAG", "STAND BY", "STAND_BY", "SWIPE LEFT", "SWIPE DOWN", "ROLL WAND", "SHAKE VIOLENT", "INFINITY 8", "V SHAPE"}
                 
                 if is_prim:
                     continue
@@ -218,7 +238,7 @@ class PageRecord(QWidget):
 
         filtered_names = sorted(list({
             n for n in display_names 
-            if n.replace("_", " ").strip().upper() not in {"SWIPE RIGHT", "SWIPE UP", "THRUST", "CIRCLE CW", "CIRCLE CCW", "WRIST FLICK", "ZIGZAG", "STAND BY", "STAND_BY"}
+            if n.replace("_", " ").strip().upper() not in {"SWIPE RIGHT", "SWIPE UP", "THRUST", "CIRCLE CW", "CIRCLE CCW", "WRIST FLICK", "ZIGZAG", "STAND BY", "STAND_BY", "SWIPE LEFT", "SWIPE DOWN", "ROLL WAND", "SHAKE VIOLENT", "INFINITY 8", "V SHAPE"}
         }))
         self._update_combo_box(filtered_names)
 

@@ -12,6 +12,7 @@ import pyqtgraph as pg
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QProgressBar,
                              QScrollArea, QStackedWidget, QVBoxLayout, QWidget)
+from PyQt6.QtGui import QShortcut, QKeySequence
 
 from logic.locale_manager import locale_manager
 from logic.primitive_i18n import get_primitive_catalog
@@ -72,6 +73,27 @@ class PagePrimitiveCollect(QWidget):
         self.btn_start_collect.clicked.connect(self._on_start_clicked)
         self.btn_stop_collect.clicked.connect(self._on_stop_clicked)
         self.btn_capture_collect.clicked.connect(self._on_capture_clicked)
+
+        self.shortcut_start = QShortcut(QKeySequence("Ctrl+S"), self)
+        self.shortcut_start.activated.connect(self._trigger_start)
+
+        self.shortcut_stop = QShortcut(QKeySequence("Ctrl+T"), self)
+        self.shortcut_stop.activated.connect(self._trigger_stop)
+
+        self.shortcut_capture = QShortcut(QKeySequence("Ctrl+X"), self)
+        self.shortcut_capture.activated.connect(self._trigger_capture)
+
+    def _trigger_start(self) -> None:
+        if self.btn_start_collect.isEnabled():
+            self.btn_start_collect.click()
+            
+    def _trigger_stop(self) -> None:
+        if self.btn_stop_collect.isEnabled():
+            self.btn_stop_collect.click()
+
+    def _trigger_capture(self) -> None:
+        if self.btn_capture_collect.isEnabled():
+            self.btn_capture_collect.click()
 
     def _load_data(self) -> None:
         """Nạp trạng thái dữ liệu ban đầu."""

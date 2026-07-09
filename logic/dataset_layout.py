@@ -23,6 +23,12 @@ _PRIMITIVE_LOGICAL_NAMES = frozenset(
         "WRIST_FLICK",
         "ZIGZAG",
         "STAND_BY",
+        "SWIPE_LEFT",
+        "SWIPE_DOWN",
+        "ROLL_WAND",
+        "SHAKE_VIOLENT",
+        "INFINITY_8",
+        "V_SHAPE",
     }
 )
 

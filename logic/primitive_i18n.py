@@ -79,6 +79,60 @@ _PRIMITIVE_EN: dict[str, dict[str, Any]] = {
             "C_transition": {"count": 50, "instruction": "Just finished / about to start a gesture"},
         },
     },
+    "SWIPE_LEFT": {
+        "description": "Swipe horizontally, right to left",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Normal speed, ~30 cm amplitude"},
+            "B_speed": {"count": 50, "instruction": "25 slow (~1.2 s), 25 fast (~0.3 s)"},
+            "C_variant": {"count": 50, "instruction": "15 small, 15 large, 20 tilted paths"},
+        },
+    },
+    "SWIPE_DOWN": {
+        "description": "Swipe vertically, top to bottom",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Normal speed, ~30 cm amplitude"},
+            "B_speed": {"count": 50, "instruction": "25 slow (~1.2 s), 25 fast (~0.3 s)"},
+            "C_variant": {"count": 50, "instruction": "15 small, 15 large, 20 tilted paths"},
+        },
+    },
+    "ROLL_WAND": {
+        "description": "Twist the wand in place like a screwdriver",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Normal speed, ~180 degree twist"},
+            "B_speed": {"count": 50, "instruction": "25 slow, 25 fast"},
+            "C_variant": {"count": 50, "instruction": "Various wrist angles"},
+        },
+    },
+    "SHAKE_VIOLENT": {
+        "description": "Violent back and forth shaking",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Rapid shaking"},
+            "B_speed": {"count": 50, "instruction": "Various speeds"},
+            "C_variant": {"count": 50, "instruction": "Different axes (X/Y/Z)"},
+        },
+    },
+    "INFINITY_8": {
+        "description": "Horizontal Figure-8 shape",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Normal speed"},
+            "B_speed": {"count": 50, "instruction": "25 slow, 25 fast"},
+            "C_variant": {"count": 50, "instruction": "15 small, 15 large, 20 tilted paths"},
+        },
+    },
+    "V_SHAPE": {
+        "description": "Sharp V-shape (down then up)",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Normal speed"},
+            "B_speed": {"count": 50, "instruction": "25 slow, 25 fast"},
+            "C_variant": {"count": 50, "instruction": "15 small, 15 large, 20 tilted paths"},
+        },
+    },
 }
 
 _PRIMITIVE_VI: dict[str, dict[str, Any]] = {
@@ -152,6 +206,60 @@ _PRIMITIVE_VI: dict[str, dict[str, Any]] = {
             "A_still": {"count": 50, "instruction": "Đứng yên các tư thế khác nhau"},
             "B_small_move": {"count": 50, "instruction": "Chuyển động nhỏ, đi bộ nhẹ"},
             "C_transition": {"count": 50, "instruction": "Vừa xong gesture / chuẩn bị gesture"},
+        },
+    },
+    "SWIPE_LEFT": {
+        "description": "Quét ngang phải → trái",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Tốc độ bình thường, biên độ ~30cm"},
+            "B_speed": {"count": 50, "instruction": "25 mẫu chậm (~1.2s), 25 mẫu nhanh (~0.3s)"},
+            "C_variant": {"count": 50, "instruction": "15 mẫu nhỏ, 15 mẫu lớn, 20 mẫu nghiêng"},
+        },
+    },
+    "SWIPE_DOWN": {
+        "description": "Quét dọc trên → dưới",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Tốc độ bình thường, biên độ ~30cm"},
+            "B_speed": {"count": 50, "instruction": "25 mẫu chậm (~1.2s), 25 mẫu nhanh (~0.3s)"},
+            "C_variant": {"count": 50, "instruction": "15 mẫu nhỏ, 15 mẫu lớn, 20 mẫu nghiêng"},
+        },
+    },
+    "ROLL_WAND": {
+        "description": "Vặn xoắn đũa tại chỗ (như vặn tua vít)",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Tốc độ bình thường, xoay ~180 độ"},
+            "B_speed": {"count": 50, "instruction": "25 mẫu chậm, 25 mẫu nhanh"},
+            "C_variant": {"count": 50, "instruction": "Góc nghiêng cổ tay khác nhau"},
+        },
+    },
+    "SHAKE_VIOLENT": {
+        "description": "Lắc đũa điên cuồng qua lại",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Lắc nhanh và mạnh"},
+            "B_speed": {"count": 50, "instruction": "Tốc độ thay đổi"},
+            "C_variant": {"count": 50, "instruction": "Lắc theo các trục X/Y/Z khác nhau"},
+        },
+    },
+    "INFINITY_8": {
+        "description": "Vẽ số 8 nằm ngang (vô cực)",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Tốc độ bình thường"},
+            "B_speed": {"count": 50, "instruction": "25 mẫu chậm, 25 mẫu nhanh"},
+            "C_variant": {"count": 50, "instruction": "15 mẫu nhỏ, 15 mẫu lớn, 20 mẫu nghiêng"},
+        },
+    },
+    "V_SHAPE": {
+        "description": "Vạch hình chữ V sắc cạnh (xuống rồi lên)",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Tốc độ bình thường"},
+            "B_speed": {"count": 50, "instruction": "25 mẫu chậm, 25 mẫu nhanh"},
+            "C_variant": {"count": 50, "instruction": "15 mẫu nhỏ, 15 mẫu lớn, 20 mẫu nghiêng"},
         },
     },
 }

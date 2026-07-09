@@ -25,6 +25,12 @@ _PRIMITIVE_TARGETS: dict[str, int] = {
     "WRIST_FLICK": 150,
     "ZIGZAG":      150,
     "STAND_BY":    150,
+    "SWIPE_LEFT":  150,
+    "SWIPE_DOWN":  150,
+    "ROLL_WAND":   150,
+    "SHAKE_VIOLENT":150,
+    "INFINITY_8":  150,
+    "V_SHAPE":     150,
 }
 
 # Map "STAND_BY" key to actual folder name on disk
