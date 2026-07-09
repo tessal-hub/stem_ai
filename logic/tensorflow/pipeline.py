@@ -268,7 +268,7 @@ def build_gesture_model(
         list(class_dir_map.keys()),
         requested_spells or None,
     )
-    class_names_ordered = [name for name in class_names_ordered if name.strip().upper() not in {"STAND BY", "STAND_BY"}]
+
     if len(class_names_ordered) < 2:
         raise RuntimeError("Need at least 2 label folders to train model.")
 
@@ -374,7 +374,7 @@ def build_gesture_model(
     for label in cnn_train_labels:
         class_counts[label] += 1
         
-    max_count = max(class_counts.values()) if class_counts else 0
+    max_count = 6000
     aug_rng = np.random.default_rng(random_seed)
     
     augmented_features: list[np.ndarray] = []
@@ -563,9 +563,18 @@ def build_gesture_model(
         _emit_status(status_cb, f"[TRAIN] ⚡ TÌM THẤY TRỌNG SỐ {h5_path.name}! BỎ QUA TRAIN CNN, BẮT ĐẦU FEW-SHOT NGAY!")
         base_model.load_weights(str(h5_path))
         skip_train = True
-        class DummyHistory:
-            history = {"accuracy": [1.0], "val_accuracy": [1.0]}
-        history = DummyHistory()
+        
+        if validation_data is not None and validation_data[1] is not None:
+            # We must evaluate using full model to get metrics matching keras fit
+            val_loss, val_acc = model.evaluate(validation_data[0], validation_data[1], verbose=0)
+            class RealHistory:
+                history = {"accuracy": [val_acc], "val_accuracy": [val_acc]}
+            history = RealHistory()
+            _emit_status(status_cb, f"[EVAL] Actual val_accuracy from .h5: {val_acc:.4f}")
+        else:
+            class DummyHistory:
+                history = {"accuracy": [1.0], "val_accuracy": [1.0]}
+            history = DummyHistory()
     else:
         _emit_status(status_cb, "[TRAIN] Training model từ đầu (chỉ cần làm 1 lần)...")
         fit_kwargs: dict[str, typing.Any] = dict(
@@ -580,7 +589,7 @@ def build_gesture_model(
             fit_kwargs["validation_split"] = val_fraction
         history = model.fit(X_train, y_train_cat, **fit_kwargs)
 
-    if not skip_train and validation_data is not None and validation_data[1] is not None:
+    if validation_data is not None and validation_data[1] is not None:
         X_val_cm = validation_data[0]
         y_val_cm = validation_data[1]
 
