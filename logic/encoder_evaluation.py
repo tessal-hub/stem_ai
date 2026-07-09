@@ -88,8 +88,9 @@ def compute_distance_ratio(encoder, X, y, class_names):
                 intra_distances.extend(np.linalg.norm(diffs, axis=1).tolist())
         
         if len(class_embs) > 0 and len(other_embs) > 0:
-            idx_a = np.random.choice(len(class_embs), min(200, len(class_embs)), replace=True)
-            idx_b = np.random.choice(len(other_embs), min(200, len(other_embs)), replace=True)
+            n_samples = min(200, len(class_embs), len(other_embs))
+            idx_a = np.random.choice(len(class_embs), n_samples, replace=True)
+            idx_b = np.random.choice(len(other_embs), n_samples, replace=True)
             diffs = class_embs[idx_a] - other_embs[idx_b]
             inter_distances.extend(np.linalg.norm(diffs, axis=1).tolist())
     

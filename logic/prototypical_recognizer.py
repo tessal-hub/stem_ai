@@ -50,6 +50,13 @@ class PrototypicalRecognizer:
         if item.ndim != 2 or item.shape[1] != 6:
             raise ValueError("sample must have shape (window_size, 6).")
 
+        # Motion gate — thay thế vai trò của STAND_BY
+        accel_variance = float(np.var(item[:, :3]))
+        gyro_energy = float(np.mean(np.abs(item[:, 3:])))
+        
+        if accel_variance < 0.005 and gyro_energy < 0.01:
+            return None, 0.0  # Không đủ năng lượng để tính là gesture
+
         embedding = self._embed_batch(np.expand_dims(item, axis=0))[0]
         embedding = self._l2_normalize(embedding)
 

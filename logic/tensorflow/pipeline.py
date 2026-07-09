@@ -109,13 +109,32 @@ def _read_csv_rows(file_path: Path) -> list[list[float]]:
     return rows
 
 
-def _windowize(rows: list[list[float]], *, window_size: int, step: int) -> list[list[list[float]]]:
+def _windowize(
+    rows: list[list[float]], *, window_size: int, step: int, is_active_gesture: bool = False
+) -> list[list[list[float]]]:
     if len(rows) < window_size:
         return []
 
     windows: list[list[list[float]]] = []
     for i in range(0, len(rows) - window_size + 1, step):
         windows.append(rows[i: i + window_size])
+
+    if is_active_gesture and len(windows) > 1:
+        best_window = windows[0]
+        max_energy = -1.0
+        
+        for w in windows:
+            energy = sum(
+                abs(row[0]) + abs(row[1]) + abs(row[2]) + 
+                abs(row[3]) + abs(row[4]) + abs(row[5])
+                for row in w
+            )
+            if energy > max_energy:
+                max_energy = energy
+                best_window = w
+                
+        return [best_window]
+
     return windows
 
 
@@ -249,6 +268,7 @@ def build_gesture_model(
         list(class_dir_map.keys()),
         requested_spells or None,
     )
+    class_names_ordered = [name for name in class_names_ordered if name.strip().upper() not in {"STAND BY", "STAND_BY"}]
     if len(class_names_ordered) < 2:
         raise RuntimeError("Need at least 2 label folders to train model.")
 
@@ -327,7 +347,9 @@ def build_gesture_model(
     train_labels: list[int] = []
 
     for class_index, rows in train_file_rows:
-        for window in _windowize(rows, window_size=effective_window_size, step=effective_step):
+        c_name = class_names[class_index]
+        is_active = c_name not in {"STAND BY", "STAND_BY", "Stand By"}
+        for window in _windowize(rows, window_size=effective_window_size, step=effective_step, is_active_gesture=is_active):
             train_features.append(np.asarray(window, dtype=np.float32))
             train_labels.append(class_index)
 
@@ -394,10 +416,13 @@ def build_gesture_model(
 
         for class_index, rows in val_file_rows:
             if class_index in primitive_class_indices:
+                c_name = class_names[class_index]
+                is_active = c_name not in {"STAND BY", "STAND_BY", "Stand By"}
                 for window in _windowize(
                     rows,
                     window_size=effective_window_size,
                     step=effective_window_size,
+                    is_active_gesture=is_active,
                 ):
                     val_features.append(np.asarray(window, dtype=np.float32))
                     val_labels.append(class_index)

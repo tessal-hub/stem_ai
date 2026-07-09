@@ -39,7 +39,7 @@ def main():
     primitive_names = [
         "SWIPE_RIGHT", "SWIPE_UP", "THRUST",
         "CIRCLE_CW", "CIRCLE_CCW", "WRIST_FLICK",
-        "ZIGZAG", "STAND_BY", "SWIPE_LEFT", "SWIPE_DOWN",
+        "ZIGZAG", "SWIPE_LEFT", "SWIPE_DOWN",
         "ROLL_WAND", "SHAKE_VIOLENT", "INFINITY_8", "V_SHAPE"
     ]
 
@@ -59,18 +59,28 @@ def main():
     print("⏳ Đang tính embeddings...")
     embeddings = encoder.predict(X_base, verbose=0)
     
-    print("⏳ Đang tính toán t-SNE 2D (mất vài giây)...")
+    print("⏳ Đang lấy mẫu (subsampling) để vẽ biểu đồ nhanh hơn...")
+    if len(X_base) > 6000:
+        np.random.seed(42)
+        indices = np.random.choice(len(X_base), 6000, replace=False)
+        X_base = X_base[indices]
+        y_base = y_base[indices]
+        embeddings = embeddings[indices]
+        print(f"✅ Đã chọn ngẫu nhiên 6000 mẫu để phân tích.")
+
+    print("⏳ Đang tính toán t-SNE 2D (Sẽ hiển thị tiến trình)...")
     tsne = TSNE(
         n_components=2,
-        perplexity=min(30, max(5, len(X_base) // 10)),
+        perplexity=30,
         random_state=42,
-        max_iter=1000
+        max_iter=1000,
+        verbose=1
     )
     coords_2d = tsne.fit_transform(embeddings)
     
     print("📊 Đang hiển thị biểu đồ...")
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
-    colors = plt.cm.tab10(np.linspace(0, 1, len(class_names)))
+    colors = plt.cm.tab20(np.linspace(0, 1, len(class_names)))
     
     # --- Biểu đồ 1: Toàn bộ classes ---
     ax = axes[0]

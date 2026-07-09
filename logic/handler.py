@@ -941,17 +941,22 @@ class Handler(QObject):
             if len(rows) < window_size:
                 continue
 
-            # Quét tìm window có tổng phương sai (biến động) lớn nhất
+            # Quét tìm window có tổng năng lượng (L1) lớn nhất để đồng bộ với pipeline
             best_window = None
-            max_var = -1.0
+            max_energy = -1.0
             
             # Slide qua toàn bộ dữ liệu với bước nhảy = 1 hoặc 2 để quét chính xác
             for start_idx in range(0, len(rows) - window_size + 1, 2):
-                window = np.asarray(rows[start_idx:start_idx + window_size], dtype=np.float32)
-                window = np.clip(window, -2.0, 2.0)
-                var_sum = float(np.sum(np.var(window, axis=0)))
-                if var_sum > max_var:
-                    max_var = var_sum
+                w_list = rows[start_idx:start_idx + window_size]
+                energy = sum(
+                    abs(row[0]) + abs(row[1]) + abs(row[2]) + 
+                    abs(row[3]) + abs(row[4]) + abs(row[5])
+                    for row in w_list
+                )
+                if energy > max_energy:
+                    max_energy = energy
+                    window = np.asarray(w_list, dtype=np.float32)
+                    window = np.clip(window, -2.0, 2.0)
                     best_window = window
 
             if best_window is not None:
@@ -1183,7 +1188,7 @@ class Handler(QObject):
             primitive_names = [
                 "SWIPE_RIGHT", "SWIPE_UP", "THRUST",
                 "CIRCLE_CW", "CIRCLE_CCW", "WRIST_FLICK",
-                "ZIGZAG", "STAND_BY", "SWIPE_LEFT", "SWIPE_DOWN",
+                "ZIGZAG", "SWIPE_LEFT", "SWIPE_DOWN",
                 "ROLL_WAND", "SHAKE_VIOLENT", "INFINITY_8", "V_SHAPE"
             ]
             

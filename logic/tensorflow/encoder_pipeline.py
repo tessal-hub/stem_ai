@@ -263,7 +263,8 @@ def load_primitive_dataset(
             rows = _read_csv_rows(csv_file)
             if not rows:
                 continue
-            windows = _windowize(rows, window_size=window_size, step=4)
+            is_active = name not in {"STAND BY", "STAND_BY", "Stand By"}
+            windows = _windowize(rows, window_size=window_size, step=4, is_active_gesture=is_active)
             for window in windows:
                 data = np.asarray(window, dtype=np.float32)
                 data = np.clip(data, -2.0, 2.0)

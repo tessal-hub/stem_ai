@@ -224,6 +224,7 @@ const char* SpellNameFromIndex(int class_index) {
 static bool s_is_moving = false;
 static float s_best_prob = 0.0f;
 static int s_best_class = -1;
+static float s_max_energy = 0.0f;
 
 static SpellId RunInference(const ImuFrame& frame) {
   if (s_input == nullptr || s_output == nullptr || s_interpreter == nullptr) {
@@ -304,6 +305,7 @@ static SpellId RunInference(const ImuFrame& frame) {
       
       s_best_prob = 0.0f;
       s_best_class = -1;
+      s_max_energy = 0.0f;
 
       // Flush buffer to prevent re-triggering on gesture tail
       for (int i = 0; i < WINDOW_SIZE; ++i) {
@@ -379,8 +381,15 @@ static SpellId RunInference(const ImuFrame& frame) {
     }
   }
 
+  // L1 Energy of the ENTIRE window (64 samples), same as Python _windowize
+  float window_energy = 0.0f;
+  for (int i = BUFFER_LENGTH - (WINDOW_SIZE * CHANNELS); i < BUFFER_LENGTH; ++i) {
+    window_energy += (s_input_buffer[i] > 0) ? s_input_buffer[i] : -s_input_buffer[i];
+  }
+
   if (max_idx >= 0) {
-    if (max_cos > s_best_prob) {
+    if (window_energy > s_max_energy) {
+      s_max_energy = window_energy;
       s_best_prob = max_cos;
       s_best_class = max_idx;
     }
