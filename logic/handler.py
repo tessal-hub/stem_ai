@@ -170,10 +170,8 @@ class Handler(QObject):
         if sig_reg is not None:
             sig_reg.connect(self.on_register_spell_prototype)
 
-        if hasattr(self, 'on_build_tflite'):
-            self.ui_wand.sig_train_build_tflite_requested.connect(self.on_build_tflite)
-        if hasattr(self, 'on_build_cc'):
-            self.ui_wand.sig_train_build_cc_requested.connect(self.on_build_cc)
+        if hasattr(self, 'on_build_firmware'):
+            self.ui_wand.sig_train_build_firmware_requested.connect(self.on_build_firmware)
 
         if hasattr(self, 'on_settings_saved'):
             self.ui_setting.sig_settings_saved.connect(self.on_settings_saved)
@@ -317,12 +315,8 @@ class Handler(QObject):
 
     # ── Internal Slots ──────────────────────────
 
-    def on_build_tflite(self, spell_names: list[str]) -> None:
-        """Kích hoạt tiến trình xây dựng mô hình .tflite."""
-        self._start_model_build(spell_names, mode="both")
-
-    def on_build_cc(self, spell_names: list[str]) -> None:
-        """Kích hoạt tiến trình xây dựng mô hình .cc (C++ Header)."""
+    def on_build_firmware(self, spell_names: list[str]) -> None:
+        """Kích hoạt tiến trình xây dựng mô hình .tflite và .cc."""
         self._start_model_build(spell_names, mode="both")
 
     def _start_model_build(self, spell_names: list[str], mode: str) -> None:
@@ -660,9 +654,16 @@ class Handler(QObject):
             self.ui_wand.append_terminal_text("[ERROR] Upload handoff failed: missing pending upload context.")
             return
 
-        self.ui_wand.append_terminal_text(f">> [START] Uploading model to {port}...")
-        self.ui_wand.update_flash_progress(0, "Uploading...")
-        self.uploader.upload_file(port, path)
+        self.ui_wand.append_terminal_text(f">> [START] Building & Flashing Firmware to {port}...")
+        self.ui_wand.update_flash_progress(0, "Building...")
+        
+        from logic.idf_worker import IDFBuildWorker
+        from config import WORKSPACE_ROOT
+        
+        self._idf_worker = IDFBuildWorker(project_dir=WORKSPACE_ROOT / "mpu6050", port=port)
+        self._idf_worker.sig_log.connect(self.ui_wand.append_terminal_text)
+        self._idf_worker.sig_finished.connect(self._on_upload_finished)
+        self._idf_worker.start()
 
     def _on_upload_finished(self, success: bool, message: str) -> None:
         """Called when ModelUploader finishes uploading."""

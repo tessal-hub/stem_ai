@@ -14,18 +14,23 @@ class IDFBuildWorker(QThread):
     sig_finished = pyqtSignal(bool, str)
     sig_progress = pyqtSignal(int)
 
-    def __init__(self, project_dir: Path):
+    def __init__(self, project_dir: Path, port: str = None):
         super().__init__()
         self.project_dir = project_dir
+        self.port = port
 
     def run(self):
         try:
-            self.sig_log.emit(f"[BUILD] Starting ESP-IDF build in {self.project_dir}...")
+            cmd_str = "build"
+            if self.port:
+                cmd_str = f"flash -p {self.port}"
+                self.sig_log.emit(f"[BUILD] Starting ESP-IDF build & flash to {self.port}...")
+            else:
+                self.sig_log.emit(f"[BUILD] Starting ESP-IDF build in {self.project_dir}...")
 
-            # Check if idf.py exists in path
-            # On Windows, idf.py usually runs via idf.py.exe or python idf.py
-            # We assume the user has run the export script or has it in PATH
             cmd = ["idf.py", "build"]
+            if self.port:
+                cmd = ["idf.py", "build", "flash", "-p", self.port]
 
             process = subprocess.Popen(
                 cmd,

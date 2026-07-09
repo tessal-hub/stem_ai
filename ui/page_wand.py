@@ -35,8 +35,7 @@ class PageWand(QWidget):
     sig_flash_upload = pyqtSignal()
     sig_term_clear = pyqtSignal()
     sig_train_build_requested = pyqtSignal()
-    sig_train_build_tflite_requested = pyqtSignal(list)
-    sig_train_build_cc_requested = pyqtSignal(list)
+    sig_train_build_firmware_requested = pyqtSignal(list)
 
     def __init__(self, data_store) -> None:
         super().__init__()
@@ -91,8 +90,7 @@ class PageWand(QWidget):
         self.connection_panel.sig_serial_disconnect.connect(self.sig_serial_disconnect.emit)
 
         # Thao tác Flash & Build
-        self.flash_panel.sig_build_tflite_clicked.connect(self._on_btn_build_tflite_clicked)
-        self.flash_panel.sig_build_cc_clicked.connect(self._on_btn_build_cc_clicked)
+        self.flash_panel.sig_build_firmware_clicked.connect(self._on_btn_build_firmware_clicked)
         self.flash_panel.sig_upload_clicked.connect(self.sig_flash_upload.emit)
 
         # Terminal
@@ -142,10 +140,14 @@ class PageWand(QWidget):
 
     def load_spell_payload_list(self, counts: dict[str, int]) -> None:
         """Cập nhật danh sách spell vào chart và panel payload."""
+        from logic.dataset_layout import _PRIMITIVE_LOGICAL_NAMES
+        
+        # Lọc bỏ các primitives để UI không hiển thị
         filtered_counts = {
-            k: v for k, v in counts.items()
-            if k.replace("_", " ").strip().upper() not in {"SWIPE RIGHT", "SWIPE UP", "THRUST", "CIRCLE CW", "CIRCLE CCW", "WRIST FLICK", "ZIGZAG", "STAND BY", "STAND_BY"}
+            k: v for k, v in counts.items() 
+            if k not in _PRIMITIVE_LOGICAL_NAMES and "::" not in k and k != "STAND BY" and k != "STAND_BY"
         }
+        
         self.stats_panel.update_spell_chart(filtered_counts)
         self.payload_panel.load_spell_list(filtered_counts)
 
@@ -158,10 +160,10 @@ class PageWand(QWidget):
         self.btn_serial_connect = self.connection_panel.btn_serial_connect
         self.lbl_serial_status = self.connection_panel.lbl_serial_status
 
-        self.btn_build_tflite = self.flash_panel.btn_build_tflite
-        self.btn_build_cc = self.flash_panel.btn_build_cc
-        self.btn_compile = self.flash_panel.btn_build_cc
-        self.btn_flash = self.flash_panel.btn_build_tflite
+        self.btn_build_firmware = self.flash_panel.btn_build_firmware
+        # Alias for backward compatibility if needed:
+        self.btn_compile = self.flash_panel.btn_build_firmware
+        self.btn_flash = self.flash_panel.btn_upload
         self.progress_bar = self.flash_panel.progress_bar
         self.lbl_flash_status = self.flash_panel.lbl_flash_status
 
@@ -183,10 +185,6 @@ class PageWand(QWidget):
 
     # ── Slots ───────────────────────────────────
 
-    def _on_btn_build_tflite_clicked(self) -> None:
-        """Xử lý khi yêu cầu build model .tflite."""
-        self.sig_train_build_tflite_requested.emit(self.payload_panel.get_checked_spells())
-
-    def _on_btn_build_cc_clicked(self) -> None:
-        """Xử lý khi yêu cầu build file .cc."""
-        self.sig_train_build_cc_requested.emit(self.payload_panel.get_checked_spells())
+    def _on_btn_build_firmware_clicked(self) -> None:
+        """Xử lý khi yêu cầu build firmware."""
+        self.sig_train_build_firmware_requested.emit(self.payload_panel.get_checked_spells())

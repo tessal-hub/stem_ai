@@ -24,8 +24,7 @@ class WandFlashPanel(QWidget):
     """
 
     # ── Signal xuất bản ───────────────────────────
-    sig_build_tflite_clicked = pyqtSignal()
-    sig_build_cc_clicked = pyqtSignal()
+    sig_build_firmware_clicked = pyqtSignal()
     sig_upload_clicked = pyqtSignal()
 
     def __init__(self) -> None:
@@ -50,12 +49,10 @@ class WandFlashPanel(QWidget):
 
         btn_layout = QVBoxLayout()
         btn_layout.setSpacing(SPACING_SM)
-        self.btn_build_tflite = make_button(tr_ui("wand_build_tflite"), "outline", height=BTN_H)
-        self.btn_build_cc = make_button(tr_ui("wand_build_cc"), "outline", height=BTN_H)
+        self.btn_build_firmware = make_button(tr_ui("wand_build_firmware"), "outline", height=BTN_H)
         self.btn_upload = make_button(tr_ui("wand_upload_model"), "primary", height=BTN_H)
 
-        btn_layout.addWidget(self.btn_build_tflite)
-        btn_layout.addWidget(self.btn_build_cc)
+        btn_layout.addWidget(self.btn_build_firmware)
         btn_layout.addWidget(self.btn_upload)
         card_layout.addLayout(btn_layout)
 
@@ -73,8 +70,7 @@ class WandFlashPanel(QWidget):
 
     def _init_signals(self) -> None:
         """Kết nối signal/slot nội bộ."""
-        self.btn_build_tflite.clicked.connect(lambda _: self.sig_build_tflite_clicked.emit())
-        self.btn_build_cc.clicked.connect(lambda _: self.sig_build_cc_clicked.emit())
+        self.btn_build_firmware.clicked.connect(lambda _: self.sig_build_firmware_clicked.emit())
         self.btn_upload.clicked.connect(lambda _: self.sig_upload_clicked.emit())
 
     # ── Public methods ──────────────────────────
@@ -82,8 +78,7 @@ class WandFlashPanel(QWidget):
     def apply_ui_language(self) -> None:
         """Làm mới văn bản khi ngôn ngữ ứng dụng thay đổi."""
         self._title_lbl.setText(tr_ui("wand_section_model"))
-        self.btn_build_tflite.setText(tr_ui("wand_build_tflite"))
-        self.btn_build_cc.setText(tr_ui("wand_build_cc"))
+        self.btn_build_firmware.setText(tr_ui("wand_build_firmware"))
         self.btn_upload.setText(tr_ui("wand_upload_model"))
 
     def update_flash_progress(self, percentage: int, status_text: str = "") -> None:

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QListWidget,
-                             QListWidgetItem, QVBoxLayout, QWidget, QComboBox)
+                             QListWidgetItem, QVBoxLayout, QWidget)
 
 from logic.rarity_utils import RARITY_TIERS, RarityTier
 from logic.theme_manager import theme_manager
@@ -17,8 +17,6 @@ from ui.component_factory import make_rarity_badge_wand
 from ui.i18n_bridge import tr_ui
 from ui.modern_layout import SPACING_SM
 from ui.tokens import WAND_SPELL_LIST_MIN_H
-
-from .shared import make_section_label
 
 
 class WandSpellPayloadPanel(QWidget):
@@ -41,16 +39,6 @@ class WandSpellPayloadPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_SM)
-
-        # Top row with header and filter
-        top_row = QHBoxLayout()
-        self._hdr_payload = make_section_label(tr_ui("wand_section_payload"))
-        self.wand_filter_combo = QComboBox()
-        self.wand_filter_combo.addItems(["All", "Primitives", "Spells"])
-        self.wand_filter_combo.currentIndexChanged.connect(self._refresh_lists)
-        top_row.addWidget(self._hdr_payload, stretch=1)
-        top_row.addWidget(self.wand_filter_combo)
-        layout.addLayout(top_row)
 
         # Requirement 7: Use QHBoxLayout with 24px gap instead of thick splitter
         content_row = QHBoxLayout()
@@ -114,14 +102,12 @@ class WandSpellPayloadPanel(QWidget):
 
     def apply_ui_language(self) -> None:
         """Làm mới văn bản khi ngôn ngữ ứng dụng thay đổi."""
-        self._hdr_payload.setText(tr_ui("wand_section_payload"))
         self._left_title.setText(tr_ui("wand_selected_title"))
         self._right_title.setText(tr_ui("wand_available_title"))
         self._refresh_lists()
 
     def refresh_styles(self) -> None:
         """Làm mới style theo theme hiện tại."""
-        self._hdr_payload.setProperty("type", "settings_section_label")
         self._left_title.setProperty("type", "settings_section_label")
         self._right_title.setProperty("type", "settings_section_label")
 
@@ -143,25 +129,13 @@ class WandSpellPayloadPanel(QWidget):
             self._add_empty_row(self.list_available_spells, tr_ui("wand_wait_avail"))
             return
 
-        filter_text = self.wand_filter_combo.currentText() if hasattr(self, "wand_filter_combo") else "All"
-
         for name in self._spell_order:
             if "::" in name:
                 continue
-            normalized = name.replace("_", " ").strip().upper()
-            is_prim = normalized in {"SWIPE RIGHT", "SWIPE UP", "THRUST", "CIRCLE CW", "CIRCLE CCW", "WRIST FLICK", "ZIGZAG", "STAND BY", "STAND_BY"}
-            
-            if filter_text == "Primitives" and not is_prim:
-                continue
-            if filter_text == "Spells" and is_prim:
-                continue
-
             target_list = self.list_selected_spells if name in self._selected_spells else self.list_available_spells
             count = int(self._spell_counts.get(name, 0))
-            
-            prefix = "[P] " if is_prim and filter_text == "All" else ("[S] " if not is_prim and filter_text == "All" else "")
-            
-            self._add_spell_row(target_list, name, count, prefix)
+
+            self._add_spell_row(target_list, name, count)
 
     def _add_spell_row(self, list_widget: QListWidget, name: str, count: int, prefix: str = "") -> None:
         """Tạo và thêm một hàng spell tùy chỉnh vào danh sách."""

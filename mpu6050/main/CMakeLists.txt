@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "main.cpp"
+    SRCS "gesture_model.cc" "main.cpp"
     INCLUDE_DIRS "."
     REQUIRES
         esp_driver_i2c

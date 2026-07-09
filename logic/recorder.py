@@ -277,8 +277,10 @@ class DataRecorder(QThread):
         if not self._is_recording and self._file is None and self._writer is None:
             return
 
+        file_path_to_evaluate = None
         try:
             if self._file is not None:
+                file_path_to_evaluate = self._file.name
                 self._file.flush()
                 self._file.close()
         except Exception as e:
@@ -295,10 +297,30 @@ class DataRecorder(QThread):
                 self._is_recording = False
                 self.sig_recording_state.emit(False)
 
+                max_gyro = 0.0
+                if success and file_path_to_evaluate and os.path.exists(file_path_to_evaluate):
+                    try:
+                        with open(file_path_to_evaluate, "r", encoding="utf-8") as f:
+                            reader = csv.reader(f)
+                            next(reader, None) # skip header
+                            for r in reader:
+                                if len(r) == 6:
+                                    g_val = max(abs(float(r[3])), abs(float(r[4])), abs(float(r[5])))
+                                    if g_val > max_gyro:
+                                        max_gyro = g_val
+                        
+                        if max_gyro < 50.0 and self._label_name != "STAND BY":
+                            os.remove(file_path_to_evaluate)
+                            success = False
+                            error_message = f"File bị loại vì lực vung quá yếu (Gyro max = {max_gyro:.1f} < 50). Hãy múa dứt khoát hơn!"
+                    except Exception as e:
+                        pass # Ignore evaluation errors if any
+
                 if success:
-                    message = f"[RECORD] Stopped. Saved {self._row_count} samples to {self._label_name}"
+                    message = f"[RECORD] OK! {self._row_count} samples -> {self._label_name} (Lực vung: {max_gyro:.1f})"
                     self.sig_status_text.emit(message)
                     self.sig_finished.emit(True, message)
                 else:
                     fail_message = error_message or "Recorder stopped with error"
+                    self.sig_status_text.emit(f"[REJECTED] {fail_message}")
                     self.sig_finished.emit(False, fail_message)
