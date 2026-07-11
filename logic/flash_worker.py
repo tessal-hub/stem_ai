@@ -136,15 +136,15 @@ class FlashWorker(QThread):
         """Return the esptool command list for the configured port and binary."""
         return [
             sys.executable, "-m", "esptool",
-            "--chip", "esp32s3",
+            "--chip", "esp32",
             "--port", self._port,
             "--baud", "115200",
-            "--before", "default_reset",
-            "--after", "hard_reset",
-            "write_flash", "-z",
-            "--flash_mode", "dio",
-            "--flash_freq", "80m",
-            "--flash_size", "keep",
+            "--before", "default-reset",
+            "--after", "hard-reset",
+            "write-flash", "-z",
+            "--flash-mode", "dio",
+            "--flash-freq", "80m",
+            "--flash-size", "keep",
             _FLASH_ADDRESS,      # Address where app firmware is flashed
             str(bin_file),
         ]

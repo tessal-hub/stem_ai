@@ -1,18 +1,18 @@
 {
   "C_Cpp.intelliSenseEngine": "default",
   "idf.openOcdConfigs": [
-    "board/esp32s3-builtin.cfg"
+    "board/esp32-wrover-kit-3.3v.cfg"
   ],
-  "idf.portWin": "COM5",
+  "idf.portWin": "COM6",
   "idf.currentSetup": "C:\\esp\\v6.0.2\\esp-idf",
   "idf.customExtraVars": {
-    "IDF_TARGET": "esp32s3"
+    "IDF_TARGET": "esp32"
   },
   "clangd.path": "C:\\Espressif\\tools\\esp-clang\\esp-20.1.1_20250829\\esp-clang\\bin\\clangd.exe",
   "clangd.arguments": [
     "--background-index",
     "--query-driver=**",
-    "--compile-commands-dir=e:\\01.MCU\\1.ESP-IDF\\01.MPU6050\\mpu6050\\build"
+    "--compile-commands-dir=e:\\00.Project\\05.STEM_AI\\02.stem_app\\stem_ai\\mpu6050\\build"
   ],
   "idf.flashType": "UART"
 }

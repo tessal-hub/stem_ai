@@ -74,6 +74,10 @@ class BuildResult:
     tflite_path: str
     cc_path: str
     output_mode: str
+    worst_class_name: str = ""
+    worst_class_recall: float = 0.0
+    est_macs: int = 0
+    params: int = 0
 
 
 def _emit_status(callback: StatusCallback | None, message: str) -> None:
@@ -204,9 +208,28 @@ def _augment_window(window: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     # 4. Thêm nhiễu ngẫu nhiên (Gaussian noise)
     raw += rng.normal(0, 0.03, size=raw.shape).astype(np.float32)
     
+    # 4b. Random spikes (giả lập nhiễu chập chờn cảm biến)
+    if rng.random() < 0.2:
+        num_spikes = int(rng.integers(1, 4))
+        for _ in range(num_spikes):
+            idx = int(rng.integers(0, W))
+            c = int(rng.integers(0, 6))
+            raw[idx, c] += float(rng.uniform(-1.0, 1.0))
+            
+    # 4c. Bias trôi (Linear drift)
+    if rng.random() < 0.3:
+        drift = np.linspace(0, rng.uniform(-0.1, 0.1), W, dtype=np.float32).reshape(-1, 1)
+        raw += drift
+    
     # 5. Co giãn biên độ biên độc lập (Amplitude Scaling)
     scale = rng.uniform(0.85, 1.15, size=(1, 6)).astype(np.float32)
     raw *= scale
+
+    # 5b. Biên độ phi tuyến (Non-linear amplitude)
+    if rng.random() < 0.5:
+        power = float(rng.uniform(0.9, 1.1))
+        raw = np.sign(raw) * (np.abs(raw) ** power)
+        raw = raw.astype(np.float32)
 
     # 6. Dịch chuyển thời gian nhẹ (Time Shift)
     shift = int(rng.integers(-2, 3))
@@ -305,6 +328,131 @@ def _file_level_split(
     return train_file_rows, val_file_rows
 
 
+def _estimate_macs(model) -> int:
+    import tensorflow as tf
+    total_macs = 0
+    for layer in model.layers:
+        if isinstance(layer, tf.keras.layers.Conv1D):
+            try:
+                in_shape = layer.input.shape
+                out_shape = layer.output.shape
+                t_out = out_shape[1] if out_shape[1] is not None else 1
+                c_in = in_shape[-1]
+                c_out = out_shape[-1]
+                k = layer.kernel_size[0]
+                total_macs += t_out * c_in * c_out * k
+            except AttributeError:
+                pass
+        elif isinstance(layer, tf.keras.layers.Dense):
+            try:
+                in_shape = layer.input.shape
+                out_shape = layer.output.shape
+                total_macs += in_shape[-1] * out_shape[-1]
+            except AttributeError:
+                pass
+    return total_macs
+
+
+def _build_base_model(effective_window_size: int, preset: str = "original"):
+    import tensorflow as tf
+    if effective_window_size >= 16:
+        input_layer = tf.keras.layers.Input(shape=(effective_window_size, 9))
+        if preset == "original":
+            b1 = tf.keras.layers.Conv1D(32, 3, padding="same", activation="relu")(input_layer)
+            b2 = tf.keras.layers.Conv1D(32, 5, padding="same", activation="relu")(input_layer)
+            b3 = tf.keras.layers.Conv1D(32, 9, padding="same", activation="relu")(input_layer)
+            merged = tf.keras.layers.Concatenate()([b1, b2, b3])
+            x = tf.keras.layers.BatchNormalization()(merged)
+            x = tf.keras.layers.MaxPooling1D(2)(x)
+            x = tf.keras.layers.Dropout(0.20)(x)
+            x = tf.keras.layers.Conv1D(128, 3, padding="same", activation="relu")(x)
+            x = tf.keras.layers.MaxPooling1D(2)(x)
+            x = tf.keras.layers.Dropout(0.20)(x)
+            x = tf.keras.layers.GlobalAveragePooling1D()(x)
+        elif preset == "medium":
+            b1 = tf.keras.layers.Conv1D(16, 3, padding="same", activation="relu")(input_layer)
+            b2 = tf.keras.layers.Conv1D(16, 5, padding="same", activation="relu")(input_layer)
+            b3 = tf.keras.layers.Conv1D(16, 9, padding="same", activation="relu")(input_layer)
+            merged = tf.keras.layers.Concatenate()([b1, b2, b3])
+            x = tf.keras.layers.BatchNormalization()(merged)
+            x = tf.keras.layers.MaxPooling1D(2)(x)
+            x = tf.keras.layers.Dropout(0.20)(x)
+            x = tf.keras.layers.Conv1D(64, 3, padding="same", activation="relu")(x)
+            x = tf.keras.layers.MaxPooling1D(2)(x)
+            x = tf.keras.layers.Dropout(0.20)(x)
+            x = tf.keras.layers.GlobalAveragePooling1D()(x)
+        elif preset == "aggressive":
+            x = tf.keras.layers.Conv1D(16, 5, padding="same", activation="relu")(input_layer)
+            x = tf.keras.layers.BatchNormalization()(x)
+            x = tf.keras.layers.MaxPooling1D(2)(x)
+            x = tf.keras.layers.Dropout(0.20)(x)
+            x = tf.keras.layers.Conv1D(32, 3, padding="same", activation="relu")(x)
+            x = tf.keras.layers.MaxPooling1D(2)(x)
+            x = tf.keras.layers.Dropout(0.20)(x)
+            x = tf.keras.layers.GlobalAveragePooling1D()(x)
+        else:
+            raise ValueError(f"Unknown preset: {preset}")
+        features = tf.keras.layers.Dense(16, activation=None, name="embedding")(x)
+        return tf.keras.Model(inputs=input_layer, outputs=features)
+    else:
+        return tf.keras.Sequential([
+            tf.keras.layers.Input(shape=(effective_window_size, 9)),
+            tf.keras.layers.Conv1D(32, 3, padding="same", activation="relu"),
+            tf.keras.layers.Dropout(0.20),
+            tf.keras.layers.Dense(16)
+        ])
+
+
+def compare_architectures(dataset_dir: str, presets: list[str] = None, **kwargs):
+    if presets is None:
+        presets = ["original", "medium", "aggressive"]
+    results = []
+    print("\nStarting architecture comparison...")
+    for preset in presets:
+        print(f"\n--- Training preset: {preset} ---")
+        try:
+            res = build_gesture_model(
+                dataset_dir=dataset_dir,
+                preset=preset,
+                force_retrain=True,
+                **kwargs
+            )
+            results.append((preset, res))
+        except Exception as e:
+            print(f"Error training preset {preset}: {e}")
+            results.append((preset, None))
+            
+    print("\n" + "="*80)
+    print(f"{'Preset':<12} | {'Val Acc':<7} | {'Est. MACs':<9} | {'Params':<7} | {'Worst-class recall':<20}")
+    print("-" * 80)
+    for preset, res in results:
+        if res is None:
+            print(f"{preset:<12} | ERROR   | N/A       | N/A     | N/A")
+            continue
+        def format_number(n):
+            if n >= 1_000_000: return f"{n/1_000_000:.1f}M"
+            if n >= 1_000: return f"{n/1_000:.0f}K"
+            return str(n)
+        macs_str = format_number(res.est_macs)
+        params_str = format_number(res.params)
+        worst_recall_str = f"{res.worst_class_name}: {res.worst_class_recall:.2f}" if res.worst_class_name else "N/A"
+        print(f"{preset:<12} | {res.accuracy:<7.2f} | {macs_str:<9} | {params_str:<7} | {worst_recall_str:<20}")
+    print("="*80)
+    
+    if len(results) >= 1 and results[0][1] is not None:
+        orig_res = results[0][1]
+        best_preset = presets[0]
+        best_macs = orig_res.est_macs
+        for preset, res in results[1:]:
+            if res is None: continue
+            if res.accuracy >= orig_res.accuracy - 0.03 and res.worst_class_recall >= orig_res.worst_class_recall - 0.10:
+                if res.est_macs < best_macs:
+                    best_preset = preset
+                    best_macs = res.est_macs
+        print(f"\nGoi y: Nen chon preset '{best_preset}' vi can bang tot nhat giua so luong phep tinh (MACs) va do chinh xac.")
+        print(f"(Tieu chi: MACs thap nhat, Val Acc giam khong qua 3%, Worst recall giam khong qua 10%).")
+
+
 def build_gesture_model(
     *,
     dataset_dir: str,
@@ -320,6 +468,7 @@ def build_gesture_model(
     val_fraction: float = 0.15,
     random_seed: int = 42,
     force_retrain: bool = False,
+    preset: str = "original",
 ) -> BuildResult:
     dataset_root = Path(dataset_dir)
     if not dataset_root.exists():
@@ -591,36 +740,11 @@ def build_gesture_model(
         )
         validation_data = (X_val_temp, y_val_cat)
 
-    if effective_window_size >= 16:
-        # Multi-scale Inception-style feature pyramid
-        input_layer = tf.keras.layers.Input(shape=(effective_window_size, 9))
-        
-        # Branch 1: Fine-grained features (kernel 3)
-        b1 = tf.keras.layers.Conv1D(32, 3, padding="same", activation="relu")(input_layer)
-        # Branch 2: Medium features (kernel 5)
-        b2 = tf.keras.layers.Conv1D(32, 5, padding="same", activation="relu")(input_layer)
-        # Branch 3: Coarse features (kernel 9)
-        b3 = tf.keras.layers.Conv1D(32, 9, padding="same", activation="relu")(input_layer)
-        
-        merged = tf.keras.layers.Concatenate()([b1, b2, b3])
-        x = tf.keras.layers.BatchNormalization()(merged)
-        x = tf.keras.layers.MaxPooling1D(2)(x)
-        x = tf.keras.layers.Dropout(0.20)(x)
-        
-        x = tf.keras.layers.Conv1D(128, 3, padding="same", activation="relu")(x)
-        x = tf.keras.layers.MaxPooling1D(2)(x)
-        x = tf.keras.layers.Dropout(0.20)(x)
-        
-        x = tf.keras.layers.GlobalAveragePooling1D()(x)
-        features = tf.keras.layers.Dense(16, activation=None, name="embedding")(x)
-        base_model = tf.keras.Model(inputs=input_layer, outputs=features)
-    else:
-        base_model = tf.keras.Sequential([
-            tf.keras.layers.Input(shape=(effective_window_size, 9)),
-            tf.keras.layers.Conv1D(32, 3, padding="same", activation="relu"),
-            tf.keras.layers.Dropout(0.20),
-            tf.keras.layers.Dense(16)
-        ])
+    import tensorflow as tf
+    base_model = _build_base_model(effective_window_size, preset)
+    est_macs = _estimate_macs(base_model)
+    params = base_model.count_params()
+    _emit_status(status_cb, f"[TRAIN] Built model preset='{preset}' | Est. MACs: {est_macs} | Params: {params}")
 
     inputs = tf.keras.layers.Input(shape=(effective_window_size, 9))
     features = base_model(inputs)
@@ -703,6 +827,9 @@ def build_gesture_model(
             fit_kwargs["validation_split"] = val_fraction
         history = model.fit(X_train, y_train_cat, **fit_kwargs)
 
+    worst_class_name = ""
+    worst_class_recall = 0.0
+
     if validation_data is not None and validation_data[1] is not None:
         X_val_cm = validation_data[0]
         y_val_cm = validation_data[1]
@@ -724,18 +851,24 @@ def build_gesture_model(
             row_counts = "  ".join(f"{cm[true_i, pred_i]:>8d}" for pred_i in range(n_classes))
             total = cm[true_i].sum()
             recall = cm[true_i, true_i] / total if total > 0 else 0.0
+            if recall < worst_class_recall or worst_class_name == "":
+                worst_class_recall = recall
+                worst_class_name = true_name
             _emit_status(
                 status_cb,
                 f"[EVAL] {true_name[:12]:>12s}  {row_counts}   recall={recall:.2%}",
             )
 
-        _emit_status(status_cb, "[EVAL] ── Per-class precision ──")
+        _emit_status(status_cb, "[EVAL] ── Per-class precision & False Accept Rate (FAR) ──")
         for pred_i, pred_name in enumerate(class_names):
             col_total = cm[:, pred_i].sum()
             precision = cm[pred_i, pred_i] / col_total if col_total > 0 else 0.0
+            false_accepts = col_total - cm[pred_i, pred_i]
+            total_negatives = cm.sum() - cm[pred_i, :].sum()
+            far = false_accepts / total_negatives if total_negatives > 0 else 0.0
             _emit_status(
                 status_cb,
-                f"[EVAL]   {pred_name[:12]:>12s}  precision={precision:.2%}  "
+                f"[EVAL]   {pred_name[:12]:>12s}  precision={precision:.2%}  FAR={far:.2%}  "
                 f"(predicted {col_total} times)",
             )
 
@@ -798,8 +931,29 @@ def build_gesture_model(
         in_scale, in_zp = in_details["quantization"]
         out_scale, out_zp = out_details["quantization"]
         
-        X_all = np.stack(train_features, axis=0)
-        y_all = np.asarray(train_labels, dtype=np.int32)
+        # C. Tầng tính centroid & threshold: Augment riêng cho tính centroid
+        aug_features = []
+        aug_labels = []
+        c_rng = np.random.default_rng(random_seed + 1)
+        for c in range(len(class_names)):
+            base_samples = [train_features[i] for i, lbl in enumerate(train_labels) if lbl == c]
+            count = len(base_samples)
+            if count == 0:
+                continue
+            
+            aug_features.extend(base_samples)
+            aug_labels.extend([c] * count)
+            
+            # Augment up to 300 samples for few-shot classes
+            if c not in primitive_class_indices and count < 300:
+                needed = 300 - count
+                for _ in range(needed):
+                    idx = c_rng.choice(count)
+                    aug_features.append(_augment_window(base_samples[idx], c_rng))
+                    aug_labels.append(c)
+
+        X_all = np.stack(aug_features, axis=0)
+        y_all = np.asarray(aug_labels, dtype=np.int32)
         X_all = np.clip(X_all, -2.0, 2.0)
         
         embeddings = []
@@ -831,16 +985,35 @@ def build_gesture_model(
                 norms = np.linalg.norm(class_embs, axis=1, keepdims=True)
                 norms[norms == 0] = 1e-10
                 class_embs = class_embs / norms
+                
+                # Iterative trimming (outlier rejection)
+                centroid_pre = np.mean(class_embs, axis=0)
+                norm_pre = np.linalg.norm(centroid_pre)
+                if norm_pre > 0: centroid_pre /= norm_pre
+                
+                cos_sims_pre = np.dot(class_embs, centroid_pre)
+                if len(cos_sims_pre) > 5:
+                    keep_threshold = np.percentile(cos_sims_pre, 10) # Drop bottom 10%
+                    keep_idx = cos_sims_pre >= keep_threshold
+                    class_embs = class_embs[keep_idx]
+                
                 centroid = np.mean(class_embs, axis=0)
                 norm = np.linalg.norm(centroid)
-                if norm > 0:
-                    centroid = centroid / norm
+                if norm > 0: centroid = centroid / norm
                 
-                # Calibrate per-class threshold (5th percentile)
-                cos_sims = np.dot(class_embs, centroid)
-                thresh = max(0.50, float(np.percentile(cos_sims, 5)))
-                # Give an upper limit so it's not too tight
-                thresh = min(thresh, 0.85)
+                # Margin-based inter-class threshold
+                other_idx = (y_all != c)
+                if np.any(other_idx):
+                    other_embs = embeddings[other_idx]
+                    other_norms = np.linalg.norm(other_embs, axis=1, keepdims=True)
+                    other_norms[other_norms == 0] = 1e-10
+                    other_embs = other_embs / other_norms
+                    other_cos_sims = np.dot(other_embs, centroid)
+                    max_other = float(np.max(other_cos_sims))
+                    # Set threshold slightly above the max similarity of any other class
+                    thresh = max(0.50, min(max_other + 0.05, 0.90))
+                else:
+                    thresh = 0.65
             else:
                 centroid = np.zeros(16)
                 thresh = 0.65
@@ -874,6 +1047,10 @@ def build_gesture_model(
         tflite_path=str(tflite_path),
         cc_path=str(cc_path),
         output_mode=output_mode,
+        worst_class_name=worst_class_name,
+        worst_class_recall=worst_class_recall,
+        est_macs=est_macs,
+        params=params,
     )
 
 
@@ -888,12 +1065,14 @@ class GestureModelBuildWorker(QThread):
         output_mode: Literal["tflite", "cc", "both"] = "both",
         selected_spells: list[str] | None = None,
         force_retrain: bool = False,
+        preset: str = "original",
     ) -> None:
         super().__init__()
         self.dataset_dir = dataset_dir
         self.output_mode: Literal["tflite", "cc", "both"] = output_mode
         self.selected_spells = selected_spells or []
         self.force_retrain = force_retrain
+        self.preset = preset
         
         # Tự động hút toàn bộ Primitives vào để làm data nền (base dataset)
         # phục vụ cho cơ chế Few-shot Learning vừa nâng cấp.
@@ -923,6 +1102,7 @@ class GestureModelBuildWorker(QThread):
                 output_mode=self.output_mode,
                 selected_spells=self.selected_spells,
                 force_retrain=self.force_retrain,
+                preset=self.preset,
             )
             self.build_result = result
             summary = (

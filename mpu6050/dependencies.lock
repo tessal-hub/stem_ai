@@ -31,5 +31,5 @@ direct_dependencies:
 - espressif/esp-nn
 - espressif/esp-tflite-micro
 manifest_hash: d8690a90a98d80fe8b711e8cd44572e4c536392b3dba9834e7ba8936f88b101a
-target: esp32s3
+target: esp32
 version: 3.0.0

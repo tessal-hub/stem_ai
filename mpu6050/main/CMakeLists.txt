@@ -9,4 +9,5 @@ idf_component_register(
         esp_partition
         spiffs
         espressif__esp-tflite-micro
+        esp_timer
 )

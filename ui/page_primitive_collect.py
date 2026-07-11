@@ -11,7 +11,7 @@ import numpy as np
 import pyqtgraph as pg
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QProgressBar,
-                             QScrollArea, QStackedWidget, QVBoxLayout, QWidget)
+                             QScrollArea, QStackedWidget, QVBoxLayout, QWidget, QComboBox)
 from PyQt6.QtGui import QShortcut, QKeySequence
 
 from logic.locale_manager import locale_manager
@@ -35,7 +35,7 @@ class PagePrimitiveCollect(QWidget):
     sig_start_collection = pyqtSignal(str, str)
     sig_stop_collection = pyqtSignal()
     sig_capture_collection = pyqtSignal(str, str)
-    sig_train_encoder_requested = pyqtSignal()
+    sig_train_encoder_requested = pyqtSignal(str)
 
     def __init__(self, data_store) -> None:
         super().__init__()
@@ -258,17 +258,25 @@ class PagePrimitiveCollect(QWidget):
         card_t, lay_t = make_card(margins=(20, 20, 20, 20), spacing=SPACING_MD)
         self._sec_training = make_section_label("ENCODER TRAINING")
         
+        self.cbo_preset = QComboBox()
+        self.cbo_preset.addItems(["original", "medium", "aggressive"])
+        self.cbo_preset.setToolTip("Select model architecture preset")
+        
         self.btn_train_encoder = make_button("TRAIN ENCODER", "primary")
         self.btn_train_encoder.setEnabled(False)
-        self.btn_train_encoder.clicked.connect(lambda _: self.sig_train_encoder_requested.emit())
+        self.btn_train_encoder.clicked.connect(lambda _: self.sig_train_encoder_requested.emit(self.cbo_preset.currentText()))
         
         from ui.terminal_widget import TerminalWidget
         self.console = TerminalWidget(max_lines=1000, read_only=True)
         self.console.setMinimumHeight(150)
         self.console.setPlainText(">> ENCODER TRAINING TERMINAL INITIALIZED...\n>> WAITING FOR TRAINING START...")
         
+        row_t = QHBoxLayout()
+        row_t.addWidget(self.cbo_preset)
+        row_t.addWidget(self.btn_train_encoder)
+        
         lay_t.addWidget(self._sec_training)
-        lay_t.addWidget(self.btn_train_encoder)
+        lay_t.addLayout(row_t)
         lay_t.addWidget(self.console)
         lay.addWidget(card_t, stretch=2)
 

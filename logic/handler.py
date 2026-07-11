@@ -331,7 +331,8 @@ class Handler(QObject):
         self._model_build_worker = GestureModelBuildWorker(
             dataset_dir=self.store.dataset_dir,
             output_mode=mode,
-            selected_spells=spell_names
+            selected_spells=spell_names,
+            preset="medium"
         )
         self._model_build_worker.sig_status.connect(self.ui_wand.append_terminal_text)
         self._model_build_worker.sig_progress.connect(self.ui_wand.update_flash_progress)
@@ -411,11 +412,21 @@ class Handler(QObject):
 
     def _on_serial_stopped(self) -> None:
         """Dọn dẹp sau khi luồng Serial dừng hẳn."""
-        self.serial_worker.finished.disconnect(self._on_serial_stopped)
+        try:
+            self.serial_worker.finished.disconnect(self._on_serial_stopped)
+        except TypeError:
+            pass
         with self._port_lock:
             self._port_owner = None
         self.serial_worker = SerialWorker()
-        self._connect_signals()
+        
+        self.serial_worker.sig_data_received.connect(self._on_serial_frame, type=Qt.ConnectionType.QueuedConnection)
+        self.serial_worker.sig_connection_status.connect(
+            self._on_serial_status, type=Qt.ConnectionType.QueuedConnection)
+        self.serial_worker.sig_raw_line_received.connect(
+            self.ui_wand.append_terminal_text, type=Qt.ConnectionType.QueuedConnection)
+        self.serial_worker.sig_prediction_received.connect(
+            self.store.update_prediction, type=Qt.ConnectionType.QueuedConnection)
 
     # ── Private methods ─────────────────────────
 
@@ -1099,11 +1110,20 @@ class Handler(QObject):
                 self.ui_setting.append_console_text(f"[ERROR] Firmware binary not found: {bin_path}")
             return
 
+        if self._mode == self._MODE_UPDATE:
+            if self.ui_setting:
+                self.ui_setting.append_console_text("[ERROR] Flash already in progress.")
+            return
+
         if not self._transition_mode(self._MODE_UPDATE, reason="start flash"):
             return
 
         if not self._can_use_port("flash", allow_owner="serial"):
+            self._transition_mode(self._MODE_IDLE, reason="flash port unavailable")
             return
+
+        if self.ui_setting:
+            self.ui_setting.set_flash_buttons_enabled(False)
 
         self._pending_flash_bin_type = bin_type
         self._pending_flash_port = port
@@ -1196,8 +1216,8 @@ class Handler(QObject):
         import os
         return os.path.exists(str(path))
 
-    def on_train_encoder_requested(self) -> None:
-        log.debug("on_train_encoder_requested CALLED")
+    def on_train_encoder_requested(self, preset: str = "original") -> None:
+        log.debug("on_train_encoder_requested CALLED with preset=%s", preset)
         try:
             import tensorflow as tf  # Fix: import in main thread to avoid QThread crash
             from .tensorflow.pipeline import GestureModelBuildWorker
@@ -1205,7 +1225,8 @@ class Handler(QObject):
             
             self.encoder_trainer = GestureModelBuildWorker(
                 dataset_dir=self.store.dataset_dir,
-                force_retrain=True
+                force_retrain=True,
+                preset=preset
             )
             log.debug("GestureModelBuildWorker initialized")
             if self.ui_primitive_collect:

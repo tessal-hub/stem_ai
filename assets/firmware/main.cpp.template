@@ -6,7 +6,9 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "driver/i2c_master.h"
 
 #include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
@@ -18,6 +20,28 @@
 
 // AUTO-GENERATED FILE: do not edit manually.
 // {{AUTOGEN_METADATA}}
+//
+// ARCHITECTURE CHANGE (this file): IMU sampling and TFLM inference are now
+// two independent FreeRTOS tasks instead of one combined loop.
+//
+// WHY: on plain ESP32 (Xtensa LX6, no esp-nn SIMD kernels), Invoke() takes
+// tens of milliseconds -- far more than the 20ms sampling budget the model
+// was trained against (WINDOW_SIZE=64 samples @ 50Hz = 1.28s of real motion).
+// Running sampling and inference in the same loop meant every slow Invoke()
+// call stole time from sampling, stretching the window to represent many
+// seconds of real time instead of 1.28s, which desynced the model from the
+// live signal shape it learned during training (see prior debug session:
+// invoke_us was 45000-188000us against a 20000us budget).
+//
+// FIX: a dedicated sampling task runs on a fixed 20ms period (vTaskDelayUntil)
+// and ONLY does I2C reads + ring buffer writes -- nothing else -- so the
+// window always represents the correct 1.28s of real elapsed time regardless
+// of how slow inference is. A separate inference task takes an atomic
+// snapshot of the latest window whenever it's free and runs the (possibly
+// slow) TFLM Invoke() + gesture state machine on that snapshot. Inference
+// naturally runs slower than 50Hz on this hardware, but each window it does
+// process is always time-correct, which is what actually matters for the
+// model's embeddings to match the training distribution.
 
 static const char* TAG = "SPELLBOOK";
 
@@ -29,11 +53,11 @@ namespace spellbook {
 #endif
 
 #ifndef STEM_I2C_SDA_PIN
-#define STEM_I2C_SDA_PIN GPIO_NUM_8
+#define STEM_I2C_SDA_PIN GPIO_NUM_21
 #endif
 
 #ifndef STEM_I2C_SCL_PIN
-#define STEM_I2C_SCL_PIN GPIO_NUM_9
+#define STEM_I2C_SCL_PIN GPIO_NUM_22
 #endif
 
 #ifndef STEM_I2C_FREQ_HZ
@@ -41,11 +65,42 @@ namespace spellbook {
 #endif
 
 #ifndef STEM_TFLM_ARENA_BYTES
-#define STEM_TFLM_ARENA_BYTES (256 * 1024)
+#define STEM_TFLM_ARENA_BYTES (96 * 1024)
 #endif
 
+// This is now the SAMPLING period (ground truth timing), not a combined
+// sample+infer budget. Keep at 20ms to match the 50Hz the model was trained
+// against (WINDOW_SIZE=64 samples => 1.28s window).
+#ifndef STEM_SAMPLING_INTERVAL_MS
+#define STEM_SAMPLING_INTERVAL_MS 20
+#endif
+
+// Kept for backward compatibility with any external code referencing it.
 #ifndef STEM_INFERENCE_INTERVAL_MS
-#define STEM_INFERENCE_INTERVAL_MS 20
+#define STEM_INFERENCE_INTERVAL_MS STEM_SAMPLING_INTERVAL_MS
+#endif
+
+// How often the inference task tries to grab a new snapshot and run.
+// This is independent of sampling; it can be shorter than Invoke() takes --
+// the task will simply take however long Invoke() takes and then loop again,
+// always reading whatever the freshest snapshot is at that time.
+#ifndef STEM_INFERENCE_POLL_MS
+#define STEM_INFERENCE_POLL_MS 2
+#endif
+
+#ifndef STEM_DEBUG_VERBOSE
+#define STEM_DEBUG_VERBOSE 0
+#endif
+
+// Pin sampling and inference to different cores so a slow Invoke() on one
+// core never blocks the I2C read timing on the other. ESP32 (non-S3) is
+// dual-core, so this is available. If your target is single-core, set both
+// to the same core (tskNO_AFFINITY still works but is less deterministic).
+#ifndef STEM_SAMPLING_TASK_CORE
+#define STEM_SAMPLING_TASK_CORE 1
+#endif
+#ifndef STEM_INFERENCE_TASK_CORE
+#define STEM_INFERENCE_TASK_CORE 0
 #endif
 
 #define MPU6050_ADDR 0x68
@@ -59,18 +114,21 @@ enum class SpellId {
 {{SPELL_ENUM_BLOCK}}
 };
 
-constexpr const char* kSpellNames[] = {
-{{SPELL_NAME_TABLE_BLOCK}}
-};
-
-constexpr std::size_t kSpellClassCount = {{SPELL_CLASS_COUNT}};
-constexpr int kIdleClassIndex = {{SPELL_IDLE_INDEX}};
-
 alignas(16) static std::uint8_t g_tensor_arena[STEM_TFLM_ARENA_BYTES];
 static i2c_master_dev_handle_t s_mpu_handle = nullptr;
-static float s_input_buffer[BUFFER_LENGTH] = {0};
-static int s_sample_count = 0;
-static int s_cooldown = 0;
+
+// ---------------------------------------------------------------------------
+// Shared state between sampling task (writer) and inference task (reader).
+// Protected by s_buffer_mutex. Kept as a plain mutex (not lock-free) because
+// the data rate is low (50Hz) and the critical section is a fast memcpy --
+// contention/latency here is negligible compared to Invoke() time.
+// ---------------------------------------------------------------------------
+static SemaphoreHandle_t s_buffer_mutex = nullptr;
+static float s_shared_buffer[BUFFER_LENGTH] = {0};
+static uint32_t s_shared_sample_count = 0;   // total samples ever written
+static uint32_t s_shared_version = 0;        // bumped every write, lets the
+                                              // inference task detect whether
+                                              // it's looking at fresh data
 
 static tflite::MicroInterpreter* s_interpreter = nullptr;
 static TfLiteTensor* s_input = nullptr;
@@ -78,12 +136,7 @@ static TfLiteTensor* s_output = nullptr;
 static tflite::MicroMutableOpResolver<20> s_resolver;
 
 struct ImuFrame {
-  float ax;
-  float ay;
-  float az;
-  float gx;
-  float gy;
-  float gz;
+  float ax, ay, az, gx, gy, gz;
 };
 
 static bool InitI2cBus() {
@@ -121,25 +174,21 @@ static bool InitMpu6050() {
     ESP_LOGE(TAG, "MPU6050 wake failed");
     return false;
   }
-
   uint8_t dlpf[] = {0x1A, 0x04};
   if (i2c_master_transmit(s_mpu_handle, dlpf, sizeof(dlpf), -1) != ESP_OK) {
     ESP_LOGE(TAG, "MPU6050 DLPF config failed");
     return false;
   }
-
   uint8_t accel_cfg[] = {0x1C, 0x00};
   if (i2c_master_transmit(s_mpu_handle, accel_cfg, sizeof(accel_cfg), -1) != ESP_OK) {
     ESP_LOGE(TAG, "MPU6050 accel config failed");
     return false;
   }
-
   uint8_t gyro_cfg[] = {0x1B, 0x00};
   if (i2c_master_transmit(s_mpu_handle, gyro_cfg, sizeof(gyro_cfg), -1) != ESP_OK) {
     ESP_LOGE(TAG, "MPU6050 gyro config failed");
     return false;
   }
-
   ESP_LOGI(TAG, "MPU6050 ready");
   return true;
 }
@@ -190,16 +239,12 @@ static bool InitInference() {
 }
 
 static bool ReadImuFrame(ImuFrame* out) {
-  if (out == nullptr) {
-    return false;
-  }
-
+  if (out == nullptr) return false;
   uint8_t reg = 0x3B;
   uint8_t data[14];
   if (i2c_master_transmit_receive(s_mpu_handle, &reg, 1, data, 14, -1) != ESP_OK) {
     return false;
   }
-
   out->ax = static_cast<int16_t>((data[0] << 8) | data[1]) / ACCEL_SCALE;
   out->ay = static_cast<int16_t>((data[2] << 8) | data[3]) / ACCEL_SCALE;
   out->az = static_cast<int16_t>((data[4] << 8) | data[5]) / ACCEL_SCALE;
@@ -209,254 +254,350 @@ static bool ReadImuFrame(ImuFrame* out) {
   return true;
 }
 
-SpellId SpellFromIndex(int class_index) {
-  switch (class_index) {
-{{SPELL_SWITCH_BLOCK}}
-    default:
-      return SpellId::UNKNOWN;
-  }
-}
-
-const char* SpellNameFromIndex(int class_index) {
-  if (class_index < 0 || class_index >= static_cast<int>(kSpellClassCount)) {
+const char* SpellNameFromClassIndex(int class_index) {
+  // Use the name baked into g_preloaded_spells (matches whatever subset of
+  // classes was actually used to train the currently-flashed model),
+  // instead of a hand-maintained enum that assumes a fixed 26-class order.
+  // This avoids the class-index mismatch bug found when training was done
+  // on a subset of classes (e.g. 23 of 26).
+  if (class_index < 0 || class_index >= g_preloaded_spell_count) {
     return "UNKNOWN";
   }
-  return kSpellNames[class_index];
+  return g_preloaded_spells[class_index].name;
 }
 
+// ---------------------------------------------------------------------------
+// SAMPLING TASK: the only thing that determines real-world timing. Runs on
+// a fixed period regardless of what the inference task is doing.
+// ---------------------------------------------------------------------------
+static void SamplingTask(void* /*arg*/) {
+  TickType_t last_wake = xTaskGetTickCount();
+  const TickType_t period_ticks = pdMS_TO_TICKS(STEM_SAMPLING_INTERVAL_MS);
+
+  while (true) {
+    ImuFrame frame{};
+    if (ReadImuFrame(&frame)) {
+      if (xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+        memmove(s_shared_buffer, s_shared_buffer + CHANNELS,
+                (BUFFER_LENGTH - CHANNELS) * sizeof(float));
+        s_shared_buffer[BUFFER_LENGTH - 6] = frame.ax;
+        s_shared_buffer[BUFFER_LENGTH - 5] = frame.ay;
+        s_shared_buffer[BUFFER_LENGTH - 4] = frame.az;
+        s_shared_buffer[BUFFER_LENGTH - 3] = frame.gx;
+        s_shared_buffer[BUFFER_LENGTH - 2] = frame.gy;
+        s_shared_buffer[BUFFER_LENGTH - 1] = frame.gz;
+        s_shared_sample_count++;
+        s_shared_version++;
+        xSemaphoreGive(s_buffer_mutex);
+      }
+    }
+    // vTaskDelayUntil keeps the period accurate even if ReadImuFrame() jitters
+    // a little -- it targets absolute wake times, not relative sleeps.
+    vTaskDelayUntil(&last_wake, period_ticks);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// INFERENCE TASK: runs independently, always operating on the freshest
+// available window snapshot. Contains the full gesture state machine that
+// used to live in RunInference()/AppMainLoopStep().
+// ---------------------------------------------------------------------------
 static bool s_is_moving = false;
 static float s_best_prob = 0.0f;
 static int s_best_class = -1;
-static float s_max_energy = 0.0f;
-
-static SpellId RunInference(const ImuFrame& frame) {
-  if (s_input == nullptr || s_output == nullptr || s_interpreter == nullptr) {
-    return SpellId::UNKNOWN;
-  }
-
-  memmove(s_input_buffer,
-          s_input_buffer + CHANNELS,
-          (BUFFER_LENGTH - CHANNELS) * sizeof(float));
-
-  s_input_buffer[BUFFER_LENGTH - 6] = frame.ax;
-  s_input_buffer[BUFFER_LENGTH - 5] = frame.ay;
-  s_input_buffer[BUFFER_LENGTH - 4] = frame.az;
-  s_input_buffer[BUFFER_LENGTH - 3] = frame.gx;
-  s_input_buffer[BUFFER_LENGTH - 2] = frame.gy;
-  s_input_buffer[BUFFER_LENGTH - 1] = frame.gz;
-
-  if (s_sample_count < WINDOW_SIZE) {
-    s_sample_count++;
-    return SpellId::UNKNOWN;
-  }
-
-  // Tính phương sai 25 mẫu cuối (250ms) để nhận biết điểm dừng thật sự
-  const int TAIL_LEN = 25;
-  int start_idx = WINDOW_SIZE - TAIL_LEN;
-
-  float sum_ax = 0, sum_ay = 0, sum_az = 0;
-  float sum_gx = 0, sum_gy = 0, sum_gz = 0;
-  for (int i = start_idx; i < WINDOW_SIZE; ++i) {
-    sum_ax += s_input_buffer[i * CHANNELS + 0];
-    sum_ay += s_input_buffer[i * CHANNELS + 1];
-    sum_az += s_input_buffer[i * CHANNELS + 2];
-    sum_gx += s_input_buffer[i * CHANNELS + 3];
-    sum_gy += s_input_buffer[i * CHANNELS + 4];
-    sum_gz += s_input_buffer[i * CHANNELS + 5];
-  }
-  float mean_ax = sum_ax / TAIL_LEN;
-  float mean_ay = sum_ay / TAIL_LEN;
-  float mean_az = sum_az / TAIL_LEN;
-  float mean_gx = sum_gx / TAIL_LEN;
-  float mean_gy = sum_gy / TAIL_LEN;
-  float mean_gz = sum_gz / TAIL_LEN;
-
-  float var_accel = 0;
-  float var_gyro = 0;
-  for (int i = start_idx; i < WINDOW_SIZE; ++i) {
-    float dx = s_input_buffer[i * CHANNELS + 0] - mean_ax;
-    float dy = s_input_buffer[i * CHANNELS + 1] - mean_ay;
-    float dz = s_input_buffer[i * CHANNELS + 2] - mean_az;
-    var_accel += (dx * dx + dy * dy + dz * dz);
-
-    float dgx = s_input_buffer[i * CHANNELS + 3] - mean_gx;
-    float dgy = s_input_buffer[i * CHANNELS + 4] - mean_gy;
-    float dgz = s_input_buffer[i * CHANNELS + 5] - mean_gz;
-    var_gyro += (dgx * dgx + dgy * dgy + dgz * dgz);
-  }
-  var_accel /= TAIL_LEN;
-  var_gyro /= TAIL_LEN;
-
-  // Kết hợp Accel và Gyro thành 1 biến đo năng lượng chuyển động.
-  // Chia 10000.0f để scale gyro về cùng tầm quan trọng với accel.
-  float motion_energy = var_accel + (var_gyro / 10000.0f);
-
-  if (s_is_moving) {
-    if (motion_energy < 0.02f) { // Hạ ngưỡng stop xuống 0.02 và tăng TAIL_LEN để không bị gãy gesture phức tạp
-      s_is_moving = false;
-      SpellId predicted = SpellId::UNKNOWN;
-      if (s_best_class >= 0) {
-        if (!g_preloaded_spells[s_best_class].is_spell) {
-            printf("DEBUG_BLACKHOLE:%s (prob: %.2f)\n", g_preloaded_spells[s_best_class].name, s_best_prob);
-        } else if (s_best_prob > 0.70f && s_best_class != kIdleClassIndex) {
-            printf("FINAL PREDICT:%s:%.2f\n", SpellNameFromIndex(s_best_class), s_best_prob);
-            predicted = SpellFromIndex(s_best_class);
-        } else {
-            printf("DEBUG_MISS:%s (prob: %.2f)\n", SpellNameFromIndex(s_best_class), s_best_prob);
-        }
-      }
-      
-      s_best_prob = 0.0f;
-      s_best_class = -1;
-      s_max_energy = 0.0f;
-
-      // Flush buffer to prevent re-triggering on gesture tail
-      for (int i = 0; i < WINDOW_SIZE; ++i) {
-        s_input_buffer[i * CHANNELS + 0] = frame.ax;
-        s_input_buffer[i * CHANNELS + 1] = frame.ay;
-        s_input_buffer[i * CHANNELS + 2] = frame.az;
-        s_input_buffer[i * CHANNELS + 3] = frame.gx;
-        s_input_buffer[i * CHANNELS + 4] = frame.gy;
-        s_input_buffer[i * CHANNELS + 5] = frame.gz;
-      }
-      return predicted;
-    }
-  } else {
-    if (motion_energy > 0.10f) { // Nâng ngưỡng start lên 0.10 để tương xứng
-      s_is_moving = true;
-    } else {
-      return SpellId::UNKNOWN;
-    }
-  }
-
-  // Đọc số lượng frame model thực sự cần (để chống buffer overflow nếu pipeline train với window_size nhỏ hơn 64)
-  int model_frames = s_input->dims->data[1];
-  // Đọc số lượng channel từ model
-  int model_channels = s_input->dims->data[2];
-  
-  const float in_scale = s_input->params.scale;
-  const int in_zp = s_input->params.zero_point;
-  
-  // Chỉ lấy model_frames * 6 phần tử cuối cùng của s_input_buffer (vì buffer chỉ lưu 6 kênh raw)
-  int start_offset = BUFFER_LENGTH - (model_frames * 6);
-  if (start_offset < 0) start_offset = 0;
-
-  for (int f = 0; f < model_frames; ++f) {
-    int idx = start_offset + f * 6;
-    float ax = (float)s_input_buffer[idx];
-    float ay = (float)s_input_buffer[idx+1];
-    float az = (float)s_input_buffer[idx+2];
-    float gx = (float)s_input_buffer[idx+3];
-    float gy = (float)s_input_buffer[idx+4];
-    float gz = (float)s_input_buffer[idx+5];
-
-    if (model_channels == 9) {
-      float derived0 = az * gx;
-      float derived1 = az * gy;
-      float jerkz = 0.0f;
-      if (idx >= 6) {
-          jerkz = az - ((float)s_input_buffer[idx - 6 + 2]);
-      }
-      float in_vals[9] = {ax, ay, az, gx, gy, gz, derived0, derived1, jerkz};
-      for(int c=0; c<9; c++) {
-        int val = static_cast<int>(in_vals[c] / in_scale + in_zp);
-        val = val > 127 ? 127 : val;
-        val = val < -128 ? -128 : val;
-        s_input->data.int8[f * 9 + c] = static_cast<int8_t>(val);
-      }
-    } else {
-      // Tương thích ngược với model 6 kênh cũ
-      float in_vals[6] = {ax, ay, az, gx, gy, gz};
-      for(int c=0; c<6; c++) {
-        int val = static_cast<int>(in_vals[c] / in_scale + in_zp);
-        val = val > 127 ? 127 : val;
-        val = val < -128 ? -128 : val;
-        s_input->data.int8[f * 6 + c] = static_cast<int8_t>(val);
-      }
-    }
-  }
-
-  if (s_interpreter->Invoke() != kTfLiteOk) {
-    ESP_LOGE(TAG, "Invoke failed");
-    return SpellId::UNKNOWN;
-  }
-
-  const float out_scale = s_output->params.scale;
-  const int out_zp = s_output->params.zero_point;
-  
-  // Extract 16-D embedding
-  float current_embedding[16];
-  for (int i = 0; i < 16; ++i) {
-      current_embedding[i] = (s_output->data.int8[i] - out_zp) * out_scale;
-  }
-
-  float v_out[16];
-  float norm_curr = 0.0f;
-  for (int i = 0; i < 16; ++i) {
-    v_out[i] = current_embedding[i];
-    norm_curr += v_out[i] * v_out[i];
-  }
-  float inv_norm = 1.0f / (sqrt(norm_curr) + 1e-6f);
-  for (int i = 0; i < 16; ++i) v_out[i] *= inv_norm;
-
-  float max_cos = -1.0f;
-  int max_idx = -1;
-  for (int i = 0; i < g_preloaded_spell_count; ++i) {
-    float cos_sim = 0.0f;
-    for (int j = 0; j < 16; ++j) {
-      cos_sim += v_out[j] * g_preloaded_spells[i].centroid[j];
-    }
-    if (cos_sim > max_cos) {
-      max_cos = cos_sim;
-      max_idx = i;
-    }
-  }
-
-  // L1 Energy of the ENTIRE window (64 samples), same as Python _windowize
-  float window_energy = 0.0f;
-  for (int i = BUFFER_LENGTH - (WINDOW_SIZE * CHANNELS); i < BUFFER_LENGTH; ++i) {
-    window_energy += (s_input_buffer[i] > 0) ? s_input_buffer[i] : -s_input_buffer[i];
-  }
-
-  if (max_idx >= 0) {
-    // REJECT CLASS THRESHOLD
-    if (max_cos < g_preloaded_spells[max_idx].threshold) {
-      // Điểm embedding nằm quá xa mọi nguyên tử -> Unknown Gesture (OOD)
-      // Không ghi nhận
-    } else {
-      if (window_energy > s_max_energy) {
-        s_max_energy = window_energy;
-        s_best_prob = max_cos;
-        s_best_class = max_idx;
-      }
-    }
-  }
-
-  return SpellId::UNKNOWN;
-}
+static float s_best_margin = -1.0f;
+static float s_local_buffer[BUFFER_LENGTH] = {0};
 
 __attribute__((weak)) void OnSpellDetected(SpellId spell) {
-  switch (spell) {
-{{SPELL_DISPATCH_CASES}}
-    default:
-      break;
-  }
+  (void)spell;
 }
 
-void AppMainLoopStep() {
-  ImuFrame frame{};
-  if (!ReadImuFrame(&frame)) {
-    return;
-  }
+static void InferenceTask(void* /*arg*/) {
+  uint32_t last_seen_version = 0;
 
-  const SpellId spell = RunInference(frame);
-  if (spell != SpellId::UNKNOWN) {
-    OnSpellDetected(spell);
+#if STEM_DEBUG_VERBOSE
+  int64_t invoke_us_max = 0;
+#endif
+
+  while (true) {
+    // Unconditional yield at the top of every iteration. Without this, when
+    // new samples are always available faster than we can process them
+    // (sampling every 20ms vs. Invoke() taking 45ms), this task never hits
+    // the vTaskDelay() branch further down and runs back-to-back forever,
+    // starving the Idle0 task and tripping the Task Watchdog (TWDT), which
+    // monitors Idle tasks by default. A 1-tick delay is cheap relative to
+    // Invoke()'s tens of milliseconds and guarantees Idle0 gets scheduled.
+    vTaskDelay(1);
+
+    uint32_t sample_count_snapshot = 0;
+    uint32_t version_snapshot = 0;
+
+    if (xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+      memcpy(s_local_buffer, s_shared_buffer, sizeof(s_local_buffer));
+      sample_count_snapshot = s_shared_sample_count;
+      version_snapshot = s_shared_version;
+      xSemaphoreGive(s_buffer_mutex);
+    }
+
+    // Skip if no new samples arrived since last time (avoids burning CPU
+    // re-running inference on an identical window).
+    if (version_snapshot == last_seen_version) {
+      vTaskDelay(pdMS_TO_TICKS(STEM_INFERENCE_POLL_MS));
+      continue;
+    }
+    last_seen_version = version_snapshot;
+
+    if (sample_count_snapshot < WINDOW_SIZE) {
+      vTaskDelay(pdMS_TO_TICKS(STEM_INFERENCE_POLL_MS));
+      continue;
+    }
+
+    // ---- Tail-variance motion detection (unchanged logic, now operating on
+    // a time-correct snapshot) ----
+    const int TAIL_LEN = 25;
+    int start_idx = WINDOW_SIZE - TAIL_LEN;
+
+    float sum_ax = 0, sum_ay = 0, sum_az = 0, sum_gx = 0, sum_gy = 0, sum_gz = 0;
+    for (int i = start_idx; i < WINDOW_SIZE; ++i) {
+      sum_ax += s_local_buffer[i * CHANNELS + 0];
+      sum_ay += s_local_buffer[i * CHANNELS + 1];
+      sum_az += s_local_buffer[i * CHANNELS + 2];
+      sum_gx += s_local_buffer[i * CHANNELS + 3];
+      sum_gy += s_local_buffer[i * CHANNELS + 4];
+      sum_gz += s_local_buffer[i * CHANNELS + 5];
+    }
+    float mean_ax = sum_ax / TAIL_LEN, mean_ay = sum_ay / TAIL_LEN, mean_az = sum_az / TAIL_LEN;
+    float mean_gx = sum_gx / TAIL_LEN, mean_gy = sum_gy / TAIL_LEN, mean_gz = sum_gz / TAIL_LEN;
+
+    float var_accel = 0, var_gyro = 0;
+    for (int i = start_idx; i < WINDOW_SIZE; ++i) {
+      float dx = s_local_buffer[i * CHANNELS + 0] - mean_ax;
+      float dy = s_local_buffer[i * CHANNELS + 1] - mean_ay;
+      float dz = s_local_buffer[i * CHANNELS + 2] - mean_az;
+      var_accel += (dx * dx + dy * dy + dz * dz);
+      float dgx = s_local_buffer[i * CHANNELS + 3] - mean_gx;
+      float dgy = s_local_buffer[i * CHANNELS + 4] - mean_gy;
+      float dgz = s_local_buffer[i * CHANNELS + 5] - mean_gz;
+      var_gyro += (dgx * dgx + dgy * dgy + dgz * dgz);
+    }
+    var_accel /= TAIL_LEN;
+    var_gyro /= TAIL_LEN;
+    float motion_energy = var_accel + (var_gyro / 10000.0f);
+
+#if STEM_DEBUG_VERBOSE
+    {
+      static int dbg_counter = 0;
+      if (++dbg_counter >= 10) {
+        dbg_counter = 0;
+        ESP_LOGI(TAG,
+                 "DEBUG_MOTION moving=%d energy=%.4f best_class=%d best_prob=%.2f",
+                 s_is_moving, motion_energy, s_best_class, s_best_prob);
+      }
+    }
+#endif
+
+    if (s_is_moving) {
+      if (motion_energy < 0.02f) {
+        s_is_moving = false;
+        SpellId predicted = SpellId::UNKNOWN;
+        if (s_best_class >= 0) {
+          const char* name = SpellNameFromClassIndex(s_best_class);
+          bool is_spell = (s_best_class < g_preloaded_spell_count)
+                              ? g_preloaded_spells[s_best_class].is_spell
+                              : true;
+          if (!is_spell) {
+#if STEM_DEBUG_VERBOSE
+            printf("DEBUG_BLACKHOLE:%s (prob: %.2f)\n", name, s_best_prob);
+#endif
+          } else if (s_best_prob > 0.70f) {
+            printf("FINAL PREDICT:%s:%.2f\n", name, s_best_prob);
+            // NOTE: predicted is left as UNKNOWN here on purpose -- mapping
+            // class index -> SpellId enum is unreliable when training used a
+            // subset of classes (see comment on SpellNameFromClassIndex).
+            // If OnSpellDetected() needs a strongly-typed enum, extend
+            // g_preloaded_spells with an explicit enum value column at
+            // train/export time instead of re-deriving it here.
+          } else {
+            printf("DEBUG_MISS:%s (prob: %.2f)\n", name, s_best_prob);
+          }
+        } else {
+#if STEM_DEBUG_VERBOSE
+          ESP_LOGW(TAG, "DEBUG_MOTION stop detected but best_class=-1 (no candidate ever accepted)");
+#endif
+        }
+
+        s_best_prob = 0.0f;
+        s_best_class = -1;
+        s_best_margin = -1.0f;
+
+        if (xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+          for (int i = 0; i < WINDOW_SIZE; ++i) {
+            s_shared_buffer[i * CHANNELS + 0] = s_local_buffer[BUFFER_LENGTH - 6];
+            s_shared_buffer[i * CHANNELS + 1] = s_local_buffer[BUFFER_LENGTH - 5];
+            s_shared_buffer[i * CHANNELS + 2] = s_local_buffer[BUFFER_LENGTH - 4];
+            s_shared_buffer[i * CHANNELS + 3] = s_local_buffer[BUFFER_LENGTH - 3];
+            s_shared_buffer[i * CHANNELS + 4] = s_local_buffer[BUFFER_LENGTH - 2];
+            s_shared_buffer[i * CHANNELS + 5] = s_local_buffer[BUFFER_LENGTH - 1];
+          }
+          s_shared_version++;
+          xSemaphoreGive(s_buffer_mutex);
+        }
+
+        if (predicted != SpellId::UNKNOWN) {
+          OnSpellDetected(predicted);
+        }
+        continue;
+      }
+    } else {
+      if (motion_energy > 0.10f) {
+        s_is_moving = true;
+#if STEM_DEBUG_VERBOSE
+        ESP_LOGI(TAG, "DEBUG_MOTION start detected, energy=%.4f", motion_energy);
+#endif
+      } else {
+        continue;
+      }
+    }
+
+    // ---- Quantize + Invoke (unchanged) ----
+    int model_frames = s_input->dims->data[1];
+    int model_channels = s_input->dims->data[2];
+    const float in_scale = s_input->params.scale;
+    const int in_zp = s_input->params.zero_point;
+    int start_offset = BUFFER_LENGTH - (model_frames * 6);
+    if (start_offset < 0) start_offset = 0;
+
+    for (int f = 0; f < model_frames; ++f) {
+      int idx = start_offset + f * 6;
+      float ax = s_local_buffer[idx], ay = s_local_buffer[idx + 1], az = s_local_buffer[idx + 2];
+      float gx = s_local_buffer[idx + 3], gy = s_local_buffer[idx + 4], gz = s_local_buffer[idx + 5];
+
+      if (model_channels == 9) {
+        float derived0 = az * gx;
+        float derived1 = az * gy;
+        float jerkz = (idx >= 6) ? (az - s_local_buffer[idx - 6 + 2]) : 0.0f;
+        float in_vals[9] = {ax, ay, az, gx, gy, gz, derived0, derived1, jerkz};
+        for (int c = 0; c < 9; c++) {
+          int val = static_cast<int>(in_vals[c] / in_scale + in_zp);
+          val = val > 127 ? 127 : (val < -128 ? -128 : val);
+          s_input->data.int8[f * 9 + c] = static_cast<int8_t>(val);
+        }
+      } else {
+        float in_vals[6] = {ax, ay, az, gx, gy, gz};
+        for (int c = 0; c < 6; c++) {
+          int val = static_cast<int>(in_vals[c] / in_scale + in_zp);
+          val = val > 127 ? 127 : (val < -128 ? -128 : val);
+          s_input->data.int8[f * 6 + c] = static_cast<int8_t>(val);
+        }
+      }
+    }
+
+#if STEM_DEBUG_VERBOSE
+    int64_t t_invoke_start = esp_timer_get_time();
+#endif
+
+    if (s_interpreter->Invoke() != kTfLiteOk) {
+      ESP_LOGE(TAG, "Invoke failed");
+      continue;
+    }
+
+#if STEM_DEBUG_VERBOSE
+    int64_t invoke_us = esp_timer_get_time() - t_invoke_start;
+    if (invoke_us > invoke_us_max) invoke_us_max = invoke_us;
+    {
+      static int invoke_dbg_counter = 0;
+      if (++invoke_dbg_counter >= 10) {
+        invoke_dbg_counter = 0;
+        ESP_LOGI(TAG, "DEBUG_TIMING invoke_us=%lld invoke_us_max=%lld (sampling period=%dms, decoupled)",
+                 (long long)invoke_us, (long long)invoke_us_max, STEM_SAMPLING_INTERVAL_MS);
+      }
+    }
+#endif
+
+    const float out_scale = s_output->params.scale;
+    const int out_zp = s_output->params.zero_point;
+    float current_embedding[16];
+    for (int i = 0; i < 16; ++i) {
+      current_embedding[i] = (s_output->data.int8[i] - out_zp) * out_scale;
+    }
+    float v_out[16];
+    float norm_curr = 0.0f;
+    for (int i = 0; i < 16; ++i) {
+      v_out[i] = current_embedding[i];
+      norm_curr += v_out[i] * v_out[i];
+    }
+    float inv_norm = 1.0f / (sqrt(norm_curr) + 1e-6f);
+    for (int i = 0; i < 16; ++i) v_out[i] *= inv_norm;
+
+    float max_cos = -1.0f;
+    int max_idx = -1;
+    float second_max_cos = -1.0f;
+    for (int i = 0; i < g_preloaded_spell_count; ++i) {
+      float cos_sim = 0.0f;
+      for (int j = 0; j < 16; ++j) {
+        cos_sim += v_out[j] * g_preloaded_spells[i].centroid[j];
+      }
+      if (cos_sim > max_cos) {
+        second_max_cos = max_cos;
+        max_cos = cos_sim;
+        max_idx = i;
+      } else if (cos_sim > second_max_cos) {
+        second_max_cos = cos_sim;
+      }
+    }
+
+#if STEM_DEBUG_VERBOSE
+    {
+      static int cls_dbg_counter = 0;
+      if (++cls_dbg_counter >= 5) {
+        cls_dbg_counter = 0;
+        ESP_LOGI(TAG, "DEBUG_MOTION max_cos=%.3f second_cos=%.3f max_idx=%d threshold=%.3f",
+                 max_cos, second_max_cos, max_idx,
+                 max_idx >= 0 ? g_preloaded_spells[max_idx].threshold : -1.0f);
+      }
+    }
+#endif
+
+    if (max_idx >= 0 && max_cos >= g_preloaded_spells[max_idx].threshold) {
+      float relative_margin = max_cos - second_max_cos;
+      float absolute_margin = max_cos - g_preloaded_spells[max_idx].threshold;
+      
+      // Require at least a relative margin of 0.03 to runner-up
+      if (relative_margin > 0.03f) {
+        if (absolute_margin > s_best_margin) {
+          s_best_margin = absolute_margin;
+          s_best_prob = max_cos;
+          s_best_class = max_idx;
+        }
+      }
+    }
   }
 }
 
 bool InitializeSpellRuntime() {
-  return InitI2cBus() && InitMpu6050() && InitInference();
+  if (!InitI2cBus() || !InitMpu6050() || !InitInference()) {
+    return false;
+  }
+
+  s_buffer_mutex = xSemaphoreCreateMutex();
+  if (s_buffer_mutex == nullptr) {
+    ESP_LOGE(TAG, "Failed to create buffer mutex");
+    return false;
+  }
+
+  // Sampling task: small stack, high priority, must not be starved --
+  // its timing accuracy is the whole point of this refactor.
+  xTaskCreatePinnedToCore(SamplingTask, "imu_sampling", 4096, nullptr,
+                           configMAX_PRIORITIES - 2, nullptr,
+                           STEM_SAMPLING_TASK_CORE);
+
+  // Inference task: larger stack (TFLM needs scratch space on its own
+  // stack in addition to the tensor arena), lower priority than sampling.
+  xTaskCreatePinnedToCore(InferenceTask, "gesture_inference", 8192, nullptr,
+                           configMAX_PRIORITIES - 4, nullptr,
+                           STEM_INFERENCE_TASK_CORE);
+
+  return true;
 }
 
 }  // namespace spellbook
@@ -466,10 +607,6 @@ extern "C" void app_main(void) {
     ESP_LOGE("MAIN", "Runtime initialization failed");
     return;
   }
-
-  ESP_LOGI("MAIN", "Starting inference loop");
-  while (1) {
-    spellbook::AppMainLoopStep();
-    vTaskDelay(pdMS_TO_TICKS(STEM_INFERENCE_INTERVAL_MS));
-  }
+  ESP_LOGI("MAIN", "Sampling + inference tasks started (decoupled)");
+  // app_main can return now -- both tasks keep running independently.
 }
