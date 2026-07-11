@@ -11,6 +11,7 @@ from __future__ import annotations
 import csv
 import os
 from pathlib import Path
+import numpy as np
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
@@ -31,6 +32,15 @@ _PRIMITIVE_TARGETS: dict[str, int] = {
     "SHAKE_VIOLENT":150,
     "INFINITY_8":  150,
     "V_SHAPE":     150,
+    "PULL":        150,
+    "YAW_SWISH":   150,
+    "LASSO":       150,
+    "WHEEL":       150,
+    "SQUARE":      150,
+    "U_SHAPE":     150,
+    "WHIP":        150,
+    "TAP":         150,
+    "SPIRAL":      150,
 }
 
 # Map "STAND_BY" key to actual folder name on disk
@@ -62,6 +72,9 @@ class PrimitiveQualityWorker(QThread):
             self.sig_finished.emit(False, str(exc))
 
     def _run_scan(self) -> None:
+        from logic.dataset_layout import discover_class_directories
+        class_dirs = discover_class_directories(Path(self._dataset_dir))
+
         gestures = list(_PRIMITIVE_TARGETS.keys())
         total = len(gestures)
         self.sig_report_line.emit("=" * 60)
@@ -74,10 +87,15 @@ class PrimitiveQualityWorker(QThread):
                 break
 
             folder_name = _FOLDER_NAME_MAP.get(gesture_name, gesture_name)
-            folder_path = Path(self._dataset_dir) / folder_name
+            paths = class_dirs.get(folder_name, [])
+            
+            # Fallback to direct root path if not found in primitives/ or spells/
+            fallback_path = Path(self._dataset_dir) / folder_name
+            if fallback_path.is_dir() and fallback_path not in paths:
+                paths.append(fallback_path)
 
             target = _PRIMITIVE_TARGETS[gesture_name]
-            metrics = self._scan_folder(folder_path)
+            metrics = self._scan_folders(paths)
             grade   = self._compute_grade(metrics, target)
 
             coverage = (metrics["sample_count"] / target * 100) if target else 0
@@ -131,13 +149,31 @@ class PrimitiveQualityWorker(QThread):
                 str(keras_path), compile=False, safe_mode=False,
             )
 
-        primitive_names = list(_PRIMITIVE_TARGETS.keys())
+        primitive_names = [k for k in _PRIMITIVE_TARGETS.keys() if k != "STAND_BY"]
         try:
             X_base, y_base, class_names = load_primitive_dataset(self._dataset_dir, primitive_names)
         except Exception as e:
             self.sig_report_line.emit(f"❌ Failed to load primitive dataset: {e}")
             self.sig_finished.emit(True, f"{overall_ready}/{total} gestures ready (eval failed)")
             return
+
+        # Thích ứng kênh (channels) của X_base với encoder đã tải
+        input_shape = encoder.input_shape
+        if isinstance(input_shape, list):
+            input_shape = input_shape[0]
+        expected_channels = input_shape[-1]
+        
+        if X_base.shape[2] != expected_channels:
+            if expected_channels == 6:
+                X_base = X_base[:, :, :6]
+            elif expected_channels == 9:
+                N, W, C = X_base.shape
+                expanded = np.zeros((N, W, 9), dtype=np.float32)
+                expanded[:, :, :6] = X_base
+                expanded[:, :, 6] = X_base[:, :, 2] * X_base[:, :, 3]
+                expanded[:, :, 7] = X_base[:, :, 2] * X_base[:, :, 4]
+                expanded[:, 1:, 8] = X_base[:, 1:, 2] - X_base[:, :-1, 2]
+                X_base = np.clip(expanded, -2.0, 2.0)
 
         save_path = APP_DATA_DIR / "embedding_space_scan.png"
         
@@ -164,26 +200,29 @@ class PrimitiveQualityWorker(QThread):
         self.sig_finished.emit(True, f"{overall_ready}/{total} gestures ready (Evaluation completed)")
 
     @staticmethod
-    def _scan_folder(folder_path: Path) -> dict:
-        if not folder_path.exists():
-            return {"sample_count": 0, "total_rows": 0, "avg_rows_per_sample": 0.0}
-
-        csv_files = sorted(folder_path.glob("*.csv"))
-        sample_count = len(csv_files)
+    def _scan_folders(folder_paths: list[Path]) -> dict:
+        total_sample_count = 0
         total_rows = 0
 
-        for csv_file in csv_files:
-            try:
-                with open(csv_file, "r", encoding="utf-8", newline="") as f:
-                    reader = csv.reader(f)
-                    rows = sum(1 for _ in reader) - 1  # subtract header
-                    total_rows += max(0, rows)
-            except Exception:
-                pass
+        for folder_path in folder_paths:
+            if not folder_path.exists():
+                continue
 
-        avg = total_rows / sample_count if sample_count else 0.0
+            csv_files = sorted(folder_path.glob("*.csv"))
+            total_sample_count += len(csv_files)
+
+            for csv_file in csv_files:
+                try:
+                    with open(csv_file, "r", encoding="utf-8", newline="") as f:
+                        reader = csv.reader(f)
+                        rows = sum(1 for _ in reader) - 1  # subtract header
+                        total_rows += max(0, rows)
+                except Exception:
+                    pass
+
+        avg = total_rows / total_sample_count if total_sample_count else 0.0
         return {
-            "sample_count":      sample_count,
+            "sample_count":      total_sample_count,
             "total_rows":        total_rows,
             "avg_rows_per_sample": avg,
         }

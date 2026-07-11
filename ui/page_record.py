@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (QComboBox, QFormLayout, QFrame, QGridLayout,
                              QStackedWidget, QVBoxLayout, QWidget)
 
 from constants import is_system_spell
+from logic.dataset_layout import _PRIMITIVE_LOGICAL_NAMES, folder_name_match_key
 from logic.theme_manager import theme_manager
 from ui.component_factory import (IconButton, make_button, make_card,
                                   make_checkbox, make_empty_state_card,
@@ -210,8 +211,8 @@ class PageRecord(QWidget):
             self.spell_stack.setCurrentIndex(0)
             
             for name in display_names:
-                normalized = name.replace("_", " ").strip().upper()
-                is_prim = normalized in {"SWIPE RIGHT", "SWIPE UP", "THRUST", "CIRCLE CW", "CIRCLE CCW", "WRIST FLICK", "ZIGZAG", "STAND BY", "STAND_BY", "SWIPE LEFT", "SWIPE DOWN", "ROLL WAND", "SHAKE VIOLENT", "INFINITY 8", "V SHAPE"}
+                normalized = folder_name_match_key(name)
+                is_prim = normalized in {folder_name_match_key(p) for p in _PRIMITIVE_LOGICAL_NAMES}
                 
                 if is_prim:
                     continue
@@ -238,7 +239,7 @@ class PageRecord(QWidget):
 
         filtered_names = sorted(list({
             n for n in display_names 
-            if n.replace("_", " ").strip().upper() not in {"SWIPE RIGHT", "SWIPE UP", "THRUST", "CIRCLE CW", "CIRCLE CCW", "WRIST FLICK", "ZIGZAG", "STAND BY", "STAND_BY", "SWIPE LEFT", "SWIPE DOWN", "ROLL WAND", "SHAKE VIOLENT", "INFINITY 8", "V SHAPE"}
+            if folder_name_match_key(n) not in {folder_name_match_key(p) for p in _PRIMITIVE_LOGICAL_NAMES}
         }))
         self._update_combo_box(filtered_names)
 

@@ -61,7 +61,6 @@ class WandTerminalPanel(QWidget):
 
         # Requirement 4: UART Terminal style
         self.terminal_output = TerminalWidget(max_lines=1000, read_only=True)
-        self.terminal_output.setMaximumHeight(300)
         self.terminal_output.setMinimumHeight(200)
         self.terminal_output.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
 

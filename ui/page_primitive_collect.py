@@ -218,28 +218,20 @@ class PagePrimitiveCollect(QWidget):
         return f"{parts[0]} ({parts[1].title()})" if len(parts) > 1 else g_name
 
     def on_encoder_training_status(self, message: str) -> None:
-        if hasattr(self, 'lbl_train_status'):
-            self.lbl_train_status.setText(message)
+        if hasattr(self, 'console'):
+            self.console.append_line(message)
             
     def on_encoder_training_progress(self, value: int) -> None:
-        if hasattr(self, 'train_progress'):
-            self.train_progress.setValue(value)
+        if hasattr(self, 'console'):
+            self.console.append_line(f"[Progress] {value}%")
             
     def on_encoder_training_finished(self, success: bool, message: str) -> None:
-        if success:
-            self.lbl_train_status.setText("Training completed.")
-            # Parse the summary string for metrics
-            # Expected format: "... distance_ratio=1.23, fewshot5=0.85, fewshot10=0.90, fewshot20=0.92 ..."
-            parts = message.split(',')
-            for part in parts:
-                if 'distance_ratio=' in part:
-                    self.lbl_distance_ratio.setText(f"Distance Ratio: {part.split('=')[1].strip()}")
-                elif 'fewshot5=' in part:
-                    self.lbl_fewshot_5.setText(f"Few-shot 5-sample: {part.split('=')[1].strip()}")
-                elif 'fewshot10=' in part:
-                    self.lbl_fewshot_10.setText(f"Few-shot 10-sample: {part.split('=')[1].strip()}")
-        else:
-            self.lbl_train_status.setText(f"Error: {message}")
+        if hasattr(self, 'console'):
+            if success:
+                self.console.append_line(">> Training completed successfully.")
+                self.console.append_line(f">> Summary: {message}")
+            else:
+                self.console.append_line(f">> Error: {message}")
 
     # ── Private methods ─────────────────────────
 
@@ -270,22 +262,14 @@ class PagePrimitiveCollect(QWidget):
         self.btn_train_encoder.setEnabled(False)
         self.btn_train_encoder.clicked.connect(lambda _: self.sig_train_encoder_requested.emit())
         
-        self.train_progress = QProgressBar()
-        self.train_progress.setRange(0, 100)
-        self.train_progress.setValue(0)
-        self.lbl_train_status = QLabel("Ready to train")
-        
-        self.lbl_distance_ratio = QLabel("Distance Ratio: --")
-        self.lbl_fewshot_5 = QLabel("Few-shot 5-sample: --")
-        self.lbl_fewshot_10 = QLabel("Few-shot 10-sample: --")
+        from ui.terminal_widget import TerminalWidget
+        self.console = TerminalWidget(max_lines=1000, read_only=True)
+        self.console.setMinimumHeight(150)
+        self.console.setPlainText(">> ENCODER TRAINING TERMINAL INITIALIZED...\n>> WAITING FOR TRAINING START...")
         
         lay_t.addWidget(self._sec_training)
         lay_t.addWidget(self.btn_train_encoder)
-        lay_t.addWidget(self.train_progress)
-        lay_t.addWidget(self.lbl_train_status)
-        lay_t.addWidget(self.lbl_distance_ratio)
-        lay_t.addWidget(self.lbl_fewshot_5)
-        lay_t.addWidget(self.lbl_fewshot_10)
+        lay_t.addWidget(self.console)
         lay.addWidget(card_t, stretch=2)
 
         return col

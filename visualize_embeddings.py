@@ -40,7 +40,9 @@ def main():
         "SWIPE_RIGHT", "SWIPE_UP", "THRUST",
         "CIRCLE_CW", "CIRCLE_CCW", "WRIST_FLICK",
         "ZIGZAG", "SWIPE_LEFT", "SWIPE_DOWN",
-        "ROLL_WAND", "SHAKE_VIOLENT", "INFINITY_8", "V_SHAPE"
+        "ROLL_WAND", "SHAKE_VIOLENT", "INFINITY_8", "V_SHAPE",
+        "PULL", "YAW_SWISH", "LASSO", "WHEEL", "SQUARE", "U_SHAPE",
+        "WHIP", "TAP", "SPIRAL"
     ]
 
     print(f"⏳ Đang nạp dữ liệu từ:\n   {DATASET_DIR} ...")
@@ -56,7 +58,26 @@ def main():
 
     print(f"✅ Đã nạp {len(X_base)} mẫu thuộc {len(class_names)} classes.")
 
-    print("⏳ Đang tính embeddings...")
+    # Thích ứng kênh (channels) của X_base với encoder đã tải
+    input_shape = encoder.input_shape
+    if isinstance(input_shape, list):
+        input_shape = input_shape[0]
+    expected_channels = input_shape[-1]
+    
+    if X_base.shape[2] != expected_channels:
+        print(f"⚠️  Dữ liệu có {X_base.shape[2]} kênh nhưng model yêu cầu {expected_channels} kênh. Đang chuyển đổi...")
+        if expected_channels == 6:
+            X_base = X_base[:, :, :6]
+        elif expected_channels == 9:
+            # Xây dựng 9 kênh từ 6 kênh gốc
+            N, W, C = X_base.shape
+            expanded = np.zeros((N, W, 9), dtype=np.float32)
+            expanded[:, :, :6] = X_base
+            expanded[:, :, 6] = X_base[:, :, 2] * X_base[:, :, 3]
+            expanded[:, :, 7] = X_base[:, :, 2] * X_base[:, :, 4]
+            expanded[:, 1:, 8] = X_base[:, 1:, 2] - X_base[:, :-1, 2]
+            X_base = np.clip(expanded, -2.0, 2.0)
+
     embeddings = encoder.predict(X_base, verbose=0)
     
     print("⏳ Đang lấy mẫu (subsampling) để vẽ biểu đồ nhanh hơn...")
@@ -80,11 +101,14 @@ def main():
     
     print("📊 Đang hiển thị biểu đồ...")
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
-    colors = plt.cm.tab20(np.linspace(0, 1, len(class_names)))
+    
+    # Ép class_names thành list tránh lỗi numpy attribute
+    class_list = list(class_names)
+    colors = plt.cm.tab20(np.linspace(0, 1, len(class_list)))
     
     # --- Biểu đồ 1: Toàn bộ classes ---
     ax = axes[0]
-    for i, (name, color) in enumerate(zip(class_names, colors)):
+    for i, (name, color) in enumerate(zip(class_list, colors)):
         mask = (y_base == i)
         if not np.any(mask): continue
         ax.scatter(coords_2d[mask, 0], coords_2d[mask, 1],
@@ -103,15 +127,19 @@ def main():
     # --- Biểu đồ 2: Cặp dễ nhầm lẫn ---
     ax = axes[1]
     hard_pairs = [
-        (class_names.index('CIRCLE_CW') if 'CIRCLE_CW' in class_names else -1, 'CIRCLE_CW', colors[0]),
-        (class_names.index('CIRCLE_CCW') if 'CIRCLE_CCW' in class_names else -1, 'CIRCLE_CCW', colors[1]),
-        (class_names.index('SWIPE_RIGHT') if 'SWIPE_RIGHT' in class_names else -1, 'SWIPE_RIGHT', colors[2]),
-        (class_names.index('SWIPE_UP') if 'SWIPE_UP' in class_names else -1, 'SWIPE_UP', colors[3]),
+        (class_list.index('CIRCLE_CW') if 'CIRCLE_CW' in class_list else -1, 'CIRCLE_CW'),
+        (class_list.index('CIRCLE_CCW') if 'CIRCLE_CCW' in class_list else -1, 'CIRCLE_CCW'),
+        (class_list.index('SWIPE_RIGHT') if 'SWIPE_RIGHT' in class_list else -1, 'SWIPE_RIGHT'),
+        (class_list.index('SWIPE_UP') if 'SWIPE_UP' in class_list else -1, 'SWIPE_UP'),
     ]
-    for class_idx, name, color in hard_pairs:
+    
+    for class_idx, name in hard_pairs:
         if class_idx == -1: continue
         mask = (y_base == class_idx)
         if not np.any(mask): continue
+        
+        # Đồng bộ màu với biểu đồ 1
+        color = colors[class_idx]
         ax.scatter(coords_2d[mask, 0], coords_2d[mask, 1],
                   c=[color], label=name, alpha=0.7, s=30)
     

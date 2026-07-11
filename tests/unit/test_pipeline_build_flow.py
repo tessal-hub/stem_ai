@@ -11,10 +11,16 @@ class _FakeHistory:
     def __init__(self) -> None:
         self.history = {"val_accuracy": [0.55]}
 
+class _FakeLayer:
+    def __init__(self, *args, **kwargs) -> None:
+        pass
+    def __call__(self, *args, **kwargs):
+        return "fake_tensor"
 
-class _FakeModel:
-    def __init__(self, _layers) -> None:
-        self.layers = _layers
+class _FakeModel(_FakeLayer):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__()
+        self.layers = kwargs.get("layers", [])
 
     def compile(self, **_kwargs) -> None:
         return None
@@ -38,7 +44,38 @@ class _FakeLiteConverter:
         return _Converter()
 
 
+class _FakeInterpreter:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def allocate_tensors(self):
+        pass
+
+    def get_input_details(self):
+        return [{"index": 0, "quantization": (1.0, 0)}]
+
+    def get_output_details(self):
+        return [{"index": 1, "quantization": (1.0, 0)}]
+
+    def set_tensor(self, index, value):
+        pass
+
+    def invoke(self):
+        pass
+
+    def get_tensor(self, index):
+        return np.zeros((1, 16), dtype=np.float32)
+
+
 class _FakeKeras:
+    @staticmethod
+    def Model(*args, **kwargs):
+        return _FakeModel()
+
+    @staticmethod
+    def Sequential(layers=None):
+        return _FakeModel(layers=layers)
+
     class callbacks:
         class Callback:
             pass
@@ -57,33 +94,17 @@ class _FakeKeras:
                 pass
 
     class layers:
-        class Input:
-            def __init__(self, **_kwargs) -> None:
-                pass
-
-        class Conv1D:
-            def __init__(self, *_args, **_kwargs) -> None:
-                pass
-
-        class BatchNormalization:
-            def __init__(self, *_args, **_kwargs) -> None:
-                pass
-
-        class MaxPooling1D:
-            def __init__(self, *_args, **_kwargs) -> None:
-                pass
-
-        class Dropout:
-            def __init__(self, *_args, **_kwargs) -> None:
-                pass
-
-        class Flatten:
-            def __init__(self, *_args, **_kwargs) -> None:
-                pass
-
-        class Dense:
-            def __init__(self, *_args, **_kwargs) -> None:
-                pass
+        Input = _FakeLayer
+        Conv1D = _FakeLayer
+        BatchNormalization = _FakeLayer
+        MaxPooling1D = _FakeLayer
+        Dropout = _FakeLayer
+        Flatten = _FakeLayer
+        Dense = _FakeLayer
+        Lambda = _FakeLayer
+        Activation = _FakeLayer
+        GlobalAveragePooling1D = _FakeLayer
+        Concatenate = _FakeLayer
 
     class utils:
         @staticmethod
@@ -95,16 +116,13 @@ class _FakeKeras:
                 output.append(row)
             return output
 
-    @staticmethod
-    def Sequential(layers):
-        return _FakeModel(layers)
-
 
 class _FakeTF:
     keras = _FakeKeras
 
     class lite:
         TFLiteConverter = _FakeLiteConverter
+        Interpreter = _FakeInterpreter
 
 
 def _write_csv(path: Path, rows: list[list[float]]) -> None:
@@ -178,8 +196,12 @@ def test_build_flow_keeps_pre_normalized_csv_scale(monkeypatch, tmp_path) -> Non
 
     class _CaptureKeras(_FakeKeras):
         @staticmethod
-        def Sequential(layers):
-            return _CaptureModel(layers)
+        def Sequential(layers=None):
+            return _CaptureModel(layers=layers)
+
+        @staticmethod
+        def Model(*args, **kwargs):
+            return _CaptureModel()
 
     class _CaptureTF(_FakeTF):
         keras = _CaptureKeras

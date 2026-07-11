@@ -29,6 +29,15 @@ _PRIMITIVE_LOGICAL_NAMES = frozenset(
         "SHAKE_VIOLENT",
         "INFINITY_8",
         "V_SHAPE",
+        "PULL",
+        "YAW_SWISH",
+        "LASSO",
+        "WHEEL",
+        "SQUARE",
+        "U_SHAPE",
+        "WHIP",
+        "TAP",
+        "SPIRAL",
     }
 )
 

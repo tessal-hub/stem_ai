@@ -66,7 +66,6 @@ class PageSetting(QWidget):
         
         right_col = QVBoxLayout()
         right_col.setSpacing(SPACING_LG)
-        right_col.setAlignment(Qt.AlignmentFlag.AlignTop)
         
         left_col.addWidget(self._build_hardware_column())
         left_col.addWidget(self._build_software_column())
@@ -267,25 +266,30 @@ class PageSetting(QWidget):
 
     def _build_paths_card(self) -> QWidget:
         col = QWidget()
+        col.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         lay = QVBoxLayout(col)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(SPACING_SM)
         lay.addWidget(self._make_section_label_i18n("section_paths"))
 
         card, c_lay = self._make_card(margins=(16, 16, 16, 16), spacing=SPACING_SM)
+        card.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         
         form = self._make_form_layout()
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         
         folder_icon = QIcon(resolve_asset_path("assets/icon/cooliocns SVG/File/Folder_Open.svg"))
 
         self.txt_idf_main_dir = QLineEdit()
-        self.txt_idf_main_dir.setFixedHeight(28)
+        self.txt_idf_main_dir.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.btn_browse_idf_main = QPushButton()
         self.btn_browse_idf_main.setIcon(folder_icon)
         self.btn_browse_idf_main.setIconSize(QSize(16, 16))
-        self.btn_browse_idf_main.setFixedSize(28, 28)
+        self.btn_browse_idf_main.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        self.btn_browse_idf_main.setFixedWidth(28)
         
         idf_container = QWidget()
+        idf_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         idf_row = QHBoxLayout(idf_container)
         idf_row.setContentsMargins(0, 0, 0, 0)
         idf_row.setSpacing(8)
@@ -295,13 +299,15 @@ class PageSetting(QWidget):
         self._add_i18n_form_row(form, "label_idf_main", idf_container)
 
         self.txt_dataset_dir = QLineEdit()
-        self.txt_dataset_dir.setFixedHeight(28)
+        self.txt_dataset_dir.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.btn_browse_dataset = QPushButton()
         self.btn_browse_dataset.setIcon(folder_icon)
         self.btn_browse_dataset.setIconSize(QSize(16, 16))
-        self.btn_browse_dataset.setFixedSize(28, 28)
+        self.btn_browse_dataset.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        self.btn_browse_dataset.setFixedWidth(28)
         
         dataset_container = QWidget()
+        dataset_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         dataset_row = QHBoxLayout(dataset_container)
         dataset_row.setContentsMargins(0, 0, 0, 0)
         dataset_row.setSpacing(8)
@@ -310,8 +316,8 @@ class PageSetting(QWidget):
         
         self._add_i18n_form_row(form, "label_dataset_dir", dataset_container)
 
-        c_lay.addLayout(form)
-        lay.addWidget(card)
+        c_lay.addLayout(form, stretch=1)
+        lay.addWidget(card, stretch=1)
         return col
 
     def _init_signals(self) -> None:

@@ -20,7 +20,29 @@ class PrototypicalRecognizer:
         return (vector / norm).astype(np.float32, copy=False)
 
     def _embed_batch(self, samples: np.ndarray) -> np.ndarray:
-        embeddings = self.encoder.predict(samples, verbose=0)
+        # samples shape: (N, window_size, 6) or similar
+        input_shape = self.encoder.input_shape
+        if isinstance(input_shape, list):
+            input_shape = input_shape[0]
+        expected_channels = input_shape[-1]
+
+        if samples.shape[2] != expected_channels:
+            if expected_channels == 6:
+                x_in = samples[:, :, :6]
+            elif expected_channels == 9:
+                N, W, C = samples.shape
+                expanded = np.zeros((N, W, 9), dtype=np.float32)
+                expanded[:, :, :6] = samples
+                expanded[:, :, 6] = samples[:, :, 2] * samples[:, :, 3] # az * gx
+                expanded[:, :, 7] = samples[:, :, 2] * samples[:, :, 4] # az * gy
+                expanded[:, 1:, 8] = samples[:, 1:, 2] - samples[:, :-1, 2] # jerkz
+                x_in = np.clip(expanded, -2.0, 2.0)
+            else:
+                x_in = samples
+        else:
+            x_in = samples
+
+        embeddings = self.encoder.predict(x_in, verbose=0)
         embeddings = np.asarray(embeddings, dtype=np.float32)
         if embeddings.ndim != 2:
             raise ValueError("Encoder output must be rank-2 embeddings.")
@@ -34,8 +56,8 @@ class PrototypicalRecognizer:
             raise ValueError("samples must not be empty.")
 
         batch = np.asarray(samples, dtype=np.float32)
-        if batch.ndim != 3 or batch.shape[2] != 6:
-            raise ValueError("samples must have shape (n_samples, window_size, 6).")
+        if batch.ndim != 3 or batch.shape[2] not in (6, 9):
+            raise ValueError("samples must have shape (n_samples, window_size, 6) or (n_samples, window_size, 9).")
 
         embeddings = self._embed_batch(batch)
         prototype = self._l2_normalize(np.mean(embeddings, axis=0))
@@ -47,12 +69,12 @@ class PrototypicalRecognizer:
             return None, 0.0
 
         item = np.asarray(sample, dtype=np.float32)
-        if item.ndim != 2 or item.shape[1] != 6:
-            raise ValueError("sample must have shape (window_size, 6).")
+        if item.ndim != 2 or item.shape[1] not in (6, 9):
+            raise ValueError("sample must have shape (window_size, 6) or (window_size, 9).")
 
         # Motion gate — thay thế vai trò của STAND_BY
         accel_variance = float(np.var(item[:, :3]))
-        gyro_energy = float(np.mean(np.abs(item[:, 3:])))
+        gyro_energy = float(np.mean(np.abs(item[:, 3:6])))
         
         if accel_variance < 0.005 and gyro_energy < 0.01:
             return None, 0.0  # Không đủ năng lượng để tính là gesture
@@ -143,8 +165,8 @@ class PrototypicalRecognizer:
         # --- embed batch ---
         try:
             batch = np.asarray(samples, dtype=np.float32)
-            if batch.ndim != 3 or batch.shape[2] != 6:
-                _empty["recommendation"] = "[Error] Kích thước mẫu không hợp lệ."
+            if batch.ndim != 3 or batch.shape[2] not in (6, 9):
+                _empty["recommendation"] = "[Error] Kích thước mẫu không hợp lệ (yêu cầu 6 hoặc 9 kênh)."
                 return _empty
             raw_embs = self._embed_batch(batch)            # (n, dim)
             embeddings = np.array(

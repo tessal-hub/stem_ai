@@ -49,7 +49,7 @@ class TripletStackLayer(tf.keras.layers.Layer):
 
 def build_encoder(
     window_size: int = 64,
-    channels: int = 6,
+    channels: int = 9,
     embedding_dim: int = 32,
 ):
     tf = _require_tensorflow()
@@ -184,8 +184,8 @@ def _time_warp(sample: np.ndarray, factor: float) -> np.ndarray:
 
 def augment_imu_sample(sample: np.ndarray, n_augments: int = 5) -> list[np.ndarray]:
     source = np.asarray(sample, dtype=np.float32)
-    if source.ndim != 2 or source.shape[1] != 6:
-        raise ValueError("sample must have shape (window_size, 6).")
+    if source.ndim != 2 or source.shape[1] != 9:
+        raise ValueError("sample must have shape (window_size, 9).")
 
     rng = np.random.default_rng()
     augmented: list[np.ndarray] = [source.copy()]

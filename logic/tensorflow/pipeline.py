@@ -117,7 +117,17 @@ def _windowize(
 
     windows: list[list[list[float]]] = []
     for i in range(0, len(rows) - window_size + 1, step):
-        windows.append(rows[i: i + window_size])
+        w = rows[i: i + window_size]
+        new_w = []
+        for j in range(len(w)):
+            az = w[j][2]
+            gx = w[j][3]
+            gy = w[j][4]
+            az_gx = az * gx
+            az_gy = az * gy
+            jerkz = az - rows[i + j - 1][2] if (i + j) > 0 else 0.0
+            new_w.append([w[j][0], w[j][1], az, gx, gy, w[j][5], az_gx, az_gy, jerkz])
+        windows.append(new_w)
 
     if is_active_gesture and len(windows) > 1:
         best_window = windows[0]
@@ -139,27 +149,91 @@ def _windowize(
 
 
 def _augment_window(window: np.ndarray, rng: np.random.Generator) -> np.ndarray:
-    aug = window.copy()
-    # Thêm nhiễu ngẫu nhiên (mô phỏng tay run)
-    aug += rng.normal(0, 0.05, size=aug.shape).astype(np.float32)
+    W, C = window.shape
+    # 1. Lấy 6 kênh gốc
+    raw = window[:, :6].copy()
     
-    # Kéo giãn/thu nhỏ biên độ (mô phỏng vung tay mạnh/yếu)
-    scale = rng.uniform(0.8, 1.2, size=(1, 6)).astype(np.float32)
-    aug *= scale
+    # 2. Co giãn thời gian (Speed scaling / Time warping)
+    speed_factor = rng.uniform(0.75, 1.25)
+    x_orig = np.arange(W)
+    x_new = np.linspace(0, W - 1, num=int(round(W / speed_factor)))
+    warped = np.zeros_like(raw)
+    for c_idx in range(6):
+        y_orig = raw[:, c_idx]
+        y_new = np.interp(x_new, x_orig, y_orig)
+        if len(y_new) >= W:
+            warped[:, c_idx] = y_new[:W]
+        else:
+            warped[:len(y_new), c_idx] = y_new
+            warped[len(y_new):, c_idx] = y_new[-1]
+    raw = warped
+
+    # 3. Phép xoay 3D ngẫu nhiên (3D Rotation jittering) cho accel và gyro
+    # Roll, pitch, yaw góc nhỏ (±10 độ = ±0.17 rad)
+    ax_angle = rng.uniform(-0.17, 0.17)
+    ay_angle = rng.uniform(-0.17, 0.17)
+    az_angle = rng.uniform(-0.17, 0.17)
     
-    # Dịch chuyển thời gian nhẹ (mô phỏng delay)
-    shift = int(rng.integers(-3, 4))
+    # Ma trận xoay từng trục
+    Rx = np.array([
+        [1, 0, 0],
+        [0, np.cos(ax_angle), -np.sin(ax_angle)],
+        [0, np.sin(ax_angle), np.cos(ax_angle)]
+    ], dtype=np.float32)
+    
+    Ry = np.array([
+        [np.cos(ay_angle), 0, np.sin(ay_angle)],
+        [0, 1, 0],
+        [-np.sin(ay_angle), 0, np.cos(ay_angle)]
+    ], dtype=np.float32)
+    
+    Rz = np.array([
+        [np.cos(az_angle), -np.sin(az_angle), 0],
+        [np.sin(az_angle), np.cos(az_angle), 0],
+        [0, 0, 1]
+    ], dtype=np.float32)
+    
+    R = Rz @ Ry @ Rx # Ma trận xoay tổng hợp 3D
+    
+    # Xoay cụm Accel (chỉ số 0, 1, 2) và Gyro (chỉ số 3, 4, 5)
+    accel = raw[:, :3]
+    gyro = raw[:, 3:6]
+    raw[:, :3] = accel @ R.T
+    raw[:, 3:6] = gyro @ R.T
+
+    # 4. Thêm nhiễu ngẫu nhiên (Gaussian noise)
+    raw += rng.normal(0, 0.03, size=raw.shape).astype(np.float32)
+    
+    # 5. Co giãn biên độ biên độc lập (Amplitude Scaling)
+    scale = rng.uniform(0.85, 1.15, size=(1, 6)).astype(np.float32)
+    raw *= scale
+
+    # 6. Dịch chuyển thời gian nhẹ (Time Shift)
+    shift = int(rng.integers(-2, 3))
     if shift > 0:
-        aug[shift:] = aug[:-shift]
-        aug[:shift] = aug[shift]
+        raw[shift:] = raw[:-shift]
+        raw[:shift] = raw[shift]
     elif shift < 0:
-        aug[:shift] = aug[-shift:]
-        aug[shift:] = aug[shift - 1]
-        
-    return aug
+        raw[:shift] = raw[-shift:]
+        raw[shift:] = raw[shift - 1]
+
+    # 7. Tính toán lại 3 kênh derived từ 6 kênh gốc đã augment
+    aug_full = np.zeros((W, 9), dtype=np.float32)
+    aug_full[:, :6] = raw
+    
+    az = raw[:, 2]
+    gx = raw[:, 3]
+    gy = raw[:, 4]
+    
+    aug_full[:, 6] = az * gx # az_gx
+    aug_full[:, 7] = az * gy # az_gy
+    aug_full[1:, 8] = az[1:] - az[:-1] # jerkz
+    aug_full[0, 8] = 0.0
+    
+    return aug_full
 
 
-def _write_c_array(tflite_path: Path, cc_path: Path, centroids: list = None, class_names: list = None, is_spell: list = None) -> None:
+def _write_c_array(tflite_path: Path, cc_path: Path, centroids: list = None, class_names: list = None, is_spell: list = None, thresholds: list = None) -> None:
     bytes_data = tflite_path.read_bytes()
     cc_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -173,14 +247,16 @@ def _write_c_array(tflite_path: Path, cc_path: Path, centroids: list = None, cla
         handle.write(f"const int g_model_len = {len(bytes_data)};\n\n")
         
         if centroids is not None and class_names is not None:
-            handle.write("struct PreloadedSpell {\n  const char* name;\n  float centroid[16];\n  bool is_spell;\n};\n\n")
+            handle.write("struct PreloadedSpell {\n  const char* name;\n  float centroid[16];\n  bool is_spell;\n  float threshold;\n};\n\n")
             handle.write("const PreloadedSpell g_preloaded_spells[] = {\n")
             if is_spell is None:
                 is_spell = [True] * len(class_names)
-            for name, centroid, flag in zip(class_names, centroids, is_spell):
-                centroid_str = ", ".join(f"{x:.6f}f" for x in centroid)
+            if thresholds is None:
+                thresholds = [0.65] * len(class_names)
+            for name, centroid, flag, thresh in zip(class_names, centroids, is_spell, thresholds):
+                c_str = ", ".join(f"{x:.6f}f" for x in centroid)
                 flag_str = "true" if flag else "false"
-                handle.write(f'    {{"{name.upper()}", {{{centroid_str}}}, {flag_str}}},\n')
+                handle.write(f'  {{"{name}", {{{c_str}}}, {flag_str}, {thresh:.3f}f}},\n')
             handle.write("};\n")
             handle.write(f"const int g_preloaded_spell_count = {len(class_names)};\n")
 
@@ -204,7 +280,6 @@ def _file_level_split(
 ]:
     train_file_rows: list[tuple[int, list[list[float]]]] = []
     val_file_rows: list[tuple[int, list[list[float]]]] = []
-    forced_fallback = False
 
     for class_index, all_file_rows in class_file_rows.items():
         shuffled = list(all_file_rows)
@@ -215,7 +290,7 @@ def _file_level_split(
         n_train = n_total - n_val
 
         if n_train == 0:
-            forced_fallback = True
+            # Class quá ít file -> dùng toàn bộ cho train, không tách val cho class này
             for rows in shuffled:
                 train_file_rows.append((class_index, rows))
         else:
@@ -224,7 +299,7 @@ def _file_level_split(
             for rows in shuffled[n_train:]:
                 val_file_rows.append((class_index, rows))
 
-    if forced_fallback:
+    if not val_file_rows:
         return train_file_rows, None
 
     return train_file_rows, val_file_rows
@@ -244,6 +319,7 @@ def build_gesture_model(
     sync_default_model: bool = True,
     val_fraction: float = 0.15,
     random_seed: int = 42,
+    force_retrain: bool = False,
 ) -> BuildResult:
     dataset_root = Path(dataset_dir)
     if not dataset_root.exists():
@@ -369,51 +445,11 @@ def build_gesture_model(
             cnn_train_features.append(f)
             cnn_train_labels.append(l)
 
-    # --- FEW-SHOT AUGMENTATION ONLY ON PRIMITIVES ---
-    class_counts = {c: 0 for c in primitive_class_indices}
-    for label in cnn_train_labels:
-        class_counts[label] += 1
-        
-    max_count = 6000
-    aug_rng = np.random.default_rng(random_seed)
-    
-    augmented_features: list[np.ndarray] = []
-    augmented_labels: list[int] = []
-    
-    for c in primitive_class_indices:
-        count = class_counts[c]
-        if count == 0 or count == max_count:
-            continue
-            
-        shortfall = max_count - count
-        base_samples = [cnn_train_features[i] for i, lbl in enumerate(cnn_train_labels) if lbl == c]
-        
-        _emit_status(status_cb, f"[TRAIN] Few-shot: Augmenting '{class_names[c]}' (Primitive) from {count} -> {max_count} samples")
-        for _ in range(shortfall):
-            base_idx = int(aug_rng.integers(0, count))
-            aug_sample = _augment_window(base_samples[base_idx], aug_rng)
-            augmented_features.append(aug_sample)
-            augmented_labels.append(c)
-            
-    cnn_train_features.extend(augmented_features)
-    cnn_train_labels.extend(augmented_labels)
-    # ---------------------------------------------
-
-    X_train = np.stack(cnn_train_features, axis=0)
-    y_train = np.asarray(cnn_train_labels, dtype=np.int32)
-
-    perm = np.random.default_rng(random_seed).permutation(len(X_train))
-    X_train = X_train[perm]
-    y_train = y_train[perm]
-
-    X_train = np.clip(X_train, -2.0, 2.0)
-
     validation_data: tuple[np.ndarray, np.ndarray | None] | None = None
     val_labels: list[int] = []
 
     if val_file_rows is not None:
         val_features: list[np.ndarray] = []
-
         for class_index, rows in val_file_rows:
             if class_index in primitive_class_indices:
                 c_name = class_names[class_index]
@@ -428,21 +464,88 @@ def build_gesture_model(
                     val_labels.append(class_index)
 
         if val_features:
-            X_val = np.clip(
-                np.stack(val_features, axis=0), -2.0, 2.0
-            )
+            X_val = np.clip(np.stack(val_features, axis=0), -2.0, 2.0)
             validation_data = (X_val, None)
-            _emit_status(
-                status_cb,
-                f"[TRAIN] {len(X_train)} train windows / {len(X_val)} val windows",
-            )
         else:
             val_file_rows = None
-            _emit_status(
-                status_cb,
-                "[WARN] Val files produced no windows (recordings too short). "
-                "Falling back to window-level split.",
-            )
+
+    if validation_data is None and val_fraction > 0:
+        # Tách split TỪ TẬP CƠ SỞ (chưa augment) để chống data leakage
+        val_size = int(len(cnn_train_features) * val_fraction)
+        if val_size > 0:
+            # shuffle base features before split
+            perm_base = np.random.default_rng(random_seed).permutation(len(cnn_train_features))
+            cnn_train_features = [cnn_train_features[i] for i in perm_base]
+            cnn_train_labels = [cnn_train_labels[i] for i in perm_base]
+
+            val_base_feat = cnn_train_features[-val_size:]
+            val_base_labels = cnn_train_labels[-val_size:]
+            cnn_train_features = cnn_train_features[:-val_size]
+            cnn_train_labels = cnn_train_labels[:-val_size]
+            
+            X_val_base = np.clip(np.stack(val_base_feat, axis=0), -2.0, 2.0)
+            y_val_base = tf.keras.utils.to_categorical(np.asarray(val_base_labels, dtype=np.int32), num_classes=len(class_names))
+            validation_data = (X_val_base, y_val_base)
+            _emit_status(status_cb, f"[WARN] Dùng random split {val_fraction*100:.0f}% từ Base Windows. Đã tách TRƯỚC augment để chống Data Leakage.")
+        else:
+            val_fraction = 0.0
+
+    # --- FEW-SHOT AUGMENTATION ONLY ON PRIMITIVES ---
+    class_counts = {c: 0 for c in primitive_class_indices}
+    for label in cnn_train_labels:
+        class_counts[label] += 1
+        
+    # LOG REAL COUNTS BEFORE AUGMENTATION
+    for c in primitive_class_indices:
+        _emit_status(status_cb, f"[TRAIN] Thống kê: '{class_names[c]}' có {class_counts[c]} windows thực tế trước khi augment.")
+        
+    target_count = 1000
+    aug_rng = np.random.default_rng(random_seed)
+    
+    balanced_features: list[np.ndarray] = []
+    balanced_labels: list[int] = []
+    
+    for c in primitive_class_indices:
+        base_samples = [cnn_train_features[i] for i, lbl in enumerate(cnn_train_labels) if lbl == c]
+        count = len(base_samples)
+        if count == 0:
+            continue
+            
+        if count >= target_count:
+            # Undersample class randomly
+            _emit_status(status_cb, f"[TRAIN] Balancing: Undersampling '{class_names[c]}' từ {count} -> {target_count} mẫu")
+            indices = aug_rng.choice(count, target_count, replace=False)
+            for idx in indices:
+                balanced_features.append(base_samples[idx])
+                balanced_labels.append(c)
+        else:
+            # Keep original samples and oversample minority
+            _emit_status(status_cb, f"[TRAIN] Balancing: Augmenting '{class_names[c]}' từ {count} -> {target_count} mẫu (x{target_count/max(1, count):.1f})")
+            balanced_features.extend(base_samples)
+            balanced_labels.extend([c] * count)
+            
+            shortfall = target_count - count
+            for _ in range(shortfall):
+                base_idx = int(aug_rng.integers(0, count))
+                aug_sample = _augment_window(base_samples[base_idx], aug_rng)
+                balanced_features.append(aug_sample)
+                balanced_labels.append(c)
+                
+    cnn_train_features = balanced_features
+    cnn_train_labels = balanced_labels
+    # ---------------------------------------------
+
+    X_train = np.stack(cnn_train_features, axis=0)
+    y_train = np.asarray(cnn_train_labels, dtype=np.int32)
+
+    perm = np.random.default_rng(random_seed).permutation(len(X_train))
+    X_train = X_train[perm]
+    y_train = y_train[perm]
+
+    X_train = np.clip(X_train, -2.0, 2.0)
+
+    if validation_data is not None and validation_data[1] is None:
+        _emit_status(status_cb, f"[TRAIN] {len(X_train)} train windows / {len(validation_data[0])} val windows")
 
     _emit_progress(progress_cb, 20)
 
@@ -489,30 +592,37 @@ def build_gesture_model(
         validation_data = (X_val_temp, y_val_cat)
 
     if effective_window_size >= 16:
-        base_model = tf.keras.Sequential([
-            tf.keras.layers.Input(shape=(effective_window_size, 6)),
-            tf.keras.layers.Conv1D(64, 5, padding="same", activation="relu"),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Conv1D(64, 3, padding="same", activation="relu"),
-            tf.keras.layers.MaxPooling1D(2),
-            tf.keras.layers.Dropout(0.20),
-            tf.keras.layers.Conv1D(96, 3, padding="same", activation="relu"),
-            tf.keras.layers.MaxPooling1D(2),
-            tf.keras.layers.Flatten(),
-            tf.keras.layers.Dense(128, activation="relu"),
-            tf.keras.layers.Dropout(0.30),
-            tf.keras.layers.Dense(16) # Output 16-D Embedding
-        ])
+        # Multi-scale Inception-style feature pyramid
+        input_layer = tf.keras.layers.Input(shape=(effective_window_size, 9))
+        
+        # Branch 1: Fine-grained features (kernel 3)
+        b1 = tf.keras.layers.Conv1D(32, 3, padding="same", activation="relu")(input_layer)
+        # Branch 2: Medium features (kernel 5)
+        b2 = tf.keras.layers.Conv1D(32, 5, padding="same", activation="relu")(input_layer)
+        # Branch 3: Coarse features (kernel 9)
+        b3 = tf.keras.layers.Conv1D(32, 9, padding="same", activation="relu")(input_layer)
+        
+        merged = tf.keras.layers.Concatenate()([b1, b2, b3])
+        x = tf.keras.layers.BatchNormalization()(merged)
+        x = tf.keras.layers.MaxPooling1D(2)(x)
+        x = tf.keras.layers.Dropout(0.20)(x)
+        
+        x = tf.keras.layers.Conv1D(128, 3, padding="same", activation="relu")(x)
+        x = tf.keras.layers.MaxPooling1D(2)(x)
+        x = tf.keras.layers.Dropout(0.20)(x)
+        
+        x = tf.keras.layers.GlobalAveragePooling1D()(x)
+        features = tf.keras.layers.Dense(16, activation=None, name="embedding")(x)
+        base_model = tf.keras.Model(inputs=input_layer, outputs=features)
     else:
         base_model = tf.keras.Sequential([
-            tf.keras.layers.Input(shape=(effective_window_size, 6)),
-            tf.keras.layers.Flatten(),
-            tf.keras.layers.Dense(96, activation="relu"),
+            tf.keras.layers.Input(shape=(effective_window_size, 9)),
+            tf.keras.layers.Conv1D(32, 3, padding="same", activation="relu"),
             tf.keras.layers.Dropout(0.20),
             tf.keras.layers.Dense(16)
         ])
 
-    inputs = tf.keras.Input(shape=(effective_window_size, 6))
+    inputs = tf.keras.layers.Input(shape=(effective_window_size, 9))
     features = base_model(inputs)
     norm_features = tf.keras.layers.Lambda(lambda x: tf.math.l2_normalize(x, axis=1))(features)
     logits = tf.keras.layers.Dense(len(class_names), use_bias=False)(norm_features)
@@ -557,15 +667,19 @@ def build_gesture_model(
         ),
     ]
 
-    h5_path = output_root / "gesture_model.h5"
+    h5_path = output_root / "gesture_model_v2.h5"
     skip_train = False
-    if h5_path.exists():
-        _emit_status(status_cb, f"[TRAIN] ⚡ TÌM THẤY TRỌNG SỐ {h5_path.name}! BỎ QUA TRAIN CNN, BẮT ĐẦU FEW-SHOT NGAY!")
-        base_model.load_weights(str(h5_path))
-        skip_train = True
-        
+    if not force_retrain and h5_path.exists():
+        try:
+            base_model.load_weights(str(h5_path))
+            skip_train = True
+            _emit_status(status_cb, f"[TRAIN] ⚡ TÌM THẤY TRỌNG SỐ {h5_path.name}! BỎ QUA TRAIN CNN.")
+        except ValueError as e:
+            _emit_status(status_cb, f"[WARN] Lỗi load weights: {e}. Sẽ train lại từ đầu.")
+            h5_path.unlink(missing_ok=True)
+
+    if skip_train:
         if validation_data is not None and validation_data[1] is not None:
-            # We must evaluate using full model to get metrics matching keras fit
             val_loss, val_acc = model.evaluate(validation_data[0], validation_data[1], verbose=0)
             class RealHistory:
                 history = {"accuracy": [val_acc], "val_accuracy": [val_acc]}
@@ -637,10 +751,12 @@ def build_gesture_model(
     _emit_status(status_cb, "[BUILD] Converting to INT8 TFLite...")
 
     with suppress_stdout_stderr():
-        h5_path = output_root / "gesture_model.h5"
+        h5_path = output_root / "gesture_model_v2.h5"
         model_save = getattr(base_model, "save", None)
         if callable(model_save):
             model_save(str(h5_path))
+            encoder_path = output_root / "gesture_encoder.keras"
+            model_save(str(encoder_path))
 
         # (Centroid computation moved to after TFLite conversion)
 
@@ -707,6 +823,7 @@ def build_gesture_model(
         embeddings = np.array(embeddings)
         
         centroids = []
+        thresholds = []
         for c in range(len(class_names)):
             idx = (y_all == c)
             class_embs = embeddings[idx]
@@ -718,9 +835,17 @@ def build_gesture_model(
                 norm = np.linalg.norm(centroid)
                 if norm > 0:
                     centroid = centroid / norm
+                
+                # Calibrate per-class threshold (5th percentile)
+                cos_sims = np.dot(class_embs, centroid)
+                thresh = max(0.50, float(np.percentile(cos_sims, 5)))
+                # Give an upper limit so it's not too tight
+                thresh = min(thresh, 0.85)
             else:
                 centroid = np.zeros(16)
+                thresh = 0.65
             centroids.append(centroid.tolist())
+            thresholds.append(thresh)
     tflite_path, cc_path = _resolve_output_paths(output_root)
     tflite_path.write_bytes(tflite_model)
 
@@ -730,7 +855,7 @@ def build_gesture_model(
     if output_mode in {"cc", "both"}:
         _emit_status(status_cb, f"[BUILD] Writing C-array to {cc_path}")
         is_spell_flags = [i not in primitive_class_indices for i in range(len(class_names))]
-        _write_c_array(tflite_path, cc_path, centroids=centroids, class_names=class_names, is_spell=is_spell_flags)
+        _write_c_array(tflite_path, cc_path, centroids=centroids, class_names=class_names, is_spell=is_spell_flags, thresholds=thresholds)
     else:
         is_spell_flags = [True] * len(class_names)
 
@@ -762,11 +887,13 @@ class GestureModelBuildWorker(QThread):
         dataset_dir: str,
         output_mode: Literal["tflite", "cc", "both"] = "both",
         selected_spells: list[str] | None = None,
+        force_retrain: bool = False,
     ) -> None:
         super().__init__()
         self.dataset_dir = dataset_dir
         self.output_mode: Literal["tflite", "cc", "both"] = output_mode
         self.selected_spells = selected_spells or []
+        self.force_retrain = force_retrain
         
         # Tự động hút toàn bộ Primitives vào để làm data nền (base dataset)
         # phục vụ cho cơ chế Few-shot Learning vừa nâng cấp.
@@ -795,6 +922,7 @@ class GestureModelBuildWorker(QThread):
                 progress_cb=self.sig_progress.emit,
                 output_mode=self.output_mode,
                 selected_spells=self.selected_spells,
+                force_retrain=self.force_retrain,
             )
             self.build_result = result
             summary = (

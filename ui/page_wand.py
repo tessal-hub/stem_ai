@@ -15,7 +15,6 @@ from ui.tokens import SPACE_32
 from ui.wand_panels.connection_panel import WandConnectionPanel
 from ui.wand_panels.flash_panel import WandFlashPanel
 from ui.wand_panels.spell_payload_panel import WandSpellPayloadPanel
-from ui.wand_panels.stats_panel import WandStatsPanel
 from ui.wand_panels.terminal_panel import WandTerminalPanel
 
 
@@ -61,7 +60,6 @@ class PageWand(QWidget):
         self.flash_panel = WandFlashPanel()
         self.connection_panel = WandConnectionPanel()
         self.terminal_panel = WandTerminalPanel()
-        self.stats_panel = WandStatsPanel()
         self.payload_panel = WandSpellPayloadPanel()
 
         # Cột trái: Setup
@@ -72,9 +70,9 @@ class PageWand(QWidget):
 
         # Cột phải: Monitoring & Flash
         right_col = QVBoxLayout()
-        right_col.addWidget(self.stats_panel)
-        right_col.addWidget(self.terminal_panel)
-        right_col.addWidget(self.flash_panel)
+        # Ưu tiên không gian cho UART terminal để dễ theo dõi log thời gian thực.
+        right_col.addWidget(self.terminal_panel, stretch=2)
+        right_col.addWidget(self.flash_panel, stretch=1)
         grid.addLayout(right_col, 0, 1)
 
         grid.setColumnStretch(0, 1)
@@ -105,7 +103,7 @@ class PageWand(QWidget):
 
     def refresh_styles(self) -> None:
         """Làm mới style cho tất cả các panel con."""
-        panels = [self.connection_panel, self.flash_panel, self.terminal_panel, self.stats_panel, self.payload_panel]
+        panels = [self.connection_panel, self.flash_panel, self.terminal_panel, self.payload_panel]
         for panel in panels:
             if hasattr(panel, "refresh_styles"):
                 panel.refresh_styles()
@@ -119,7 +117,6 @@ class PageWand(QWidget):
         self.flash_panel.apply_ui_language()
         self.connection_panel.apply_ui_language()
         self.terminal_panel.apply_ui_language()
-        self.stats_panel.apply_ui_language()
         self.payload_panel.apply_ui_language()
 
     def update_flash_progress(self, percentage: int, status: str = "") -> None:
@@ -136,7 +133,7 @@ class PageWand(QWidget):
 
     def update_esp_stats(self, stats: dict[str, str]) -> None:
         """Cập nhật thông số phần cứng ESP32."""
-        self.stats_panel.update_esp_stats(stats)
+        pass
 
     def load_spell_payload_list(self, counts: dict[str, int]) -> None:
         """Cập nhật danh sách spell vào chart và panel payload."""
@@ -148,7 +145,6 @@ class PageWand(QWidget):
             if k not in _PRIMITIVE_LOGICAL_NAMES and "::" not in k and k != "STAND BY" and k != "STAND_BY"
         }
         
-        self.stats_panel.update_spell_chart(filtered_counts)
         self.payload_panel.load_spell_list(filtered_counts)
 
     # ── Private methods ─────────────────────────
@@ -170,8 +166,8 @@ class PageWand(QWidget):
         self.btn_term_clear = self.terminal_panel.btn_term_clear
         self.terminal_output = self.terminal_panel.terminal_output
 
-        self.layout_stats = self.stats_panel.layout_stats
-        self.stats_plot = self.stats_panel.stats_plot
+        self.layout_stats = None
+        self.stats_plot = None
         self.list_firmware = self.payload_panel.list_firmware
         self.list_selected_spells = self.payload_panel.list_selected_spells
         self.list_available_spells = self.payload_panel.list_available_spells

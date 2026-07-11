@@ -509,7 +509,7 @@ class Handler(QObject):
             for window in windows:
                 data = np.asarray(window, dtype=np.float32)
                 data = np.clip(data, -2.0, 2.0)
-                emb = self.spell_recognizer.encoder.predict(np.expand_dims(data, axis=0), verbose=0)[0]
+                emb = self.spell_recognizer._embed_batch(np.expand_dims(data, axis=0))[0]
                 norm = np.linalg.norm(emb)
                 if norm > 0:
                     emb = emb / norm
@@ -748,6 +748,23 @@ class Handler(QObject):
             self.ui_setting.append_console_text(
                 f"[{'DONE' if success else 'STOPPED'}] {message}"
             )
+            if success:
+                from config import APP_DATA_DIR
+                save_path = APP_DATA_DIR / "embedding_space_scan.png"
+                if save_path.exists():
+                    self.ui_setting.append_console_text(f"[INFO] Opening visualization plot: {save_path}")
+                    import os
+                    import platform
+                    import subprocess
+                    try:
+                        if platform.system() == "Windows":
+                            os.startfile(str(save_path))
+                        elif platform.system() == "Darwin":
+                            subprocess.Popen(["open", str(save_path)])
+                        else:
+                            subprocess.Popen(["xdg-open", str(save_path)])
+                    except Exception as e:
+                        self.ui_setting.append_console_text(f"[WARN] Could not open image: {e}")
         self._quality_worker = None
 
     def on_start_collection(self, gesture_name: str, group_name: str) -> None:
@@ -903,7 +920,8 @@ class Handler(QObject):
     _PRIMITIVE_NAMES: frozenset[str] = frozenset([
         "SWIPE_RIGHT", "SWIPE_UP", "THRUST", "CIRCLE_CW",
         "CIRCLE_CCW", "WRIST_FLICK", "ZIGZAG", "STAND_BY", "STAND BY",
-        "SWIPE_LEFT", "SWIPE_DOWN", "ROLL_WAND", "SHAKE_VIOLENT", "INFINITY_8", "V_SHAPE"
+        "SWIPE_LEFT", "SWIPE_DOWN", "ROLL_WAND", "SHAKE_VIOLENT", "INFINITY_8", "V_SHAPE",
+        "PULL", "YAW_SWISH", "LASSO", "WHEEL", "SQUARE", "U_SHAPE", "WHIP", "TAP", "SPIRAL"
     ])
 
     def _load_samples_for_analysis(
@@ -1182,21 +1200,14 @@ class Handler(QObject):
         log.debug("on_train_encoder_requested CALLED")
         try:
             import tensorflow as tf  # Fix: import in main thread to avoid QThread crash
-            from .encoder_trainer import EncoderTrainerWorker
-            log.debug("EncoderTrainerWorker imported successfully")
+            from .tensorflow.pipeline import GestureModelBuildWorker
+            log.debug("GestureModelBuildWorker imported successfully")
             
-            primitive_names = [
-                "SWIPE_RIGHT", "SWIPE_UP", "THRUST",
-                "CIRCLE_CW", "CIRCLE_CCW", "WRIST_FLICK",
-                "ZIGZAG", "SWIPE_LEFT", "SWIPE_DOWN",
-                "ROLL_WAND", "SHAKE_VIOLENT", "INFINITY_8", "V_SHAPE"
-            ]
-            
-            self.encoder_trainer = EncoderTrainerWorker(
+            self.encoder_trainer = GestureModelBuildWorker(
                 dataset_dir=self.store.dataset_dir,
-                primitive_names=primitive_names
+                force_retrain=True
             )
-            log.debug("EncoderTrainerWorker initialized")
+            log.debug("GestureModelBuildWorker initialized")
             if self.ui_primitive_collect:
                 self.encoder_trainer.sig_status.connect(self.ui_primitive_collect.on_encoder_training_status)
                 self.encoder_trainer.sig_progress.connect(self.ui_primitive_collect.on_encoder_training_progress)

@@ -12,6 +12,15 @@ def inspect_embedding_space(encoder, X, y, class_names, save_path='embedding_spa
 
     print("Đang tính embeddings...")
     embeddings = encoder.predict(X, verbose=0)
+
+    # Subsampling to 6000 samples like visualize_embeddings.py
+    if len(X) > 6000:
+        np.random.seed(42)
+        indices = np.random.choice(len(X), 6000, replace=False)
+        X = X[indices]
+        y = y[indices]
+        embeddings = embeddings[indices]
+        print(f"Đã chọn ngẫu nhiên 6000 mẫu để phân tích.")
     
     print("Đang chiếu xuống 2D (mất vài giây)...")
     tsne = TSNE(
@@ -23,10 +32,11 @@ def inspect_embedding_space(encoder, X, y, class_names, save_path='embedding_spa
     coords_2d = tsne.fit_transform(embeddings)
     
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
-    colors = plt.cm.tab10(np.linspace(0, 1, len(class_names)))
+    class_list = list(class_names)
+    colors = plt.cm.tab20(np.linspace(0, 1, len(class_list)))
     
     ax = axes[0]
-    for i, (name, color) in enumerate(zip(class_names, colors)):
+    for i, (name, color) in enumerate(zip(class_list, colors)):
         mask = (y == i)
         if not np.any(mask): continue
         ax.scatter(coords_2d[mask, 0], coords_2d[mask, 1],
@@ -43,15 +53,17 @@ def inspect_embedding_space(encoder, X, y, class_names, save_path='embedding_spa
     
     ax = axes[1]
     hard_pairs = [
-        (class_names.index('CIRCLE_CW') if 'CIRCLE_CW' in class_names else -1, 'CIRCLE_CW', colors[0]),
-        (class_names.index('CIRCLE_CCW') if 'CIRCLE_CCW' in class_names else -1, 'CIRCLE_CCW', colors[1]),
-        (class_names.index('SWIPE_RIGHT') if 'SWIPE_RIGHT' in class_names else -1, 'SWIPE_RIGHT', colors[2]),
-        (class_names.index('SWIPE_UP') if 'SWIPE_UP' in class_names else -1, 'SWIPE_UP', colors[3]),
+        (class_list.index('CIRCLE_CW') if 'CIRCLE_CW' in class_list else -1, 'CIRCLE_CW'),
+        (class_list.index('CIRCLE_CCW') if 'CIRCLE_CCW' in class_list else -1, 'CIRCLE_CCW'),
+        (class_list.index('SWIPE_RIGHT') if 'SWIPE_RIGHT' in class_list else -1, 'SWIPE_RIGHT'),
+        (class_list.index('SWIPE_UP') if 'SWIPE_UP' in class_list else -1, 'SWIPE_UP'),
     ]
-    for class_idx, name, color in hard_pairs:
+    for class_idx, name in hard_pairs:
         if class_idx == -1: continue
         mask = (y == class_idx)
         if not np.any(mask): continue
+        
+        color = colors[class_idx]
         ax.scatter(coords_2d[mask, 0], coords_2d[mask, 1],
                   c=[color], label=name, alpha=0.7, s=30)
     

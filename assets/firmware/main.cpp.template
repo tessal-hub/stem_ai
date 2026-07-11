@@ -41,7 +41,7 @@ namespace spellbook {
 #endif
 
 #ifndef STEM_TFLM_ARENA_BYTES
-#define STEM_TFLM_ARENA_BYTES (100 * 1024)
+#define STEM_TFLM_ARENA_BYTES (256 * 1024)
 #endif
 
 #ifndef STEM_INFERENCE_INTERVAL_MS
@@ -75,7 +75,7 @@ static int s_cooldown = 0;
 static tflite::MicroInterpreter* s_interpreter = nullptr;
 static TfLiteTensor* s_input = nullptr;
 static TfLiteTensor* s_output = nullptr;
-static tflite::MicroMutableOpResolver<13> s_resolver;
+static tflite::MicroMutableOpResolver<20> s_resolver;
 
 struct ImuFrame {
   float ax;
@@ -167,6 +167,9 @@ static bool InitInference() {
   s_resolver.AddMul();
   s_resolver.AddAdd();
   s_resolver.AddQuantize();
+  s_resolver.AddConcatenation();
+  s_resolver.AddMean();
+  s_resolver.AddL2Normalization();
 
   static tflite::MicroInterpreter interpreter(
       model, s_resolver, g_tensor_arena, STEM_TFLM_ARENA_BYTES);
@@ -328,21 +331,49 @@ static SpellId RunInference(const ImuFrame& frame) {
 
   // Đọc số lượng frame model thực sự cần (để chống buffer overflow nếu pipeline train với window_size nhỏ hơn 64)
   int model_frames = s_input->dims->data[1];
-  int input_elements = model_frames * CHANNELS;
-  if (input_elements > BUFFER_LENGTH) {
-      input_elements = BUFFER_LENGTH;
-  }
-
+  // Đọc số lượng channel từ model
+  int model_channels = s_input->dims->data[2];
+  
   const float in_scale = s_input->params.scale;
   const int in_zp = s_input->params.zero_point;
   
-  // Chỉ lấy N phần tử cuối cùng của s_input_buffer để đút vào model
-  int start_offset = BUFFER_LENGTH - input_elements;
-  for (int i = 0; i < input_elements; ++i) {
-    int val = static_cast<int>(s_input_buffer[start_offset + i] / in_scale + in_zp);
-    val = val > 127 ? 127 : val;
-    val = val < -128 ? -128 : val;
-    s_input->data.int8[i] = static_cast<int8_t>(val);
+  // Chỉ lấy model_frames * 6 phần tử cuối cùng của s_input_buffer (vì buffer chỉ lưu 6 kênh raw)
+  int start_offset = BUFFER_LENGTH - (model_frames * 6);
+  if (start_offset < 0) start_offset = 0;
+
+  for (int f = 0; f < model_frames; ++f) {
+    int idx = start_offset + f * 6;
+    float ax = (float)s_input_buffer[idx];
+    float ay = (float)s_input_buffer[idx+1];
+    float az = (float)s_input_buffer[idx+2];
+    float gx = (float)s_input_buffer[idx+3];
+    float gy = (float)s_input_buffer[idx+4];
+    float gz = (float)s_input_buffer[idx+5];
+
+    if (model_channels == 9) {
+      float derived0 = az * gx;
+      float derived1 = az * gy;
+      float jerkz = 0.0f;
+      if (idx >= 6) {
+          jerkz = az - ((float)s_input_buffer[idx - 6 + 2]);
+      }
+      float in_vals[9] = {ax, ay, az, gx, gy, gz, derived0, derived1, jerkz};
+      for(int c=0; c<9; c++) {
+        int val = static_cast<int>(in_vals[c] / in_scale + in_zp);
+        val = val > 127 ? 127 : val;
+        val = val < -128 ? -128 : val;
+        s_input->data.int8[f * 9 + c] = static_cast<int8_t>(val);
+      }
+    } else {
+      // Tương thích ngược với model 6 kênh cũ
+      float in_vals[6] = {ax, ay, az, gx, gy, gz};
+      for(int c=0; c<6; c++) {
+        int val = static_cast<int>(in_vals[c] / in_scale + in_zp);
+        val = val > 127 ? 127 : val;
+        val = val < -128 ? -128 : val;
+        s_input->data.int8[f * 6 + c] = static_cast<int8_t>(val);
+      }
+    }
   }
 
   if (s_interpreter->Invoke() != kTfLiteOk) {
@@ -388,10 +419,16 @@ static SpellId RunInference(const ImuFrame& frame) {
   }
 
   if (max_idx >= 0) {
-    if (window_energy > s_max_energy) {
-      s_max_energy = window_energy;
-      s_best_prob = max_cos;
-      s_best_class = max_idx;
+    // REJECT CLASS THRESHOLD
+    if (max_cos < g_preloaded_spells[max_idx].threshold) {
+      // Điểm embedding nằm quá xa mọi nguyên tử -> Unknown Gesture (OOD)
+      // Không ghi nhận
+    } else {
+      if (window_energy > s_max_energy) {
+        s_max_energy = window_energy;
+        s_best_prob = max_cos;
+        s_best_class = max_idx;
+      }
     }
   }
 

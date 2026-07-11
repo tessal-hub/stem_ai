@@ -133,6 +133,87 @@ _PRIMITIVE_EN: dict[str, dict[str, Any]] = {
             "C_variant": {"count": 50, "instruction": "15 small, 15 large, 20 tilted paths"},
         },
     },
+    "PULL": {
+        "description": "Pull back along Z-axis",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Normal speed, ~30 cm pull back"},
+            "B_speed": {"count": 50, "instruction": "25 slow (~1.2 s), 25 fast (~0.3 s)"},
+            "C_variant": {"count": 50, "instruction": "15 small, 15 large, 20 angled pulls"},
+        },
+    },
+    "YAW_SWISH": {
+        "description": "Yaw wrist swish left-right",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Normal speed, horizontal plane"},
+            "B_speed": {"count": 50, "instruction": "25 slow, 25 fast"},
+            "C_variant": {"count": 50, "instruction": "Various wrist angles and amplitudes"},
+        },
+    },
+    "LASSO": {
+        "description": "Horizontal lasso circle (XZ plane, overhead)",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Normal speed, overhead circle"},
+            "B_speed": {"count": 50, "instruction": "25 slow, 25 fast"},
+            "C_variant": {"count": 50, "instruction": "15 small, 15 large, 20 tilted"},
+        },
+    },
+    "WHEEL": {
+        "description": "Side wheel rotation (YZ plane)",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Normal speed, beside body"},
+            "B_speed": {"count": 50, "instruction": "25 slow, 25 fast"},
+            "C_variant": {"count": 50, "instruction": "15 small, 15 large, 20 tilted"},
+        },
+    },
+    "SQUARE": {
+        "description": "Sharp 90-degree corner (brief velocity=0)",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Normal speed, clean right angle"},
+            "B_speed": {"count": 50, "instruction": "25 slow, 25 fast"},
+            "C_variant": {"count": 50, "instruction": "Various orientations and sizes"},
+        },
+    },
+    "U_SHAPE": {
+        "description": "Smooth orthogonal U-turn (no full stop at bottom)",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Normal speed, smooth curve"},
+            "B_speed": {"count": 50, "instruction": "25 slow, 25 fast"},
+            "C_variant": {"count": 50, "instruction": "Various depths and orientations"},
+        },
+    },
+    "WHIP": {
+        "description": "Whip crack: slow pull-back then fast forward snap",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Clear slow-then-fast asymmetry"},
+            "B_speed": {"count": 50, "instruction": "Various timing ratios"},
+            "C_variant": {"count": 50, "instruction": "Different directions and intensities"},
+        },
+    },
+    "TAP": {
+        "description": "Short mechanical tap/knock (impact spike, near-zero gyro)",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Single clean tap on surface"},
+            "B_speed": {"count": 50, "instruction": "Light taps and firm knocks"},
+            "C_variant": {"count": 50, "instruction": "Tap on different surfaces/angles"},
+        },
+    },
+    "SPIRAL": {
+        "description": "Forward thrust + simultaneous rotation (corkscrew)",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Normal speed spiral forward"},
+            "B_speed": {"count": 50, "instruction": "25 slow, 25 fast"},
+            "C_variant": {"count": 50, "instruction": "Various radii and forward speeds"},
+        },
+    },
 }
 
 _PRIMITIVE_VI: dict[str, dict[str, Any]] = {
@@ -260,6 +341,87 @@ _PRIMITIVE_VI: dict[str, dict[str, Any]] = {
             "A_standard": {"count": 50, "instruction": "Tốc độ bình thường"},
             "B_speed": {"count": 50, "instruction": "25 mẫu chậm, 25 mẫu nhanh"},
             "C_variant": {"count": 50, "instruction": "15 mẫu nhỏ, 15 mẫu lớn, 20 mẫu nghiêng"},
+        },
+    },
+    "PULL": {
+        "description": "Giật lùi theo trục Z",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Tốc độ bình thường, biên độ ~30cm"},
+            "B_speed": {"count": 50, "instruction": "25 mẫu chậm (~1.2s), 25 mẫu nhanh (~0.3s)"},
+            "C_variant": {"count": 50, "instruction": "15 mẫu nhỏ, 15 mẫu lớn, 20 mẫu nghiêng"},
+        },
+    },
+    "YAW_SWISH": {
+        "description": "Vẫy/Lắc cổ tay sang trái-phải (Yaw)",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Tốc độ bình thường, mặt phẳng ngang"},
+            "B_speed": {"count": 50, "instruction": "25 mẫu chậm, 25 mẫu nhanh"},
+            "C_variant": {"count": 50, "instruction": "Góc cổ tay và biên độ khác nhau"},
+        },
+    },
+    "LASSO": {
+        "description": "Quay lọng ngang trên đỉnh đầu (mặt phẳng XZ)",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Tốc độ bình thường, quay ngang trên đầu"},
+            "B_speed": {"count": 50, "instruction": "25 mẫu chậm, 25 mẫu nhanh"},
+            "C_variant": {"count": 50, "instruction": "15 mẫu nhỏ, 15 mẫu lớn, 20 mẫu nghiêng"},
+        },
+    },
+    "WHEEL": {
+        "description": "Quay bánh xe bên hông cơ thể (mặt phẳng YZ)",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Tốc độ bình thường, bên hông cơ thể"},
+            "B_speed": {"count": 50, "instruction": "25 mẫu chậm, 25 mẫu nhanh"},
+            "C_variant": {"count": 50, "instruction": "15 mẫu nhỏ, 15 mẫu lớn, 20 mẫu nghiêng"},
+        },
+    },
+    "SQUARE": {
+        "description": "Bẻ góc vuông 90° (vận tốc = 0 chớp nhoáng)",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Tốc độ bình thường, góc vuông rõ ràng"},
+            "B_speed": {"count": 50, "instruction": "25 mẫu chậm, 25 mẫu nhanh"},
+            "C_variant": {"count": 50, "instruction": "Hướng và kích thước khác nhau"},
+        },
+    },
+    "U_SHAPE": {
+        "description": "Bẻ cua chữ U mượt mà (không dừng ở đáy)",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Tốc độ bình thường, đường cong mượt"},
+            "B_speed": {"count": 50, "instruction": "25 mẫu chậm, 25 mẫu nhanh"},
+            "C_variant": {"count": 50, "instruction": "Độ sâu và hướng khác nhau"},
+        },
+    },
+    "WHIP": {
+        "description": "Quất roi: Kéo lùi chậm rồi vụt mạnh tới",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Bất đối xứng rõ: chậm-rồi-nhanh"},
+            "B_speed": {"count": 50, "instruction": "Tỉ lệ thời gian khác nhau"},
+            "C_variant": {"count": 50, "instruction": "Hướng và cường độ khác nhau"},
+        },
+    },
+    "TAP": {
+        "description": "Gõ/Búng ngắn (sóng va chạm, Gyro ~ 0)",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Gõ nhẹ một lần lên mặt phẳng"},
+            "B_speed": {"count": 50, "instruction": "Gõ nhẹ và gõ mạnh"},
+            "C_variant": {"count": 50, "instruction": "Gõ lên các bề mặt/góc khác nhau"},
+        },
+    },
+    "SPIRAL": {
+        "description": "Trôn ốc: Đâm thẳng + Xoay vòng đồng thời",
+        "target_samples": 150,
+        "groups": {
+            "A_standard": {"count": 50, "instruction": "Tốc độ bình thường, xoắn ốc về phía trước"},
+            "B_speed": {"count": 50, "instruction": "25 mẫu chậm, 25 mẫu nhanh"},
+            "C_variant": {"count": 50, "instruction": "Bán kính và tốc độ tiến khác nhau"},
         },
     },
 }

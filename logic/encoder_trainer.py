@@ -83,7 +83,7 @@ class EncoderTrainerWorker(QThread):
             self.sig_status.emit("[ENCODER] Building encoder and triplet model...")
             encoder = build_encoder(
                 window_size=self.window_size,
-                channels=6,
+                channels=9,
                 embedding_dim=self.embedding_dim,
             )
             triplet_model = build_triplet_model(encoder)
