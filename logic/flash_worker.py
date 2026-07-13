@@ -40,19 +40,22 @@ class FlashWorker(QThread):
         super().__init__()
         self._process: subprocess.Popen | None = None
         self._port: str = ""
-        self._bin_path: str = ""
+        self._flash_parts: dict[str, str] = {}
         self._last_error_message: str = ""
 
-    def flash_firmware(self, port: str, bin_path: str) -> None:
+    def flash_firmware(self, port: str, bin_path: str = "", flash_parts: dict[str, str] = None) -> None:
         """
         Queue a firmware flash operation.
 
         Args:
             port: Serial port (e.g., "COM3", "/dev/ttyUSB0")
-            bin_path: Path to .bin firmware file
+            bin_path: Path to .bin firmware file (flashed to 0x10000 by default)
+            flash_parts: Dictionary mapping address strings to file paths
         """
         self._port = port
-        self._bin_path = bin_path
+        self._flash_parts = flash_parts or {}
+        if bin_path:
+            self._flash_parts[_FLASH_ADDRESS] = bin_path
         self.start()
 
     def run(self) -> None:
@@ -61,11 +64,11 @@ class FlashWorker(QThread):
         success = False
         finished_message = "Flash failed"
         try:
-            bin_file = self._validate_flash_inputs()
-            if bin_file is None:
+            valid_parts = self._validate_flash_inputs()
+            if not valid_parts:
                 finished_message = self._last_error_message or "Flash validation failed"
                 return
-            cmd = self._build_esptool_cmd(bin_file)
+            cmd = self._build_esptool_cmd(valid_parts)
             success, finished_message = self._execute_flash(cmd)
         except subprocess.TimeoutExpired:
             self.log_msg.emit("[ERROR] Flash operation timed out (5 minutes)")
@@ -99,42 +102,43 @@ class FlashWorker(QThread):
         self.log_msg.emit(f"[ERROR] {message}")
         self.sig_error.emit(message)
 
-    def _validate_flash_inputs(self) -> "Path | None":
-        """Validate port, binary path, binary size, and esptool availability.
+    def _validate_flash_inputs(self) -> dict[str, "Path"]:
+        """Validate port, binary paths, binary sizes, and esptool availability.
 
-        Returns the resolved ``Path`` on success, or ``None`` on any failure
-        (error signals are already emitted before returning ``None``).
+        Returns a dict mapping addresses to validated ``Path`` objects, or empty dict on failure.
         """
         if not self._port:
             self._fail("No serial port specified")
-            return None
+            return {}
 
-        if not self._bin_path:
-            self._fail("No binary file path specified")
-            return None
+        if not self._flash_parts:
+            self._fail("No binaries specified for flashing")
+            return {}
 
-        bin_file = Path(self._bin_path).resolve()
-        if not bin_file.exists():
-            self._fail(f"Binary file not found: {bin_file}")
-            return None
+        valid_parts = {}
+        for addr, path_str in self._flash_parts.items():
+            bin_file = Path(path_str).resolve()
+            if not bin_file.exists():
+                self._fail(f"Binary file not found: {bin_file}")
+                return {}
 
-        file_size = bin_file.stat().st_size
-        if file_size == 0:
-            self._fail(f"Binary file is empty: {bin_file}")
-            return None
+            file_size = bin_file.stat().st_size
+            if file_size == 0:
+                self._fail(f"Binary file is empty: {bin_file}")
+                return {}
 
-        self.log_msg.emit(f"[INFO] Binary file: {bin_file}")
-        self.log_msg.emit(f"[INFO] Binary size: {file_size} bytes")
+            self.log_msg.emit(f"[INFO] File: {bin_file} -> {addr} ({file_size} bytes)")
+            valid_parts[addr] = bin_file
 
         if not self._check_esptool_available():
             self._fail("esptool not installed. Run: pip install esptool")
-            return None
+            return {}
 
-        return bin_file
+        return valid_parts
 
-    def _build_esptool_cmd(self, bin_file: "Path") -> list[str]:
-        """Return the esptool command list for the configured port and binary."""
-        return [
+    def _build_esptool_cmd(self, valid_parts: dict[str, "Path"]) -> list[str]:
+        """Return the esptool command list for the configured port and binaries."""
+        cmd = [
             sys.executable, "-m", "esptool",
             "--chip", "esp32",
             "--port", self._port,
@@ -145,9 +149,10 @@ class FlashWorker(QThread):
             "--flash-mode", "dio",
             "--flash-freq", "80m",
             "--flash-size", "keep",
-            _FLASH_ADDRESS,      # Address where app firmware is flashed
-            str(bin_file),
         ]
+        for addr, path in valid_parts.items():
+            cmd.extend([addr, str(path)])
+        return cmd
 
     def _execute_flash(self, cmd: list[str]) -> tuple[bool, str]:
         """Spawn esptool process, stream output, and return final status tuple."""

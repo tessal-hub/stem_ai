@@ -141,12 +141,6 @@ def sync_firmware_sources(
     if idf_main.name.lower() != "main":
         raise ValueError("IDF path must point to the main directory")
 
-    if not generated_cc_path.exists() or not generated_cc_path.is_file():
-        raise FileNotFoundError(f"Generated gesture_model.cc not found: {generated_cc_path}")
-
-    gesture_cc_target = idf_main / "gesture_model.cc"
-    shutil.copyfile(generated_cc_path, gesture_cc_target)
-
     main_cpp_path, backup_path, class_count = generate_main_cpp(
         idf_main_dir=idf_main,
         class_names=class_names,
@@ -155,7 +149,7 @@ def sync_firmware_sources(
 
     return FirmwareSyncResult(
         main_cpp_path=main_cpp_path,
-        gesture_cc_path=str(gesture_cc_target),
+        gesture_cc_path="",
         backup_path=backup_path,
         class_count=class_count,
     )

@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "gesture_model.cc" "main.cpp"
+    SRCS "main.cpp"
     INCLUDE_DIRS "."
     REQUIRES
         esp_driver_i2c
@@ -10,4 +10,5 @@ idf_component_register(
         spiffs
         espressif__esp-tflite-micro
         esp_timer
+        nvs_flash
 )

@@ -204,7 +204,7 @@ class Handler(QObject):
         self.serial_worker.sig_connection_status.connect(
             self._on_serial_status, type=Qt.ConnectionType.QueuedConnection)
         self.serial_worker.sig_raw_line_received.connect(
-            self.ui_wand.append_terminal_text, type=Qt.ConnectionType.QueuedConnection)
+            self._route_raw_line, type=Qt.ConnectionType.QueuedConnection)
         self.serial_worker.sig_prediction_received.connect(
             self.store.update_prediction, type=Qt.ConnectionType.QueuedConnection)
 
@@ -398,6 +398,15 @@ class Handler(QObject):
     def _on_serial_status(self, connected: bool, msg: str) -> None:
         """Xử lý thay đổi trạng thái kết nối phần cứng."""
         self.ui_wand.set_serial_status(connected, self.serial_worker.port if connected else "")
+
+    def _route_raw_line(self, line: str) -> None:
+        """Phân luồng log UART: Primitive sang màn hình thu thập, Spell sang Wand."""
+        line_upper = line.upper()
+        if "DEBUG_BLACKHOLE" in line_upper or "PRIMITIVE" in line_upper:
+            if self.ui_primitive_collect and hasattr(self.ui_primitive_collect, "console"):
+                self.ui_primitive_collect.console.append_line(line)
+        else:
+            self.ui_wand.append_terminal_text(line)
         self.store.set_connection_status(connected, self.serial_worker.port if connected else "None")
         if not connected:
             self._set_mode(self._MODE_IDLE)
@@ -668,13 +677,24 @@ class Handler(QObject):
         self.ui_wand.append_terminal_text(f">> [START] Building & Flashing Firmware to {port}...")
         self.ui_wand.update_flash_progress(0, "Building...")
         
-        from logic.idf_worker import IDFBuildWorker
-        from config import WORKSPACE_ROOT
+        from logic.flash_worker import FlashWorker
+        from config import APP_DATA_DIR
         
-        self._idf_worker = IDFBuildWorker(project_dir=WORKSPACE_ROOT / "mpu6050", port=port)
-        self._idf_worker.sig_log.connect(self.ui_wand.append_terminal_text)
-        self._idf_worker.sig_finished.connect(self._on_upload_finished)
-        self._idf_worker.start()
+        self._model_flash_worker = FlashWorker()
+        self._model_flash_worker.log_msg.connect(self.ui_wand.append_terminal_text)
+        self._model_flash_worker.sig_progress.connect(
+            lambda p: self.ui_wand.update_flash_progress(p, f"Flashing {p}%")
+        )
+        self._model_flash_worker.sig_finished.connect(self._on_upload_finished)
+        
+        labels_path = APP_DATA_DIR / "labels.bin"
+        self._model_flash_worker.flash_firmware(
+            port=port,
+            flash_parts={
+                "0x290000": str(path),
+                "0x390000": str(labels_path)
+            }
+        )
 
     def _on_upload_finished(self, success: bool, message: str) -> None:
         """Called when ModelUploader finishes uploading."""

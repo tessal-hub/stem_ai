@@ -1010,13 +1010,13 @@ def build_gesture_model(
                     other_embs = other_embs / other_norms
                     other_cos_sims = np.dot(other_embs, centroid)
                     max_other = float(np.max(other_cos_sims))
-                    # Set threshold slightly above the max similarity of any other class
-                    thresh = max(0.50, min(max_other + 0.05, 0.90))
+                    # Set threshold slightly above the max similarity of any other class, but cap at 0.55 to make spells very easy to cast
+                    thresh = max(0.40, min(max_other + 0.05, 0.55))
                 else:
-                    thresh = 0.65
+                    thresh = 0.45
             else:
                 centroid = np.zeros(16)
-                thresh = 0.65
+                thresh = 0.45
             centroids.append(centroid.tolist())
             thresholds.append(thresh)
     tflite_path, cc_path = _resolve_output_paths(output_root)
