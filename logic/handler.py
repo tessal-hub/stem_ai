@@ -34,6 +34,150 @@ from .recorder import DataRecorder
 from .serial_worker import SerialWorker
 from .tensorflow.pipeline import GestureModelBuildWorker
 from .primitive_quality_worker import PrimitiveQualityWorker
+from PyQt6.QtCore import QThread, pyqtSignal
+
+class NVSBuildWorker(QThread):
+    sig_status = pyqtSignal(str)
+    sig_progress = pyqtSignal(int)
+    sig_finished = pyqtSignal(bool, str)
+
+    def __init__(self, spell_names: list[str], dataset_dir: str, spell_recognizer, app_data_dir) -> None:
+        super().__init__()
+        self.spell_names = spell_names
+        self.dataset_dir = dataset_dir
+        self.spell_recognizer = spell_recognizer
+        self.app_data_dir = app_data_dir
+
+    def run(self) -> None:
+        try:
+            from pathlib import Path
+            from logic.dataset_layout import discover_class_directories, _routes_to_primitives, _PRIMITIVE_LOGICAL_NAMES
+            from constants import canonical_system_spell, normalize_spell_name
+            from logic.tensorflow.nvs_builder import build_config_bin
+            import numpy as np
+            import csv
+
+            self.sig_status.emit(">> [NVS] Discovering dataset classes...")
+            self.sig_progress.emit(10)
+            dataset_root = Path(self.dataset_dir)
+            all_classes = discover_class_directories(dataset_root)
+
+            # Trích xuất primitives
+            primitives = []
+            for c_name in all_classes.keys():
+                canon = canonical_system_spell(normalize_spell_name(c_name))
+                if _routes_to_primitives(canon) or c_name.upper() in _PRIMITIVE_LOGICAL_NAMES:
+                    primitives.append(c_name)
+
+            if "STAND BY" not in primitives and "STAND_BY" not in primitives:
+                primitives.append("STAND BY")
+
+            # Gộp danh sách cử chỉ không trùng lặp
+            seen = set()
+            final_gestures = []
+            for g in primitives + self.spell_names:
+                g_clean = g.strip()
+                if not g_clean:
+                    continue
+                g_upper = g_clean.upper()
+                if g_upper not in seen:
+                    seen.add(g_upper)
+                    final_gestures.append(g_clean)
+
+            gesture_names = []
+            centroids = []
+            is_spell_flags = []
+            thresholds = []
+
+            total_gestures = len(final_gestures)
+            for idx, g in enumerate(final_gestures):
+                is_spell = g not in primitives
+                if is_spell:
+                    self.sig_status.emit(f">> [NVS] Embedding spell '{g}'...")
+                self.sig_progress.emit(10 + int(70 * (idx / total_gestures)))
+
+                # Load samples locally
+                from logic.dataset_layout import storage_dirs_for_spell
+                dirs = storage_dirs_for_spell(dataset_root, g)
+                csv_files = []
+                for d in dirs:
+                    csv_files.extend(sorted(d.glob("*.csv")))
+
+                samples = []
+                for fpath in csv_files:
+                    rows = []
+                    try:
+                        with open(fpath, "r", encoding="utf-8", newline="") as f:
+                            reader = csv.reader(f)
+                            next(reader, None)  # skip header
+                            for line in reader:
+                                if len(line) >= 6:
+                                    try:
+                                        rows.append([float(v) for v in line[:6]])
+                                    except ValueError:
+                                        continue
+                    except Exception:
+                        continue
+
+                    if len(rows) < 64:
+                        continue
+
+                    best_window = None
+                    max_energy = -1.0
+                    for start_idx in range(0, len(rows) - 64 + 1, 2):
+                        w_list = rows[start_idx:start_idx + 64]
+                        energy = sum(
+                            abs(row[0]) + abs(row[1]) + abs(row[2]) + 
+                            abs(row[3]) + abs(row[4]) + abs(row[5])
+                            for row in w_list
+                        )
+                        if energy > max_energy:
+                            max_energy = energy
+                            window = np.asarray(w_list, dtype=np.float32)
+                            window = np.clip(window, -2.0, 2.0)
+                            best_window = window
+                    if best_window is not None:
+                        samples.append(best_window)
+
+                if not samples:
+                    if is_spell:
+                        self.sig_status.emit(f">> [WARN] No samples found for spell '{g}', using default zero centroid.")
+                    centroid = [0.0] * 16
+                    thresh = 0.45
+                else:
+                    batch = np.asarray(samples, dtype=np.float32)
+                    embeddings = self.spell_recognizer._embed_batch(batch)
+                    
+                    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+                    norms[norms == 0] = 1e-10
+                    normalized = embeddings / norms
+                    
+                    mean_emb = np.mean(normalized, axis=0)
+                    m_norm = np.linalg.norm(mean_emb)
+                    if m_norm > 0:
+                        mean_emb = mean_emb / m_norm
+                    centroid = mean_emb.tolist()
+                    thresh = 0.45
+
+                gesture_names.append(g)
+                centroids.append(centroid)
+                is_spell_flags.append(is_spell)
+                thresholds.append(thresh)
+
+            self.sig_status.emit(">> [NVS] Compiling labels.bin...")
+            self.sig_progress.emit(90)
+
+            out_bin = Path(self.app_data_dir) / "labels.bin"
+            build_config_bin(
+                gesture_names=gesture_names,
+                centroids=centroids,
+                is_spell_flags=is_spell_flags,
+                thresholds=thresholds,
+                out_path=str(out_bin)
+            )
+            self.sig_finished.emit(True, f"labels.bin generated successfully w/ {len(self.spell_names)} spells.")
+        except Exception as e:
+            self.sig_finished.emit(False, str(e))
 
 log = logging.getLogger(__name__)
 
@@ -113,6 +257,7 @@ class Handler(QObject):
 
         self.spell_recognizer: PrototypicalRecognizer | None = None
         self._model_build_worker: GestureModelBuildWorker | None = None
+        self._nvs_build_worker: NVSBuildWorker | None = None
         self._primitive_active = False
         self._quality_worker: PrimitiveQualityWorker | None = None
         self.encoder_trainer = None
@@ -316,62 +461,36 @@ class Handler(QObject):
     # ── Internal Slots ──────────────────────────
 
     def on_build_firmware(self, spell_names: list[str]) -> None:
-        """Kích hoạt tiến trình xây dựng mô hình .tflite và .cc."""
-        self._start_model_build(spell_names, mode="both")
-
-    def _start_model_build(self, spell_names: list[str], mode: str) -> None:
-        """Khởi tạo worker huấn luyện mô hình."""
-        if self._model_build_worker and self._model_build_worker.isRunning():
-            self.ui_wand.append_terminal_text(">> [ERROR] Build already in progress.")
+        """Sinh ra file labels.bin chứa cấu hình NVS động cho các spell và primitive."""
+        if not self.spell_recognizer or not self.spell_recognizer.encoder:
+            self.ui_wand.append_terminal_text(">> [ERROR] Encoder is not trained or loaded. Please train encoder in Primitive page first.")
+            self.ui_wand.update_flash_progress(0, "Failed")
             return
 
-        self.ui_wand.append_terminal_text(f">> [START] Building model ({mode})...")
-        self.ui_wand.update_flash_progress(0, "Initializing...")
+        if self._nvs_build_worker and self._nvs_build_worker.isRunning():
+            self.ui_wand.append_terminal_text(">> [ERROR] NVS Build already in progress.")
+            return
 
-        self._model_build_worker = GestureModelBuildWorker(
+        self.ui_wand.append_terminal_text(">> [START] Building NVS labels configuration (labels.bin)...")
+        self.ui_wand.update_flash_progress(0, "Building...")
+
+        self._nvs_build_worker = NVSBuildWorker(
+            spell_names=spell_names,
             dataset_dir=self.store.dataset_dir,
-            output_mode=mode,
-            selected_spells=spell_names,
-            preset="medium"
+            spell_recognizer=self.spell_recognizer,
+            app_data_dir=APP_DATA_DIR
         )
-        self._model_build_worker.sig_status.connect(self.ui_wand.append_terminal_text)
-        self._model_build_worker.sig_progress.connect(self.ui_wand.update_flash_progress)
-        self._model_build_worker.sig_finished.connect(self._on_model_build_finished)
-        self._model_build_worker.start()
+        self._nvs_build_worker.sig_status.connect(self.ui_wand.append_terminal_text)
+        self._nvs_build_worker.sig_progress.connect(self.ui_wand.update_flash_progress)
+        self._nvs_build_worker.sig_finished.connect(self._on_nvs_build_finished)
+        self._nvs_build_worker.start()
 
-    def _on_model_build_finished(self, success: bool, msg: str) -> None:
-        """Xử lý sau khi kết thúc huấn luyện."""
+    def _on_nvs_build_finished(self, success: bool, message: str) -> None:
         if success:
-            self.ui_wand.append_terminal_text(f">> [DONE] Build success: {msg}")
+            self.ui_wand.append_terminal_text(f">> [DONE] {message}")
             self.ui_wand.update_flash_progress(100, "Success")
-            if self._model_build_worker and self._model_build_worker.build_result:
-                result = self._model_build_worker.build_result
-                tflite_path = result.tflite_path
-                cc_path = result.cc_path
-                classes = result.classes
-                if tflite_path:
-                    self.store.save_settings({"model_path": str(tflite_path)})
-                    self.ui_wand.append_terminal_text(f">> Updated settings: model_path={tflite_path}")
-                if cc_path and classes:
-                    from logic.firmware_main_generator import sync_firmware_sources
-                    from config import WORKSPACE_ROOT
-                    idf_main_dir = WORKSPACE_ROOT / "mpu6050" / "main"
-                    template_path = WORKSPACE_ROOT / "assets" / "firmware" / "main.cpp.template"
-                    if idf_main_dir.exists() and template_path.exists():
-                        try:
-                            sync_res = sync_firmware_sources(
-                                idf_main_dir=idf_main_dir,
-                                generated_cc_path=Path(cc_path),
-                                class_names=classes,
-                                template_path=template_path
-                            )
-                            self.ui_wand.append_terminal_text(
-                                f">> Tailored main.cpp generated successfully with {sync_res.class_count} classes."
-                            )
-                        except Exception as e:
-                            log.error("Failed to sync firmware main.cpp: %s", e)
         else:
-            self.ui_wand.append_terminal_text(f">> [FAIL] Build failed: {msg}")
+            self.ui_wand.append_terminal_text(f">> [ERROR] Failed to generate labels.bin: {message}")
             self.ui_wand.update_flash_progress(0, "Failed")
 
     def _on_serial_frame(self, values: list[float]) -> None:
@@ -398,6 +517,11 @@ class Handler(QObject):
     def _on_serial_status(self, connected: bool, msg: str) -> None:
         """Xử lý thay đổi trạng thái kết nối phần cứng."""
         self.ui_wand.set_serial_status(connected, self.serial_worker.port if connected else "")
+        self.store.set_connection_status(connected, self.serial_worker.port if connected else "None")
+        if not connected:
+            self._set_mode(self._MODE_IDLE)
+            with self._port_lock:
+                self._port_owner = None
 
     def _route_raw_line(self, line: str) -> None:
         """Phân luồng log UART: Primitive sang màn hình thu thập, Spell sang Wand."""
@@ -407,11 +531,6 @@ class Handler(QObject):
                 self.ui_primitive_collect.console.append_line(line)
         else:
             self.ui_wand.append_terminal_text(line)
-        self.store.set_connection_status(connected, self.serial_worker.port if connected else "None")
-        if not connected:
-            self._set_mode(self._MODE_IDLE)
-            with self._port_lock:
-                self._port_owner = None
 
     def _on_feature_timer_tick(self) -> None:
         """Kích hoạt trích xuất đặc trưng định kỳ."""
@@ -1283,3 +1402,6 @@ class Handler(QObject):
         self.feature_worker.stop()
         if self._quality_worker and self._quality_worker.isRunning():
             self._quality_worker.stop()
+        if self._nvs_build_worker and self._nvs_build_worker.isRunning():
+            self._nvs_build_worker.terminate()
+            self._nvs_build_worker.wait()

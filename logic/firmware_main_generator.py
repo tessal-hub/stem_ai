@@ -147,9 +147,12 @@ def sync_firmware_sources(
         template_path=template_path,
     )
 
+    gesture_cc_path = idf_main / "gesture_model.cc"
+    shutil.copyfile(generated_cc_path, gesture_cc_path)
+
     return FirmwareSyncResult(
         main_cpp_path=main_cpp_path,
-        gesture_cc_path="",
+        gesture_cc_path=str(gesture_cc_path),
         backup_path=backup_path,
         class_count=class_count,
     )

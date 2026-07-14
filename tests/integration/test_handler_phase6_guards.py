@@ -66,6 +66,7 @@ class WandStub(QObject):
     sig_train_build_requested = pyqtSignal()
     sig_train_build_tflite_requested = pyqtSignal(list)
     sig_train_build_cc_requested = pyqtSignal(list)
+    sig_train_build_firmware_requested = pyqtSignal(list)
     sig_term_clear = pyqtSignal()
 
     def __init__(self) -> None:

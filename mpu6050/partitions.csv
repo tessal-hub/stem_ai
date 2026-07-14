@@ -1,9 +1,40 @@
-# Name,   Type, SubType, Offset,   Size
-# Tong = 0x400000 (4MB). Neu board dung flash 8MB/16MB,
-# tang size cua "storage" tuong ung va sua CONFIG_ESPTOOLPY_FLASHSIZE trong sdkconfig.
-nvs,      data, nvs,     0x9000,   0x5000
-phy_init, data, phy,     0xf000,   0x1000
-factory,  app,  factory, 0x10000,  0x180000
-storage,  data, spiffs,  0x190000, 0x100000,
+# Name,   Type, SubType, Offset,   Size,     Flags
+# =============================================================================
+# Total flash = 0x400000 (4MB)
+#
+# Layout:
+#   0x0000 - 0x0FFF  : Reserved (bootloader detection)
+#   0x1000 - 0x7FFF  : Bootloader (28KB)
+#   0x8000 - 0x8FFF  : Partition table (4KB)
+#   0x9000 - 0xDFFF  : nvs (WiFi/BT config, 20KB)
+#   0xE000 - 0xEFFF  : phy_init (4KB)
+#   0xF000 - 0xFFFF  : Reserved (4KB alignment gap)
+#   0x10000- 0x18FFFF: factory app (1.5MB)
+#   0x190000-0x27FFFF: storage (SPIFFS, 960KB)
+#   0x280000-0x28FFFF: Reserved (64KB gap — future use or alignment)
+#   0x290000-0x38FFFF: model (raw .tflite, 1MB)
+#   0x390000-0x39FFFF: labels (NVS, 64KB)
+#   0x3A0000-0x3FFFFF: Unused (384KB — available for future expansion)
+#
+# NOTES:
+# - labels partition type = nvs. Requires ESP-IDF NVS binary format.
+#   Use nvs_partition_gen.py to generate labels.bin from CSV/JSON source.
+#   Raw binary dump will NOT work and will be reformatted on first boot,
+#   causing data loss.
+#
+# - model partition type = 0x40 (custom). Mmap'd as raw data at runtime.
+#   No filesystem overhead; direct pointer into flash.
+#
+# - storage partition type = spiffs. Used for web UI assets, logs, OTA
+#   download cache, etc.
+#
+# - If using 8MB or 16MB flash, increase storage size accordingly and
+#   update CONFIG_ESPTOOLPY_FLASHSIZE in sdkconfig.
+# =============================================================================
+
+nvs,      data, nvs,     0x9000,   0x6000,
+phy_init, data, phy,     0xf000,   0x1000,
+factory,  app,  factory, 0x10000,  0x180000,
+storage,  data, spiffs,  0x190000, 0xF0000,
 model,    data, 0x40,    0x290000, 0x100000,
-labels,   data, nvs,     0x390000, 0x6000,
+labels,   data, nvs,     0x390000, 0x10000,

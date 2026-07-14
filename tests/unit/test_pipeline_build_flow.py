@@ -22,6 +22,9 @@ class _FakeModel(_FakeLayer):
         super().__init__()
         self.layers = kwargs.get("layers", [])
 
+    def count_params(self) -> int:
+        return 1000
+
     def compile(self, **_kwargs) -> None:
         return None
 

@@ -11,4 +11,6 @@ idf_component_register(
         espressif__esp-tflite-micro
         esp_timer
         nvs_flash
+        esp_driver_gpio
+        esp_rom
 )
