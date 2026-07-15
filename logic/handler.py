@@ -17,7 +17,7 @@ from threading import Lock
 
 from PyQt6.QtCore import QObject, Qt, QTimer
 
-from config import APP_DATA_DIR, WORKSPACE_ROOT
+from config import APP_DATA_DIR, WORKSPACE_ROOT, FIRMWARE_BIN_DIR
 from constants import is_system_spell, canonical_system_spell
 from ui.asset_utils import resolve_asset_path
 from pathlib import Path
@@ -304,16 +304,10 @@ class Handler(QObject):
         self.ui_record.sig_spell_selected.connect(self.on_spell_selected)
         self.ui_record.sig_spell_deleted.connect(self.on_spell_deleted)
 
-        if hasattr(self.ui_record, 'sig_delete_latest_sample') and hasattr(self, 'on_delete_latest_sample'):
-            self.ui_record.sig_delete_latest_sample.connect(self.on_delete_latest_sample)
         if hasattr(self, 'on_clear_buffer'):
             self.ui_record.sig_clear_buffer.connect(self.on_clear_buffer)
         if hasattr(self, 'on_export_csv'):
             self.ui_record.sig_export_csv.connect(self.on_export_csv)
-
-        sig_reg = getattr(self.ui_record, 'sig_register_prototype', None)
-        if sig_reg is not None:
-            sig_reg.connect(self.on_register_spell_prototype)
 
         if hasattr(self, 'on_build_firmware'):
             self.ui_wand.sig_train_build_firmware_requested.connect(self.on_build_firmware)
@@ -603,6 +597,11 @@ class Handler(QObject):
                 log.info(f"Loaded encoder and {len(self.spell_recognizer.prototypes) if self.spell_recognizer else 0} prototypes.")
             except Exception as e:
                 log.error(f"Failed to load encoder: {e}")
+                if hasattr(self, 'ui_wand') and self.ui_wand:
+                    self.ui_wand.append_terminal_text(
+                        f"[ERROR] Encoder load failed: {type(e).__name__}: {e}"
+                    )
+
 
     def _on_db_refreshed(self, counts: dict) -> None:
         """Cập nhật dữ liệu từ DB vào các trang UI."""
@@ -1128,6 +1127,19 @@ class Handler(QObject):
                     best_window = window
 
             if best_window is not None:
+                # Sanity-check: normalized IMU data must live in [-20, 20].
+                # Values far outside this range indicate raw un-normalized
+                # int16 data was written to CSV — clipping would produce
+                # a flat, misleading signal. Skip and warn instead.
+                if float(np.max(np.abs(best_window))) > 20.0:
+                    log.warning(
+                        "_load_samples_for_analysis: '%s' - %s appears to contain "
+                        "raw (un-normalized) data (max |value|=%.1f). "
+                        "Sample skipped to avoid false consistency scores.",
+                        spell_name, fpath.name,
+                        float(np.max(np.abs(best_window))),
+                    )
+                    continue
                 samples.append(best_window)
 
         return samples
@@ -1242,7 +1254,11 @@ class Handler(QObject):
                 return
 
         filename = "collect.bin" if bin_type == "data" else "inference.bin"
-        bin_path = Path(resolve_asset_path(f"assets/firmware/{filename}"))
+        custom_bin_path = FIRMWARE_BIN_DIR / filename
+        if custom_bin_path.exists():
+            bin_path = custom_bin_path
+        else:
+            bin_path = Path(resolve_asset_path(f"assets/firmware/{filename}"))
 
         if not self._validate_required_file(bin_path):
             if self.ui_setting:
@@ -1380,8 +1396,16 @@ class Handler(QObject):
     def _on_encoder_training_finished(self, success: bool, message: str) -> None:
         if success:
             self._try_load_encoder()
+            # Refresh consistency display for whichever spell is open so the
+            # "Encoder chưa được load" message is replaced immediately —
+            # without this the user has to back-out and re-select the spell.
+            if self.spell_recognizer is not None:
+                current_spell = getattr(self.ui_record, 'current_spell_name', None)
+                if current_spell:
+                    self._run_consistency_analysis(current_spell)
         if self.ui_primitive_collect:
             self.ui_primitive_collect.on_encoder_training_finished(success, message)
+
 
     def on_settings_saved(self, config: dict) -> None:
         """Called when settings are saved to update components."""

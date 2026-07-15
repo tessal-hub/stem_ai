@@ -13,4 +13,5 @@ idf_component_register(
         nvs_flash
         esp_driver_gpio
         esp_rom
+        esp_system
 )

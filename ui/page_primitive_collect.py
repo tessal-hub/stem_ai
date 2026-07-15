@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import numpy as np
 import pyqtgraph as pg
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QProgressBar,
                              QScrollArea, QStackedWidget, QVBoxLayout, QWidget, QComboBox)
 from PyQt6.QtGui import QShortcut, QKeySequence
@@ -23,6 +23,7 @@ from ui.layout_utils import clear_layout
 from ui.modern_layout import (MARGIN_COMFORTABLE, SPACING_LG, SPACING_MD,
                               SPACING_SM)
 from ui.tokens import (PLOT_AX_COLOR, PLOT_AY_COLOR, PLOT_AZ_COLOR,
+                       PLOT_GX_COLOR, PLOT_GY_COLOR, PLOT_GZ_COLOR,
                        RIGHT_MAX_W, RIGHT_MIN_W)
 
 
@@ -52,6 +53,11 @@ class PagePrimitiveCollect(QWidget):
         self._setup_plot()
         self._init_signals()
         self._load_data()
+
+        # High-performance timer-based polling for plots (avoids UI choking at 100Hz)
+        self._plot_timer = QTimer(self)
+        self._plot_timer.timeout.connect(self._render_plots)
+        self._plot_timer.start(40)  # 25 Hz
 
     def _init_ui(self) -> None:
         """Khởi tạo giao diện trang thu thập mẫu gốc."""
@@ -128,30 +134,49 @@ class PagePrimitiveCollect(QWidget):
     def refresh_styles(self) -> None:
         """Làm mới style theo theme hiện tại."""
         p = theme_manager.get_palette()
-        self.preview_plot.setBackground("transparent")
-        self.preview_plot.getAxis("left").setPen(p.TEXT_TERTIARY)
+        self.preview_plot_accel.setBackground("transparent")
+        self.preview_plot_gyro.setBackground("transparent")
+        self.preview_plot_accel.getAxis("left").setPen(p.TEXT_TERTIARY)
+        self.preview_plot_gyro.getAxis("left").setPen(p.TEXT_TERTIARY)
         self._rebuild_cards()
 
     def update_signal_preview(self, snapshot: list) -> None:
-        """Vẽ lại đồ thị sensor thời gian thực."""
-        if not snapshot:
+        """Giờ là hàm dummy để tương thích ngược. Vẽ chính được thực hiện qua QTimer."""
+        pass
+
+    def _render_plots(self) -> None:
+        """Vẽ lại đồ thị sensor thời gian thực định kỳ từ live buffer."""
+        if not self.isVisible():
+            return
+        buf = self.store.get_live_buffer_snapshot()
+        if not buf:
             self.preview_stack.setCurrentIndex(0)
             return
         self.preview_stack.setCurrentIndex(1)
-        arr = np.asarray(snapshot, dtype=np.float32)
-        if arr.ndim == 2 and arr.shape[1] >= 6:
-            self.curve_ax.setData(arr[:, 0])
-            self.curve_ay.setData(arr[:, 1])
-            self.curve_az.setData(arr[:, 2])
+        try:
+            arr = np.asarray(buf, dtype=np.float32)
+            if arr.ndim == 2 and arr.shape[1] >= 6:
+                self.curve_ax.setData(arr[:, 0])
+                self.curve_ay.setData(arr[:, 1])
+                self.curve_az.setData(arr[:, 2])
+                self.curve_gx.setData(arr[:, 3])
+                self.curve_gy.setData(arr[:, 4])
+                self.curve_gz.setData(arr[:, 5])
+        except Exception:
+            pass
 
     def update_collection_stats(self, stats: dict) -> None:
         """Cập nhật tiến độ thu thập cho từng cử chỉ."""
-        self._stats = stats  # Lưu lại để dùng khi rebuild UI
+        self._stats = stats
         gestures_ready = 0
         for name, widgets in self._card_widgets.items():
             count = int(stats.get(name, 0))
             target = int(self._catalog[name]["target_samples"])
-            widgets["progress"].setValue(min(count, target))
+            prog = widgets["progress"]
+            prog.setMaximum(target)           # fixed at 150 — bar never overflows
+            prog.setValue(min(count, target)) # cap visual fill at 100%
+            prog.setFormat(f"{count}/{target}")  # text shows real count e.g. "187/150"
+            prog.setTextVisible(True)
             if count >= 100:
                 gestures_ready += 1
             self._update_group_buttons(name, count, widgets["groups"])
@@ -179,12 +204,12 @@ class PagePrimitiveCollect(QWidget):
             display_name = self._get_group_display_name(g_name)
             btn.setText(f"{display_name}: {current}/{target}")
 
-            if current >= target:
-                btn.setProperty("status", "success")
-                btn.setProperty("type", "base")
-            elif gesture_name == self._selected_gesture and g_name == self._selected_group:
+            if gesture_name == self._selected_gesture and g_name == self._selected_group:
                 btn.setProperty("type", "primary")
                 btn.setProperty("status", "")
+            elif current >= target:
+                btn.setProperty("status", "success")
+                btn.setProperty("type", "base")
             else:
                 btn.setProperty("type", "base")
                 btn.setProperty("status", "")
@@ -246,10 +271,20 @@ class PagePrimitiveCollect(QWidget):
         # 1. Preview
         card_p, lay_p = make_card(margins=(20, 20, 20, 20), spacing=SPACING_MD)
         self._sec_preview = make_section_label(tr_ui("primitive_signal_preview"))
-        self.preview_plot = pg.PlotWidget()
+        
+        # Double plots (Accel & Gyro separate) to avoid scale issues
+        self.preview_plot_accel = pg.PlotWidget()
+        self.preview_plot_gyro = pg.PlotWidget()
+        self.plots_container = QWidget()
+        plots_lay = QVBoxLayout(self.plots_container)
+        plots_lay.setContentsMargins(0, 0, 0, 0)
+        plots_lay.setSpacing(6)
+        plots_lay.addWidget(self.preview_plot_accel)
+        plots_lay.addWidget(self.preview_plot_gyro)
+        
         self.preview_stack = QStackedWidget()
         self.preview_stack.addWidget(self._make_empty_state_widget())
-        self.preview_stack.addWidget(self.preview_plot)
+        self.preview_stack.addWidget(self.plots_container)
         lay_p.addWidget(self._sec_preview)
         lay_p.addWidget(self.preview_stack)
         lay.addWidget(card_p, stretch=3)
@@ -320,11 +355,18 @@ class PagePrimitiveCollect(QWidget):
         return col
 
     def _setup_plot(self) -> None:
-        """Cấu hình chi tiết đồ thị pyqtgraph."""
-        self.preview_plot.showGrid(x=True, y=True, alpha=0.1)
-        self.curve_ax = self.preview_plot.plot(pen=pg.mkPen(PLOT_AX_COLOR, width=2))
-        self.curve_ay = self.preview_plot.plot(pen=pg.mkPen(PLOT_AY_COLOR, width=2))
-        self.curve_az = self.preview_plot.plot(pen=pg.mkPen(PLOT_AZ_COLOR, width=2))
+        """Cấu hình chi tiết đồ thị pyqtgraph — 6 kênh IMU tách biệt."""
+        # Accelerometer Plot (ax, ay, az)
+        self.preview_plot_accel.showGrid(x=True, y=True, alpha=0.1)
+        self.curve_ax = self.preview_plot_accel.plot(pen=pg.mkPen(PLOT_AX_COLOR, width=2))
+        self.curve_ay = self.preview_plot_accel.plot(pen=pg.mkPen(PLOT_AY_COLOR, width=2))
+        self.curve_az = self.preview_plot_accel.plot(pen=pg.mkPen(PLOT_AZ_COLOR, width=2))
+        
+        # Gyroscope Plot (gx, gy, gz)
+        self.preview_plot_gyro.showGrid(x=True, y=True, alpha=0.1)
+        self.curve_gx = self.preview_plot_gyro.plot(pen=pg.mkPen(PLOT_GX_COLOR, width=2))
+        self.curve_gy = self.preview_plot_gyro.plot(pen=pg.mkPen(PLOT_GY_COLOR, width=2))
+        self.curve_gz = self.preview_plot_gyro.plot(pen=pg.mkPen(PLOT_GZ_COLOR, width=2))
 
     def _rebuild_cards(self) -> None:
         """Xây dựng lại các thẻ card cử chỉ."""
@@ -364,6 +406,9 @@ class PagePrimitiveCollect(QWidget):
         title.setProperty("type", "gesture_card_title")
         prog = QProgressBar()
         prog.setRange(0, int(info["target_samples"]))
+        prog.setValue(0)
+        prog.setFormat(f"0/{int(info['target_samples'])}")
+        prog.setTextVisible(True)
 
         lay.addWidget(title)
         lay.addWidget(QLabel(info["description"]))
@@ -402,14 +447,21 @@ class PagePrimitiveCollect(QWidget):
             return
         self._selected_gesture = gesture
         self._selected_group = group
-        
+
         # Lấy instruction từ catalog
         instruction_text = self._catalog[gesture]["groups"][group].get("instruction", "")
         display_name = self._get_group_display_name(group)
-        
-        self.lbl_instruction.setText(f"Đang chọn: {gesture} ➜ {display_name}\n\nHướng dẫn: {instruction_text}")
+
+        self.lbl_instruction.setText(
+            f"Đang chọn: {gesture} ➜ {display_name}\n\nHướng dẫn: {instruction_text}"
+        )
         self.btn_start_collect.setEnabled(True)
-        self.refresh_styles()
+
+        # Refresh all button styles in-place to highlight the new selection and
+        # clear any previous ones, without rebuilding widgets (which resets scroll).
+        for g_name, widgets in self._card_widgets.items():
+            g_count = int(self._stats.get(g_name, 0))
+            self._update_group_buttons(g_name, g_count, widgets["groups"])
 
     def set_collection_state(self, collecting: bool) -> None:
         self._collecting = collecting

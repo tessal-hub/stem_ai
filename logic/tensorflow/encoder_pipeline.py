@@ -4,18 +4,22 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 import numpy as np
-import tensorflow as tf
+try:
+    import tensorflow as tf
+    _TF_AVAILABLE = True
+except ModuleNotFoundError:
+    tf = None  # type: ignore[assignment]
+    _TF_AVAILABLE = False
 
 from ..dataset_layout import discover_class_directories, folder_name_match_key
 from .pipeline import _read_csv_rows, _windowize
 
 
 def _require_tensorflow():
-    try:
-        import tensorflow as tf
-    except ModuleNotFoundError as exc:
-        raise RuntimeError("TensorFlow is required for encoder pipeline operations.") from exc
+    if not _TF_AVAILABLE or tf is None:
+        raise RuntimeError("TensorFlow is required for encoder pipeline operations.")
     return tf
+
 
 
 class L2NormalizeLayer(tf.keras.layers.Layer):

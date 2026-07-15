@@ -11,10 +11,21 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import os
+
 if getattr(sys, "frozen", False):
-    WORKSPACE_ROOT = Path(sys.executable).resolve().parent
+    _exe_dir = Path(sys.executable).resolve().parent
+    # Kiểm tra quyền ghi — fallback về %APPDATA% nếu thư mục là read-only (e.g. Program Files)
+    _test_file = _exe_dir / ".write_test"
+    try:
+        _test_file.touch()
+        _test_file.unlink()
+        WORKSPACE_ROOT = _exe_dir
+    except (PermissionError, OSError):
+        WORKSPACE_ROOT = Path(os.environ.get("APPDATA", Path.home())) / "STEMSpellBook"
 else:
     WORKSPACE_ROOT = Path(__file__).resolve().parent
+
 
 
 
@@ -36,6 +47,7 @@ DATASET_DIR = WORKSPACE_ROOT / "dataset"
 SPELL_DIR = DATASET_DIR / "spells"
 PRIMITIVE_DIR = DATASET_DIR / "primitives"
 FIRMWARE_PROJECT_ROOT = WORKSPACE_ROOT / "mpu6050"
+FIRMWARE_BIN_DIR = WORKSPACE_ROOT / "firmware"
 DEFAULT_MODEL_PATH = APP_DATA_DIR / "model.tflite"
 VSCODE_WORKSPACE_FILE = _detect_workspace_file()
 GESTURE_MODEL_CC_OUTPUT = APP_DATA_DIR / "gesture_model.cc"
@@ -51,4 +63,6 @@ def ensure_data_dir() -> Path:
     DATASET_DIR.mkdir(parents=True, exist_ok=True)
     SPELL_DIR.mkdir(parents=True, exist_ok=True)
     PRIMITIVE_DIR.mkdir(parents=True, exist_ok=True)
+    FIRMWARE_BIN_DIR.mkdir(parents=True, exist_ok=True)
     return APP_DATA_DIR
+

@@ -6,10 +6,21 @@ import json
 from pathlib import Path
 from typing import Literal
 
+import sys
+
 Lang = Literal["en", "vi"]
 
-_PATH = Path(__file__).resolve().with_name("ui_strings.json")
+
+def _get_ui_strings_path() -> Path:
+    """Trả về đường dẫn chính xác tới ui_strings.json, cả khi frozen (PyInstaller)."""
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS) / "logic" / "ui_strings.json"
+    return Path(__file__).resolve().with_name("ui_strings.json")
+
+
+_PATH = _get_ui_strings_path()
 _TABLE: dict[str, dict[str, str]] = json.loads(_PATH.read_text(encoding="utf-8"))
+
 
 
 def normalize_ui_language(code: str | None) -> Lang:

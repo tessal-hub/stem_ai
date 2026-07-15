@@ -58,13 +58,11 @@ class PageRecord(QWidget):
     sig_snip_record = pyqtSignal()
     sig_sample_opened = pyqtSignal(str)
     sig_sample_deleted = pyqtSignal(str)
-    sig_delete_latest_sample = pyqtSignal(str)
     sig_data_cropped = pyqtSignal(list, str)
     sig_spell_selected = pyqtSignal(str)
     sig_spell_deleted = pyqtSignal(str)
     sig_clear_buffer = pyqtSignal()
     sig_export_csv = pyqtSignal()
-    sig_register_prototype = pyqtSignal(str)   # spell_name
 
     def __init__(self, data_store) -> None:
         super().__init__()
@@ -75,10 +73,10 @@ class PageRecord(QWidget):
         self._sample_sentinel = "__STEM_EMPTY_SAMPLES__"
         self._current_samples: list[str] = []          # filenames in display order
         self._per_sample_scores: dict[str, float] = {} # filename -> score
-        self._suggested_delete_fname: str = ""         # outlier filename from analysis
 
         self._recording_timer = QTimer()
         self._recording_start_time = QElapsedTimer()
+        self._pending_consistency_result: dict | None = None  # cached when UI not on sample page
 
         self._init_ui()
         self._setup_plots()
@@ -116,7 +114,7 @@ class PageRecord(QWidget):
         self.btn_zoom_in.clicked.connect(self._on_zoom_in_clicked)
         self.btn_zoom_out.clicked.connect(self._on_zoom_out_clicked)
         self.btn_zoom_fit.clicked.connect(self._on_zoom_fit_clicked)
-        self.btn_delete_latest_sample.clicked.connect(self._on_btn_delete_latest_clicked)
+        self.btn_delete_selected.clicked.connect(self._on_btn_delete_selected_clicked)
         self.btn_clear_samples.clicked.connect(self._on_btn_clear_clicked)
         self.btn_export_csv.clicked.connect(self._on_btn_export_clicked)
         self.btn_back_spells.clicked.connect(self._on_btn_back_clicked)
@@ -125,12 +123,6 @@ class PageRecord(QWidget):
         self.chk_graph1.toggled.connect(self.graph1.setVisible)
         self.chk_graph2.toggled.connect(self.graph2.setVisible)
         self._recording_timer.timeout.connect(self._update_recording_duration)
-        self.btn_register_prototype.clicked.connect(
-            lambda: (
-                self.btn_register_prototype.setEnabled(False),
-                self.sig_register_prototype.emit(self.current_spell_name)
-            )
-        )
         self.shortcut_start = QShortcut(QKeySequence("Ctrl+S"), self)
         self.shortcut_start.activated.connect(self._trigger_start)
 
@@ -143,7 +135,8 @@ class PageRecord(QWidget):
         self._plot_timer = QTimer(self)
         self._plot_timer.timeout.connect(self._render_plots)
         self._plot_timer.start(_PLOT_REFRESH_MS)
-        self.btn_delete_suggested.clicked.connect(self._on_btn_delete_suggested_clicked)
+        # Show/hide delete button based on list selection
+        self.sample_list.itemSelectionChanged.connect(self._on_sample_selection_changed)
 
     def _trigger_start(self) -> None:
         if self.btn_start.isEnabled():
@@ -179,7 +172,7 @@ class PageRecord(QWidget):
         self.btn_start.setEnabled(not recording)
         self.btn_stop.setEnabled(recording)
         self.combo_spell.setEnabled(not recording)
-        self.btn_delete_latest_sample.setEnabled(not recording)
+        self.btn_delete_selected.setEnabled(not recording)
 
         status = tr_ui('record_recording_short') if recording else tr_ui('record_ready')
         self.lbl_wand_status.setText(status)
@@ -276,10 +269,18 @@ class PageRecord(QWidget):
         else:
             self.sample_stack.setCurrentIndex(1)
         self.stacked_spells.setCurrentIndex(1)
+        # Apply any consistency result that arrived while we were on page 0
+        if self._pending_consistency_result is not None:
+            pending = self._pending_consistency_result
+            self._pending_consistency_result = None
+            self.update_consistency_display(pending)
 
     def update_consistency_display(self, result: dict) -> None:
         """Đập kết quả từ analyze_spell_samples vào UI consistency section."""
-        # Chỉ hiển thị khi đang ở trang sample list
+        # Cache result unconditionally so it survives a page switch
+        self._pending_consistency_result = result
+
+        # Chỉ render khi đang ở trang sample list
         if self.stacked_spells.currentIndex() != 1:
             return
 
@@ -297,6 +298,7 @@ class PageRecord(QWidget):
         if overall is not None:
             pct = int(overall * 100)
             self.consistency_bar.setValue(pct)
+            self.consistency_bar.setFormat(f"Độ đồng nhất: {pct}%")
             self.consistency_bar.setVisible(True)
             if pct >= 85:
                 bar_color = SUCCESS
@@ -309,7 +311,18 @@ class PageRecord(QWidget):
                 "QProgressBar { border-radius: 4px; background: #E5E5EA; text-align: center; }"
             )
         else:
-            self.consistency_bar.setVisible(False)
+            # n < 3: show dot-progress so user sees how many samples remain
+            n_samples = result.get("n_samples", 0)
+            filled = "●" * min(n_samples, 3)
+            empty  = "○" * max(0, 3 - n_samples)
+            self.consistency_bar.setValue(0)
+            self.consistency_bar.setFormat(f"Thu mẫu: {filled}{empty}  ({n_samples}/3)")
+            self.consistency_bar.setStyleSheet(
+                "QProgressBar::chunk { background-color: #8E8E93; }"
+                "QProgressBar { border-radius: 4px; background: #E5E5EA; text-align: center; color: #3a3a3c; }"
+            )
+            self.consistency_bar.setVisible(True)
+
 
         # Map per_sample_scores to filenames
         self._per_sample_scores = {}
@@ -337,33 +350,17 @@ class PageRecord(QWidget):
                     font = item.font(); font.setBold(True); item.setFont(font)
                 self.sample_list.addItem(item)
 
-        # Show/hide suggested delete button
+        # Highlight worst outlier row in the list (already colored by score)
         worst_idx = result.get("worst_sample_idx")
         if worst_idx is not None and worst_idx < len(self._current_samples):
-            fname = self._current_samples[worst_idx]
-            self._suggested_delete_fname = fname
-            score = self._per_sample_scores.get(fname)
-            score_txt = f" [{int(score*100)}%]" if score is not None else ""
-            self.btn_delete_suggested.setText(f"🗑 Xóa mẫu #{worst_idx+1}{score_txt} (bất thường)")
-            self.btn_delete_suggested.setToolTip(
-                f"Mẫu bất thường: {fname}\n"
-                f"Điểm thấp nhất trong tập — gợi ý xóa để cải thiện độ đồng nhất."
-            )
-            self.btn_delete_suggested.setVisible(True)
-        else:
-            self._suggested_delete_fname = ""
-            self.btn_delete_suggested.setVisible(False)
-
-        # Show/hide register button
-        self.btn_register_prototype.setVisible(ready)
-        if ready:
-            self.btn_register_prototype.setEnabled(True)
+            item = self.sample_list.item(worst_idx)
+            if item:
+                item.setToolTip(
+                    f"⚠️ Mẫu có điểm thấp nhất trong tập — cân nhắc xóa để cải thiện độ đồng nhất."
+                )
 
     def on_spell_registered(self, spell_name: str) -> None:
         """Được gọi sau khi handler đăng ký prototype thành công."""
-        self.btn_register_prototype.setVisible(False)
-        self.btn_delete_suggested.setVisible(False)
-        self._suggested_delete_fname = ""
         self.lbl_consistency.setText(
             f"✅ '{spell_name}' đã đăng ký. Hiển thị [Ready] trong danh sách."
         )
@@ -565,9 +562,11 @@ class PageRecord(QWidget):
         row = QHBoxLayout()
         row.setSpacing(SPACING_SM)
 
-        self.btn_delete_latest_sample = make_button(
-            tr_ui("record_btn_delete_latest"), "danger_outline", BTN_H
+        self.btn_delete_selected = make_button(
+            "🗑 Xóa đã chọn", "danger_outline", BTN_H
         )
+        self.btn_delete_selected.setEnabled(False)
+        self.btn_delete_selected.setToolTip("Chọn một hoặc nhiều mẫu trong danh sách rồi nhấn nút này để xóa.")
         self.btn_clear_samples = make_button(
             tr_ui("record_btn_clear"), "danger_outline", BTN_H
         )
@@ -575,7 +574,7 @@ class PageRecord(QWidget):
             tr_ui("record_btn_export"), "base", BTN_H
         )
 
-        row.addWidget(self.btn_delete_latest_sample, stretch=1)
+        row.addWidget(self.btn_delete_selected, stretch=1)
         row.addWidget(self.btn_clear_samples, stretch=1)
         row.addWidget(self.btn_export_csv, stretch=1)
         layout.addLayout(row)
@@ -634,21 +633,12 @@ class PageRecord(QWidget):
 
         self.sample_list = QListWidget()
         self.sample_list.setProperty("type", "record_list")
+        self.sample_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         self.sample_stack = QStackedWidget()
         self.sample_stack.addWidget(self.sample_list)
         empty_card, _ = make_empty_state_card()
         self.sample_stack.addWidget(empty_card)
         layout.addWidget(self.sample_stack)
-
-        # ── Gợi ý xóa mẫu outlier ──────────────────────
-        self.btn_delete_suggested = make_button(
-            "🗑 Xóa mẫu bất thường", "danger_outline", BTN_H
-        )
-        self.btn_delete_suggested.setVisible(False)
-        self.btn_delete_suggested.setToolTip(
-            "Mẫu này có điểm thấp nhất trong tập — gợi ý nên xóa."
-        )
-        layout.addWidget(self.btn_delete_suggested)
 
         # ── Consistency Analysis section ─────────────────────
         self.consistency_bar = QProgressBar()
@@ -658,15 +648,6 @@ class PageRecord(QWidget):
         self.consistency_bar.setFixedHeight(18)
         self.consistency_bar.setVisible(False)
         layout.addWidget(self.consistency_bar)
-
-        self.btn_register_prototype = make_button(
-            "⚡ Đăng ký spell này", "primary", BTN_H
-        )
-        self.btn_register_prototype.setVisible(False)
-        self.btn_register_prototype.setToolTip(
-            "Prototype đã ốn định. Nhấn để đăng ký spell vào hệ thống nhận diện."
-        )
-        layout.addWidget(self.btn_register_prototype)
 
         return page
 
@@ -775,41 +756,60 @@ class PageRecord(QWidget):
         if self.store.get_live_buffer_snapshot():
             self.sig_export_csv.emit()
 
-    def _on_btn_delete_latest_clicked(self) -> None:
-        """Xóa mẫu ghi gần nhất của spell đang chọn."""
-        spell = self.combo_spell.currentText().strip()
-        if spell and self.store.get_samples_for_spell(spell):
-            self.sig_delete_latest_sample.emit(spell)
+    def _on_sample_selection_changed(self) -> None:
+        """Bật/tắt nút xóa theo số mẫu đang được chọn."""
+        n = len(self.sample_list.selectedItems())
+        self.btn_delete_selected.setEnabled(n > 0)
+        if n == 0:
+            self.btn_delete_selected.setText("🗑 Xóa đã chọn")
+        elif n == 1:
+            self.btn_delete_selected.setText("🗑 Xóa 1 mẫu")
+        else:
+            self.btn_delete_selected.setText(f"🗑 Xóa {n} mẫu")
 
-    def _on_btn_delete_suggested_clicked(self) -> None:
-        """Xóa file mẫu outlier được gợi ý bởi consistency analysis."""
-        fname = self._suggested_delete_fname
+    def _on_btn_delete_selected_clicked(self) -> None:
+        """Xóa các mẫu đang được chọn trong sample_list."""
         spell = self.current_spell_name
-        if not fname or not spell:
+        if not spell:
             return
-        if confirm_destructive(
+        selected_items = self.sample_list.selectedItems()
+        if not selected_items:
+            return
+
+        # Strip score annotation to get bare filename
+        fnames = [item.text().split("  [")[0].strip() for item in selected_items]
+        n = len(fnames)
+        label = f"'{fnames[0]}'" if n == 1 else f"{n} mẫu"
+
+        if not confirm_destructive(
             self,
-            title="Xóa mẫu bất thường",
-            message=f"Xóa mẫu '{fname}' khỏi spell '{spell}'?\nHành động này không thể hoàn tác."
+            title=f"Xóa {label}",
+            message=f"Xóa {label} khỏi spell '{spell}'?\nHành động này không thể hoàn tác."
         ):
-            from pathlib import Path
-            from logic.dataset_layout import storage_dirs_for_spell
-            dataset_root = Path(self.store.dataset_dir)
-            for d in storage_dirs_for_spell(dataset_root, spell):
+            return
+
+        from pathlib import Path
+        from logic.dataset_layout import storage_dirs_for_spell
+        dataset_root = Path(self.store.dataset_dir)
+        dirs = storage_dirs_for_spell(dataset_root, spell)
+        deleted = 0
+        for fname in fnames:
+            for d in dirs:
                 fpath = d / fname
                 if fpath.exists():
                     try:
                         fpath.unlink()
-                        self._suggested_delete_fname = ""
-                        self.btn_delete_suggested.setVisible(False)
-                        # Refresh sample list
-                        samples = self.store.get_samples_for_spell(spell)
-                        self.load_samples_for_spell(spell, samples)
-                        # Trigger DB refresh for counts
-                        self.store.refresh_database(force=True)
+                        deleted += 1
                     except Exception as exc:
-                        log.error("Delete suggested sample failed: %s", exc)
-                    return
+                        log.error("Delete sample '%s' failed: %s", fname, exc)
+                    break  # found in this dir, no need to check others
+
+        if deleted:
+            self.btn_delete_selected.setText("🗑 Xóa đã chọn")
+            self.btn_delete_selected.setEnabled(False)
+            samples = self.store.get_samples_for_spell(spell)
+            self.load_samples_for_spell(spell, samples)
+            self.store.refresh_database(force=True)
 
     def _on_spell_item_clicked(self, item: QListWidgetItem) -> None:
         """Khi chọn một spell từ danh sách thư viện."""
@@ -838,4 +838,5 @@ class PageRecord(QWidget):
         self.current_spell_name = ""
         self.lbl_consistency.setText("")
         self.lbl_consistency.setVisible(False)
+        self._pending_consistency_result = None  # discard stale analysis from previous spell
         self.stacked_spells.setCurrentIndex(0)

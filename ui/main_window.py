@@ -101,7 +101,6 @@ class MainWindow(QMainWindow):
 
         # Cập nhật từ DataStore
         self.data_store.sig_connection_state_updated.connect(self.page_home.set_connection_status)
-        self.data_store.sig_live_buffer_updated.connect(self.page_primitive_collect.update_signal_preview)
         self.data_store.sig_sensor_data_updated.connect(self._on_sensor_data_for_3d)
         if hasattr(self.data_store, "sig_primitive_stats_updated"):
             self.data_store.sig_primitive_stats_updated.connect(self.page_primitive_collect.update_collection_stats)

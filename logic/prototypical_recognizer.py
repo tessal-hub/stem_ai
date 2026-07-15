@@ -158,8 +158,14 @@ class PrototypicalRecognizer:
         n = len(samples)
         _empty["n_samples"] = n
 
-        if n < 2:
-            _empty["recommendation"] = "Thu thêm ít nhất 1 mẫu nữa."
+        # Require at least 3 samples before running any accuracy metric.
+        # Fewer samples make centroid-based consistency mathematically
+        # unreliable and mislead the user into thinking one good take is enough.
+        if n < 3:
+            remaining = 3 - n
+            _empty["recommendation"] = (
+                f"📥 {n}/3 mẫu — cần thêm {remaining} mẫu nữa để bắt đầu đánh giá."
+            )
             return _empty
 
         # --- embed batch ---
@@ -185,12 +191,18 @@ class PrototypicalRecognizer:
         overall = float(np.mean(per_sample_scores))
 
         # --- Metric C: prototype stability (only when n >= 3) ---
+        # Shift threshold relaxes at n==3 (minimum gate) because the centroid
+        # moves more when only 2→3 samples are averaged. It tightens as n grows:
+        #   n=3  → 0.05 (lenient: centroid still volatile)
+        #   n=4  → 0.04
+        #   n>=5 → 0.02 (strict: prototype should be converging)
         prototype_stable = False
         if n >= 3:
             proto_before = self._l2_normalize(np.mean(embeddings[:-1], axis=0))
             proto_after = self._l2_normalize(np.mean(embeddings, axis=0))
             shift = 1.0 - float(np.dot(proto_before, proto_after))
-            prototype_stable = shift < 0.02
+            shift_threshold = max(0.02, 0.05 - 0.01 * (n - 3))
+            prototype_stable = shift < shift_threshold
 
         # --- worst outlier ---
         worst_idx: int | None = None

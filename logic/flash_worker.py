@@ -137,72 +137,81 @@ class FlashWorker(QThread):
         return valid_parts
 
     def _build_esptool_cmd(self, valid_parts: dict[str, "Path"]) -> list[str]:
-        """Return the esptool command list for the configured port and binaries."""
-        cmd = [
-            sys.executable, "-m", "esptool",
+        """Return the esptool argument list for the configured port and binaries."""
+        args = [
             "--chip", "esp32",
             "--port", self._port,
             "--baud", "115200",
-            "--before", "default-reset",
-            "--after", "hard-reset",
-            "write-flash", "-z",
-            "--flash-mode", "dio",
-            "--flash-freq", "80m",
-            "--flash-size", "keep",
+            "--before", "default_reset",
+            "--after", "hard_reset",
+            "write_flash", "-z",
+            "--flash_mode", "dio",
+            "--flash_freq", "80m",
+            "--flash_size", "keep",
         ]
         for addr, path in valid_parts.items():
-            cmd.extend([addr, str(path)])
-        return cmd
+            args.extend([addr, str(path)])
+        return args
 
-    def _execute_flash(self, cmd: list[str]) -> tuple[bool, str]:
-        """Spawn esptool process, stream output, and return final status tuple."""
-        self.log_msg.emit(f"[INFO] Command: {' '.join(cmd)}")
-        self.log_msg.emit(f"[INFO] Using Python: {sys.executable}")
+    def _execute_flash(self, args: list[str]) -> tuple[bool, str]:
+        """Call esptool Python API directly (works in both frozen and normal mode)."""
+        self.log_msg.emit(f"[INFO] esptool args: {' '.join(args)}")
         self.log_msg.emit("=" * 70)
         self.sig_progress.emit(0)
+        try:
+            import esptool
+            import io
+            import contextlib
 
-        self._process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="ignore",
-        )
-
-        if not (self._process and self._process.stdout):
-            self._fail("Failed to start esptool process")
-            return False, self._last_error_message
-
-        success = self._parse_esptool_output(self._process.stdout)
-        return_code = self._process.wait(timeout=_FLASH_TIMEOUT_S)
-
-        if return_code == 0 and success:
-            self.sig_progress.emit(100)
+            log_buf = io.StringIO()
+            success = False
+            with contextlib.redirect_stdout(log_buf), contextlib.redirect_stderr(log_buf):
+                esptool.main(args)
+            output = log_buf.getvalue()
+            for line in output.splitlines():
+                self.log_msg.emit(line)
+                if "FINISH" in line or "Hard resetting" in line:
+                    success = True
+                match = re.search(r"\((\d{1,3})%\)", line)
+                if match:
+                    try:
+                        percent = int(match.group(1))
+                        if 0 <= percent <= 100:
+                            self.sig_progress.emit(percent)
+                    except ValueError:
+                        pass
+            if success:
+                self.sig_progress.emit(100)
+                self.log_msg.emit("=" * 70)
+                self.log_msg.emit("[SUCCESS] Firmware flash completed!")
+                return True, "Flash successful"
             self.log_msg.emit("=" * 70)
-            self.log_msg.emit("[SUCCESS] Firmware flash completed!")
-            return True, "Flash successful"
+            self.log_msg.emit("[FAILED] Firmware flash failed (no completion marker detected)")
+            return False, "Flash failed (no completion marker)"
+        except SystemExit as exc:
+            # esptool calls sys.exit() on success (exit code 0) and failure
+            code = exc.code if exc.code is not None else -1
+            if code == 0:
+                self.sig_progress.emit(100)
+                self.log_msg.emit("[SUCCESS] Firmware flash completed!")
+                return True, "Flash successful"
+            self.log_msg.emit(f"[FAILED] esptool exited with code {code}")
+            return False, f"Flash failed (exit code: {code})"
+        except ImportError:
+            self.log_msg.emit("[ERROR] esptool Python package not found. Run: pip install esptool")
+            return False, "esptool not installed"
+        except Exception as exc:
+            self.log_msg.emit(f"[ERROR] esptool exception: {exc}")
+            return False, str(exc)
 
-        self.log_msg.emit("=" * 70)
-        self.log_msg.emit(f"[FAILED] Firmware flash failed (exit code: {return_code})")
-        self.sig_error.emit(f"Flash failed (exit code: {return_code})")
-        return False, f"Flash failed (exit code: {return_code})"
 
     def _check_esptool_available(self) -> bool:
-        """Check if esptool is installed in current Python environment."""
+        """Check if esptool is importable as a Python module."""
         try:
-            result = subprocess.run(
-                [sys.executable, "-m", "esptool", "version"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=_ESPTOOL_CHECK_TIMEOUT_S,
-                encoding="utf-8",
-                errors="ignore",
-            )
-            return result.returncode == 0
-        except Exception as e:
-            self.log_msg.emit(f"[WARN] Could not verify esptool: {e}")
+            import esptool  # noqa: F401
+            return True
+        except ImportError:
+            self.log_msg.emit("[WARN] esptool Python module not found: pip install esptool")
             return False
 
     def _parse_esptool_output(self, stream) -> bool:

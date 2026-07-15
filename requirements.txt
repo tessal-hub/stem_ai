@@ -10,6 +10,7 @@ numpy>=1.26.0
 
 #esp
 esptool
+esp-idf-nvs-partition-gen
 
 # Utils & Serialization
 pyserial>=3.5

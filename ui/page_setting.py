@@ -32,7 +32,6 @@ class PageSetting(QWidget):
 
     # ── Signal xuất bản ───────────────────────────
     sig_settings_saved = pyqtSignal(dict)
-    sig_clear_database = pyqtSignal()
     sig_flash_data_firmware = pyqtSignal()
     sig_flash_inference_firmware = pyqtSignal()
     sig_scan_primitive_quality = pyqtSignal()
@@ -50,13 +49,12 @@ class PageSetting(QWidget):
         self._load_data()
 
     def _init_ui(self) -> None:
-        """Khởi tạo bố cục trang cài đặt siêu gọn (Zero-scroll)."""
+        """Khởi tạo bố cục trang cài đặt chuyên nghiệp dạng Dashboard."""
         outer = QVBoxLayout(self)
-        # Bỏ padding-bottom cứng để nội dung được bung hết cỡ
         outer.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
         outer.setSpacing(SPACING_LG)
 
-        # Requirement 2: 2-column layout
+        # Cấu trúc 2 cột chính
         columns = QHBoxLayout()
         columns.setSpacing(SPACE_32)
         
@@ -67,23 +65,23 @@ class PageSetting(QWidget):
         right_col = QVBoxLayout()
         right_col.setSpacing(SPACING_LG)
         
+        # Cột trái: Các cài đặt cấu hình dạng form nhập liệu
         left_col.addWidget(self._build_hardware_column())
-        left_col.addWidget(self._build_software_column())
+        left_col.addWidget(self._build_general_settings())
+        left_col.addWidget(self._build_quality_card())
+        left_col.addWidget(self._build_hardware_info_card())
         
-        right_col.addWidget(self._build_appearance_column())
-        right_col.addWidget(self._build_paths_card())
-        right_col.addWidget(self._build_danger_card())
+        # Cột phải: Các chức năng quét chất lượng và nạp firmware kèm console log
+        right_col.addWidget(self._build_firmware_section(), stretch=1)
         
-        columns.addLayout(left_col, stretch=1)
-        columns.addLayout(right_col, stretch=1)
+        columns.addLayout(left_col, stretch=4)
+        columns.addLayout(right_col, stretch=6)
         
-        outer.addLayout(columns)
+        outer.addLayout(columns, stretch=1)
 
-        # 2. Section Firmware (Full width)
-        outer.addWidget(self._build_firmware_section(), stretch=1)
-
-        # 3. Thanh điều khiển
+        # Thanh điều khiển (Lưu / Hủy) nằm dưới cùng
         outer.addLayout(self._build_control_bar())
+
 
     def _build_hardware_column(self) -> QWidget:
         col = QWidget()
@@ -105,45 +103,30 @@ class PageSetting(QWidget):
         lay.addWidget(card)
         return col
 
-    def _build_software_column(self) -> QWidget:
-        """Requirement 1: Removed duplicate Appearance section from here."""
+    def _build_quality_card(self) -> QWidget:
+        """Primitive Dataset Quality scan — moved to left column after ML section removed."""
         col = QWidget()
         lay = QVBoxLayout(col)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(SPACING_SM)
-        lay.addWidget(self._make_section_label_i18n("section_ml"))
-
-        card, c_lay = self._make_card()
-        self.combo_ml_pipeline = self._make_combo(["Random Forest (Edge)", "SVM"])
-        self.spin_window_size = QSpinBox()
-        self.spin_window_size.setRange(1, 1000)
-        self.spin_window_overlap = QSpinBox()
-        self.spin_window_overlap.setRange(0, 99)
-
-        form = self._make_form_layout()
-        self._add_i18n_form_row(form, "label_algorithm", self.combo_ml_pipeline)
-        self._add_i18n_form_row(form, "label_window_size", self.spin_window_size)
-        self._add_i18n_form_row(form, "label_window_overlap", self.spin_window_overlap)
-        c_lay.addLayout(form)
-        lay.addWidget(card)
 
         lbl_quality = QLabel("PRIMITIVE DATASET QUALITY")
         lbl_quality.setProperty("type", "settings_section_label")
         lbl_quality.setProperty("status", "accent")
         lay.addWidget(lbl_quality)
-        
+
         quality_card, quality_layout = self._make_card()
 
         quality_btn_row = QHBoxLayout()
         quality_btn_row.setSpacing(SPACING_MD)
 
-        self.btn_scan_quality = QPushButton("🔍  SCAN QUALITY")
+        self.btn_scan_quality = QPushButton("🔍 SCAN QUALITY")
         self.btn_scan_quality.setProperty("type", "primary")
         self.btn_scan_quality.setToolTip(
             "Scan all primitive gesture folders and generate a quality report"
         )
 
-        self.btn_stop_scan = QPushButton("■  STOP SCAN")
+        self.btn_stop_scan = QPushButton("■ STOP SCAN")
         self.btn_stop_scan.setEnabled(False)
         self.btn_stop_scan.setProperty("type", "stop")
         self.btn_stop_scan.setStyleSheet(STYLE_SETTING_BTN_DANGER)
@@ -163,17 +146,17 @@ class PageSetting(QWidget):
         )
         quality_layout.addWidget(self.quality_progress)
         lay.addWidget(quality_card)
-
         return col
 
-    def _build_appearance_column(self) -> QWidget:
-        """Khối cài đặt giao diện."""
+    def _build_general_settings(self) -> QWidget:
+        """Khối cấu hình chung: Giao diện, dự án, đường dẫn và các tùy chọn khác."""
         col = QWidget()
         lay = QVBoxLayout(col)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(SPACING_SM)
         lay.addWidget(self._make_section_label_i18n("section_appearance"))
-        card, a_lay = self._make_card()
+        
+        card, c_lay = self._make_card(margins=(16, 16, 16, 16), spacing=SPACING_SM)
         self.combo_ui_language = self._make_combo([])
         self.txt_project_name = QLineEdit()
         self.chk_auto_save = QCheckBox()
@@ -182,31 +165,95 @@ class PageSetting(QWidget):
         form = self._make_form_layout()
         self._add_i18n_form_row(form, "label_ui_language", self.combo_ui_language)
         self._add_i18n_form_row(form, "label_project_name", self.txt_project_name)
+        
+        # Đường dẫn Dataset
+        folder_icon = QIcon(resolve_asset_path("assets/icon/cooliocns SVG/File/Folder_Open.svg"))
+        self.txt_dataset_dir = QLineEdit()
+        self.txt_dataset_dir.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.btn_browse_dataset = QPushButton()
+        self.btn_browse_dataset.setIcon(folder_icon)
+        self.btn_browse_dataset.setIconSize(QSize(16, 16))
+        self.btn_browse_dataset.setFixedWidth(28)
+
+        dataset_container = QWidget()
+        dataset_row = QHBoxLayout(dataset_container)
+        dataset_row.setContentsMargins(0, 0, 0, 0)
+        dataset_row.setSpacing(8)
+        dataset_row.addWidget(self.txt_dataset_dir)
+        dataset_row.addWidget(self.btn_browse_dataset)
+        self._add_i18n_form_row(form, "label_dataset_dir", dataset_container)
+
         form.addRow(QLabel("Auto Save"), self.chk_auto_save)
         
         self.lbl_show_primitives = QLabel("Hiển thị menu Primitives" if self._lang == "vi" else "Show Primitives Menu")
         form.addRow(self.lbl_show_primitives, self.chk_show_primitives)
         
-        a_lay.addLayout(form)
+        c_lay.addLayout(form)
         lay.addWidget(card)
         return col
 
-    def _build_danger_card(self) -> QWidget:
-        """Khối thao tác nguy hiểm (Requirement 8)."""
+    def _build_hardware_info_card(self) -> QWidget:
+        """Thẻ hiển thị thông số phần cứng ESP32 và kích thước mô hình TinyML."""
         col = QWidget()
         lay = QVBoxLayout(col)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(SPACING_SM)
-        lay.addWidget(self._make_section_label_i18n("section_danger", color=DANGER))
-        card, c_lay = self._make_card()
+        
+        lbl_title = QLabel("CẤU HÌNH PHẦN CỨNG & MÔ HÌNH" if self._lang == "vi" else "HARDWARE & MODEL METRICS")
+        lbl_title.setProperty("type", "settings_section_label")
+        lbl_title.setProperty("status", "accent")
+        lay.addWidget(lbl_title)
+        
+        card, c_lay = self._make_card(margins=(16, 16, 16, 16), spacing=SPACING_SM)
+        
+        grid = QGridLayout()
+        grid.setSpacing(12)
+        
+        # Labels and Specs translation
+        lang = self._lang
+        mcu_lbl = "MCU Target:" if lang == "en" else "Vi xử lý mục tiêu:"
+        mcu_val = "ESP32 / Dual-Core LX6 @ 240MHz"
+        mem_lbl = "SRAM / Flash:"
+        mem_val = "520 KB / 4 MB"
+        fw_lbl = "TinyML Engine:" if lang == "en" else "Động cơ TinyML:"
+        fw_val = "TF Lite Micro (INT8)"
+        size_lbl = "Model Size (.tflite):" if lang == "en" else "Kích thước mô hình (.tflite):"
+        gestures_lbl = "Active Gestures:" if lang == "en" else "Số cử chỉ kích hoạt:"
+        
+        def add_row(row_idx, label, value):
+            lbl_name = QLabel(label)
+            lbl_name.setStyleSheet("color: rgba(128, 128, 128, 200); font-weight: bold;")
+            lbl_val = QLabel(value)
+            lbl_val.setStyleSheet("font-weight: 500;")
+            grid.addWidget(lbl_name, row_idx, 0)
+            grid.addWidget(lbl_val, row_idx, 1)
 
-        self.btn_clear_db = QPushButton("")
-        self.btn_clear_db.setProperty("type", "stop")
-        self.btn_clear_db.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self._tx(self.btn_clear_db, "btn_clear_db")
-        c_lay.addWidget(self.btn_clear_db)
+        add_row(0, mcu_lbl, mcu_val)
+        add_row(1, mem_lbl, mem_val)
+        add_row(2, fw_lbl, fw_val)
+        
+        # Load dynamic TFLite size
+        from config import APP_DATA_DIR
+        tflite_path = APP_DATA_DIR / "gesture_encoder.tflite"
+        size_str = "N/A"
+        if tflite_path.exists():
+            try:
+                sz = tflite_path.stat().st_size
+                size_str = f"{sz / 1024:.1f} KB"
+            except Exception:
+                pass
+        add_row(3, size_lbl, size_str)
+        
+        # Load active gestures count
+        classes_count = "0"
+        if hasattr(self.data_store, "spell_counts"):
+            classes_count = str(len(self.data_store.spell_counts))
+        add_row(4, gestures_lbl, classes_count)
+        
+        c_lay.addLayout(grid)
         lay.addWidget(card)
         return col
+
 
     def _build_firmware_section(self) -> QWidget:
         col = QWidget()
@@ -238,11 +285,11 @@ class PageSetting(QWidget):
         self.progress_bar.setTextVisible(False)
         c_lay.addWidget(self.progress_bar)
 
-        # Requirement 4: Terminal style
+        # Console grows to fill remaining vertical space
         self.console_log = TerminalWidget(read_only=True)
-        self.console_log.setFixedHeight(120)
-        c_lay.addWidget(self.console_log)
-        lay.addWidget(card)
+        self.console_log.setMinimumHeight(160)
+        c_lay.addWidget(self.console_log, stretch=1)
+        lay.addWidget(card, stretch=1)
         return col
 
     def _build_control_bar(self) -> QHBoxLayout:
@@ -264,70 +311,14 @@ class PageSetting(QWidget):
         row.addWidget(self.btn_save)
         return row
 
-    def _build_paths_card(self) -> QWidget:
-        col = QWidget()
-        col.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
-        lay = QVBoxLayout(col)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(SPACING_SM)
-        lay.addWidget(self._make_section_label_i18n("section_paths"))
 
-        card, c_lay = self._make_card(margins=(16, 16, 16, 16), spacing=SPACING_SM)
-        card.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
-        
-        form = self._make_form_layout()
-        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
-        
-        folder_icon = QIcon(resolve_asset_path("assets/icon/cooliocns SVG/File/Folder_Open.svg"))
-
-        self.txt_idf_main_dir = QLineEdit()
-        self.txt_idf_main_dir.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.btn_browse_idf_main = QPushButton()
-        self.btn_browse_idf_main.setIcon(folder_icon)
-        self.btn_browse_idf_main.setIconSize(QSize(16, 16))
-        self.btn_browse_idf_main.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
-        self.btn_browse_idf_main.setFixedWidth(28)
-        
-        idf_container = QWidget()
-        idf_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        idf_row = QHBoxLayout(idf_container)
-        idf_row.setContentsMargins(0, 0, 0, 0)
-        idf_row.setSpacing(8)
-        idf_row.addWidget(self.txt_idf_main_dir)
-        idf_row.addWidget(self.btn_browse_idf_main)
-        
-        self._add_i18n_form_row(form, "label_idf_main", idf_container)
-
-        self.txt_dataset_dir = QLineEdit()
-        self.txt_dataset_dir.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.btn_browse_dataset = QPushButton()
-        self.btn_browse_dataset.setIcon(folder_icon)
-        self.btn_browse_dataset.setIconSize(QSize(16, 16))
-        self.btn_browse_dataset.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
-        self.btn_browse_dataset.setFixedWidth(28)
-        
-        dataset_container = QWidget()
-        dataset_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        dataset_row = QHBoxLayout(dataset_container)
-        dataset_row.setContentsMargins(0, 0, 0, 0)
-        dataset_row.setSpacing(8)
-        dataset_row.addWidget(self.txt_dataset_dir)
-        dataset_row.addWidget(self.btn_browse_dataset)
-        
-        self._add_i18n_form_row(form, "label_dataset_dir", dataset_container)
-
-        c_lay.addLayout(form, stretch=1)
-        lay.addWidget(card, stretch=1)
-        return col
 
     def _init_signals(self) -> None:
         """Kết nối signal và slot."""
         self.btn_save.clicked.connect(self._on_btn_save_clicked)
         self.btn_revert.clicked.connect(self._on_btn_revert_clicked)
-        self.btn_clear_db.clicked.connect(self._on_btn_clear_db_clicked)
         self.btn_flash_collect.clicked.connect(self._on_btn_flash_collect_clicked)
         self.btn_flash_ai.clicked.connect(self._on_btn_flash_ai_clicked)
-        self.btn_browse_idf_main.clicked.connect(self._on_btn_browse_clicked)
         self.btn_browse_dataset.clicked.connect(self._on_btn_browse_dataset_clicked)
         self.combo_ui_language.currentIndexChanged.connect(self._on_ui_language_changed)
         self.btn_scan_quality.clicked.connect(self._on_btn_scan_quality_clicked)
@@ -348,12 +339,8 @@ class PageSetting(QWidget):
             "sample_rate": self.combo_sample_rate,
             "accel_scale": self.combo_accel_scale,
             "gyro_scale": self.combo_gyro_scale,
-            "ml_pipeline": self.combo_ml_pipeline,
-            "window_size": self.spin_window_size,
-            "window_overlap": self.spin_window_overlap,
             "project_name": self.txt_project_name,
             "auto_save": self.chk_auto_save,
-            "idf_main_dir": self.txt_idf_main_dir,
             "dataset_dir": self.txt_dataset_dir,
             "show_primitives_menu": self.chk_show_primitives,
         }
@@ -485,11 +472,9 @@ class PageSetting(QWidget):
             "sample_rate": self.combo_sample_rate.currentText(),
             "accel_scale": self.combo_accel_scale.currentText(),
             "gyro_scale": self.combo_gyro_scale.currentText(),
-            "ml_pipeline": self.combo_ml_pipeline.currentText(),
             "theme": "light",
             "ui_language": self.combo_ui_language.currentData(),
             "auto_save": self.chk_auto_save.isChecked(),
-            "idf_main_dir": self.txt_idf_main_dir.text().strip(),
             "dataset_dir": self.txt_dataset_dir.text().strip(),
             "show_primitives_menu": self.chk_show_primitives.isChecked(),
         }
@@ -498,9 +483,7 @@ class PageSetting(QWidget):
     def _on_btn_revert_clicked(self) -> None:
         self.load_settings(self._last_saved)
 
-    def _on_btn_clear_db_clicked(self) -> None:
-        if confirm_destructive(self, title="Xóa dữ liệu", message="Bạn có chắc muốn xóa tất cả dataset?"):
-            self.sig_clear_database.emit()
+
 
     def _on_btn_flash_collect_clicked(self) -> None:
         self.sig_flash_data_firmware.emit()
@@ -512,12 +495,6 @@ class PageSetting(QWidget):
         lang = self.combo_ui_language.currentData()
         self._refresh_ui_texts(lang)
         locale_manager.current_language = lang
-
-    def _on_btn_browse_clicked(self) -> None:
-        """Mở hộp thoại chọn thư mục IDF main."""
-        path = QFileDialog.getExistingDirectory(self, "Chọn thư mục dự án")
-        if path:
-            self.txt_idf_main_dir.setText(path)
 
     def _on_btn_browse_dataset_clicked(self) -> None:
         """Mở hộp thoại chọn thư mục dataset."""

@@ -2,6 +2,7 @@
 logic/idf_worker.py — Background worker for ESP-IDF build operations.
 """
 
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -20,6 +21,15 @@ class IDFBuildWorker(QThread):
         self.port = port
 
     def run(self):
+        # Kiểm tra idf.py có trong PATH không — khi frozen exe thừa hưởng PATH tối thiểu
+        if not shutil.which("idf.py"):
+            self.sig_finished.emit(
+                False,
+                "ESP-IDF không tìm thấy trong PATH. "
+                "Hãy cài đặt và kích hoạt ESP-IDF trước (chạy 'idf_cmd_init.bat' hoặc 'export.bat').",
+            )
+            return
+
         try:
             cmd_str = "build"
             if self.port:
@@ -56,3 +66,4 @@ class IDFBuildWorker(QThread):
 
         except Exception as e:
             self.sig_finished.emit(False, str(e))
+
