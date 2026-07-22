@@ -79,7 +79,7 @@ namespace spellbook {
 #define WINDOW_SIZE 64
 #define CHANNELS 6
 #define ACCEL_SCALE 16384.0f
-#define GYRO_SCALE 131.0f
+#define GYRO_SCALE (131.0f * 125.0f)  // 131 LSB/(°/s) × 125 rescale → matches Python pipeline
 #define BUFFER_LENGTH (WINDOW_SIZE * CHANNELS)   // 384 phần tử
 #define EMBEDDING_DIM 16
 

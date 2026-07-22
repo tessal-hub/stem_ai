@@ -415,10 +415,11 @@ class PagePrimitiveCollect(QWidget):
         lay.addWidget(prog)
 
         group_btns = {}
-        row = QHBoxLayout()
+        row = QVBoxLayout()
+        row.setSpacing(4)
         for g_name in info["groups"]:
             display_name = self._get_group_display_name(g_name)
-            btn = make_button(display_name, "base", height=32)
+            btn = make_button(display_name, "base", height=30)
             btn.setToolTip(info["groups"][g_name].get("instruction", ""))
             btn.clicked.connect(lambda _b, g=name, gn=g_name: self._on_group_selected(g, gn))
             row.addWidget(btn)

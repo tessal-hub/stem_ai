@@ -90,6 +90,12 @@ def _emit_progress(callback: ProgressCallback | None, value: int) -> None:
         callback(max(0, min(100, int(value))))
 
 
+# Gyro values in CSV are in °/s (±250 at default ±250dps scale).
+# Rescale gyro channels to a similar ±2 range as accel (in g).
+# This prevents np.clip(-2, 2) from destroying gyro features.
+_GYRO_RESCALE = 125.0  # 250 / 2 = 125
+
+
 def _read_csv_rows(file_path: Path) -> list[list[float]]:
     rows: list[list[float]] = []
     with file_path.open("r", encoding="utf-8", newline="") as handle:
@@ -109,6 +115,10 @@ def _read_csv_rows(file_path: Path) -> list[list[float]]:
             except (TypeError, ValueError):
                 continue
             if len(values) == 6:
+                # Rescale gyro (indices 3,4,5) from °/s to ~±2 range
+                values[3] /= _GYRO_RESCALE
+                values[4] /= _GYRO_RESCALE
+                values[5] /= _GYRO_RESCALE
                 rows.append(values)
     return rows
 
@@ -355,6 +365,17 @@ def _estimate_macs(model) -> int:
 
 def _build_base_model(effective_window_size: int, preset: str = "original"):
     import tensorflow as tf
+
+    class L2NormalizeLayer(tf.keras.layers.Layer):
+        """L2-normalize embeddings to unit sphere. Baked into model graph
+        so TFLite export includes normalization — no manual norm needed."""
+
+        def call(self, inputs):
+            return tf.math.l2_normalize(inputs, axis=-1)
+
+        def get_config(self):
+            return super().get_config()
+
     if effective_window_size >= 16:
         input_layer = tf.keras.layers.Input(shape=(effective_window_size, 9))
         if preset == "original":
@@ -393,13 +414,15 @@ def _build_base_model(effective_window_size: int, preset: str = "original"):
         else:
             raise ValueError(f"Unknown preset: {preset}")
         features = tf.keras.layers.Dense(16, activation=None, name="embedding")(x)
+        features = L2NormalizeLayer(name="l2_embedding")(features)
         return tf.keras.Model(inputs=input_layer, outputs=features)
     else:
         return tf.keras.Sequential([
             tf.keras.layers.Input(shape=(effective_window_size, 9)),
             tf.keras.layers.Conv1D(32, 3, padding="same", activation="relu"),
             tf.keras.layers.Dropout(0.20),
-            tf.keras.layers.Dense(16)
+            tf.keras.layers.Dense(16),
+            L2NormalizeLayer(name="l2_embedding"),
         ])
 
 
@@ -741,6 +764,41 @@ def build_gesture_model(
         validation_data = (X_val_temp, y_val_cat)
 
     import tensorflow as tf
+    
+    class CosineSimilarityLayer(tf.keras.layers.Layer):
+        def __init__(self, num_classes, **kwargs):
+            super().__init__(**kwargs)
+            self.num_classes = num_classes
+            
+        def build(self, input_shape):
+            self.W = self.add_weight(
+                shape=(input_shape[-1], self.num_classes),
+                initializer="glorot_uniform",
+                trainable=True,
+                name="cosine_weights"
+            )
+            
+        def call(self, inputs):
+            import tensorflow as tf
+            W_norm = tf.math.l2_normalize(self.W, axis=0)
+            return tf.matmul(inputs, W_norm)
+
+    def arcface_loss(s=15.0, m=0.3):
+        import tensorflow as tf
+        def loss(y_true, y_pred):
+            y_pred = tf.clip_by_value(y_pred, -1.0 + 1e-7, 1.0 - 1e-7)
+            cos_m = tf.math.cos(m)
+            sin_m = tf.math.sin(m)
+            sin_theta = tf.math.sqrt(1.0 - tf.square(y_pred))
+            cos_theta_m = y_pred * cos_m - sin_theta * sin_m
+            
+            y_true = tf.cast(y_true, tf.float32)
+            logits = tf.where(y_true > 0.5, cos_theta_m, y_pred)
+            
+            logits = logits * s
+            return tf.keras.losses.categorical_crossentropy(y_true, logits, from_logits=True)
+        return loss
+
     base_model = _build_base_model(effective_window_size, preset)
     est_macs = _estimate_macs(base_model)
     params = base_model.count_params()
@@ -748,16 +806,13 @@ def build_gesture_model(
 
     inputs = tf.keras.layers.Input(shape=(effective_window_size, 9))
     features = base_model(inputs)
-    norm_features = tf.keras.layers.Lambda(lambda x: tf.math.l2_normalize(x, axis=1))(features)
-    logits = tf.keras.layers.Dense(len(class_names), use_bias=False)(norm_features)
-    scaled_logits = tf.keras.layers.Lambda(lambda x: x * 10.0)(logits)
-    outputs = tf.keras.layers.Activation("softmax")(scaled_logits)
+    logits = CosineSimilarityLayer(len(class_names))(features)
     
-    model = tf.keras.Model(inputs=inputs, outputs=outputs)
+    model = tf.keras.Model(inputs=inputs, outputs=logits)
 
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
-        loss="categorical_crossentropy",
+        loss=arcface_loss(s=15.0, m=0.3),
         metrics=["accuracy"],
     )
 
@@ -982,9 +1037,6 @@ def build_gesture_model(
             idx = (y_all == c)
             class_embs = embeddings[idx]
             if len(class_embs) > 0:
-                norms = np.linalg.norm(class_embs, axis=1, keepdims=True)
-                norms[norms == 0] = 1e-10
-                class_embs = class_embs / norms
                 
                 # Iterative trimming (outlier rejection)
                 centroid_pre = np.mean(class_embs, axis=0)
@@ -1005,18 +1057,15 @@ def build_gesture_model(
                 other_idx = (y_all != c)
                 if np.any(other_idx):
                     other_embs = embeddings[other_idx]
-                    other_norms = np.linalg.norm(other_embs, axis=1, keepdims=True)
-                    other_norms[other_norms == 0] = 1e-10
-                    other_embs = other_embs / other_norms
                     other_cos_sims = np.dot(other_embs, centroid)
                     max_other = float(np.max(other_cos_sims))
-                    # Set threshold slightly above the max similarity of any other class, but cap at 0.55 to make spells very easy to cast
-                    thresh = max(0.40, min(max_other + 0.05, 0.55))
+                    # ArcFace provides stronger margins, safely raise threshold floor
+                    thresh = max(0.55, min(max_other + 0.10, 0.70))
                 else:
-                    thresh = 0.45
+                    thresh = 0.60
             else:
                 centroid = np.zeros(16)
-                thresh = 0.45
+                thresh = 0.60
             centroids.append(centroid.tolist())
             thresholds.append(thresh)
     tflite_path, cc_path = _resolve_output_paths(output_root)

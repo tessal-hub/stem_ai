@@ -13,8 +13,8 @@ from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QFormLayout,
                              QFrame, QGridLayout, QHBoxLayout, QLabel,
-                             QLineEdit, QProgressBar, QPushButton, QSizePolicy,
-                             QSpinBox, QVBoxLayout, QWidget)
+                             QLineEdit, QProgressBar, QPushButton, QScrollArea,
+                             QSizePolicy, QSpinBox, QVBoxLayout, QWidget)
 from ui.asset_utils import resolve_asset_path
 
 from logic.locale_manager import locale_manager
@@ -57,26 +57,41 @@ class PageSetting(QWidget):
         # Cấu trúc 2 cột chính
         columns = QHBoxLayout()
         columns.setSpacing(SPACE_32)
-        
-        left_col = QVBoxLayout()
+
+        # ── Cột TRÁI: bọc trong ScrollArea để tránh bị ép khi cửa sổ nhỏ ──
+        left_inner = QWidget()
+        left_col = QVBoxLayout(left_inner)
+        left_col.setContentsMargins(0, 0, 0, 0)
         left_col.setSpacing(SPACING_LG)
         left_col.setAlignment(Qt.AlignmentFlag.AlignTop)
-        
-        right_col = QVBoxLayout()
-        right_col.setSpacing(SPACING_LG)
-        
-        # Cột trái: Các cài đặt cấu hình dạng form nhập liệu
         left_col.addWidget(self._build_hardware_column())
         left_col.addWidget(self._build_general_settings())
         left_col.addWidget(self._build_quality_card())
         left_col.addWidget(self._build_hardware_info_card())
-        
-        # Cột phải: Các chức năng quét chất lượng và nạp firmware kèm console log
+        left_col.addStretch()
+
+        left_scroll = QScrollArea()
+        left_scroll.setWidget(left_inner)
+        left_scroll.setWidgetResizable(True)
+        left_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        left_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        left_scroll.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        left_scroll.setMinimumWidth(280)
+        left_scroll.setStyleSheet("QScrollArea#SettingScroll { background: transparent; border: none; }")
+        left_scroll.setObjectName("SettingScroll")
+        left_inner.setObjectName("SettingLeftInner")
+        left_inner.setStyleSheet("QWidget#SettingLeftInner { background: transparent; }")
+        left_scroll.viewport().setAutoFillBackground(False)
+
+        # ── Cột PHẢI: Firmware + console ──
+        right_col = QVBoxLayout()
+        right_col.setSpacing(SPACING_LG)
         right_col.addWidget(self._build_firmware_section(), stretch=1)
-        
-        columns.addLayout(left_col, stretch=4)
-        columns.addLayout(right_col, stretch=6)
-        
+
+        # Tỷ lệ cân bằng: trái ~45%, phải ~55%
+        columns.addWidget(left_scroll, stretch=9)
+        columns.addLayout(right_col, stretch=11)
+
         outer.addLayout(columns, stretch=1)
 
         # Thanh điều khiển (Lưu / Hủy) nằm dưới cùng
@@ -263,6 +278,7 @@ class PageSetting(QWidget):
         lay.addWidget(self._make_section_label_i18n("section_firmware"))
 
         card, c_lay = self._make_card(margins=(16, 16, 16, 16), spacing=SPACING_SM)
+        card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         btns = QHBoxLayout()
         btns.setSpacing(SPACING_SM)
@@ -285,9 +301,10 @@ class PageSetting(QWidget):
         self.progress_bar.setTextVisible(False)
         c_lay.addWidget(self.progress_bar)
 
-        # Console grows to fill remaining vertical space
+        # Console: min height bảo vệ, max height giới hạn để không chiếm hết
         self.console_log = TerminalWidget(read_only=True)
-        self.console_log.setMinimumHeight(160)
+        self.console_log.setMinimumHeight(200)
+        self.console_log.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         c_lay.addWidget(self.console_log, stretch=1)
         lay.addWidget(card, stretch=1)
         return col
@@ -414,14 +431,17 @@ class PageSetting(QWidget):
 
     def _make_form_layout(self) -> QFormLayout:
         form = QFormLayout()
-        form.setSpacing(16)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form.setSpacing(12)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        form.setFormAlignment(Qt.AlignmentFlag.AlignTop)
         return form
 
     def _add_i18n_form_row(self, form: QFormLayout, key: str, field: QWidget) -> None:
         label = QLabel("")
         label.setProperty("type", "settings_form_label")
+        label.setMinimumWidth(110)   # prevent label from collapsing/truncating
+        label.setWordWrap(False)
         form.addRow(label, field)
         self._tx(label, key)
 

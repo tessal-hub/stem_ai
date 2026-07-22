@@ -154,7 +154,11 @@ class FlashWorker(QThread):
         return args
 
     def _execute_flash(self, args: list[str]) -> tuple[bool, str]:
-        """Call esptool Python API directly (works in both frozen and normal mode)."""
+        """Call esptool Python API directly (works in both frozen and normal mode).
+
+        If stub files are missing (common in packaged .exe), automatically
+        retries with --no-stub to avoid the 'Flasher stub data is missing' error.
+        """
         self.log_msg.emit(f"[INFO] esptool args: {' '.join(args)}")
         self.log_msg.emit("=" * 70)
         self.sig_progress.emit(0)
@@ -163,46 +167,78 @@ class FlashWorker(QThread):
             import io
             import contextlib
 
-            log_buf = io.StringIO()
-            success = False
-            with contextlib.redirect_stdout(log_buf), contextlib.redirect_stderr(log_buf):
-                esptool.main(args)
-            output = log_buf.getvalue()
-            for line in output.splitlines():
-                self.log_msg.emit(line)
-                if "FINISH" in line or "Hard resetting" in line:
-                    success = True
-                match = re.search(r"\((\d{1,3})%\)", line)
-                if match:
-                    try:
-                        percent = int(match.group(1))
-                        if 0 <= percent <= 100:
-                            self.sig_progress.emit(percent)
-                    except ValueError:
-                        pass
-            if success:
-                self.sig_progress.emit(100)
-                self.log_msg.emit("=" * 70)
-                self.log_msg.emit("[SUCCESS] Firmware flash completed!")
-                return True, "Flash successful"
-            self.log_msg.emit("=" * 70)
-            self.log_msg.emit("[FAILED] Firmware flash failed (no completion marker detected)")
-            return False, "Flash failed (no completion marker)"
-        except SystemExit as exc:
-            # esptool calls sys.exit() on success (exit code 0) and failure
-            code = exc.code if exc.code is not None else -1
-            if code == 0:
-                self.sig_progress.emit(100)
-                self.log_msg.emit("[SUCCESS] Firmware flash completed!")
-                return True, "Flash successful"
-            self.log_msg.emit(f"[FAILED] esptool exited with code {code}")
-            return False, f"Flash failed (exit code: {code})"
+            return self._run_esptool(esptool, args)
         except ImportError:
             self.log_msg.emit("[ERROR] esptool Python package not found. Run: pip install esptool")
             return False, "esptool not installed"
         except Exception as exc:
             self.log_msg.emit(f"[ERROR] esptool exception: {exc}")
             return False, str(exc)
+
+    def _run_esptool(self, esptool, args: list[str], _retry_no_stub: bool = False) -> tuple[bool, str]:
+        """Run esptool.main() with output capture. Retries with --no-stub on stub error."""
+        import io
+        import contextlib
+
+        log_buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(log_buf), contextlib.redirect_stderr(log_buf):
+                esptool.main(args)
+        except SystemExit as exc:
+            output = log_buf.getvalue()
+            # Flush captured output before processing result
+            for line in output.splitlines():
+                self.log_msg.emit(line)
+            code = exc.code if exc.code is not None else -1
+            if code == 0:
+                self.sig_progress.emit(100)
+                self.log_msg.emit("[SUCCESS] Firmware flash completed!")
+                return True, "Flash successful"
+            self.log_msg.emit(f"[FAIL] esptool exited with code {code}")
+            return False, f"Flash failed (exit code: {code})"
+        except Exception as exc:
+            output = log_buf.getvalue()
+            for line in output.splitlines():
+                self.log_msg.emit(line)
+            raise
+
+        output = log_buf.getvalue()
+
+        # Check for stub-missing error BEFORE emitting lines — retry with --no-stub
+        _STUB_MISSING = "stub data is missing" in output.lower() or "stub files" in output.lower()
+        if _STUB_MISSING and not _retry_no_stub:
+            self.log_msg.emit("[WARN] Stub files missing — retrying with --no-stub (slower but compatible)...")
+            no_stub_args = ["--no-stub"] + args
+            return self._run_esptool(esptool, no_stub_args, _retry_no_stub=True)
+
+        success = False
+        for line in output.splitlines():
+            self.log_msg.emit(line)
+            if "FINISH" in line or "Hard resetting" in line:
+                success = True
+            match = re.search(r"\((\d{1,3})%\)", line)
+            if match:
+                try:
+                    percent = int(match.group(1))
+                    if 0 <= percent <= 100:
+                        self.sig_progress.emit(percent)
+                except ValueError:
+                    pass
+
+        if success:
+            self.sig_progress.emit(100)
+            self.log_msg.emit("=" * 70)
+            self.log_msg.emit("[SUCCESS] Firmware flash completed!")
+            return True, "Flash successful"
+        self.log_msg.emit("=" * 70)
+        self.log_msg.emit("[FAIL] Firmware flash FAILED: " + ("Flasher stub data is missing for ESP32.\n"
+            "This means the esptool installation is incomplete or broken - "
+            "stub JSON files were removed or a third-party distribution package didn't ship them. "
+            "It is\nunlikely to be a defect in esptool itself.\n\n"
+            "Try reinstalling esptool or restoring the stub files from the upstream source tree. "
+            "As a workaround, you can pass --no-stub (slower operation, fewer\nfeatures)."
+            if _STUB_MISSING else "no completion marker detected"))
+        return False, "Flash failed (stub missing)" if _STUB_MISSING else "Flash failed (no completion marker)"
 
 
     def _check_esptool_available(self) -> bool:

@@ -134,6 +134,9 @@ class NVSBuildWorker(QThread):
                         if energy > max_energy:
                             max_energy = energy
                             window = np.asarray(w_list, dtype=np.float32)
+                            window[:, 3] /= 125.0
+                            window[:, 4] /= 125.0
+                            window[:, 5] /= 125.0
                             window = np.clip(window, -2.0, 2.0)
                             best_window = window
                     if best_window is not None:
@@ -1123,6 +1126,9 @@ class Handler(QObject):
                 if energy > max_energy:
                     max_energy = energy
                     window = np.asarray(w_list, dtype=np.float32)
+                    window[:, 3] /= 125.0
+                    window[:, 4] /= 125.0
+                    window[:, 5] /= 125.0
                     window = np.clip(window, -2.0, 2.0)
                     best_window = window
 

@@ -509,11 +509,14 @@ class PageRecord(QWidget):
 
     def _build_detail_card(self) -> QFrame:
         """Card chọn câu thần chú và thông số ghi."""
-        card, layout = make_card(margins=(10, 10, 10, 10), spacing=SPACING_SM)
+        card, layout = make_card(margins=(8, 8, 8, 8), spacing=4)
 
         form = QFormLayout()
+        form.setSpacing(6)
+        form.setContentsMargins(0, 0, 0, 0)
         self.combo_spell = QComboBox()
         self.combo_spell.setEditable(True)
+        self.combo_spell.setFixedHeight(28)
         self.combo_spell.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         lbl = QLabel(tr_ui("record_spell_label"))
         lbl.setProperty("type", "record_field_label")
@@ -521,12 +524,17 @@ class PageRecord(QWidget):
         layout.addLayout(form)
 
         stats = QGridLayout()
+        stats.setSpacing(4)
         self.lbl_record_count = QLabel("0")
         self.lbl_record_count.setProperty("type", "record_metric_value")
         self.lbl_record_duration = QLabel("00:00")
         self.lbl_record_duration.setProperty("type", "record_metric_value")
-        stats.addWidget(make_hint(tr_ui("record_hint_recorded")), 0, 0)
-        stats.addWidget(make_hint(tr_ui("record_hint_duration")), 0, 1)
+        
+        lbl_recorded = make_hint(tr_ui("record_hint_recorded"))
+        lbl_duration = make_hint(tr_ui("record_hint_duration"))
+        
+        stats.addWidget(lbl_recorded, 0, 0)
+        stats.addWidget(lbl_duration, 0, 1)
         stats.addWidget(self.lbl_record_count, 1, 0)
         stats.addWidget(self.lbl_record_duration, 1, 1)
         layout.addLayout(stats)
@@ -534,44 +542,50 @@ class PageRecord(QWidget):
 
     def _build_controls_card(self) -> QFrame:
         """Card chứa các nút tác vụ ghi (Start/Stop/Snip)."""
-        card, layout = make_card(margins=(10, 10, 10, 10), spacing=SPACING_SM)
+        card, layout = make_card(margins=(8, 8, 8, 8), spacing=6)
 
         # Sắp xếp nút Start/Stop cạnh nhau, Snip chiếm trọn hàng để dễ thao tác
         row1 = QHBoxLayout()
-        self.btn_start = make_button(tr_ui("record_btn_start"), "start", BTN_H)
-        self.btn_stop = make_button(tr_ui("record_btn_stop"), "stop", BTN_H)
+        row1.setSpacing(6)
+        self.btn_start = make_button(tr_ui("record_btn_start"), "start", 28)
+        self.btn_stop = make_button(tr_ui("record_btn_stop"), "stop", 28)
         self.btn_stop.setEnabled(False)
         row1.addWidget(self.btn_start)
         row1.addWidget(self.btn_stop)
         layout.addLayout(row1)
 
-        self.btn_snip = make_button(tr_ui("record_btn_snip"), "snip", BTN_H)
+        self.btn_snip = make_button(tr_ui("record_btn_snip"), "snip", 28)
         self.btn_snip.setEnabled(False)
         layout.addWidget(self.btn_snip)
 
         hint = make_hint(tr_ui("record_hint_controls"))
         hint.setWordWrap(True)
+        # Giảm font size của hint để gọn hơn
+        hint.setStyleSheet("font-size: 10px; color: gray;")
         layout.addWidget(hint)
         return card
 
     def _build_batch_card(self) -> QFrame:
         """Card tác vụ hàng loạt — 3 nút xếp ngang."""
-        card, layout = make_card(margins=(8, 8, 8, 8), spacing=SPACING_SM)
-        layout.addWidget(make_section_label(tr_ui("record_batch"), accent=False))
+        card, layout = make_card(margins=(6, 6, 6, 6), spacing=4)
+        
+        lbl_batch = make_section_label(tr_ui("record_batch"), accent=False)
+        lbl_batch.setStyleSheet("font-size: 11px; font-weight: bold;")
+        layout.addWidget(lbl_batch)
 
         row = QHBoxLayout()
-        row.setSpacing(SPACING_SM)
+        row.setSpacing(4)
 
         self.btn_delete_selected = make_button(
-            "🗑 Xóa đã chọn", "danger_outline", BTN_H
+            "🗑 Xóa", "danger_outline", 28
         )
         self.btn_delete_selected.setEnabled(False)
         self.btn_delete_selected.setToolTip("Chọn một hoặc nhiều mẫu trong danh sách rồi nhấn nút này để xóa.")
         self.btn_clear_samples = make_button(
-            tr_ui("record_btn_clear"), "danger_outline", BTN_H
+            tr_ui("record_btn_clear"), "danger_outline", 28
         )
         self.btn_export_csv = make_button(
-            tr_ui("record_btn_export"), "base", BTN_H
+            tr_ui("record_btn_export"), "base", 28
         )
 
         row.addWidget(self.btn_delete_selected, stretch=1)
