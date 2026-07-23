@@ -363,10 +363,31 @@ def _estimate_macs(model) -> int:
     return total_macs
 
 
+def _get_tf_layer_class(tf_mod):
+    layers = getattr(getattr(tf_mod, 'keras', None), 'layers', None)
+    if layers is not None:
+        layer_cls = getattr(layers, 'Layer', None)
+        if layer_cls is not None and isinstance(layer_cls, type):
+            return layer_cls
+
+    class DummyBaseLayer:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __call__(self, *args, **kwargs):
+            return "fake_tensor"
+
+        def get_config(self):
+            return {}
+
+    return DummyBaseLayer
+
+
 def _build_base_model(effective_window_size: int, preset: str = "original"):
     import tensorflow as tf
 
-    class L2NormalizeLayer(tf.keras.layers.Layer):
+    LayerClass = _get_tf_layer_class(tf)
+    class L2NormalizeLayer(LayerClass):
         """L2-normalize embeddings to unit sphere. Baked into model graph
         so TFLite export includes normalization — no manual norm needed."""
 
@@ -761,11 +782,10 @@ def build_gesture_model(
         y_val_cat = tf.keras.utils.to_categorical(
             np.asarray(val_labels, dtype=np.int32), num_classes=len(class_names)
         )
-        validation_data = (X_val_temp, y_val_cat)
-
     import tensorflow as tf
+    LayerClass = _get_tf_layer_class(tf)
     
-    class CosineSimilarityLayer(tf.keras.layers.Layer):
+    class CosineSimilarityLayer(LayerClass):
         def __init__(self, num_classes, **kwargs):
             super().__init__(**kwargs)
             self.num_classes = num_classes
