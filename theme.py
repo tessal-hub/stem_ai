@@ -61,6 +61,10 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
             background-color: transparent;
             border: none;
         }}
+        QFrame {{
+            border: none;
+            background: transparent;
+        }}
 
         /* ══════════════════════════════════════════════
            SIDEBAR — Warm tinted panel with pill nav
@@ -657,10 +661,6 @@ def apply_modern_theme(widget_or_app, theme_name: str = "light") -> None:
 
 
 def apply_flat_widget_chrome(root_widget: QWidget) -> None:
-    """
-    Loại bỏ khung viền mặc định của các widget con bên trong.
-    """
-    for frame in root_widget.findChildren(QFrame):
-        frame.setFrameShape(QFrame.Shape.NoFrame)
-        frame.setFrameShadow(QFrame.Shadow.Plain)
-        frame.setLineWidth(0)
+    """No-op — frame removal is now handled by QSS in get_modern_stylesheet."""
+    pass
+
