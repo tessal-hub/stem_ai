@@ -89,23 +89,13 @@ class UdpWorker(QThread):
             self.sig_finished.emit(run_success, run_message)
 
     def stop(self) -> None:
-        """Gracefully asks the thread to terminate."""
+        """Cooperatively ask the thread to terminate (non-blocking)."""
         self._is_running = False
         if self._sock:
             try:
                 self._sock.close()
             except Exception:
                 pass
-
-        import time
-        start_time = time.perf_counter()
-        while self.isRunning() and (time.perf_counter() - start_time < 2.0):
-            time.sleep(0.01)
-
-        if self.isRunning():
-            logging.getLogger(__name__).warning(
-                "UdpWorker: thread did not exit within 2 s after stop()"
-            )
 
     def _update_health_metrics(self, payload: dict[str, Any]) -> None:
         """Cập nhật thống kê tốc độ/jitter/loss từ một gói UDP mới nhận.

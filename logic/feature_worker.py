@@ -76,21 +76,12 @@ class FeatureWorker(QThread):
         self._sample_rate_hz = max(1, int(hz))
 
     def stop(self) -> None:
-        """Request the worker loop to exit and wait up to 2 s."""
+        """Cooperatively ask the worker to exit (non-blocking)."""
         self._running = False
-        # Unblock the blocking get() with a sentinel.
         try:
             self._queue.put_nowait(None)
         except queue.Full:
             pass
-
-        import time
-        start_time = time.perf_counter()
-        while self.isRunning() and (time.perf_counter() - start_time < 2.0):
-            time.sleep(0.01)
-
-        if self.isRunning():
-            log.warning("FeatureWorker: thread did not exit within 2 s")
 
     # ------------------------------------------------------------------
     # QThread entry point
