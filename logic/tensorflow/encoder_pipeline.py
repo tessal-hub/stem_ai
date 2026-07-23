@@ -22,33 +22,39 @@ def _require_tensorflow():
 
 
 
-class L2NormalizeLayer(tf.keras.layers.Layer):
-    """Normalize embeddings to unit sphere.
+def _get_l2_normalize_layer_class():
+    tf = _require_tensorflow()
+    class L2NormalizeLayer(tf.keras.layers.Layer):
+        """Normalize embeddings to unit sphere.
 
-    Replaces Lambda(l2_normalize) so the model can be
-    serialized and deserialized safely — Lambda stores
-    Python bytecode which Keras refuses to load by default.
-    """
+        Replaces Lambda(l2_normalize) so the model can be
+        serialized and deserialized safely — Lambda stores
+        Python bytecode which Keras refuses to load by default.
+        """
 
-    def call(self, inputs):
-        return tf.math.l2_normalize(inputs, axis=-1)
+        def call(self, inputs):
+            return tf.math.l2_normalize(inputs, axis=-1)
 
-    def get_config(self):
-        return super().get_config()
+        def get_config(self):
+            return super().get_config()
+    return L2NormalizeLayer
 
 
-class TripletStackLayer(tf.keras.layers.Layer):
-    """Stack anchor/positive/negative embeddings along axis=1.
+def _get_triplet_stack_layer_class():
+    tf = _require_tensorflow()
+    class TripletStackLayer(tf.keras.layers.Layer):
+        """Stack anchor/positive/negative embeddings along axis=1.
 
-    Same rationale as L2NormalizeLayer — avoid Lambda for
-    serialization safety.
-    """
+        Same rationale as L2NormalizeLayer — avoid Lambda for
+        serialization safety.
+        """
 
-    def call(self, inputs):
-        return tf.stack(inputs, axis=1)
+        def call(self, inputs):
+            return tf.stack(inputs, axis=1)
 
-    def get_config(self):
-        return super().get_config()
+        def get_config(self):
+            return super().get_config()
+    return TripletStackLayer
 
 
 def build_encoder(
@@ -65,6 +71,7 @@ def build_encoder(
     x = tf.keras.layers.GlobalAveragePooling1D()(x)
     x = tf.keras.layers.Dense(32, activation="relu")(x)
     x = tf.keras.layers.Dense(embedding_dim)(x)
+    L2NormalizeLayer = _get_l2_normalize_layer_class()
     outputs = L2NormalizeLayer(name="l2_embedding")(x)
     return tf.keras.Model(inputs=inputs, outputs=outputs, name="gesture_encoder")
 
@@ -101,6 +108,7 @@ def build_triplet_model(encoder):
     emb_p = encoder(positive_in)
     emb_n = encoder(negative_in)
 
+    TripletStackLayer = _get_triplet_stack_layer_class()
     stacked = TripletStackLayer(name="triplet_stack")([emb_a, emb_p, emb_n])
 
     return tf.keras.Model(

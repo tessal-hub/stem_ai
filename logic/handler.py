@@ -185,6 +185,42 @@ class NVSBuildWorker(QThread):
 log = logging.getLogger(__name__)
 
 
+class _EncoderLoadWorker(QThread):
+    sig_done = pyqtSignal(object, object)
+
+    def __init__(self, app_data_dir):
+        super().__init__()
+        self.app_data_dir = app_data_dir
+
+    def run(self):
+        try:
+            path = self.app_data_dir / "gesture_encoder.keras"
+            proto_path = self.app_data_dir / "spell_prototypes.json"
+            if not path.exists():
+                self.sig_done.emit(None, None)
+                return
+
+            import tensorflow as tf
+            from logic.tensorflow.encoder_pipeline import _get_l2_normalize_layer_class
+            
+            try:
+                encoder = tf.keras.models.load_model(
+                    str(path), compile=False,
+                    custom_objects={"L2NormalizeLayer": _get_l2_normalize_layer_class()},
+                )
+            except Exception:
+                log.warning("Loading legacy Lambda encoder — retrain to upgrade.")
+                encoder = tf.keras.models.load_model(
+                    str(path), compile=False, safe_mode=False,
+                )
+            
+            p_path = str(proto_path) if proto_path.exists() else None
+            self.sig_done.emit(encoder, p_path)
+        except Exception as e:
+            log.error(f"Background encoder load failed: {e}")
+            self.sig_done.emit(None, None)
+
+
 class Handler(QObject):
     """
     Bộ não điều phối chính của ứng dụng.
@@ -281,7 +317,7 @@ class Handler(QObject):
 
     def _load_initial_state(self) -> None:
         """Nạp trạng thái ban đầu sau khi khởi tạo."""
-        self._try_load_encoder()
+        self._start_async_encoder_load()
         self.on_serial_scan()
         self.ui_home.set_mode(self._mode)
         self._feature_timer.start()
@@ -572,38 +608,25 @@ class Handler(QObject):
             self.store.set_current_mode(mode)
             self.ui_home.set_mode(mode)
 
-    def _try_load_encoder(self) -> None:
-        """Nạp mô hình mã hóa cử chỉ nếu có sẵn."""
-        path = APP_DATA_DIR / "gesture_encoder.keras"
-        proto_path = APP_DATA_DIR / "spell_prototypes.json"
+    def _start_async_encoder_load(self) -> None:
+        self._encoder_worker = _EncoderLoadWorker(APP_DATA_DIR)
+        self._encoder_worker.sig_done.connect(self._on_encoder_loaded)
+        self._encoder_worker.start()
+
+    def _on_encoder_loaded(self, encoder, proto_path):
+        if not encoder:
+            return
         
-        if path.exists():
-            try:
-                import tensorflow as tf
-                from logic.tensorflow.encoder_pipeline import L2NormalizeLayer
-                try:
-                    encoder = tf.keras.models.load_model(
-                        str(path), compile=False,
-                        custom_objects={"L2NormalizeLayer": L2NormalizeLayer},
-                    )
-                except Exception:
-                    # Legacy model with Lambda layer — load with safe_mode=False
-                    log.warning("Loading legacy Lambda encoder — retrain to upgrade.")
-                    encoder = tf.keras.models.load_model(
-                        str(path), compile=False, safe_mode=False,
-                    )
-                self.spell_recognizer = PrototypicalRecognizer(encoder)
-                
-                if proto_path.exists():
-                    self.spell_recognizer.load(str(proto_path))
-                    self.store.registered_prototypes = set(self.spell_recognizer.prototypes.keys())
-                log.info(f"Loaded encoder and {len(self.spell_recognizer.prototypes) if self.spell_recognizer else 0} prototypes.")
-            except Exception as e:
-                log.error(f"Failed to load encoder: {e}")
-                if hasattr(self, 'ui_wand') and self.ui_wand:
-                    self.ui_wand.append_terminal_text(
-                        f"[ERROR] Encoder load failed: {type(e).__name__}: {e}"
-                    )
+        try:
+            self.spell_recognizer = PrototypicalRecognizer(encoder)
+            if proto_path:
+                self.spell_recognizer.load(proto_path)
+                self.store.registered_prototypes = set(self.spell_recognizer.prototypes.keys())
+            log.info(f"Loaded encoder and {len(self.spell_recognizer.prototypes) if self.spell_recognizer else 0} prototypes.")
+        except Exception as e:
+            log.error(f"Failed to initialize recognizer: {e}")
+            if hasattr(self, 'ui_wand') and self.ui_wand:
+                self.ui_wand.append_terminal_text(f"[ERROR] Recognizer init failed: {e}")
 
 
     def _on_db_refreshed(self, counts: dict) -> None:
