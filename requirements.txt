@@ -1,28 +1,8 @@
-# UI Core
+# requirements.txt — Core runtime (no TensorFlow)
 PyQt6>=6.5.0
 PyOpenGL>=3.1.0
-
-# Plotting & Visualization
 pyqtgraph>=0.13.3
-
-# Data Processing
 numpy>=1.26.0
-
-#esp
 esptool
 esp-idf-nvs-partition-gen
-
-# Utils & Serialization
 pyserial>=3.5
-
-# Packaging
-pyinstaller>=6.2.0
-
-# Training scripts (optional, not required for app runtime)
-tensorflow>=2.16.0
-pandas>=2.1.0
-scipy>=1.11.0
-
-# Testing
-pytest>=8.2.0
-pytest-json-report>=1.5.0

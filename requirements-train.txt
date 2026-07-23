@@ -1,0 +1,5 @@
+# requirements-train.txt — Training pipeline (optional)
+-r requirements.txt
+tensorflow>=2.16.0
+pandas>=2.1.0
+scipy>=1.11.0
