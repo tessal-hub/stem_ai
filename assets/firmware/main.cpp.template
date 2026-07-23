@@ -601,12 +601,13 @@ static void InferenceTask(void* /*arg*/) {
 bool InitializeSpellRuntime() {
   // Load gestures from NVS
   esp_err_t err = nvs_flash_init_partition("labels");
-  if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-      ESP_ERROR_CHECK(nvs_flash_erase_partition("labels"));
+  if (err != ESP_OK) {
+      ESP_LOGW(TAG, "nvs_flash_init_partition 'labels' returned %s (0x%x). Erasing and re-initializing...", esp_err_to_name(err), err);
+      nvs_flash_erase_partition("labels");
       err = nvs_flash_init_partition("labels");
   }
   if (err != ESP_OK) {
-      ESP_LOGE(TAG, "Failed to init labels NVS partition");
+      ESP_LOGE(TAG, "Failed to init labels NVS partition: %s", esp_err_to_name(err));
       return false;
   }
 

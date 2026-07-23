@@ -79,6 +79,7 @@ namespace spellbook {
 #define WINDOW_SIZE 64
 #define CHANNELS 6
 #define ACCEL_SCALE 16384.0f
+#define GYRO_RAW_SCALE 131.0f
 #define GYRO_SCALE (131.0f * 125.0f)  // 131 LSB/(°/s) × 125 rescale → matches Python pipeline
 #define BUFFER_LENGTH (WINDOW_SIZE * CHANNELS)   // 384 phần tử
 #define EMBEDDING_DIM 16
@@ -366,9 +367,9 @@ static void InferenceTask(void* /*arg*/) {
             float ax = s_local_buffer[i * CHANNELS + 0] / ACCEL_SCALE;
             float ay = s_local_buffer[i * CHANNELS + 1] / ACCEL_SCALE;
             float az = s_local_buffer[i * CHANNELS + 2] / ACCEL_SCALE;
-            float gx = s_local_buffer[i * CHANNELS + 3] / GYRO_SCALE;
-            float gy = s_local_buffer[i * CHANNELS + 4] / GYRO_SCALE;
-            float gz = s_local_buffer[i * CHANNELS + 5] / GYRO_SCALE;
+            float gx = s_local_buffer[i * CHANNELS + 3] / GYRO_RAW_SCALE;
+            float gy = s_local_buffer[i * CHANNELS + 4] / GYRO_RAW_SCALE;
+            float gz = s_local_buffer[i * CHANNELS + 5] / GYRO_RAW_SCALE;
             sum_ax += ax; sum_ay += ay; sum_az += az;
             sum_gx += gx; sum_gy += gy; sum_gz += gz;
         }
@@ -380,9 +381,9 @@ static void InferenceTask(void* /*arg*/) {
             float ax = s_local_buffer[i * CHANNELS + 0] / ACCEL_SCALE;
             float ay = s_local_buffer[i * CHANNELS + 1] / ACCEL_SCALE;
             float az = s_local_buffer[i * CHANNELS + 2] / ACCEL_SCALE;
-            float gx = s_local_buffer[i * CHANNELS + 3] / GYRO_SCALE;
-            float gy = s_local_buffer[i * CHANNELS + 4] / GYRO_SCALE;
-            float gz = s_local_buffer[i * CHANNELS + 5] / GYRO_SCALE;
+            float gx = s_local_buffer[i * CHANNELS + 3] / GYRO_RAW_SCALE;
+            float gy = s_local_buffer[i * CHANNELS + 4] / GYRO_RAW_SCALE;
+            float gz = s_local_buffer[i * CHANNELS + 5] / GYRO_RAW_SCALE;
             float dx = ax - mean_ax, dy = ay - mean_ay, dz = az - mean_az;
             var_accel += (dx*dx + dy*dy + dz*dz);
             float dgx = gx - mean_gx, dgy = gy - mean_gy, dgz = gz - mean_gz;
@@ -536,7 +537,7 @@ static void InferenceTask(void* /*arg*/) {
         for (int i = 0; i < BUFFER_LENGTH; ++i) {
             // cần giá trị tuyệt đối float
             float val = (i % 6 < 3) ? (s_local_buffer[i] / ACCEL_SCALE)
-                                    : (s_local_buffer[i] / GYRO_SCALE);
+                                    : (s_local_buffer[i] / GYRO_RAW_SCALE);
             window_energy += (val > 0) ? val : -val;
         }
 
@@ -573,12 +574,13 @@ static void InferenceTask(void* /*arg*/) {
 bool InitializeSpellRuntime() {
     // Khởi tạo NVS partition labels
     esp_err_t err = nvs_flash_init_partition("labels");
-    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase_partition("labels"));
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "nvs_flash_init_partition 'labels' returned %s (0x%x). Erasing and re-initializing...", esp_err_to_name(err), err);
+        nvs_flash_erase_partition("labels");
         err = nvs_flash_init_partition("labels");
     }
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to init labels NVS partition");
+        ESP_LOGE(TAG, "Failed to init labels NVS partition: %s", esp_err_to_name(err));
         return false;
     }
 

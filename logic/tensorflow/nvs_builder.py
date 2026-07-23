@@ -18,7 +18,7 @@ import argparse
 from pathlib import Path
 
 
-def _call_nvs_gen_api(csv_path: str, out_path: str) -> None:
+def _call_nvs_gen_api(csv_path: str, out_path: str, partition_size: str = "0x10000") -> None:
     """
     Gọi `esp_idf_nvs_partition_gen.generate()` trực tiếp qua Python API.
     Hoạt động trong cả chế độ script thường và PyInstaller frozen exe.
@@ -26,6 +26,7 @@ def _call_nvs_gen_api(csv_path: str, out_path: str) -> None:
     Args:
         csv_path: Đường dẫn tới file CSV đầu vào.
         out_path: Đường dẫn file .bin đầu ra.
+        partition_size: Kích thước partition NVS trong partition table (mặc định 0x10000 = 64KB).
 
     Raises:
         RuntimeError: Nếu esp_idf_nvs_partition_gen không được cài đặt.
@@ -45,7 +46,7 @@ def _call_nvs_gen_api(csv_path: str, out_path: str) -> None:
         input=[csv_path],
         output=out_p.name,          # chỉ tên file, không có thư mục
         outdir=str(out_p.parent),   # thư mục chứa file output
-        size="0x6000",
+        size=partition_size,
         version=2,
         keygen=False,
         encrypt=False,
