@@ -386,22 +386,22 @@ class Handler(QObject):
         self.serial_worker.sig_prediction_received.connect(
             self.store.update_prediction, type=Qt.ConnectionType.QueuedConnection)
 
-        self.data_io_worker.sig_save_done.connect(self._on_io_done)
-        self.data_io_worker.sig_db_refreshed.connect(self.store.update_counts_from_worker)
-        self.data_io_worker.sig_delete_sample_done.connect(self._on_io_delete_sample_done)
+        self.data_io_worker.sig_save_done.connect(self._on_io_done, type=Qt.ConnectionType.QueuedConnection)
+        self.data_io_worker.sig_db_refreshed.connect(self.store.update_counts_from_worker, type=Qt.ConnectionType.QueuedConnection)
+        self.data_io_worker.sig_delete_sample_done.connect(self._on_io_delete_sample_done, type=Qt.ConnectionType.QueuedConnection)
         self.data_io_worker.sig_queue_warning.connect(
             self.ui_wand.append_terminal_text, type=Qt.ConnectionType.QueuedConnection)
-        self.feature_worker.sig_features_ready.connect(self.store.update_live_features)
+        self.feature_worker.sig_features_ready.connect(self.store.update_live_features, type=Qt.ConnectionType.QueuedConnection)
 
         # Uploader signals
-        self.uploader.status_msg.connect(self.ui_wand.append_terminal_text)
-        self.uploader.sig_progress.connect(self.ui_wand.update_flash_progress)
-        self.uploader.sig_finished.connect(self._on_upload_finished)
+        self.uploader.status_msg.connect(self.ui_wand.append_terminal_text, type=Qt.ConnectionType.QueuedConnection)
+        self.uploader.sig_progress.connect(self.ui_wand.update_flash_progress, type=Qt.ConnectionType.QueuedConnection)
+        self.uploader.sig_finished.connect(self._on_upload_finished, type=Qt.ConnectionType.QueuedConnection)
 
         # Flash worker signals
-        self.flash_worker.log_msg.connect(self._flash_log_to_console)
-        self.flash_worker.sig_progress.connect(self.ui_setting.update_flash_progress)
-        self.flash_worker.sig_finished.connect(self._on_firmware_flash_finished)
+        self.flash_worker.log_msg.connect(self._flash_log_to_console, type=Qt.ConnectionType.QueuedConnection)
+        self.flash_worker.sig_progress.connect(self.ui_setting.update_flash_progress, type=Qt.ConnectionType.QueuedConnection)
+        self.flash_worker.sig_finished.connect(self._on_firmware_flash_finished, type=Qt.ConnectionType.QueuedConnection)
 
     def _connect_store_signals(self) -> None:
         """Kết nối tín hiệu từ kho dữ liệu."""

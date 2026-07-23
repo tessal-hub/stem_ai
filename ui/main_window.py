@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QCloseEvent, QIcon
 from PyQt6.QtWidgets import QMainWindow, QStackedWidget, QWidget
 
@@ -95,9 +96,9 @@ class MainWindow(QMainWindow):
         self.page_setting.sig_settings_saved.connect(self._on_settings_saved)
 
         # Dữ liệu UDP
-        self.udp_worker.sig_data_received.connect(self._on_udp_sensor_dispatch)
-        self.udp_worker.sig_status_change.connect(self._on_udp_status_changed)
-        self.udp_worker.sig_health_update.connect(self._on_udp_health_updated)
+        self.udp_worker.sig_data_received.connect(self._on_udp_sensor_dispatch, type=Qt.ConnectionType.QueuedConnection)
+        self.udp_worker.sig_status_change.connect(self._on_udp_status_changed, type=Qt.ConnectionType.QueuedConnection)
+        self.udp_worker.sig_health_update.connect(self._on_udp_health_updated, type=Qt.ConnectionType.QueuedConnection)
 
         # Cập nhật từ DataStore
         self.data_store.sig_connection_state_updated.connect(self.page_home.set_connection_status)
