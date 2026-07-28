@@ -73,19 +73,20 @@ class EncoderTrainerWorker(QThread):
             self.sig_progress.emit(20)
 
             self._check_cancel()
-            self.sig_status.emit("[ENCODER] Generating triplets...")
-            anchors, positives, negatives = generate_triplets(
-                X_aug, y_aug, n_triplets=self.n_triplets
-            )
-            self.sig_progress.emit(30)
-
-            self._check_cancel()
-            self.sig_status.emit("[ENCODER] Building encoder and triplet model...")
+            self.sig_status.emit("[ENCODER] Building encoder architecture...")
             encoder = build_encoder(
                 window_size=self.window_size,
                 channels=9,
                 embedding_dim=self.embedding_dim,
             )
+
+            self._check_cancel()
+            self.sig_status.emit("[ENCODER] Generating Semi-Hard Triplets...")
+            anchors, positives, negatives = generate_triplets(
+                X_aug, y_aug, n_triplets=self.n_triplets, encoder=encoder, margin=0.3
+            )
+            self.sig_progress.emit(30)
+
             triplet_model = build_triplet_model(encoder)
             triplet_model.compile(
                 optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
@@ -97,29 +98,82 @@ class EncoderTrainerWorker(QThread):
 
             worker = self
 
-            class TrainingProgressCallback(tf.keras.callbacks.Callback):
+            class EncoderMetricsCallback(tf.keras.callbacks.Callback):
+                def __init__(self, enc_model, X_v, y_v):
+                    super().__init__()
+                    self.enc = enc_model
+                    self.X_v = X_v
+                    self.y_v = y_v
+                    self.collapsed = False
+
                 def on_epoch_end(self, epoch, logs=None):
                     logs = logs or {}
+                    # Calculate validation embeddings for Distance Ratio & Collapse Detection
+                    embs = self.enc.predict(self.X_v, verbose=0)
+
+                    # 1. Collapse Check by Variance
+                    emb_std = float(np.std(embs))
+                    if emb_std < 1e-4:
+                        self.collapsed = True
+                        self.model.stop_training = True
+                        worker.sig_status.emit("⚠️ [COLLAPSE DETECTED] Variance embeddings ~ 0! Stop training.")
+                        return
+
+                    # 2. Distance Ratio Check
+                    classes = np.unique(self.y_v)
+                    intra_dists = []
+                    centroids = {}
+                    for c in classes:
+                        mask = (self.y_v == c)
+                        c_embs = embs[mask]
+                        if len(c_embs) > 0:
+                            ctr = c_embs.mean(axis=0)
+                            centroids[c] = ctr
+                            intra_dists.append(np.linalg.norm(c_embs - ctr, axis=1).mean())
+
+                    inter_dists = []
+                    c_keys = list(centroids.keys())
+                    for i_idx in range(len(c_keys)):
+                        for j_idx in range(i_idx + 1, len(c_keys)):
+                            inter_dists.append(np.linalg.norm(centroids[c_keys[i_idx]] - centroids[c_keys[j_idx]]))
+
+                    d_intra = float(np.mean(intra_dists)) if intra_dists else 0.0
+                    d_inter = float(np.mean(inter_dists)) if inter_dists else 1.0
+
+                    # 3. Collapse Check by Inter-distance
+                    if d_inter < 0.15:
+                        self.collapsed = True
+                        self.model.stop_training = True
+                        worker.sig_status.emit(f"⚠️ [COLLAPSE DETECTED] Inter-dist ({d_inter:.3f}) < 0.15! Stop training.")
+                        return
+
+                    ratio = d_intra / d_inter if d_inter > 0 else 1.0
+                    logs["val_distance_ratio"] = ratio
+
                     progress = 35 + int(((epoch + 1) / max(1, worker.epochs)) * 50)
                     worker.sig_progress.emit(max(35, min(85, progress)))
                     worker.sig_status.emit(
-                        f"[ENCODER] Epoch {epoch + 1}/{worker.epochs} | loss={float(logs.get('loss', 0.0)):.4f}"
+                        f"[ENCODER] Epoch {epoch + 1}/{worker.epochs} | "
+                        f"loss={float(logs.get('loss', 0.0)):.4f} | Ratio={ratio:.3f}"
                     )
                     if worker._stop_requested or worker.isInterruptionRequested():
                         self.model.stop_training = True
 
+            metrics_cb = EncoderMetricsCallback(encoder, X_base, y_base)
+
             callbacks = [
-                TrainingProgressCallback(),
+                metrics_cb,
                 tf.keras.callbacks.EarlyStopping(
-                    monitor="loss",
+                    monitor="val_distance_ratio",
+                    mode="min",
                     patience=8,
                     restore_best_weights=True,
-                    min_delta=1e-4,
+                    min_delta=1e-3,
                 ),
             ]
 
             self._check_cancel()
-            self.sig_status.emit("[ENCODER] Training triplet model...")
+            self.sig_status.emit("[ENCODER] Training triplet model (Distance-Ratio Early Stopping)...")
             triplet_model.fit(
                 [anchors, positives, negatives],
                 y_dummy,
@@ -129,6 +183,12 @@ class EncoderTrainerWorker(QThread):
                 callbacks=callbacks,
             )
             self._check_cancel()
+
+            if metrics_cb.collapsed:
+                msg = "❌ Training aborted: Encoder collapse detected."
+                self.sig_error.emit(msg)
+                self.sig_finished.emit(False, msg)
+                return
 
             keras_path = APP_DATA_DIR / "gesture_encoder.keras"
             tflite_path = APP_DATA_DIR / "gesture_encoder.tflite"

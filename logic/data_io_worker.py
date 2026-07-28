@@ -54,6 +54,7 @@ class DataIOWorker(QThread):
     sig_queue_warning = pyqtSignal(str)        # queue drop/backpressure warnings
     # Emitted after any operation that changes the dataset directory layout.
     sig_db_refreshed = pyqtSignal(dict)        # spell_counts: {name: int}
+    sig_finished = pyqtSignal(bool, str)       # (success, message)
 
     def __init__(self, dataset_dir: str, parent=None) -> None:
         super().__init__(parent)
@@ -154,41 +155,45 @@ class DataIOWorker(QThread):
 
     def run(self) -> None:
         self._running = True
-        while self._running:
-            try:
-                job = self._job_queue.get(timeout=1.0)
-            except queue.Empty:
-                continue
+        try:
+            while self._running:
+                try:
+                    job = self._job_queue.get(timeout=1.0)
+                except queue.Empty:
+                    continue
 
-            kind = job[0]
-            if kind == "_stop":
-                break
-            elif kind == "save":
-                if len(job) == 4:
-                    _, spell_name, data, prefix = job
+                kind = job[0]
+                if kind == "_stop":
+                    break
+                elif kind == "save":
+                    if len(job) == 4:
+                        _, spell_name, data, prefix = job
+                    else:
+                        _, spell_name, data = job
+                        prefix = ""
+                    self._do_save(spell_name, data, prefix)
+                elif kind == "delete":
+                    _, spell_name = job
+                    self._do_delete(spell_name)
+                elif kind == "delete_latest_sample":
+                    _, spell_name = job
+                    self._do_delete_latest_sample(spell_name)
+                elif kind == "export":
+                    _, buf, path = job
+                    self._do_export(buf, path)
+                elif kind == "refresh":
+                    self._do_refresh()
                 else:
-                    _, spell_name, data = job
-                    prefix = ""
-                self._do_save(spell_name, data, prefix)
-            elif kind == "delete":
-                _, spell_name = job
-                self._do_delete(spell_name)
-            elif kind == "delete_latest_sample":
-                _, spell_name = job
-                self._do_delete_latest_sample(spell_name)
-            elif kind == "export":
-                _, buf, path = job
-                self._do_export(buf, path)
-            elif kind == "refresh":
-                self._do_refresh()
-            else:
-                log.warning("DataIOWorker: unknown job kind %r", kind)
+                    log.warning("DataIOWorker: unknown job kind %r", kind)
+        finally:
+            self.sig_finished.emit(True, "DataIOWorker stopped")
 
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
 
     def _do_save(self, spell_name: str, data: list[list[float]], prefix: str = "") -> None:
+        tmp_path = None
         try:
             folder = spell_write_dir(Path(self._dataset_dir), spell_name)
             folder.mkdir(parents=True, exist_ok=True)
@@ -196,16 +201,21 @@ class DataIOWorker(QThread):
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
             filename = f"{prefix}_sample_{timestamp}.csv" if prefix else f"sample_{timestamp}.csv"
             file_path = folder / filename
+            tmp_path = file_path.with_suffix(".csv.tmp")
 
-            with open(file_path, mode="w", newline="", encoding="utf-8") as f:
+            with open(tmp_path, mode="w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
                 writer.writerow(["ax", "ay", "az", "gx", "gy", "gz"])
                 writer.writerows(data)
+
+            os.replace(str(tmp_path), str(file_path))
 
             counts = self._scan_database()
             self.sig_db_refreshed.emit(counts)
             self.sig_save_done.emit(True, f"Saved {len(data)} samples → {spell_name}")
         except Exception as exc:
+            if tmp_path is not None:
+                tmp_path.unlink(missing_ok=True)
             msg = f"Save failed: {type(exc).__name__}: {exc}"
             log.exception("DataIOWorker._do_save")
             self.sig_save_done.emit(False, msg)

@@ -77,5 +77,5 @@ def test_sync_firmware_sources_handles_identifier_edge_cases(tmp_path) -> None:
 
     assert "SPELL_2FAST" in rendered_main
     assert "SPELL_2FAST_2" in rendered_main
-    assert "IDLE_NORMAL" in rendered_main
+    assert "IDLENORMAL" in rendered_main
     assert "kIdleClassIndex = 2" in rendered_main

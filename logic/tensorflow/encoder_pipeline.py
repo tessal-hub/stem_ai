@@ -122,7 +122,10 @@ def generate_triplets(
     X: np.ndarray,
     y: np.ndarray,
     n_triplets: int = 10_000,
+    encoder=None,
+    margin: float = 0.3,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Tạo các triplet dùng Semi-Hard Negative Mining (nếu encoder/features được cung cấp)."""
     labels = np.asarray(y)
     if labels.ndim != 1:
         raise ValueError("y must be a 1D array of class labels.")
@@ -141,25 +144,60 @@ def generate_triplets(
     if len(class_to_indices) < 2:
         raise ValueError("Need at least two classes to generate triplets.")
 
+    # Tính biểu diễn đặc trưng để miner tìm semi-hard negatives
+    if encoder is not None:
+        try:
+            feats = encoder.predict(X, verbose=0)
+        except Exception:
+            feats = X.reshape(len(X), -1)
+    else:
+        feats = X.reshape(len(X), -1)
+
+    # Chuẩn hóa L2 cho đặc trưng để tính khoảng cách Euclide
+    norms = np.linalg.norm(feats, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    feats_norm = feats / norms
+
     rng = np.random.default_rng()
     anchors_idx = np.empty(n_triplets, dtype=np.int32)
     positives_idx = np.empty(n_triplets, dtype=np.int32)
     negatives_idx = np.empty(n_triplets, dtype=np.int32)
 
     classes = list(class_to_indices.keys())
+
     for i in range(n_triplets):
         anchor_class = positive_classes[rng.integers(0, len(positive_classes))]
         anchor_pool = class_to_indices[anchor_class]
-        anchor_idx, positive_idx = rng.choice(anchor_pool, size=2, replace=False)
+        a_idx, p_idx = rng.choice(anchor_pool, size=2, replace=False)
 
-        negative_candidates = [cls for cls in classes if cls != anchor_class]
-        negative_class = negative_candidates[rng.integers(0, len(negative_candidates))]
-        negative_pool = class_to_indices[negative_class]
-        negative_idx = int(negative_pool[rng.integers(0, len(negative_pool))])
+        # Tính d(A, P)
+        d_ap = float(np.linalg.norm(feats_norm[a_idx] - feats_norm[p_idx]))
 
-        anchors_idx[i] = int(anchor_idx)
-        positives_idx[i] = int(positive_idx)
-        negatives_idx[i] = negative_idx
+        # Tìm Negative candidates từ các lớp khác
+        neg_candidates = [idx for c in classes if c != anchor_class for idx in class_to_indices[c]]
+        neg_candidates = np.asarray(neg_candidates)
+
+        # Khoảng cách d(A, N_cand)
+        d_an_all = np.linalg.norm(feats_norm[neg_candidates] - feats_norm[a_idx], axis=1)
+
+        # Semi-hard mask: d(A,P) < d(A,N) < d(A,P) + margin
+        semi_hard_mask = (d_an_all > d_ap) & (d_an_all < d_ap + margin)
+        semi_hard_indices = neg_candidates[semi_hard_mask]
+
+        if len(semi_hard_indices) > 0:
+            n_idx = int(rng.choice(semi_hard_indices))
+        else:
+            # Fallback: chọn hard negative (gần nhất) hoặc random
+            hard_mask = (d_an_all > d_ap)
+            hard_indices = neg_candidates[hard_mask]
+            if len(hard_indices) > 0:
+                n_idx = int(hard_indices[np.argmin(d_an_all[hard_mask])])
+            else:
+                n_idx = int(rng.choice(neg_candidates))
+
+        anchors_idx[i] = int(a_idx)
+        positives_idx[i] = int(p_idx)
+        negatives_idx[i] = n_idx
 
     return X[anchors_idx], X[positives_idx], X[negatives_idx]
 

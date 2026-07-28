@@ -48,7 +48,7 @@ class IDFBuildWorker(QThread):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                shell=True,
+                shell=False,
                 bufsize=1
             )
 

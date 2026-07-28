@@ -516,7 +516,8 @@ def main() -> None:
 
     print("⏳ Đang nạp model...")
     try:
-        from logic.tensorflow.encoder_pipeline import L2NormalizeLayer
+        from logic.tensorflow.encoder_pipeline import _get_l2_normalize_layer_class
+        L2NormalizeLayer = _get_l2_normalize_layer_class()
         custom_objects = {"L2NormalizeLayer": L2NormalizeLayer}
     except ImportError:
         custom_objects = None

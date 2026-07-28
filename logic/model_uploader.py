@@ -36,6 +36,8 @@ class ModelUploader(QThread):
         self._serial: serial.Serial | None = None
         self._is_running = False
         self._cancel_requested = False
+        self._last_error = ""
+        self._finished_emitted = False
 
     def upload_file(self, port: str, file_path: str) -> None:
         """Configure parameters and start the background thread."""
@@ -51,41 +53,40 @@ class ModelUploader(QThread):
 
     def run(self) -> None:
         """Core upload loop with CHUNK-ACK flow control."""
+        self._finished_emitted = False
+        self._last_error = ""
         try:
             if not self._validate_upload_inputs():
                 return
             self._perform_upload()
         except serial.SerialException as e:
             message = f"Serial Port Error: {e}"
-            self.status_msg.emit(message)
-            self.sig_error.emit(message)
-            self.sig_finished.emit(False, message)
+            self._fail(message)
         except FileNotFoundError as e:
             message = f"File Not Found: {e}"
-            self.status_msg.emit(message)
-            self.sig_error.emit(message)
-            self.sig_finished.emit(False, message)
+            self._fail(message)
         except PermissionError as e:
             message = f"File Permission Error: {e}"
-            self.status_msg.emit(message)
-            self.sig_error.emit(message)
-            self.sig_finished.emit(False, message)
+            self._fail(message)
         except Exception as e:
             message = f"Fatal Error: {type(e).__name__}: {e}"
-            self.status_msg.emit(message)
-            self.sig_error.emit(message)
-            self.sig_finished.emit(False, message)
+            self._fail(message)
         finally:
             if self._serial and self._serial.is_open:
                 self._serial.close()
             self._serial = None
             self._is_running = False
             self._cancel_requested = False
+            if not getattr(self, "_finished_emitted", False):
+                self.sig_finished.emit(False, getattr(self, "_last_error", "") or "Upload ended")
+            self._finished_emitted = False
 
     def _fail(self, message: str) -> None:
         """Emit status, error, and finished-failure signals in one call."""
         self.status_msg.emit(message)
         self.sig_error.emit(message)
+        self._last_error = message
+        self._finished_emitted = True
         self.sig_finished.emit(False, message)
 
     def _validate_upload_inputs(self) -> bool:
@@ -129,6 +130,7 @@ class ModelUploader(QThread):
             return
 
         self.status_msg.emit("Flasher: Upload Success! Rebooting ESP32.")
+        self._finished_emitted = True
         self.sig_finished.emit(True, "Upload successful")
 
     def _send_chunks(self, file_size: int) -> bool:

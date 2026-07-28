@@ -136,9 +136,10 @@ class PrimitiveQualityWorker(QThread):
         import sys
         from io import StringIO
         import tensorflow as tf
-        from logic.tensorflow.encoder_pipeline import L2NormalizeLayer, load_primitive_dataset
+        from logic.tensorflow.encoder_pipeline import _get_l2_normalize_layer_class, load_primitive_dataset
         from logic.encoder_evaluation import full_encoder_evaluation
 
+        L2NormalizeLayer = _get_l2_normalize_layer_class()
         try:
             encoder = tf.keras.models.load_model(
                 str(keras_path), compile=False,

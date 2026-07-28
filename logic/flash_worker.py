@@ -38,7 +38,7 @@ class FlashWorker(QThread):
 
     def __init__(self) -> None:
         super().__init__()
-        self._process: subprocess.Popen | None = None
+        self._cancel_requested = False
         self._port: str = ""
         self._flash_parts: dict[str, str] = {}
         self._last_error_message: str = ""
@@ -63,6 +63,11 @@ class FlashWorker(QThread):
         self._last_error_message = ""
         success = False
         finished_message = "Flash failed"
+
+        if self._cancel_requested:
+            self.sig_finished.emit(False, "Flash cancelled before start")
+            return
+
         try:
             valid_parts = self._validate_flash_inputs()
             if not valid_parts:
@@ -74,8 +79,6 @@ class FlashWorker(QThread):
             self.log_msg.emit("[ERROR] Flash operation timed out (5 minutes)")
             self.sig_error.emit("Flash operation timed out")
             finished_message = "Timeout"
-            if self._process:
-                self._process.kill()
         except FileNotFoundError as e:
             self.log_msg.emit(f"[ERROR] Executable or binary not found: {e}")
             self.sig_error.emit("Tool or binary not found")
@@ -118,6 +121,25 @@ class FlashWorker(QThread):
         valid_parts = {}
         for addr, path_str in self._flash_parts.items():
             bin_file = Path(path_str).resolve()
+            
+            import sys
+            from config import FIRMWARE_BIN_DIR, APP_DATA_DIR, WORKSPACE_ROOT
+            allowed_roots = [
+                FIRMWARE_BIN_DIR.resolve(),
+                APP_DATA_DIR.resolve(),
+                (WORKSPACE_ROOT / "assets").resolve(),
+            ]
+            if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+                allowed_roots.append(Path(sys._MEIPASS).resolve())
+
+            is_valid = any(
+                bin_file == root or bin_file.is_relative_to(root)
+                for root in allowed_roots
+            )
+            if not is_valid:
+                self._fail(f"Path traversal detected: {bin_file}")
+                return {}
+
             if not bin_file.exists():
                 self._fail(f"Binary file not found: {bin_file}")
                 return {}
@@ -287,24 +309,8 @@ class FlashWorker(QThread):
 
     def stop(self) -> None:
         """Gracefully stop the flashing process."""
-        if self._process and self._process.poll() is None:  # Process still running
-            try:
-                self._process.terminate()
-                self._process.wait(timeout=_PROCESS_TERMINATE_TIMEOUT_S)
-            except Exception as e:
-                self.log_msg.emit(f"[WARN] Error terminating process: {e}")
-                try:
-                    self._process.kill()
-                except Exception:
-                    pass
+        self._cancel_requested = True
 
     def _cleanup(self) -> None:
         """Clean up resources."""
-        if self._process:
-            try:
-                if self._process.poll() is None:  # Still running
-                    self._process.terminate()
-                    self._process.wait(timeout=_PROCESS_CLEANUP_TIMEOUT_S)
-            except Exception:
-                pass
-            self._process = None
+        pass

@@ -18,7 +18,21 @@ for name in ["vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll", "msvcp140
         if sys32_path.exists():
             vc_dlls.append((str(sys32_path), '.'))
 
-# ── Collect tensorflow, scipy, keras (removed for core runtime) ──────────────
+# ── Collect TensorFlow, scipy, keras for 100% self-contained offline portability ────
+try:
+    tf_datas, tf_binaries, tf_hiddenimports = collect_all('tensorflow')
+except Exception:
+    tf_datas, tf_binaries, tf_hiddenimports = [], [], []
+
+try:
+    sc_datas, sc_binaries, sc_hiddenimports = collect_all('scipy')
+except Exception:
+    sc_datas, sc_binaries, sc_hiddenimports = [], [], []
+
+try:
+    keras_datas, keras_binaries, keras_hiddenimports = collect_all('keras')
+except Exception:
+    keras_datas, keras_binaries, keras_hiddenimports = [], [], []
 
 # ── Collect esp_idf_nvs_partition_gen (tạo labels.bin không cần IDF ngoài) ───
 try:
@@ -27,7 +41,6 @@ except Exception:
     nvs_datas, nvs_binaries, nvs_hiddenimports = [], [], []
 
 # ── Collect esptool (Fix: stub JSON files bị thiếu khi pack exe) ─────────────
-# esptool cần targets/stub_flasher/**/*.json — thiếu thì báo "stub data missing"
 try:
     esp_datas, esp_binaries, esp_hiddenimports = collect_all('esptool')
 except Exception:
@@ -36,23 +49,21 @@ except Exception:
 a = Analysis(
     ['main.py'],
     pathex=[],
-    binaries=vc_dlls + nvs_binaries + esp_binaries,
+    binaries=vc_dlls + tf_binaries + sc_binaries + keras_binaries + nvs_binaries + esp_binaries,
     datas=(
         [
             ('assets', 'assets'),          # icons, firmware .bin, templates
             ('logic/*.json', 'logic'),     # top-level JSON (ui_strings, i18n)
         ]
-        # PyInstaller không hỗ trợ ** glob → dùng rglob thủ công
         + [(str(p), str(p.parent.relative_to(Path('logic').resolve().parent)))
            for p in Path('logic').resolve().rglob('*.json')]
-        + nvs_datas + esp_datas
+        + tf_datas + sc_datas + keras_datas + nvs_datas + esp_datas
     ),
 
     hiddenimports=[
         # ── PyQt6 ──
         'PyQt6', 'PyQt6.QtCore', 'PyQt6.QtGui', 'PyQt6.QtWidgets',
         'PyQt6.QtSvg', 'PyQt6.QtOpenGL',
-        # PyQt6 platform/style plugins — needed so window renders on other machines
         'PyQt6.QtNetwork',
         # ── Serial / ESP ──
         'serial', 'serial.tools', 'serial.tools.list_ports',
@@ -62,8 +73,15 @@ a = Analysis(
         'esptool.targets.stub_flasher',
         'esp_idf_nvs_partition_gen',
         'esp_idf_nvs_partition_gen.nvs_partition_gen',
-        # ── Numpy ──
+        # ── Numpy & SciPy ──
         'numpy', 'numpy.core', 'numpy.core._multiarray_umath',
+        'scipy', 'scipy.interpolate', 'scipy.interpolate._interpolate',
+        # ── TensorFlow/Keras ──
+        'tensorflow', 'tensorflow.python',
+        'tensorflow.lite', 'tensorflow.lite.python',
+        'tensorflow.keras', 'tensorflow.keras.layers',
+        'tensorflow.keras.models',
+        'keras', 'keras.src',
         # ── Pyqtgraph ──
         'pyqtgraph', 'pyqtgraph.opengl',
         'pyqtgraph.graphicsItems',
@@ -73,7 +91,7 @@ a = Analysis(
         'logic.ui_i18n', 'logic.data_store', 'logic.handler',
         'logic.tensorflow.pipeline', 'logic.tensorflow.encoder_pipeline',
         'logic.tensorflow.nvs_builder',
-    ] + nvs_hiddenimports + esp_hiddenimports,
+    ] + tf_hiddenimports + sc_hiddenimports + keras_hiddenimports + nvs_hiddenimports + esp_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

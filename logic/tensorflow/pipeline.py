@@ -663,23 +663,20 @@ def build_gesture_model(
             val_file_rows = None
 
     if validation_data is None and val_fraction > 0:
-        # Tách split TỪ TẬP CƠ SỞ (chưa augment) để chống data leakage
         val_size = int(len(cnn_train_features) * val_fraction)
         if val_size > 0:
-            # shuffle base features before split
-            perm_base = np.random.default_rng(random_seed).permutation(len(cnn_train_features))
-            cnn_train_features = [cnn_train_features[i] for i in perm_base]
-            cnn_train_labels = [cnn_train_labels[i] for i in perm_base]
-
             val_base_feat = cnn_train_features[-val_size:]
             val_base_labels = cnn_train_labels[-val_size:]
             cnn_train_features = cnn_train_features[:-val_size]
             cnn_train_labels = cnn_train_labels[:-val_size]
             
             X_val_base = np.clip(np.stack(val_base_feat, axis=0), -2.0, 2.0)
-            y_val_base = tf.keras.utils.to_categorical(np.asarray(val_base_labels, dtype=np.int32), num_classes=len(class_names))
+            y_val_base = tf.keras.utils.to_categorical(
+                np.asarray(val_base_labels, dtype=np.int32), num_classes=len(class_names))
             validation_data = (X_val_base, y_val_base)
-            _emit_status(status_cb, f"[WARN] Dùng random split {val_fraction*100:.0f}% từ Base Windows. Đã tách TRƯỚC augment để chống Data Leakage.")
+            _emit_status(status_cb,
+                f"[WARN] Dùng temporal split {val_fraction*100:.0f}% từ Base Windows "
+                f"(cuối chuỗi, không shuffle để tránh Data Leakage).")
         else:
             val_fraction = 0.0
 
@@ -782,6 +779,7 @@ def build_gesture_model(
         y_val_cat = tf.keras.utils.to_categorical(
             np.asarray(val_labels, dtype=np.int32), num_classes=len(class_names)
         )
+        validation_data = (X_val_temp, y_val_cat)
     import tensorflow as tf
     LayerClass = _get_tf_layer_class(tf)
     
@@ -885,9 +883,11 @@ def build_gesture_model(
             history = RealHistory()
             _emit_status(status_cb, f"[EVAL] Actual val_accuracy from .h5: {val_acc:.4f}")
         else:
-            class DummyHistory:
-                history = {"accuracy": [1.0], "val_accuracy": [1.0]}
-            history = DummyHistory()
+            class SkippedHistory:
+                history = {"accuracy": [0.0], "val_accuracy": [0.0]}
+            history = SkippedHistory()
+            _emit_status(status_cb,
+                "[WARN] Bỏ qua train — val_accuracy=N/A (trả về 0.0, cần evaluate riêng)")
     else:
         _emit_status(status_cb, "[TRAIN] Training model từ đầu (chỉ cần làm 1 lần)...")
         fit_kwargs: dict[str, typing.Any] = dict(
@@ -896,7 +896,7 @@ def build_gesture_model(
             verbose=0,
             callbacks=callbacks,
         )
-        if validation_data is not None:
+        if validation_data is not None and validation_data[1] is not None:
             fit_kwargs["validation_data"] = validation_data
         else:
             fit_kwargs["validation_split"] = val_fraction

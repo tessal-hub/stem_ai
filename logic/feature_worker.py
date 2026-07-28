@@ -38,6 +38,7 @@ class FeatureWorker(QThread):
     """Background thread that computes rolling statistics and FFT features."""
 
     sig_features_ready = pyqtSignal(dict)
+    sig_finished = pyqtSignal(bool, str)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -89,18 +90,21 @@ class FeatureWorker(QThread):
 
     def run(self) -> None:
         self._running = True
-        while self._running:
-            try:
-                snapshot = self._queue.get(timeout=1.0)
-            except queue.Empty:
-                continue
+        try:
+            while self._running:
+                try:
+                    snapshot = self._queue.get(timeout=1.0)
+                except queue.Empty:
+                    continue
 
-            if snapshot is None:
-                break  # sentinel from stop()
+                if snapshot is None:
+                    break  # sentinel from stop()
 
-            features = self._compute_features(snapshot)
-            if features:
-                self.sig_features_ready.emit(features)
+                features = self._compute_features(snapshot)
+                if features:
+                    self.sig_features_ready.emit(features)
+        finally:
+            self.sig_finished.emit(True, "FeatureWorker stopped")
 
     # ------------------------------------------------------------------
     # Feature computation (runs entirely in the worker thread)

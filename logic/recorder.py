@@ -182,6 +182,7 @@ class DataRecorder(QThread):
             self.sig_finished.emit(False, message)
         finally:
             self._close_recording(success=True)
+            self.sig_finished.emit(True, "Recording stopped")
 
     def _process_commands(self) -> None:
         while True:

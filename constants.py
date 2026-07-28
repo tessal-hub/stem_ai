@@ -7,6 +7,8 @@ chuẩn hóa tên spell để đảm bảo so sánh nhất quán.
 
 from __future__ import annotations
 
+import re
+
 SYSTEM_SPELL_NAMES = {"STAND BY"}
 
 
@@ -19,7 +21,8 @@ def normalize_spell_name(name: str) -> str:
     Returns:
         Tên spell đã chuẩn hóa (uppercase, single-space).
     """
-    return " ".join(str(name).strip().split()).upper()
+    cleaned = re.sub(r'[^A-Za-z0-9_ ]', '', str(name))
+    return " ".join(cleaned.strip().split()).upper()
 
 
 SYSTEM_SPELL_NAMES_NORMALIZED = {normalize_spell_name(name) for name in SYSTEM_SPELL_NAMES}

@@ -25,7 +25,8 @@ def main():
         return
 
     print("⏳ Đang nạp model...")
-    from logic.tensorflow.encoder_pipeline import L2NormalizeLayer
+    from logic.tensorflow.encoder_pipeline import _get_l2_normalize_layer_class
+    L2NormalizeLayer = _get_l2_normalize_layer_class()
     encoder = tf.keras.models.load_model(
         str(encoder_path), compile=False,
         custom_objects={"L2NormalizeLayer": L2NormalizeLayer},

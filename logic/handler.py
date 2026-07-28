@@ -276,10 +276,12 @@ class Handler(QObject):
         self.flash_worker = FlashWorker()
 
         self.data_io_worker = DataIOWorker(dataset_dir=self.store.dataset_dir)
-        self.data_io_worker.start()
+        if not self.data_io_worker.isRunning():
+            self.data_io_worker.start()
 
         self.feature_worker = FeatureWorker()
-        self.feature_worker.start()
+        if not self.feature_worker.isRunning():
+            self.feature_worker.start()
 
     def _init_state(self) -> None:
         """Khởi tạo trạng thái nội bộ."""
@@ -427,7 +429,8 @@ class Handler(QObject):
         settings = self.store.get_settings_snapshot()
         self.serial_worker.set_scale_profile(build_scale_profile(settings))
         self.serial_worker.port = port
-        self.serial_worker.start()
+        if not self.serial_worker.isRunning():
+            self.serial_worker.start()
 
     def on_serial_disconnect(self) -> None:
         """Ngắt kết nối Serial (non-blocking)."""
@@ -516,7 +519,8 @@ class Handler(QObject):
         self._nvs_build_worker.sig_status.connect(self.ui_wand.append_terminal_text)
         self._nvs_build_worker.sig_progress.connect(self.ui_wand.update_flash_progress)
         self._nvs_build_worker.sig_finished.connect(self._on_nvs_build_finished)
-        self._nvs_build_worker.start()
+        if not self._nvs_build_worker.isRunning():
+            self._nvs_build_worker.start()
 
     def _on_nvs_build_finished(self, success: bool, message: str) -> None:
         if success:
@@ -611,7 +615,8 @@ class Handler(QObject):
     def _start_async_encoder_load(self) -> None:
         self._encoder_worker = _EncoderLoadWorker(APP_DATA_DIR)
         self._encoder_worker.sig_done.connect(self._on_encoder_loaded)
-        self._encoder_worker.start()
+        if not self._encoder_worker.isRunning():
+            self._encoder_worker.start()
 
     def _on_encoder_loaded(self, encoder, proto_path):
         if not encoder:
@@ -909,7 +914,8 @@ class Handler(QObject):
         self._quality_worker.sig_report_line.connect(self.ui_setting.append_console_text)
         self._quality_worker.sig_progress.connect(self.ui_setting.update_scan_progress)
         self._quality_worker.sig_finished.connect(self._on_quality_scan_finished)
-        self._quality_worker.start()
+        if not self._quality_worker.isRunning():
+            self._quality_worker.start()
 
     def on_primitive_quality_scan_stop(self) -> None:
         """Request cooperative cancellation of running quality scan."""
@@ -1418,7 +1424,8 @@ class Handler(QObject):
                 self.encoder_trainer.sig_progress.connect(self.ui_primitive_collect.on_encoder_training_progress)
             self.encoder_trainer.sig_finished.connect(self._on_encoder_training_finished)
             log.debug("Starting encoder_trainer")
-            self.encoder_trainer.start()
+            if not self.encoder_trainer.isRunning():
+                self.encoder_trainer.start()
         except Exception as e:
             log.error("ERROR in on_train_encoder_requested: %s", e)
 
@@ -1458,3 +1465,5 @@ class Handler(QObject):
         if self._nvs_build_worker and self._nvs_build_worker.isRunning():
             self._nvs_build_worker.terminate()
             self._nvs_build_worker.wait()
+        if hasattr(self, '_encoder_worker') and self._encoder_worker and self._encoder_worker.isRunning():
+            self._encoder_worker.wait()
