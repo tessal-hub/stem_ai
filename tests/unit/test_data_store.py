@@ -416,7 +416,7 @@ def test_prediction_compat_with_legacy_model_after_standby_bootstrap(qapp, tmp_p
     label, confidence = store.get_prediction_state()
     assert label == "LEGACY_GESTURE"
     assert confidence == pytest.approx(0.81)
-    assert store.get_settings_snapshot()["model_path"] == str(model_path)
+    assert store.get_settings_snapshot()["model_path"] == str(model_path.as_posix())
 
 
 # ── Settings reload ─────────────────────────────────────────────────────────────
@@ -429,3 +429,57 @@ def test_reload_settings_returns_current_snapshot(qapp, tmp_path) -> None:
     reloaded = store.reload_settings()
 
     assert reloaded["window_size"] == 20
+
+
+# ── Spell history (ephemeral) ───────────────────────────────────────────────────
+
+
+def test_spell_history_bounded_to_6_entries(qapp, tmp_path) -> None:
+    """Spell history deque keeps only most recent 6, appendleft order."""
+    store = DataStore(dataset_dir=str(tmp_path / "dataset"))
+    history_snapshots: list[list] = []
+    store.sig_spell_history_updated.connect(lambda h: history_snapshots.append(h))
+
+    for i in range(8):
+        store.update_prediction(f"SPELL_{i}", 0.9)
+
+    assert len(store.spell_history) == 6
+    # Most recent should be first (appendleft order)
+    assert store.spell_history[0]["spell"] == "SPELL_7"
+    assert store.spell_history[5]["spell"] == "SPELL_2"
+
+
+def test_none_predictions_excluded_from_history(qapp, tmp_path) -> None:
+    """'None' and empty predictions must NOT appear in spell_history."""
+    store = DataStore(dataset_dir=str(tmp_path / "dataset"))
+    prediction_signals: list[tuple] = []
+    history_signals: list[list] = []
+    store.sig_prediction_updated.connect(lambda a, c: prediction_signals.append((a, c)))
+    store.sig_spell_history_updated.connect(lambda h: history_signals.append(h))
+
+    store.update_prediction("None", 0.0)
+    store.update_prediction("", 0.5)
+    store.update_prediction("FIREBALL", 0.95)
+
+    # sig_prediction_updated should have fired 3 times
+    assert len(prediction_signals) == 3
+    # But history should only contain FIREBALL
+    assert len(store.spell_history) == 1
+    assert store.spell_history[0]["spell"] == "FIREBALL"
+    # sig_spell_history_updated should have fired only once (for FIREBALL)
+    assert len(history_signals) == 1
+
+
+def test_set_registered_prototypes_emits_signal(qapp, tmp_path) -> None:
+    """set_registered_prototypes updates state and emits signal with correct set."""
+    store = DataStore(dataset_dir=str(tmp_path / "dataset"))
+    received: list[set] = []
+    store.sig_registered_prototypes_updated.connect(lambda s: received.append(s))
+
+    test_spells = {"FIREBALL", "LUMOS", "WINGARDIUM"}
+    store.set_registered_prototypes(test_spells)
+
+    assert store.registered_prototypes == test_spells
+    assert len(received) == 1
+    assert received[0] == test_spells
+

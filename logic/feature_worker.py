@@ -58,7 +58,7 @@ class FeatureWorker(QThread):
         If the internal queue is full the oldest item is discarded so that
         the worker always processes the most recent data.
         """
-        if not snapshot:
+        if snapshot is None or len(snapshot) == 0:
             return
         try:
             self._queue.put_nowait(snapshot)

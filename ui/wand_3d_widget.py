@@ -260,7 +260,13 @@ class Wand3DWidget(QWidget):
             ax, ay, az: Normalised acceleration (±1.0 g range).
             gx, gy, gz: Angular velocity in degrees/second.
         """
+        if not self.isVisible():
+            return
+
         now = time.perf_counter()
+        if self._last_update_ts is not None and (now - self._last_update_ts) < 0.012:
+            return
+
         if self._last_update_ts is None:
             dt = self._DT
         else:

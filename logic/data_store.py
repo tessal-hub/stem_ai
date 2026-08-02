@@ -19,6 +19,8 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, Mapping
 
+import numpy as np
+
 from PyQt6.QtCore import QObject, QSettings, pyqtSignal
 
 from config import DATASET_DIR, DEFAULT_MODEL_PATH, ensure_data_dir
@@ -30,6 +32,7 @@ from .frame_protocol import FrameValidationError, validate_six_axis_values
 
 log = logging.getLogger(__name__)
 SCHEMA_VERSION = 1
+_EMPTY_LIVE_ARRAY = np.empty((0, 6), dtype=np.float32)
 
 
 class SettingsStore:
@@ -73,6 +76,8 @@ class SettingsStore:
         model_path = self.get_str("model_path", self._DEFAULTS["model_path"]).strip()
         if not model_path or model_path == "model.tflite":
             model_path = self._DEFAULTS["model_path"]
+        else:
+            model_path = str(Path(model_path).as_posix())
 
         return {
             "sample_rate": self.get_str("sample_rate", self._DEFAULTS["sample_rate"]),
@@ -127,6 +132,8 @@ class DataStore(QObject):
     sig_sensor_data_updated = pyqtSignal(dict)
     sig_stats_updated = pyqtSignal(dict)
     sig_prediction_updated = pyqtSignal(str, float)
+    sig_spell_history_updated = pyqtSignal(list)
+    sig_registered_prototypes_updated = pyqtSignal(set)
     sig_live_buffer_updated = pyqtSignal(list)
     sig_live_features_updated = pyqtSignal(dict)
     sig_recording_state_updated = pyqtSignal(bool)
@@ -168,6 +175,7 @@ class DataStore(QObject):
         self.current_mode = "IDLE"
         self.last_prediction = "None"
         self.prediction_confidence = 0.0
+        self.spell_history: collections.deque = collections.deque(maxlen=6)
         self.is_recording = False
         self.spell_counts: dict[str, int] = {}
         self.registered_prototypes: set[str] = set()
@@ -207,25 +215,34 @@ class DataStore(QObject):
             return list(self.recent_sensor_frames)
 
     def add_live_sample(self, sample: list[float], *, emit: bool = True) -> list[list[float]]:
-        """Thêm mẫu dữ liệu vào bộ đệm hiển thị đồ thị và trả về snapshot."""
+        """Thêm mẫu dữ liệu vào bộ đệm hiển thị đồ thị và phát signal."""
         try:
             valid_sample = validate_six_axis_values(sample)
         except FrameValidationError:
             return []
 
         now = time.perf_counter()
+        should_emit = False
         with self._buffer_lock:
             self.live_buffer.append(valid_sample)
-            snapshot = [list(r) for r in self.live_buffer]
             if emit and now - self._last_live_emit >= 0.05:
                 self._last_live_emit = now
-                self.sig_live_buffer_updated.emit(snapshot)
-            return snapshot
+                should_emit = True
+        if should_emit:
+            self.sig_live_buffer_updated.emit([])
+        return self.get_live_buffer_snapshot()
 
     def get_live_buffer_snapshot(self) -> list[list[float]]:
         """Lấy bản sao an toàn của bộ đệm live."""
         with self._buffer_lock:
             return [list(r) for r in self.live_buffer]
+
+    def get_live_buffer_numpy(self) -> np.ndarray:
+        """Lấy snapshot NumPy array 2D của bộ đệm live cho hiệu năng vẽ cao."""
+        with self._buffer_lock:
+            if not self.live_buffer:
+                return _EMPTY_LIVE_ARRAY
+            return np.array(self.live_buffer, dtype=np.float32)
 
     def set_connection_status(self, connected: bool, port: str = "None") -> None:
         """Cập nhật trạng thái kết nối thiết bị."""
@@ -277,7 +294,7 @@ class DataStore(QObject):
             if "dataset_dir" in updates:
                 self.dataset_dir = str(Path(updates["dataset_dir"]))
             if "model_path" in updates and updates["model_path"]:
-                self.settings["model_path"] = str(Path(updates["model_path"]))
+                self.settings["model_path"] = str(Path(updates["model_path"]).as_posix())
         self.refresh_database(force=True)
         with self._state_lock:
             return dict(self.settings)
@@ -296,24 +313,39 @@ class DataStore(QObject):
 
     def update_prediction(self, action: str, confidence: float) -> None:
         """Cập nhật kết quả suy luận AI mới nhất. Hỗ trợ dịch chỉ số lớp thành tên spell."""
+        history_snapshot: list[dict] | None = None
         with self._state_lock:
-            # Nếu action là số chỉ số lớp (index), dịch ngược thành tên spell
             if action.isdigit():
                 idx = int(action)
-                # Lấy danh sách spell xếp alphabet
-                spells = [k for k in self.spell_counts.keys() if "::" not in k]
-                spells = sorted(spells)
+                spells = sorted(k for k in self.spell_counts.keys() if "::" not in k)
                 if 0 <= idx < len(spells):
                     action = spells[idx]
 
             self.last_prediction = action
             self.prediction_confidence = confidence
+
+            if action not in ("None", ""):
+                self.spell_history.appendleft({
+                    "spell": action,
+                    "confidence": confidence,
+                    "timestamp": time.time(),
+                })
+                history_snapshot = list(self.spell_history)
+
         self.sig_prediction_updated.emit(action, confidence)
+        if history_snapshot is not None:
+            self.sig_spell_history_updated.emit(history_snapshot)
 
     def get_prediction_state(self) -> tuple[str, float]:
         """Lấy trạng thái dự đoán hiện tại dưới dạng tuple (action, confidence)."""
         with self._state_lock:
             return self.last_prediction, self.prediction_confidence
+
+    def set_registered_prototypes(self, spells: set[str]) -> None:
+        """Cập nhật tập hợp các spell có prototype đã đăng ký trong phiên làm việc."""
+        with self._state_lock:
+            self.registered_prototypes = set(spells)
+        self.sig_registered_prototypes_updated.emit(set(self.registered_prototypes))
 
     def get_spell_list(self) -> list[str]:
         """Lấy danh sách các spell lớp cử chỉ hiện có."""
@@ -323,6 +355,10 @@ class DataStore(QObject):
 
     def refresh_database(self, *, force: bool = False) -> None:
         """Quét thư mục dataset để cập nhật số lượng mẫu."""
+        now = time.perf_counter()
+        if not force and hasattr(self, "_last_db_refresh") and (now - self._last_db_refresh < 0.5):
+            return
+        self._last_db_refresh = now
         self._ensure_dirs()
         self.spell_counts.clear()
         if os.path.exists(self.dataset_dir):
@@ -330,12 +366,19 @@ class DataStore(QObject):
             for name, paths in class_map.items():
                 count = 0
                 for p in paths:
-                    for f in p.glob("*.csv"):
-                        count += 1
-                        parts = f.name.split("_sample_")
-                        if len(parts) == 2 and parts[0]:
-                            group_key = f"{name}::{parts[0]}"
-                            self.spell_counts[group_key] = self.spell_counts.get(group_key, 0) + 1
+                    if not p.exists():
+                        continue
+                    try:
+                        with os.scandir(p) as entries:
+                            for entry in entries:
+                                if entry.is_file() and entry.name.endswith(".csv"):
+                                    count += 1
+                                    parts = entry.name.split("_sample_")
+                                    if len(parts) == 2 and parts[0]:
+                                        group_key = f"{name}::{parts[0]}"
+                                        self.spell_counts[group_key] = self.spell_counts.get(group_key, 0) + 1
+                    except OSError:
+                        pass
                 self.spell_counts[name] = count
 
         for name in SYSTEM_SPELL_NAMES:
@@ -375,7 +418,7 @@ class DataStore(QObject):
 
     def save_cropped_data(self, spell: str, data: list[list[float]]) -> bool:
         """Lưu vùng dữ liệu đã cắt vào file CSV mới."""
-        if not data or not spell.strip():
+        if data is None or len(data) == 0 or not spell.strip():
             return False
         folder = spell_write_dir(Path(self.dataset_dir), spell)
         folder.mkdir(parents=True, exist_ok=True)
@@ -396,7 +439,14 @@ class DataStore(QObject):
         """Lấy danh sách các file mẫu của một spell."""
         files = []
         for d in storage_dirs_for_spell(Path(self.dataset_dir), spell):
-            files.extend(f.name for f in sorted(d.glob("*.csv")))
+            if d.exists():
+                try:
+                    with os.scandir(d) as entries:
+                        for entry in entries:
+                            if entry.is_file() and entry.name.endswith(".csv"):
+                                files.append(entry.name)
+                except OSError:
+                    pass
         return sorted(files)
 
     def delete_spell(self, spell: str) -> bool:

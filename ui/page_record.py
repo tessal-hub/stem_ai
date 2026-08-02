@@ -40,7 +40,7 @@ log = logging.getLogger(__name__)
 # Hằng số cấu hình nội bộ
 _EMPTY_SPELL_LIST = "__STEM_EMPTY_SPELL_LIST__"
 _TIMER_INTERVAL_MS = 1000
-_PLOT_REFRESH_MS = 33
+_PLOT_REFRESH_MS = 40
 _DEFAULT_CROP_START = 30
 _DEFAULT_CROP_END = 120
 _AUTO_CROP_TAIL = 200
@@ -199,28 +199,34 @@ class PageRecord(QWidget):
         names = sorted(list(spell_counts.keys()))
         display_names = [n for n in names if "::" not in n]
 
-        self.spell_list.clear()
-        if display_names:
-            self.spell_stack.setCurrentIndex(0)
-            
-            for name in display_names:
-                normalized = folder_name_match_key(name)
-                is_prim = normalized in {folder_name_match_key(p) for p in _PRIMITIVE_LOGICAL_NAMES}
-                
-                if is_prim:
-                    continue
-                
-                item = QListWidgetItem(f"{name} ({spell_counts[name]})")
-                item.setData(Qt.ItemDataRole.UserRole, name)
-                self.spell_list.addItem(item)
+        prim_set = {folder_name_match_key(p) for p in _PRIMITIVE_LOGICAL_NAMES}
+        filtered_names = [
+            n for n in display_names
+            if folder_name_match_key(n) not in prim_set
+        ]
+
+        if filtered_names:
+            if self.spell_stack.currentIndex() != 0:
+                self.spell_stack.setCurrentIndex(0)
+
+            # Smart check if list items are unchanged to avoid clearing selection
+            current_items = [
+                (self.spell_list.item(i).data(Qt.ItemDataRole.UserRole), self.spell_list.item(i).text())
+                for i in range(self.spell_list.count())
+            ]
+            new_items = [(n, f"{n} ({spell_counts[n]})") for n in filtered_names]
+
+            if current_items != new_items:
+                self.spell_list.clear()
+                for name, text in new_items:
+                    item = QListWidgetItem(text)
+                    item.setData(Qt.ItemDataRole.UserRole, name)
+                    self.spell_list.addItem(item)
         else:
             # Requirement 3: Empty State
-            self.spell_stack.setCurrentIndex(1)
+            if self.spell_stack.currentIndex() != 1:
+                self.spell_stack.setCurrentIndex(1)
 
-        filtered_names = sorted(list({
-            n for n in display_names 
-            if folder_name_match_key(n) not in {folder_name_match_key(p) for p in _PRIMITIVE_LOGICAL_NAMES}
-        }))
         self._update_combo_box(filtered_names)
 
     def _on_filter_changed(self) -> None:
@@ -233,7 +239,8 @@ class PageRecord(QWidget):
         self.lbl_current_spell.setText(tr_ui("record_spell_samples", name=spell_name))
         self.sample_list.clear()
         if samples:
-            self.sample_stack.setCurrentIndex(0)
+            if self.sample_stack.currentIndex() != 0:
+                self.sample_stack.setCurrentIndex(0)
             scores = self._per_sample_scores
             for fname in samples:
                 score = scores.get(fname)
@@ -254,8 +261,10 @@ class PageRecord(QWidget):
                     item.setFont(font)
                 self.sample_list.addItem(item)
         else:
-            self.sample_stack.setCurrentIndex(1)
-        self.stacked_spells.setCurrentIndex(1)
+            if self.sample_stack.currentIndex() != 1:
+                self.sample_stack.setCurrentIndex(1)
+        if self.stacked_spells.currentIndex() != 1:
+            self.stacked_spells.setCurrentIndex(1)
         # Apply any consistency result that arrived while we were on page 0
         if self._pending_consistency_result is not None:
             pending = self._pending_consistency_result
@@ -312,25 +321,33 @@ class PageRecord(QWidget):
             if i < len(per_scores):
                 self._per_sample_scores[fname] = per_scores[i]
 
-        # Re-render danh sách mẫu với màu sắc điểm số
+        # Re-render danh sách mẫu với màu sắc điểm số chỉ khi có thay đổi
         samples_snapshot = list(self._current_samples)
         if samples_snapshot:
-            self.sample_list.clear()
+            current_texts = [self.sample_list.item(i).text() for i in range(self.sample_list.count())]
+            target_items = []
             for fname in samples_snapshot:
                 score = self._per_sample_scores.get(fname)
                 if score is None:
-                    item = QListWidgetItem(fname)
-                elif score >= 0.85:
-                    item = QListWidgetItem(f"{fname}  [{int(score*100)}%]")
-                    item.setForeground(QColor(SUCCESS))
-                elif score >= 0.70:
-                    item = QListWidgetItem(f"{fname}  [{int(score*100)}%]")
-                    item.setForeground(QColor(WARNING))
+                    target_items.append((fname, None))
                 else:
-                    item = QListWidgetItem(f"{fname}  [{int(score*100)}%]")
-                    item.setForeground(QColor(DANGER))
-                    font = item.font(); font.setBold(True); item.setFont(font)
-                self.sample_list.addItem(item)
+                    target_items.append((f"{fname}  [{int(score*100)}%]", score))
+
+            if current_texts != [t[0] for t in target_items]:
+                self.sample_list.clear()
+                for text, score in target_items:
+                    item = QListWidgetItem(text)
+                    if score is not None:
+                        if score >= 0.85:
+                            item.setForeground(QColor(SUCCESS))
+                        elif score >= 0.70:
+                            item.setForeground(QColor(WARNING))
+                        else:
+                            item.setForeground(QColor(DANGER))
+                            font = item.font()
+                            font.setBold(True)
+                            item.setFont(font)
+                    self.sample_list.addItem(item)
 
         # Highlight mẫu kém nhất
         worst_idx = result.get("worst_sample_idx")
@@ -367,8 +384,6 @@ class PageRecord(QWidget):
             plot.getAxis("bottom").setPen(TEXT_MUTED)
             plot.setMenuEnabled(False)
             plot.setMouseEnabled(x=False, y=True)
-            plot.getPlotItem().setClipToView(True)
-            plot.getPlotItem().setDownsampling(auto=True, mode="peak")
 
         self.curve_ax = self.graph1.plot(pen=pg.mkPen(PLOT_AX_COLOR, width=2), name="aX")
         self.curve_ay = self.graph1.plot(pen=pg.mkPen(PLOT_AY_COLOR, width=2), name="aY")
@@ -376,6 +391,9 @@ class PageRecord(QWidget):
         self.curve_gx = self.graph2.plot(pen=pg.mkPen(PLOT_GX_COLOR, width=2), name="gX")
         self.curve_gy = self.graph2.plot(pen=pg.mkPen(PLOT_GY_COLOR, width=2), name="gY")
         self.curve_gz = self.graph2.plot(pen=pg.mkPen(PLOT_GZ_COLOR, width=2), name="gZ")
+
+        for c in [self.curve_ax, self.curve_ay, self.curve_az, self.curve_gx, self.curve_gy, self.curve_gz]:
+            c.setSkipFiniteCheck(True)
 
         self.graph1.addLegend()
         self.graph2.addLegend()
@@ -392,17 +410,18 @@ class PageRecord(QWidget):
         self.crop_region.sigRegionChanged.connect(self._on_crop_region_changed)
         self.graph1.addItem(self.crop_region)
 
-    def _render_plots(self) -> None:
+    def _render_plots(self, force: bool = False) -> None:
         """Vẽ dữ liệu cảm biến thời gian thực."""
-        if not self.isVisible() or not self.is_live:
+        if not self.isVisible():
+            return
+        if not force and not self.is_live:
             return
 
-        buf = self.store.get_live_buffer_snapshot()
-        if not buf:
+        arr = self.store.get_live_buffer_numpy()
+        if arr.size == 0:
             return
 
         try:
-            arr = np.asarray(buf, dtype=np.float32)
             if arr.ndim == 2 and arr.shape[1] >= 6:
                 self.curve_ax.setData(arr[:, 0])
                 self.curve_ay.setData(arr[:, 1])
@@ -701,6 +720,7 @@ class PageRecord(QWidget):
             self.crop_region.setRegion([start, buf_len])
         self._recording_timer.stop()
         self.lbl_record_duration.setText("00:00")
+        self._render_plots(force=True)
         self.sig_stop_record.emit()
 
     def _on_btn_snip_clicked(self) -> None:
@@ -840,3 +860,14 @@ class PageRecord(QWidget):
         self.lbl_consistency.setVisible(False)
         self._pending_consistency_result = None  # discard stale analysis from previous spell
         self.stacked_spells.setCurrentIndex(0)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if hasattr(self, "_plot_timer") and not self._plot_timer.isActive():
+            self._plot_timer.start(_PLOT_REFRESH_MS)
+            self._render_plots(force=True)
+
+    def hideEvent(self, event) -> None:
+        super().hideEvent(event)
+        if hasattr(self, "_plot_timer") and self._plot_timer.isActive():
+            self._plot_timer.stop()

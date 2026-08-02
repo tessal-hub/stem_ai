@@ -140,11 +140,16 @@ def parse_sensor_csv_frame(
 
 
 def parse_prediction_frame(frame: str) -> tuple[str, float]:
-    """Validate and parse one prediction frame (PREDICT:<label>:<confidence>)."""
+    """Validate and parse one prediction frame (PREDICT:<label>:<confidence> or FINAL PREDICT:<label>:<confidence>)."""
     if not isinstance(frame, str):
         raise FrameValidationError("Prediction frame must be a string")
 
-    parts = frame.split(":", maxsplit=2)
+    if "PREDICT:" not in frame:
+        raise FrameValidationError("Prediction frame format is invalid")
+
+    idx = frame.find("PREDICT:")
+    payload = frame[idx:]
+    parts = payload.split(":", maxsplit=2)
     if len(parts) != 3 or parts[0] != "PREDICT":
         raise FrameValidationError("Prediction frame format is invalid")
 

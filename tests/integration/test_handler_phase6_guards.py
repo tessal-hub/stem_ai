@@ -173,11 +173,22 @@ class HomeStub(QObject):
             latest.append(float(values[-1]))
         self.set_sensor_readout(latest)
 
+    def update_spell_history(self, history: list[dict]) -> None:
+        pass
+
+    def update_loaded_spells(self, spells: set[str]) -> None:
+        pass
+
+    def show_recognized_spell(self, spell_name: str, confidence: float) -> None:
+        pass
+
 
 class SettingStub(QObject):
     sig_flash_data_firmware = pyqtSignal()
     sig_flash_inference_firmware = pyqtSignal()
     sig_settings_saved = pyqtSignal(dict)
+    sig_scan_primitive_quality = pyqtSignal()
+    sig_stop_primitive_scan = pyqtSignal()
 
 
     def __init__(self) -> None:

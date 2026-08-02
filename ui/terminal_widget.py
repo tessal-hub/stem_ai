@@ -16,25 +16,25 @@ class TerminalWidget(QTextEdit):
         self.setFrameShadow(QFrame.Shadow.Plain)
 
     def append_line(self, text: str, *, strip_right: bool = False) -> None:
-        """Append one line, keep autoscroll, and cap total line count."""
+        """Append one line or batch, keep autoscroll, and cap total line count."""
+        if not text:
+            return
         payload = text.rstrip() if strip_right else text
         self.append(payload)
         self._cap_lines()
         self._scroll_to_bottom()
 
     def _cap_lines(self) -> None:
-        """Trim oldest lines to keep document size bounded."""
+        """Trim oldest lines to keep document size bounded efficiently."""
         doc = self.document()
         overflow = doc.blockCount() - self._max_lines
-        while overflow > 0:
-            first = doc.firstBlock()
-            if not first.isValid():
-                break
-            cursor = QTextCursor(first)
-            cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
-            cursor.removeSelectedText()
-            cursor.deleteChar()
-            overflow -= 1
+        if overflow <= 0:
+            return
+        cursor = QTextCursor(doc)
+        cursor.movePosition(QTextCursor.MoveOperation.Start)
+        for _ in range(overflow):
+            cursor.movePosition(QTextCursor.MoveOperation.NextBlock, QTextCursor.MoveMode.KeepAnchor)
+        cursor.removeSelectedText()
 
     def _scroll_to_bottom(self) -> None:
         sb = self.verticalScrollBar()

@@ -127,7 +127,7 @@ class SerialWorker(QThread):
             self._drain_outbound_commands()
 
             if not self._serial.in_waiting:
-                self.msleep(10)     # yield CPU; _running checked ~100x/s
+                self.msleep(2)     # yield CPU low latency
                 continue
 
             try:
@@ -141,7 +141,7 @@ class SerialWorker(QThread):
 
             self.sig_raw_line_received.emit(line)   # forward to terminal unconditionally
 
-            if line.startswith("PREDICT:"):
+            if "PREDICT:" in line:
                 self._handle_prediction(line)
             elif "," in line and not line.startswith("ACK:"):
                 self._handle_sensor_csv(line)

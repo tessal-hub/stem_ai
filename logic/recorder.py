@@ -59,6 +59,7 @@ class DataRecorder(QThread):
         self._start_pending = False
         self._stop_requested = False
         self._pending_label = ""
+        self.last_recorded_file: str | None = None
 
         # Command/data queues: main thread enqueues, worker thread performs I/O.
         self._command_queue: queue.Queue[tuple[str, str | None]] = queue.Queue()
@@ -318,10 +319,12 @@ class DataRecorder(QThread):
                         pass # Ignore evaluation errors if any
 
                 if success:
+                    self.last_recorded_file = file_path_to_evaluate
                     message = f"[RECORD] OK! {self._row_count} samples -> {self._label_name} (Lực vung: {max_gyro:.1f})"
                     self.sig_status_text.emit(message)
                     self.sig_finished.emit(True, message)
                 else:
+                    self.last_recorded_file = None
                     fail_message = error_message or "Recorder stopped with error"
                     self.sig_status_text.emit(f"[REJECTED] {fail_message}")
                     self.sig_finished.emit(False, fail_message)

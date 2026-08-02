@@ -383,6 +383,9 @@ class Handler(QObject):
             self.ui_wand.append_terminal_text, type=Qt.ConnectionType.QueuedConnection)
         self.feature_worker.sig_features_ready.connect(self.store.update_live_features, type=Qt.ConnectionType.QueuedConnection)
 
+        if hasattr(self, "recorder") and self.recorder:
+            self.recorder.sig_finished.connect(self._on_recorder_finished, type=Qt.ConnectionType.QueuedConnection)
+
         # Uploader signals
         self.uploader.status_msg.connect(self.ui_wand.append_terminal_text, type=Qt.ConnectionType.QueuedConnection)
         self.uploader.sig_progress.connect(self.ui_wand.update_flash_progress, type=Qt.ConnectionType.QueuedConnection)
@@ -397,6 +400,9 @@ class Handler(QObject):
         """Kết nối tín hiệu từ kho dữ liệu."""
         self.store.sig_db_updated.connect(self._on_db_refreshed)
         self.store.sig_stats_updated.connect(self.ui_wand.update_esp_stats)
+        self.store.sig_spell_history_updated.connect(self.ui_home.update_spell_history)
+        self.store.sig_registered_prototypes_updated.connect(self.ui_home.update_loaded_spells)
+        self.store.sig_prediction_updated.connect(self.ui_home.show_recognized_spell)
 
     # ── Action Handlers ──────────────────────────
 
@@ -437,10 +443,18 @@ class Handler(QObject):
         if self._mode == self._MODE_UPDATE:
             self.ui_wand.append_terminal_text("[ERROR] Cannot start recording while update mode is active.")
             return
+        self._recording_raw_file = None
         if self.recorder.start_recording(spell):
             self.store.clear_live_buffer()
             self.ui_record.is_live = True
             self._set_mode(self._MODE_RECORD)
+
+    def _on_recorder_finished(self, success: bool, message: str) -> None:
+        """Nhận sự kiện hoàn tất ghi file từ DataRecorder."""
+        if success and hasattr(self.recorder, "last_recorded_file") and self.recorder.last_recorded_file:
+            self._recording_raw_file = self.recorder.last_recorded_file
+        else:
+            self._recording_raw_file = None
 
     def on_record_stop(self) -> None:
         """Dừng quá trình ghi mẫu."""
@@ -457,6 +471,17 @@ class Handler(QObject):
     def on_data_cropped(self, data: list, spell: str) -> None:
         """Gửi yêu cầu lưu dữ liệu đã cắt vào dataset."""
         if data and spell.strip():
+            raw_file = getattr(self, "_recording_raw_file", None)
+            if raw_file:
+                try:
+                    p = Path(raw_file)
+                    if p.exists():
+                        p.unlink()
+                        log.info("Removed uncropped raw sample %s in favor of snipped sample.", p.name)
+                except Exception as exc:
+                    log.warning("Could not remove raw recording file %s: %s", raw_file, exc)
+                self._recording_raw_file = None
+
             self._pending_save_context = "record"
             self._pending_save_spell = spell
             self.data_io_worker.enqueue_save(spell, data)
@@ -523,10 +548,7 @@ class Handler(QObject):
         if len(values) < 6:
             return
 
-        # 1. Cập nhật 3D Dashboard
-        self.ui_home.wand_3d.update_orientation(*values)
-
-        # 2. Đẩy vào DataStore
+        # 1. Đẩy vào DataStore
         self.store.update_sensor_data({
             "ax": values[0], "ay": values[1], "az": values[2],
             "gx": values[3], "gy": values[4], "gz": values[5]
@@ -550,6 +572,13 @@ class Handler(QObject):
 
     def _route_raw_line(self, line: str) -> None:
         """Phân luồng log UART: Primitive sang màn hình thu thập, Spell sang Wand."""
+        if not line:
+            return
+        # Lọc bỏ các dòng CSV cảm biến thô để tránh gây nghẽn giao diện Terminal
+        first = line[0]
+        if (first.isdigit() or first in "-+") and "," in line and not line.startswith("ACK:"):
+            return
+
         line_upper = line.upper()
         if "DEBUG_BLACKHOLE" in line_upper or "PRIMITIVE" in line_upper:
             if self.ui_primitive_collect and hasattr(self.ui_primitive_collect, "console"):
@@ -559,9 +588,9 @@ class Handler(QObject):
 
     def _on_feature_timer_tick(self) -> None:
         """Kích hoạt trích xuất đặc trưng định kỳ."""
-        snapshot = self.store.get_live_buffer_snapshot()
-        if snapshot:
-            self.feature_worker.enqueue(snapshot)
+        arr = self.store.get_live_buffer_numpy()
+        if arr.size > 0:
+            self.feature_worker.enqueue(arr)
 
     def _on_serial_stopped(self) -> None:
         """Dọn dẹp sau khi luồng Serial dừng hẳn."""
@@ -614,7 +643,7 @@ class Handler(QObject):
             self.spell_recognizer = PrototypicalRecognizer(encoder)
             if proto_path:
                 self.spell_recognizer.load(proto_path)
-                self.store.registered_prototypes = set(self.spell_recognizer.prototypes.keys())
+                self.store.set_registered_prototypes(set(self.spell_recognizer.prototypes.keys()))
             log.info(f"Loaded encoder and {len(self.spell_recognizer.prototypes) if self.spell_recognizer else 0} prototypes.")
         except Exception as e:
             log.error(f"Failed to initialize recognizer: {e}")
@@ -740,7 +769,7 @@ class Handler(QObject):
         if updated_any:
             proto_path = APP_DATA_DIR / "spell_prototypes.json"
             self.spell_recognizer.save(str(proto_path))
-            self.store.registered_prototypes = set(self.spell_recognizer.prototypes.keys())
+            self.store.set_registered_prototypes(set(self.spell_recognizer.prototypes.keys()))
             log.info(f"Updated spell prototypes in {proto_path}")
 
     def _on_io_done(self, success: bool, msg: str) -> None:

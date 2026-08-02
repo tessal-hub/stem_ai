@@ -3,7 +3,7 @@
 Status: Active
 Language: English
 Owner: UI and Handler Maintainers
-Last Updated: 2026-04-21
+Last Updated: 2026-08-02
 
 This document is the frozen contract between UI pages and orchestration logic.
 Signal and method names in this file are compatibility boundaries.
@@ -15,7 +15,6 @@ Signal and method names in this file are compatibility boundaries.
 - PageStatistics
 - PageWand
 - PageSetting
-- Wand3DWidget
 
 ## Contract Rules
 
@@ -28,3 +27,12 @@ Signal and method names in this file are compatibility boundaries.
 
 - combo_serial_ports remains a required compatibility attribute for existing handler logic.
 - Worker to UI signal paths remain handler-mediated and must not bypass orchestration.
+- PageHome inbound compatibility contract methods:
+  - `set_connection_status(connected: bool)`
+  - `set_mode(mode: str)`
+  - `apply_ui_language()`
+  - `refresh_styles()`
+  - `show_recognized_spell(action: str, confidence: float)`
+  - `update_spell_history(history: list[dict])`
+  - `update_loaded_spells(spells: set[str])`
+- Wand3DWidget retired from runtime data path (no longer embedded on PageHome or updated via serial/sensor signals).

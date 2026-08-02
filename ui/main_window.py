@@ -102,7 +102,6 @@ class MainWindow(QMainWindow):
 
         # Cập nhật từ DataStore
         self.data_store.sig_connection_state_updated.connect(self.page_home.set_connection_status)
-        self.data_store.sig_sensor_data_updated.connect(self._on_sensor_data_for_3d)
         self.data_store.sig_primitive_stats_updated.connect(self.page_primitive_collect.update_collection_stats)
 
         # Hệ thống
@@ -212,19 +211,6 @@ class MainWindow(QMainWindow):
     def _on_udp_health_updated(self, health: dict) -> None:
         """Cập nhật sức khỏe kết nối vào DataStore."""
         self.data_store.update_udp_health(health)
-
-    def _on_sensor_data_for_3d(self, buffers: dict) -> None:
-        """Cập nhật hướng 3D cho wand viewer."""
-        try:
-            ax = buffers["ax"][-1] if buffers.get("ax") else 0.0
-            ay = buffers["ay"][-1] if buffers.get("ay") else 0.0
-            az = buffers["az"][-1] if buffers.get("az") else 1.0
-            gx = buffers["gx"][-1] if buffers.get("gx") else 0.0
-            gy = buffers["gy"][-1] if buffers.get("gy") else 0.0
-            gz = buffers["gz"][-1] if buffers.get("gz") else 0.0
-            self.page_home.wand_3d.update_orientation(ax, ay, az, gx, gy, gz)
-        except Exception:
-            log.debug("MainWindow: Bỏ qua cập nhật 3D", exc_info=True)
 
     def _on_settings_saved(self, config: dict) -> None:
         """Lưu cấu hình ứng dụng."""

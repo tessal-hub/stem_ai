@@ -57,7 +57,8 @@ class PagePrimitiveCollect(QWidget):
         # High-performance timer-based polling for plots (avoids UI choking at 100Hz)
         self._plot_timer = QTimer(self)
         self._plot_timer.timeout.connect(self._render_plots)
-        self._plot_timer.start(40)  # 25 Hz
+        if self.isVisible():
+            self._plot_timer.start(40)  # 25 Hz
 
     def _init_ui(self) -> None:
         """Khởi tạo giao diện trang thu thập mẫu gốc."""
@@ -138,7 +139,10 @@ class PagePrimitiveCollect(QWidget):
         self.preview_plot_gyro.setBackground("transparent")
         self.preview_plot_accel.getAxis("left").setPen(p.TEXT_TERTIARY)
         self.preview_plot_gyro.getAxis("left").setPen(p.TEXT_TERTIARY)
-        self._rebuild_cards()
+        if not self._card_widgets:
+            self._rebuild_cards()
+        elif hasattr(self, '_stats'):
+            self.update_collection_stats(self._stats)
 
     def update_signal_preview(self, snapshot: list) -> None:
         """Giờ là hàm dummy để tương thích ngược. Vẽ chính được thực hiện qua QTimer."""
@@ -148,13 +152,14 @@ class PagePrimitiveCollect(QWidget):
         """Vẽ lại đồ thị sensor thời gian thực định kỳ từ live buffer."""
         if not self.isVisible():
             return
-        buf = self.store.get_live_buffer_snapshot()
-        if not buf:
-            self.preview_stack.setCurrentIndex(0)
+        arr = self.store.get_live_buffer_numpy()
+        if arr.size == 0:
+            if self.preview_stack.currentIndex() != 0:
+                self.preview_stack.setCurrentIndex(0)
             return
-        self.preview_stack.setCurrentIndex(1)
+        if self.preview_stack.currentIndex() != 1:
+            self.preview_stack.setCurrentIndex(1)
         try:
-            arr = np.asarray(buf, dtype=np.float32)
             if arr.ndim == 2 and arr.shape[1] >= 6:
                 self.curve_ax.setData(arr[:, 0])
                 self.curve_ay.setData(arr[:, 1])
@@ -174,8 +179,11 @@ class PagePrimitiveCollect(QWidget):
             target = int(self._catalog[name]["target_samples"])
             prog = widgets["progress"]
             prog.setMaximum(target)           # fixed at 150 — bar never overflows
-            prog.setValue(min(count, target)) # cap visual fill at 100%
-            prog.setFormat(f"{count}/{target}")  # text shows real count e.g. "187/150"
+            if prog.value() != min(count, target):
+                prog.setValue(min(count, target)) # cap visual fill at 100%
+            fmt = f"{count}/{target}"
+            if prog.format() != fmt:
+                prog.setFormat(fmt)  # text shows real count e.g. "187/150"
             prog.setTextVisible(True)
             if count >= 100:
                 gestures_ready += 1
@@ -202,19 +210,22 @@ class PagePrimitiveCollect(QWidget):
                 current = int(group_counts.get(g_name, 0))
                 
             display_name = self._get_group_display_name(g_name)
-            btn.setText(f"{display_name}: {current}/{target}")
+            new_text = f"{display_name}: {current}/{target}"
+            if btn.text() != new_text:
+                btn.setText(new_text)
 
             if gesture_name == self._selected_gesture and g_name == self._selected_group:
-                btn.setProperty("type", "primary")
-                btn.setProperty("status", "")
+                new_type, new_status = "primary", ""
             elif current >= target:
-                btn.setProperty("status", "success")
-                btn.setProperty("type", "base")
+                new_type, new_status = "base", "success"
             else:
-                btn.setProperty("type", "base")
-                btn.setProperty("status", "")
-            btn.style().unpolish(btn)
-            btn.style().polish(btn)
+                new_type, new_status = "base", ""
+
+            if btn.property("type") != new_type or btn.property("status") != new_status:
+                btn.setProperty("type", new_type)
+                btn.setProperty("status", new_status)
+                btn.style().unpolish(btn)
+                btn.style().polish(btn)
 
     def _compute_group_counts(self, gesture_name: str, total_count: int) -> dict[str, int]:
         """Tính toán số lượng mẫu cho từng nhóm dựa trên tổng số."""
@@ -368,6 +379,9 @@ class PagePrimitiveCollect(QWidget):
         self.curve_gy = self.preview_plot_gyro.plot(pen=pg.mkPen(PLOT_GY_COLOR, width=2))
         self.curve_gz = self.preview_plot_gyro.plot(pen=pg.mkPen(PLOT_GZ_COLOR, width=2))
 
+        for c in [self.curve_ax, self.curve_ay, self.curve_az, self.curve_gx, self.curve_gy, self.curve_gz]:
+            c.setSkipFiniteCheck(True)
+
     def _rebuild_cards(self) -> None:
         """Xây dựng lại các thẻ card cử chỉ."""
         clear_layout(self.cards_layout)
@@ -484,4 +498,14 @@ class PagePrimitiveCollect(QWidget):
         # Check if we hit 30-sample marks or 50-sample group completions.
         # This will be handled by Handler, so we just update UI.
         pass
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if hasattr(self, "_plot_timer") and not self._plot_timer.isActive():
+            self._plot_timer.start(40)
+
+    def hideEvent(self, event) -> None:
+        super().hideEvent(event)
+        if hasattr(self, "_plot_timer") and self._plot_timer.isActive():
+            self._plot_timer.stop()
 

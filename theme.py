@@ -145,8 +145,9 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
         /* ══════════════════════════════════════════════
            CARDS — White surface with soft border + depth
            ══════════════════════════════════════════════ */
-        QFrame#CardFrame, QFrame#VanguardCardOuter, QWidget#Card,
-        #HomeViewerCard, #HomeRightSection, #CardFrameElevated,
+        QFrame#CardFrame, QFrame#VanguardCardOuter, QWidget#Card, QFrame#Card,
+        #HomeViewerCard, #HomeRightSection, #CardFrameElevated, #HomeHeroCard,
+        #HomeHistoryCard, #HomeLoadedCard,
         #VanguardCardInner, QFrame[type="statistics_card"],
         QWidget[type="statistics_card"], #HomeViewerSurface,
         QFrame#ModernCard {{
@@ -649,6 +650,134 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
         QPushButton[type="small"]:hover {{
             background-color: {FILL_SECONDARY};
             color: {TEXT_PRIMARY};
+        }}
+
+        /* ══════════════════════════════════════════════
+           HOME PAGE — Refined & Fluid Dashboard Visuals
+           ══════════════════════════════════════════════ */
+        QFrame#HomeStatusBar {{
+            background-color: {SURFACE_1};
+            border: 1px solid {BORDER_LIGHT};
+            border-radius: {RADIUS_MD}px;
+            padding: 2px 4px;
+        }}
+        QFrame#HomeHeroCard {{
+            background-color: {SURFACE_1};
+            border: 1px solid {BORDER_COLOR};
+            border-bottom: 2px solid {PRIMARY_COLOR};
+            border-radius: {RADIUS_XL}px;
+        }}
+        QLabel[type="hero_spell_name"] {{
+            font-family: {TITLE_FONT_STACK};
+            font-size: 38px;
+            font-weight: 800;
+            color: {TEXT_PRIMARY};
+            letter-spacing: 1.5px;
+            padding: 8px 0px;
+        }}
+        QLabel[type="hero_spell_name"][pulsing="true"] {{
+            color: {PRIMARY_COLOR};
+        }}
+        QLabel[type="hero_confidence"] {{
+            font-family: {MONO_FONT_STACK};
+            font-size: 13px;
+            font-weight: 700;
+            padding: 5px 16px;
+            border-radius: {RADIUS_FULL}px;
+        }}
+        QLabel[type="hero_confidence"][level="high"] {{
+            background-color: {STATUS_SUCCESS_BG};
+            color: {STATUS_SUCCESS};
+            border: 1px solid rgba(16, 185, 129, 0.25);
+        }}
+        QLabel[type="hero_confidence"][level="moderate"] {{
+            background-color: {STATUS_WARNING_BG};
+            color: {STATUS_WARNING};
+            border: 1px solid rgba(245, 158, 11, 0.25);
+        }}
+        QLabel[type="hero_confidence"][level="low"] {{
+            background-color: {STATUS_ERROR_BG};
+            color: {STATUS_ERROR};
+            border: 1px solid rgba(239, 68, 68, 0.25);
+        }}
+        QLabel[type="hero_subtitle"] {{
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            color: {PRIMARY_COLOR};
+            text-transform: uppercase;
+        }}
+        QProgressBar[type="hero_confidence_bar"] {{
+            background-color: {FILL_TERTIARY};
+            border: none;
+            border-radius: 3px;
+            max-height: 5px;
+            min-height: 5px;
+        }}
+        QProgressBar[type="hero_confidence_bar"]::chunk {{
+            background-color: {PRIMARY_COLOR};
+            border-radius: 3px;
+        }}
+        /* Tip Card Container */
+        QFrame#HomeTipCard {{
+            background-color: {PRIMARY_LIGHT};
+            border: 1px solid rgba(0, 122, 255, 0.20);
+            border-left: 5px solid {PRIMARY_COLOR};
+            border-radius: {RADIUS_MD}px;
+        }}
+        QLabel[type="tip_eyebrow"] {{
+            font-size: 11px;
+            font-weight: 800;
+            color: {PRIMARY_COLOR};
+            letter-spacing: 1.4px;
+            text-transform: uppercase;
+        }}
+        QLabel[type="tip_text"] {{
+            font-size: 15px;
+            font-weight: 600;
+            font-style: italic;
+            color: {TEXT_PRIMARY};
+            line-height: 1.5;
+        }}
+        /* History & Loaded Cards */
+        QFrame#HomeHistoryCard, QFrame#HomeLoadedCard {{
+            background-color: {SURFACE_1};
+            border: 1px solid {BORDER_COLOR};
+            border-radius: {RADIUS_LG}px;
+        }}
+        QListWidget#HomeHistoryList {{
+            background-color: transparent;
+            border: none;
+            outline: none;
+        }}
+        QListWidget#HomeHistoryList::item {{
+            background-color: transparent;
+            border: none;
+            padding: 0px;
+            margin-bottom: 4px;
+        }}
+        QListWidget#HomeHistoryList::item:hover {{
+            background-color: transparent;
+        }}
+        QFrame[type="history_item_row"] {{
+            background-color: {SURFACE_0};
+            border: 1px solid {BORDER_LIGHT};
+            border-radius: {RADIUS_MD}px;
+            padding: 8px 12px;
+        }}
+        QFrame[type="history_item_row"]:hover {{
+            background-color: {NAV_HOVER_BG};
+            border-color: {PRIMARY_LIGHT};
+        }}
+        QFrame[type="loaded_spell_row"] {{
+            background-color: {SURFACE_0};
+            border: 1px solid {BORDER_LIGHT};
+            border-radius: {RADIUS_MD}px;
+            padding: 8px 14px;
+        }}
+        QFrame[type="loaded_spell_row"]:hover {{
+            background-color: {NAV_HOVER_BG};
+            border-color: {PRIMARY_LIGHT};
         }}
     """
 
