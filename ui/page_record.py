@@ -27,7 +27,7 @@ from ui.component_factory import (IconButton, make_button, make_card,
 from ui.confirm_dialog import confirm_destructive
 from ui.i18n_bridge import tr_ui
 from ui.modern_layout import (MARGIN_COMFORTABLE, SPACING_LG, SPACING_MD,
-                              SPACING_SM)
+                              SPACING_SM, SPACING_XS)
 from ui.tokens import (ACCENT, BTN_H, CROP_REGION, DANGER, PLOT_AX_COLOR,
                        PLOT_AY_COLOR, PLOT_AZ_COLOR, PLOT_GX_COLOR,
                        PLOT_GY_COLOR, PLOT_GZ_COLOR, PLOT_HANDLE_HOVER_COLOR,
@@ -210,20 +210,7 @@ class PageRecord(QWidget):
                 if is_prim:
                     continue
                 
-                is_registered = name in getattr(self.store, "registered_prototypes", set())
-                suffix = " [Ready]" if is_registered else ""
-                
-                # Hiển thị độ đồng nhất hoặc gợi ý hành động ngay trên danh sách chính
-                consistency = getattr(self, "_current_consistencies", {}).get(name)
-                score_suffix = ""
-                if consistency == "no_encoder":
-                    score_suffix = " - Yêu cầu train Encoder"
-                elif consistency == "need_samples":
-                    score_suffix = " - Cần >= 2 mẫu"
-                elif isinstance(consistency, float):
-                    score_suffix = f" - Độ đồng nhất: {int(consistency * 100)}%"
-                
-                item = QListWidgetItem(f"{name} ({spell_counts[name]}){suffix}{score_suffix}")
+                item = QListWidgetItem(f"{name} ({spell_counts[name]})")
                 item.setData(Qt.ItemDataRole.UserRole, name)
                 self.spell_list.addItem(item)
         else:
@@ -276,11 +263,9 @@ class PageRecord(QWidget):
             self.update_consistency_display(pending)
 
     def update_consistency_display(self, result: dict) -> None:
-        """Đập kết quả từ analyze_spell_samples vào UI consistency section."""
-        # Cache result unconditionally so it survives a page switch
+        """Cập nhật hiển thị đánh giá độ đồng nhất và trạng thái đăng ký."""
         self._pending_consistency_result = result
 
-        # Chỉ render khi đang ở trang sample list
         if self.stacked_spells.currentIndex() != 1:
             return
 
@@ -290,11 +275,11 @@ class PageRecord(QWidget):
         per_scores = result.get("per_sample_scores", [])
         ready = result.get("ready_to_register", False)
 
-        # Update recommendation label
+        # Văn bản khuyến nghị
         self.lbl_consistency.setVisible(True)
         self.lbl_consistency.setText(rec)
 
-        # Update progress bar
+        # Thanh tiến trình & điểm số
         if overall is not None:
             pct = int(overall * 100)
             self.consistency_bar.setValue(pct)
@@ -307,30 +292,27 @@ class PageRecord(QWidget):
             else:
                 bar_color = DANGER
             self.consistency_bar.setStyleSheet(
-                f"QProgressBar::chunk {{ background-color: {bar_color}; }}"
-                "QProgressBar { border-radius: 4px; background: #E5E5EA; text-align: center; }"
+                f"QProgressBar::chunk {{ background-color: {bar_color}; border-radius: 3px; }}"
+                "QProgressBar { border-radius: 4px; background: rgba(0, 0, 0, 0.08); text-align: center; color: #111827; font-weight: 700; font-size: 12px; }"
             )
         else:
-            # n < 3: show dot-progress so user sees how many samples remain
-            n_samples = result.get("n_samples", 0)
-            filled = "●" * min(n_samples, 3)
-            empty  = "○" * max(0, 3 - n_samples)
+            filled = "●" * min(n, 3)
+            empty  = "○" * max(0, 3 - n)
             self.consistency_bar.setValue(0)
-            self.consistency_bar.setFormat(f"Thu mẫu: {filled}{empty}  ({n_samples}/3)")
+            self.consistency_bar.setFormat(f"Tiến độ: {filled}{empty} ({n}/3 mẫu)")
             self.consistency_bar.setStyleSheet(
-                "QProgressBar::chunk { background-color: #8E8E93; }"
-                "QProgressBar { border-radius: 4px; background: #E5E5EA; text-align: center; color: #3a3a3c; }"
+                "QProgressBar::chunk { background-color: #8E8E93; border-radius: 3px; }"
+                "QProgressBar { border-radius: 4px; background: rgba(0, 0, 0, 0.08); text-align: center; color: #111827; font-weight: 700; font-size: 12px; }"
             )
             self.consistency_bar.setVisible(True)
 
-
-        # Map per_sample_scores to filenames
+        # Gắn điểm per_sample_scores cho các file mẫu
         self._per_sample_scores = {}
         for i, fname in enumerate(self._current_samples):
             if i < len(per_scores):
                 self._per_sample_scores[fname] = per_scores[i]
 
-        # Re-render sample list with colors
+        # Re-render danh sách mẫu với màu sắc điểm số
         samples_snapshot = list(self._current_samples)
         if samples_snapshot:
             self.sample_list.clear()
@@ -350,22 +332,16 @@ class PageRecord(QWidget):
                     font = item.font(); font.setBold(True); item.setFont(font)
                 self.sample_list.addItem(item)
 
-        # Highlight worst outlier row in the list (already colored by score)
+        # Highlight mẫu kém nhất
         worst_idx = result.get("worst_sample_idx")
         if worst_idx is not None and worst_idx < len(self._current_samples):
             item = self.sample_list.item(worst_idx)
             if item:
-                item.setToolTip(
-                    f"⚠️ Mẫu có điểm thấp nhất trong tập — cân nhắc xóa để cải thiện độ đồng nhất."
-                )
+                item.setToolTip("⚠️ Mẫu có điểm thấp nhất trong tập — cân nhắc xóa để nâng cao độ đồng nhất.")
 
     def on_spell_registered(self, spell_name: str) -> None:
-        """Được gọi sau khi handler đăng ký prototype thành công."""
-        self.lbl_consistency.setText(
-            f"✅ '{spell_name}' đã đăng ký. Hiển thị [Ready] trong danh sách."
-        )
-        self.consistency_bar.setVisible(False)
-        self._per_sample_scores = {}
+        """Được gọi sau khi nạp/đăng ký thành công."""
+        self.lbl_consistency.setText(f"✅ '{spell_name}' đã được xác nhận.")
 
     def set_consistency_score(self, score: float | str | None) -> None:
         """Legacy fallback — vẫn giữ để tương thích ngược."""
@@ -626,7 +602,7 @@ class PageRecord(QWidget):
         return page
 
     def _build_sample_list_page(self) -> QWidget:
-        """Trang hiển thị danh sách mẫu đã thu thập."""
+        """Trang hiển thị danh sách mẫu và đánh giá độ đồng nhất."""
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -640,11 +616,29 @@ class PageRecord(QWidget):
         top.addWidget(self.lbl_current_spell)
         layout.addLayout(top)
 
+        # ── Evaluation Card ─────────────────────────────────
+        eval_card, eval_layout = make_card(margins=(10, 10, 10, 10), spacing=SPACING_XS)
+
+        eval_header = QHBoxLayout()
+        eval_title = make_section_label("ĐÁNH GIÁ CỬ CHỈ", accent=True)
+        eval_header.addWidget(eval_title)
+        eval_layout.addLayout(eval_header)
+
+        self.consistency_bar = QProgressBar()
+        self.consistency_bar.setRange(0, 100)
+        self.consistency_bar.setValue(0)
+        self.consistency_bar.setTextVisible(True)
+        self.consistency_bar.setFixedHeight(20)
+        eval_layout.addWidget(self.consistency_bar)
+
         self.lbl_consistency = QLabel("")
         self.lbl_consistency.setWordWrap(True)
-        self.lbl_consistency.setStyleSheet("margin: 5px 0px; font-size: 13px;")
-        layout.addWidget(self.lbl_consistency)
+        self.lbl_consistency.setStyleSheet("font-size: 12px; font-weight: 500; color: #111827; margin: 3px 0;")
+        eval_layout.addWidget(self.lbl_consistency)
 
+        layout.addWidget(eval_card)
+
+        # ── Sample List Stack ────────────────────────────────
         self.sample_list = QListWidget()
         self.sample_list.setProperty("type", "record_list")
         self.sample_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
@@ -652,16 +646,7 @@ class PageRecord(QWidget):
         self.sample_stack.addWidget(self.sample_list)
         empty_card, _ = make_empty_state_card()
         self.sample_stack.addWidget(empty_card)
-        layout.addWidget(self.sample_stack)
-
-        # ── Consistency Analysis section ─────────────────────
-        self.consistency_bar = QProgressBar()
-        self.consistency_bar.setRange(0, 100)
-        self.consistency_bar.setValue(0)
-        self.consistency_bar.setTextVisible(True)
-        self.consistency_bar.setFixedHeight(18)
-        self.consistency_bar.setVisible(False)
-        layout.addWidget(self.consistency_bar)
+        layout.addWidget(self.sample_stack, stretch=1)
 
         return page
 
@@ -824,6 +809,7 @@ class PageRecord(QWidget):
             samples = self.store.get_samples_for_spell(spell)
             self.load_samples_for_spell(spell, samples)
             self.store.refresh_database(force=True)
+            self.sig_spell_selected.emit(spell)
 
     def _on_spell_item_clicked(self, item: QListWidgetItem) -> None:
         """Khi chọn một spell từ danh sách thư viện."""

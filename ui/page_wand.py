@@ -97,7 +97,6 @@ class PageWand(QWidget):
     def _load_data(self, data_store) -> None:
         """Nạp dữ liệu trạng thái ban đầu."""
         self.load_spell_payload_list(data_store.spell_counts)
-        self.update_esp_stats(data_store.esp32_stats)
 
     # ── Public methods ──────────────────────────
 
@@ -132,7 +131,7 @@ class PageWand(QWidget):
         self.connection_panel.update_serial_port_list(ports)
 
     def update_esp_stats(self, stats: dict[str, str]) -> None:
-        """Cập nhật thông số phần cứng ESP32."""
+        """No-op: ESP32 stats display removed."""
         pass
 
     def load_spell_payload_list(self, counts: dict[str, int]) -> None:

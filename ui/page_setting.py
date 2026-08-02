@@ -173,13 +173,11 @@ class PageSetting(QWidget):
         
         card, c_lay = self._make_card(margins=(16, 16, 16, 16), spacing=SPACING_SM)
         self.combo_ui_language = self._make_combo([])
-        self.txt_project_name = QLineEdit()
         self.chk_auto_save = QCheckBox()
         self.chk_show_primitives = QCheckBox()
 
         form = self._make_form_layout()
         self._add_i18n_form_row(form, "label_ui_language", self.combo_ui_language)
-        self._add_i18n_form_row(form, "label_project_name", self.txt_project_name)
         
         # Đường dẫn Dataset
         folder_icon = QIcon(resolve_asset_path("assets/icon/cooliocns SVG/File/Folder_Open.svg"))
@@ -197,6 +195,22 @@ class PageSetting(QWidget):
         dataset_row.addWidget(self.txt_dataset_dir)
         dataset_row.addWidget(self.btn_browse_dataset)
         self._add_i18n_form_row(form, "label_dataset_dir", dataset_container)
+
+        # Đường dẫn Model
+        self.txt_model_path = QLineEdit()
+        self.txt_model_path.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.btn_browse_model = QPushButton()
+        self.btn_browse_model.setIcon(folder_icon)
+        self.btn_browse_model.setIconSize(QSize(16, 16))
+        self.btn_browse_model.setFixedWidth(28)
+
+        model_container = QWidget()
+        model_row = QHBoxLayout(model_container)
+        model_row.setContentsMargins(0, 0, 0, 0)
+        model_row.setSpacing(8)
+        model_row.addWidget(self.txt_model_path)
+        model_row.addWidget(self.btn_browse_model)
+        self._add_i18n_form_row(form, "label_model_path", model_container)
 
         form.addRow(QLabel("Auto Save"), self.chk_auto_save)
         
@@ -255,14 +269,13 @@ class PageSetting(QWidget):
             try:
                 sz = tflite_path.stat().st_size
                 size_str = f"{sz / 1024:.1f} KB"
-            except Exception:
-                pass
+            except OSError as exc:
+                import logging as _log
+                _log.getLogger(__name__).warning("Could not stat tflite file: %s", exc)
         add_row(3, size_lbl, size_str)
         
         # Load active gestures count
-        classes_count = "0"
-        if hasattr(self.data_store, "spell_counts"):
-            classes_count = str(len(self.data_store.spell_counts))
+        classes_count = str(len(self.data_store.spell_counts))
         add_row(4, gestures_lbl, classes_count)
         
         c_lay.addLayout(grid)
@@ -337,6 +350,7 @@ class PageSetting(QWidget):
         self.btn_flash_collect.clicked.connect(self._on_btn_flash_collect_clicked)
         self.btn_flash_ai.clicked.connect(self._on_btn_flash_ai_clicked)
         self.btn_browse_dataset.clicked.connect(self._on_btn_browse_dataset_clicked)
+        self.btn_browse_model.clicked.connect(self._on_btn_browse_model_clicked)
         self.combo_ui_language.currentIndexChanged.connect(self._on_ui_language_changed)
         self.btn_scan_quality.clicked.connect(self._on_btn_scan_quality_clicked)
         self.btn_stop_scan.clicked.connect(self._on_btn_stop_scan_clicked)
@@ -356,9 +370,9 @@ class PageSetting(QWidget):
             "sample_rate": self.combo_sample_rate,
             "accel_scale": self.combo_accel_scale,
             "gyro_scale": self.combo_gyro_scale,
-            "project_name": self.txt_project_name,
             "auto_save": self.chk_auto_save,
             "dataset_dir": self.txt_dataset_dir,
+            "model_path": self.txt_model_path,
             "show_primitives_menu": self.chk_show_primitives,
         }
         for key, w in widgets.items():
@@ -492,10 +506,10 @@ class PageSetting(QWidget):
             "sample_rate": self.combo_sample_rate.currentText(),
             "accel_scale": self.combo_accel_scale.currentText(),
             "gyro_scale": self.combo_gyro_scale.currentText(),
-            "theme": "light",
             "ui_language": self.combo_ui_language.currentData(),
             "auto_save": self.chk_auto_save.isChecked(),
             "dataset_dir": self.txt_dataset_dir.text().strip(),
+            "model_path": self.txt_model_path.text().strip(),
             "show_primitives_menu": self.chk_show_primitives.isChecked(),
         }
         self.sig_settings_saved.emit(config)
@@ -521,6 +535,14 @@ class PageSetting(QWidget):
         path = QFileDialog.getExistingDirectory(self, "Chọn thư mục Dataset")
         if path:
             self.txt_dataset_dir.setText(path)
+
+    def _on_btn_browse_model_clicked(self) -> None:
+        """Open file dialog to select model file (.tflite)."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select Model File", "", "TFLite Models (*.tflite);;All Files (*)"
+        )
+        if path:
+            self.txt_model_path.setText(path)
 
     def _on_btn_scan_quality_clicked(self) -> None:
         """Bắt đầu quét chất lượng dataset primitive."""

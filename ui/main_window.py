@@ -103,8 +103,7 @@ class MainWindow(QMainWindow):
         # Cập nhật từ DataStore
         self.data_store.sig_connection_state_updated.connect(self.page_home.set_connection_status)
         self.data_store.sig_sensor_data_updated.connect(self._on_sensor_data_for_3d)
-        if hasattr(self.data_store, "sig_primitive_stats_updated"):
-            self.data_store.sig_primitive_stats_updated.connect(self.page_primitive_collect.update_collection_stats)
+        self.data_store.sig_primitive_stats_updated.connect(self.page_primitive_collect.update_collection_stats)
 
         # Hệ thống
         locale_manager.language_changed.connect(self._apply_ui_language)
@@ -197,13 +196,7 @@ class MainWindow(QMainWindow):
             values = [float(data.get(k, 0.0)) for k in sensor_keys]
             handler.on_udp_sensor_data(values)
 
-        esp_update: dict[str, str] = {}
-        if "battery" in data:
-            esp_update["Battery"] = f"{data['battery']}%"
-        if "free_ram" in data:
-            esp_update["RAM Free"] = f"{data['free_ram']} KB"
-        if "rssi" in data:
-            esp_update["RSSI"] = f"{data['rssi']} dBm"
+        esp_update = self._extract_esp_stats(data)
         if esp_update:
             handler.on_udp_esp_stats(esp_update)
 

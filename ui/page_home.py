@@ -36,7 +36,7 @@ class PageHome(QWidget):
     def _init_ui(self) -> None:
         """Khởi tạo giao diện dashboard với bố cục editorial 2 cột."""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, 80)
+        layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
         layout.setSpacing(SPACING_LG)
 
         header = QFrame()
@@ -100,22 +100,15 @@ class PageHome(QWidget):
         self._connected = connected
         status_key = "home_status_connected" if connected else "home_status_disconnected"
         self.status_bar.setText(tr_ui(status_key))
-        if hasattr(self, "_status_chip"):
-            self._status_chip.setText(tr_ui(status_key))
-
         self.status_bar.setProperty("status", "success" if connected else "error")
-        if hasattr(self, "_status_chip"):
-            self._status_chip.setProperty("status", "success" if connected else "error")
-            self._status_chip.style().unpolish(self._status_chip)
-            self._status_chip.style().polish(self._status_chip)
         self.status_bar.style().unpolish(self.status_bar)
         self.status_bar.style().polish(self.status_bar)
 
     def set_mode(self, mode: str) -> None:
         """Cập nhật chế độ hoạt động hiện tại."""
         self._current_mode = mode.upper()
-        if hasattr(self, "_mode_chip"):
-            self._mode_chip.setText(f"MODE: {self._current_mode}")
+        if hasattr(self, "_mode_label"):
+            self._mode_label.setText(f"{tr_ui('home_mode_prefix')} {self._current_mode}")
 
     def apply_ui_language(self) -> None:
         """Cập nhật ngôn ngữ cho các nhãn tĩnh."""
@@ -126,7 +119,7 @@ class PageHome(QWidget):
 
     def refresh_styles(self) -> None:
         """Làm mới giao diện theo theme hiện tại."""
-        pass  # Không cần thiết lập lại stylesheet thủ công vì theme.py đã quản lý
+        pass
 
     # ── Private methods ─────────────────────────
 

@@ -13,15 +13,14 @@ from __future__ import annotations
 import csv
 import logging
 import numpy as np
+from pathlib import Path
 from threading import Lock
 
 from PyQt6.QtCore import QObject, Qt, QTimer
 
 from config import APP_DATA_DIR, WORKSPACE_ROOT, FIRMWARE_BIN_DIR
-from constants import is_system_spell, canonical_system_spell
+from constants import is_system_spell, canonical_system_spell, normalize_spell_name
 from ui.asset_utils import resolve_asset_path
-from pathlib import Path
-
 
 from .data_io_worker import DataIOWorker
 from .data_store import DataStore
@@ -34,6 +33,13 @@ from .recorder import DataRecorder
 from .serial_worker import SerialWorker
 from .tensorflow.pipeline import GestureModelBuildWorker
 from .primitive_quality_worker import PrimitiveQualityWorker
+from logic.dataset_layout import (
+    discover_class_directories,
+    _routes_to_primitives,
+    _PRIMITIVE_LOGICAL_NAMES,
+    storage_dirs_for_spell,
+)
+from logic.tensorflow.nvs_builder import build_config_bin
 from PyQt6.QtCore import QThread, pyqtSignal
 
 class NVSBuildWorker(QThread):
@@ -50,12 +56,6 @@ class NVSBuildWorker(QThread):
 
     def run(self) -> None:
         try:
-            from pathlib import Path
-            from logic.dataset_layout import discover_class_directories, _routes_to_primitives, _PRIMITIVE_LOGICAL_NAMES
-            from constants import canonical_system_spell, normalize_spell_name
-            from logic.tensorflow.nvs_builder import build_config_bin
-            import numpy as np
-            import csv
 
             self.sig_status.emit(">> [NVS] Discovering dataset classes...")
             self.sig_progress.emit(10)
@@ -350,33 +350,21 @@ class Handler(QObject):
         if hasattr(self, 'on_export_csv'):
             self.ui_record.sig_export_csv.connect(self.on_export_csv)
 
-        if hasattr(self, 'on_build_firmware'):
-            self.ui_wand.sig_train_build_firmware_requested.connect(self.on_build_firmware)
+        self.ui_wand.sig_train_build_firmware_requested.connect(self.on_build_firmware)
 
-        if hasattr(self, 'on_settings_saved'):
-            self.ui_setting.sig_settings_saved.connect(self.on_settings_saved)
+        self.ui_setting.sig_settings_saved.connect(self.on_settings_saved)
         if hasattr(self, 'on_clear_database'):
             self.ui_setting.sig_clear_database.connect(self.on_clear_database)
-        if hasattr(self, 'on_flash_data_firmware'):
-            self.ui_setting.sig_flash_data_firmware.connect(self.on_flash_data_firmware)
-        if hasattr(self, 'on_flash_inference_firmware'):
-            self.ui_setting.sig_flash_inference_firmware.connect(self.on_flash_inference_firmware)
-        
-        if self.ui_setting:
-            if hasattr(self.ui_setting, 'sig_scan_primitive_quality'):
-                self.ui_setting.sig_scan_primitive_quality.connect(self.on_primitive_quality_scan_requested)
-            if hasattr(self.ui_setting, 'sig_stop_primitive_scan'):
-                self.ui_setting.sig_stop_primitive_scan.connect(self.on_primitive_quality_scan_stop)
+        self.ui_setting.sig_flash_data_firmware.connect(self.on_flash_data_firmware)
+        self.ui_setting.sig_flash_inference_firmware.connect(self.on_flash_inference_firmware)
+        self.ui_setting.sig_scan_primitive_quality.connect(self.on_primitive_quality_scan_requested)
+        self.ui_setting.sig_stop_primitive_scan.connect(self.on_primitive_quality_scan_stop)
 
         if self.ui_primitive_collect:
-            if hasattr(self, 'on_start_collection'):
-                self.ui_primitive_collect.sig_start_collection.connect(self.on_start_collection)
-            if hasattr(self, 'on_stop_collection'):
-                self.ui_primitive_collect.sig_stop_collection.connect(self.on_stop_collection)
-            if hasattr(self, 'on_capture_collection'):
-                self.ui_primitive_collect.sig_capture_collection.connect(self.on_capture_collection)
-            if hasattr(self, 'on_train_encoder_requested'):
-                self.ui_primitive_collect.sig_train_encoder_requested.connect(self.on_train_encoder_requested)
+            self.ui_primitive_collect.sig_start_collection.connect(self.on_start_collection)
+            self.ui_primitive_collect.sig_stop_collection.connect(self.on_stop_collection)
+            self.ui_primitive_collect.sig_capture_collection.connect(self.on_capture_collection)
+            self.ui_primitive_collect.sig_train_encoder_requested.connect(self.on_train_encoder_requested)
 
     def _connect_worker_signals(self) -> None:
         """Kết nối tín hiệu từ các worker nền."""
@@ -1431,7 +1419,7 @@ class Handler(QObject):
 
     def _on_encoder_training_finished(self, success: bool, message: str) -> None:
         if success:
-            self._try_load_encoder()
+            self._start_async_encoder_load()
             # Refresh consistency display for whichever spell is open so the
             # "Encoder chưa được load" message is replaced immediately —
             # without this the user has to back-out and re-select the spell.
@@ -1444,11 +1432,18 @@ class Handler(QObject):
 
 
     def on_settings_saved(self, config: dict) -> None:
-        """Called when settings are saved to update components."""
+        """Called when settings are saved — update runtime components.
+
+        Note: DataStore persistence is handled by MainWindow._on_settings_saved.
+        This method updates only the live worker state.
+        """
         dataset_dir = config.get("dataset_dir")
         if dataset_dir:
             self.recorder.dataset_dir = dataset_dir
             self.data_io_worker.dataset_dir = dataset_dir
+
+        # Propagate updated IMU scale profile to serial worker immediately
+        self.serial_worker.set_scale_profile(build_scale_profile(config))
 
     def shutdown(self) -> None:
         """Dừng toàn bộ hệ thống an toàn."""

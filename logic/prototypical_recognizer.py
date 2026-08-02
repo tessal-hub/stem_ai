@@ -214,7 +214,7 @@ class PrototypicalRecognizer:
 
         # --- recommendation ---
         if ready:
-            rec = f"✅ Prototype ổn định sau {n} mẫu. Sẵn sàng đăng ký."
+            rec = f"✅ Tập mẫu có độ đồng nhất cao ({overall:.0%}) sau {n} mẫu."
         elif overall >= 0.70:
             rec = f"🟡 Đang tốt ({overall:.0%}). Thu thêm 1-2 mẫu để chắc chắn."
         else:

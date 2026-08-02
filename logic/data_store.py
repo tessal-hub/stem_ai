@@ -276,6 +276,8 @@ class DataStore(QObject):
             self.settings = self.settings_store.save(self.settings)
             if "dataset_dir" in updates:
                 self.dataset_dir = str(Path(updates["dataset_dir"]))
+            if "model_path" in updates and updates["model_path"]:
+                self.settings["model_path"] = str(Path(updates["model_path"]))
         self.refresh_database(force=True)
         with self._state_lock:
             return dict(self.settings)

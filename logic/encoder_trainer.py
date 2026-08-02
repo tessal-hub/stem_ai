@@ -11,6 +11,11 @@ from logic.tensorflow.encoder_pipeline import (augment_dataset, build_encoder,
                                                triplet_loss)
 
 
+import logging
+
+log = logging.getLogger(__name__)
+
+
 class EncoderTrainerWorker(QThread):
     sig_status = pyqtSignal(str)
     sig_progress = pyqtSignal(int)
@@ -225,7 +230,7 @@ class EncoderTrainerWorker(QThread):
                     encoder, X_base, y_base, class_names, save_path=str(save_path)
                 )
             except Exception as eval_err:
-                print(f"Lỗi khi đánh giá encoder: {eval_err}")
+                log.warning("Lỗi khi đánh giá encoder: %s", eval_err)
                 distance_ratio = self._compute_distance_ratio(encoder, X_base, y_base)
                 fewshot_5 = self._few_shot_eval(encoder, X_base, y_base, n_support=5)
                 fewshot_10 = self._few_shot_eval(encoder, X_base, y_base, n_support=10)

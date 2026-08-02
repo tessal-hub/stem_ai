@@ -15,6 +15,11 @@ from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtWidgets import (QFrame, QGestureEvent, QHBoxLayout, QLabel,
                              QSizePolicy, QSwipeGesture, QToolButton,
                              QVBoxLayout, QWidget)
+try:
+    from PyQt6.QtWidgets import QSwipeDirection
+except ImportError:
+    # PyQt6 ≮ 6.4: direction available directly on QSwipeGesture
+    QSwipeDirection = None
 
 from logic.theme_manager import theme_manager
 from ui.asset_utils import resolve_asset_path
@@ -152,8 +157,9 @@ class MacShell(QWidget):
         self.lbl_subtitle.setText(tr_ui(item.subtitle_key))
 
     def refresh_styles(self) -> None:
-        """Làm mới toàn bộ stylesheet theo theme."""
-
+        """Repaint shell chrome using current theme stylesheet."""
+        from theme import get_modern_stylesheet
+        self._chrome.setStyleSheet(get_modern_stylesheet())
     def event(self, event: QEvent) -> bool:
         """Xử lý sự kiện chung, bao gồm cử chỉ."""
         if event.type() == QEvent.Type.Gesture:
@@ -277,9 +283,12 @@ class MacShell(QWidget):
         """Điều phối cử chỉ vuốt ngang."""
         swipe = event.gesture(Qt.GestureType.SwipeGesture)
         if isinstance(swipe, QSwipeGesture):
-            if swipe.horizontalDirection() == QSwipeDirection.Left:
+            direction = swipe.horizontalDirection()
+            left = QSwipeGesture.SwipeDirection.Left
+            right = QSwipeGesture.SwipeDirection.Right
+            if direction == left:
                 self.set_active_index(min(len(NAV_ITEMS) - 1, self._active_index + 1))
-            elif swipe.horizontalDirection() == QSwipeDirection.Right:
+            elif direction == right:
                 self.set_active_index(max(0, self._active_index - 1))
             return True
         return False

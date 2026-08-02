@@ -2,6 +2,7 @@
 .venv/
 .venv312/
 .venv-tf/
+.env/
 
 # Python cache and artifacts
 __pycache__/
@@ -23,3 +24,5 @@ app_data/
 build/
 dist/
 *.spec
+env/
+__pycache__/
