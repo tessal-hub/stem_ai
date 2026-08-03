@@ -35,3 +35,14 @@ def test_single_item_pool_always_returns_that_item() -> None:
     rotator = TipRotator(["ONLY"])
     for _ in range(10):
         assert rotator.next_tip() == "ONLY"
+
+
+def test_next_tip_with_dynamic_pool_switch() -> None:
+    """next_tip(pool) dynamically updates pool when a new pool is passed."""
+    rotator = TipRotator(["A1", "A2"])
+    t1 = rotator.next_tip()
+    assert t1 in {"A1", "A2"}
+
+    t2 = rotator.next_tip(["B1", "B2"])
+    assert t2 in {"B1", "B2"}
+

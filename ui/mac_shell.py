@@ -38,11 +38,11 @@ class NavItem:
 
 
 NAV_ITEMS: tuple[NavItem, ...] = (
-    NavItem("nav_home_editorial", "assets/icon/home.svg", "shell_subtitle_home"),
-    NavItem("nav_primitives_editorial", "assets/icon/statistic.svg", "shell_subtitle_primitives"),
-    NavItem("nav_record_editorial", "assets/icon/record.svg", "shell_subtitle_record"),
-    NavItem("nav_wand_editorial", "assets/icon/wand.svg", "shell_subtitle_wand"),
-    NavItem("nav_settings_editorial", "assets/icon/setting.svg", "shell_subtitle_settings"),
+    NavItem("nav_home", "assets/icon/home.svg", "shell_subtitle_home"),
+    NavItem("nav_primitives", "assets/icon/statistic.svg", "shell_subtitle_primitives"),
+    NavItem("nav_record", "assets/icon/record.svg", "shell_subtitle_record"),
+    NavItem("nav_wand", "assets/icon/wand.svg", "shell_subtitle_wand"),
+    NavItem("nav_settings", "assets/icon/setting.svg", "shell_subtitle_settings"),
 )
 
 

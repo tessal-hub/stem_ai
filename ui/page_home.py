@@ -58,9 +58,11 @@ class PageHome(QWidget):
         self._connected = False
         self._current_mode = "IDLE"
         self._last_hero_spell = ""
+        self._last_confidence_level: str | None = None
 
         self._tip_rotator = TipRotator(get_tip_pool(
-            locale_manager.current_language
+            locale_manager.current_language,
+            self._last_confidence_level,
         ))
 
         self._init_timers()
@@ -142,6 +144,7 @@ class PageHome(QWidget):
         self.lbl_hero_spell.setText(action)
         pct = int(confidence * 100)
         level = resolve_confidence_level(confidence)
+        self._last_confidence_level = level
 
         level_str = level.upper()
         self.lbl_hero_confidence.setText(f"⚡ {pct}% Match  •  {level_str}")
@@ -210,7 +213,8 @@ class PageHome(QWidget):
         lang = locale_manager.current_language
         if hasattr(self, "_lbl_tip_eyebrow"):
             self._lbl_tip_eyebrow.setText(tr_ui("home_tip_title"))
-        self._tip_rotator.reload_pool(get_tip_pool(lang))
+        pool = get_tip_pool(lang, self._last_confidence_level)
+        self._tip_rotator.reload_pool(pool)
         self.lbl_tip.setText(self._tip_rotator.next_tip())
 
         self._refresh_status_bar()
@@ -548,8 +552,12 @@ class PageHome(QWidget):
     # ── Slots ───────────────────────────────────
 
     def _on_tip_timer_tick(self) -> None:
-        """Luân phiên hiển thị tip mới."""
-        self.lbl_tip.setText(self._tip_rotator.next_tip())
+        """Luân phiên hiển thị tip mới dựa trên mức độ tự tin nhận diện gần nhất."""
+        pool = get_tip_pool(
+            locale_manager.current_language,
+            self._last_confidence_level,
+        )
+        self.lbl_tip.setText(self._tip_rotator.next_tip(pool))
 
     def _on_pulse_timer_done(self) -> None:
         """Tắt hiệu ứng pulse sau thời gian quy định."""

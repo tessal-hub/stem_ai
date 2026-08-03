@@ -15,8 +15,11 @@ class TipRotator:
         self._pool = list(pool)
         self._last_index: int | None = None
 
-    def next_tip(self) -> str:
+    def next_tip(self, pool: list[str] | None = None) -> str:
         """Trả về tip tiếp theo, đảm bảo không trùng với tip ngay trước."""
+        if pool is not None and pool != self._pool:
+            self._pool = list(pool)
+            self._last_index = None
         if not self._pool:
             return ""
         if len(self._pool) == 1:

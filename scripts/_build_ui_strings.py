@@ -131,6 +131,55 @@ extra_en: dict[str, str] = {
     "primitive_title": "PRIMITIVE GESTURE COLLECTION",
     "primitive_subtitle": "Structured capture for encoder training",
     "common_cancel": "Cancel",
+
+    # Navigation
+    "nav_home": "The Threshold",
+    "nav_primitives": "The Fundamentals",
+    "nav_record": "Scribe",
+    "nav_wand": "Laboratory",
+    "nav_settings": "Mechanisms",
+    "nav_home_editorial": "The Threshold",
+    "nav_primitives_editorial": "The Fundamentals",
+    "nav_record_editorial": "Scribe",
+    "nav_wand_editorial": "Laboratory",
+    "nav_settings_editorial": "Mechanisms",
+    "home_tip_title": "PRO SPELLCASTER TIP",
+    "home_hero_subtitle": "REAL-TIME SPELL RECOGNITION",
+    "home_hero_idle": "WAITING FOR SPELL...",
+    "home_history_title": "RECENT SPELL HISTORY",
+    "home_history_empty": "No Spells Recognized Yet",
+    "home_loaded_title": "SPELLS LOADED THIS SESSION",
+    "home_loaded_empty": "No Spells Loaded",
+    "home_spell_count": "{count} Spells Registered",
+    "home_samples_count": "{count} samples",
+    "time_just_now": "Just now",
+    "time_seconds_ago": "{n}s ago",
+    "time_minutes_ago": "{n}m ago",
+    "time_hours_ago": "{n}h ago",
+
+    # Primitive collection page
+    "primitive_btn_capture": "RECORD SAMPLE",
+    "primitive_flow_hint": "Perform the primitive gesture carefully to record clean IMU sensor data.",
+
+    # Record page
+    "record_btn_back": "BACK",
+    "record_btn_clear": "CLEAR ALL",
+    "record_btn_export": "EXPORT CSV",
+    "record_btn_snip": "SNIP SAMPLE",
+    "record_btn_start": "START RECORDING",
+    "record_btn_stop": "STOP RECORDING",
+    "record_protected_msg": "Built-in primitive gestures cannot be modified.",
+    "record_protected_title": "Protected Gesture",
+    "record_recording_short": "RECORDING...",
+    "record_snipped": "Sample snipped successfully",
+
+    # Wand page
+    "wand_build_firmware": "BUILD FIRMWARE",
+    "wand_flash_ready": "Firmware ready to flash",
+    "wand_status_connected": "WAND CONNECTED",
+    "wand_status_connected_port": "WAND CONNECTED ({port})",
+    "wand_status_disconnected": "WAND DISCONNECTED",
+    "wand_upload_model": "UPLOAD MODEL",
 }
 
 extra_vi: dict[str, str] = {
@@ -256,6 +305,55 @@ extra_vi: dict[str, str] = {
     "primitive_title": "THU THẬP GESTURE NGUYÊN MẪU",
     "primitive_subtitle": "Thu có cấu trúc cho huấn luyện encoder",
     "common_cancel": "Hủy",
+
+    # Navigation
+    "nav_home": "Trang Chủ",
+    "nav_primitives": "Nguyên Mẫu",
+    "nav_record": "Ghi Mẫu",
+    "nav_wand": "Đũa Phép",
+    "nav_settings": "Cài Đặt",
+    "nav_home_editorial": "Trang Chủ",
+    "nav_primitives_editorial": "Nguyên Mẫu",
+    "nav_record_editorial": "Ghi Mẫu",
+    "nav_wand_editorial": "Đũa Phép",
+    "nav_settings_editorial": "Cài Đặt",
+    "home_tip_title": "GỢI Ý THẦN CHÚ",
+    "home_hero_subtitle": "NHẬN DIỆN THẦN CHÚ THỜI GIAN THỰC",
+    "home_hero_idle": "ĐANG CHỜ THẦN CHÚ...",
+    "home_history_title": "LỊCH SỬ NHẬN DIỆN GẦN ĐÂY",
+    "home_history_empty": "Chưa Có Thần Chú Nào Được Ghi Nhận",
+    "home_loaded_title": "THẦN CHÚ ĐÃ TẢI TRONG PHIÊN",
+    "home_loaded_empty": "Chưa Tải Thần Chú Nào",
+    "home_spell_count": "{count} Thần Chú Đã Đăng Ký",
+    "home_samples_count": "{count} mẫu",
+    "time_just_now": "Vừa xong",
+    "time_seconds_ago": "{n} giây trước",
+    "time_minutes_ago": "{n} phút trước",
+    "time_hours_ago": "{n} giờ trước",
+
+    # Primitive collection page
+    "primitive_btn_capture": "GHI MẪU",
+    "primitive_flow_hint": "Thực hiện cử chỉ nguyên thủy cẩn thận để ghi dữ liệu cảm biến IMU chuẩn xác.",
+
+    # Record page
+    "record_btn_back": "QUAY LẠI",
+    "record_btn_clear": "XÓA TOÀN BỘ",
+    "record_btn_export": "XUẤT FILE CSV",
+    "record_btn_snip": "CẮT MẪU",
+    "record_btn_start": "BẮT ĐẦU GHI",
+    "record_btn_stop": "DỪNG GHI",
+    "record_protected_msg": "Các cử chỉ nguyên thủy có sẵn không thể chỉnh sửa.",
+    "record_protected_title": "Cử Chỉ Được Bảo Vệ",
+    "record_recording_short": "ĐANG GHI...",
+    "record_snipped": "Đã cắt mẫu thành công",
+
+    # Wand page
+    "wand_build_firmware": "BUILD FIRMWARE",
+    "wand_flash_ready": "Firmware sẵn sàng nạp",
+    "wand_status_connected": "ĐŨA PHÉP ĐÃ KẾT NỐI",
+    "wand_status_connected_port": "ĐŨA PHÉP ĐÃ KẾT NỐI ({port})",
+    "wand_status_disconnected": "ĐŨA PHÉP CHƯA KẾT NỐI",
+    "wand_upload_model": "TẢI MÔ HÌNH LÊN ĐŨA",
 }
 
 data["en"].update(extra_en)
