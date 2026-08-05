@@ -210,11 +210,10 @@ class Wand3DWidget(QWidget):
         outer.addWidget(self.gl_view, stretch=1)
 
         # Reference grid
-        grid = gl.GLGridItem()
-        grid.setSize(6, 6, 1)
-        grid.setSpacing(0.5, 0.5, 1)
-        grid.setColor((0, 0, 0, 35))
-        self.gl_view.addItem(grid)
+        self.grid_item = gl.GLGridItem()
+        self.grid_item.setSize(6, 6, 1)
+        self.grid_item.setSpacing(0.5, 0.5, 1)
+        self.gl_view.addItem(self.grid_item)
 
         # World-frame axis indicator (does not rotate with the wand)
         axis = gl.GLAxisItem()
@@ -225,11 +224,27 @@ class Wand3DWidget(QWidget):
         self._parts: list[gl.GLMeshItem] = []
         self._build_wand()
 
+        # Connect theme
+        from logic.theme_manager import theme_manager
+        theme_manager.theme_changed.connect(self.refresh_styles)
+        self.refresh_styles()
+
         # ── Orientation state ─────────────────────────────────────────
         self._roll = 0.0   # degrees
         self._pitch = 0.0   # degrees
         self._yaw = 0.0   # degrees
         self._last_update_ts: float | None = None
+
+    def refresh_styles(self, theme_name: str | None = None) -> None:
+        """Cập nhật màu nền GL View và màu lưới theo theme."""
+        from logic.theme_manager import theme_manager
+        is_dark = theme_manager.current_theme == "dark"
+        if is_dark:
+            self.gl_view.setBackgroundColor((0.07, 0.07, 0.08, 1.0))
+            self.grid_item.setColor((255, 255, 255, 30))
+        else:
+            self.gl_view.setBackgroundColor("w")
+            self.grid_item.setColor((0, 0, 0, 35))
 
     # ------------------------------------------------------------------
     # Public API

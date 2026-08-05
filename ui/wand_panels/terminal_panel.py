@@ -32,7 +32,7 @@ class WandTerminalPanel(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        self._pending_lines = collections.deque()
+        self._pending_lines = collections.deque(maxlen=1000)
         self._flush_timer = QTimer(self)
 
         self._init_ui()
@@ -95,7 +95,7 @@ class WandTerminalPanel(QWidget):
 
     def _flush_pending(self) -> None:
         """Ghi dữ liệu từ hàng đợi vào widget hiển thị."""
-        if not self._pending_lines:
+        if not self._pending_lines or not self.isVisible():
             return
         batch = "\n".join(self._pending_lines)
         self._pending_lines.clear()

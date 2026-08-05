@@ -3,29 +3,24 @@
 Status: Active
 Language: English
 Owner: QA and Core Team
-Last Updated: 2026-04-21
+Last Updated: 2026-08-05
 
 ## Test Commands
 
-- pytest
-- pytest tests/unit -v
-- pytest tests/integration -v
-- pytest tests/perf -v
+- `.\.venv\Scripts\pytest.exe tests/`
+- `.\.venv\Scripts\pytest.exe tests/unit -v`
+- `.\.venv\Scripts\pytest.exe tests/integration -v`
+- `.\.venv\Scripts\pytest.exe tests/perf -v`
 
-## Test Layers
+## Status & Coverage
 
-- Unit: protocol parsing, datastore, rarity, recorder, helpers.
-- Integration: handler guards, signal routing, mode transitions.
-- Performance: latency, UI blocking, packet stability, plot responsiveness.
+- **Suite Status**: 100% PASS (164/164 tests passing).
+- **Unit Layer**: Protocol parsing, data store, rarity, recorder, tips, security guards.
+- **Integration Layer**: Handler guards, mode transitions, signal routing.
+- **Performance Layer**: End-to-end latency (50Hz), packet drop, UI block time (<50ms), plot FPS.
 
-## Required Checks
+## Standalone Executable Packaging
 
-1. Malformed frame rejection.
-2. Mode and connection guard enforcement.
-3. Protected system spell behavior.
-4. Dataset save/delete/export reliability.
-5. Thread-safe signal flow in live pipeline.
-
-## Coverage Targets
-
-Prioritize high coverage on core runtime modules in logic.
+- **Build Command**: `.\.venv\Scripts\pyinstaller.exe STEMSpellBook.spec --noconfirm`
+- **Output Artifact**: `dist/STEMSpellBook.exe` (~499 MB standalone executable with bundled Python runtime, PyQt6, TensorFlow, C++ DLLs, and resources).
+- **Portability**: 100% self-contained for Windows 10/11 offline environments.

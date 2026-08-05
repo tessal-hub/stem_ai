@@ -20,6 +20,7 @@ from logic.home_tips_i18n import get_tip_pool
 from logic.locale_manager import locale_manager
 from logic.rarity_utils import resolve_confidence_level, resolve_rarity
 from logic.tip_rotator import TipRotator
+from logic.theme_manager import theme_manager
 from ui.component_factory import (make_card, make_empty_state_card,
                                   make_rarity_badge_wand, make_section_label)
 from ui.i18n_bridge import tr_ui
@@ -96,6 +97,7 @@ class PageHome(QWidget):
 
     def _init_signals(self) -> None:
         """Kết nối signal/slot."""
+        theme_manager.theme_changed.connect(self.refresh_styles)
 
     def _init_timers(self) -> None:
         """Khởi tạo các timer nội bộ UI-only."""
@@ -545,9 +547,15 @@ class PageHome(QWidget):
 
     def _configure_accessibility(self) -> None:
         """Thiết lập thông tin hỗ trợ người khiếm thị."""
-        self.status_bar.setAccessibleName(
-            "Trạng thái kết nối đũa phép",
-        )
+    def showEvent(self, event: Any) -> None:
+        super().showEvent(event)
+        if hasattr(self, "_tip_timer") and not self._tip_timer.isActive():
+            self._tip_timer.start()
+
+    def hideEvent(self, event: Any) -> None:
+        super().hideEvent(event)
+        if hasattr(self, "_tip_timer") and self._tip_timer.isActive():
+            self._tip_timer.stop()
 
     # ── Slots ───────────────────────────────────
 

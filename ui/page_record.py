@@ -137,6 +137,8 @@ class PageRecord(QWidget):
         self._plot_timer.start(_PLOT_REFRESH_MS)
         # Show/hide delete button based on list selection
         self.sample_list.itemSelectionChanged.connect(self._on_sample_selection_changed)
+        theme_manager.theme_changed.connect(self.refresh_styles)
+        self.refresh_styles()
 
     def _trigger_start(self) -> None:
         if self.btn_start.isEnabled():
@@ -233,10 +235,20 @@ class PageRecord(QWidget):
         self._refresh_spell_list()
 
     def load_samples_for_spell(self, spell_name: str, samples: list[str]) -> None:
-        """Hiển thị danh sách mẫu cho một câu thần chú cụ thể."""
+        """Hiển thị danh sách mẫu cho một câu thần chú cụ thể và nhảy trực tiếp vào spell đó."""
         self.current_spell_name = spell_name
         self._current_samples = list(samples)
         self.lbl_current_spell.setText(tr_ui("record_spell_samples", name=spell_name))
+
+        if hasattr(self, "combo_spell") and spell_name:
+            self.combo_spell.blockSignals(True)
+            idx = self.combo_spell.findText(spell_name)
+            if idx >= 0:
+                self.combo_spell.setCurrentIndex(idx)
+            else:
+                self.combo_spell.setEditText(spell_name)
+            self.combo_spell.blockSignals(False)
+
         self.sample_list.clear()
         if samples:
             if self.sample_stack.currentIndex() != 0:
@@ -300,18 +312,22 @@ class PageRecord(QWidget):
                 bar_color = WARNING
             else:
                 bar_color = DANGER
+            p = theme_manager.get_palette()
+            bg = "rgba(255, 255, 255, 0.12)" if theme_manager.current_theme == "dark" else "rgba(0, 0, 0, 0.08)"
             self.consistency_bar.setStyleSheet(
                 f"QProgressBar::chunk {{ background-color: {bar_color}; border-radius: 3px; }}"
-                "QProgressBar { border-radius: 4px; background: rgba(0, 0, 0, 0.08); text-align: center; color: #111827; font-weight: 700; font-size: 12px; }"
+                f"QProgressBar {{ border-radius: 4px; background: {bg}; text-align: center; color: {p.TEXT_PRIMARY}; font-weight: 700; font-size: 12px; }}"
             )
         else:
             filled = "●" * min(n, 3)
             empty  = "○" * max(0, 3 - n)
             self.consistency_bar.setValue(0)
             self.consistency_bar.setFormat(f"Tiến độ: {filled}{empty} ({n}/3 mẫu)")
+            p = theme_manager.get_palette()
+            bg = "rgba(255, 255, 255, 0.12)" if theme_manager.current_theme == "dark" else "rgba(0, 0, 0, 0.08)"
             self.consistency_bar.setStyleSheet(
-                "QProgressBar::chunk { background-color: #8E8E93; border-radius: 3px; }"
-                "QProgressBar { border-radius: 4px; background: rgba(0, 0, 0, 0.08); text-align: center; color: #111827; font-weight: 700; font-size: 12px; }"
+                f"QProgressBar::chunk {{ background-color: #8E8E93; border-radius: 3px; }}"
+                f"QProgressBar {{ border-radius: 4px; background: {bg}; text-align: center; color: {p.TEXT_PRIMARY}; font-weight: 700; font-size: 12px; }}"
             )
             self.consistency_bar.setVisible(True)
 
@@ -365,13 +381,18 @@ class PageRecord(QWidget):
         # update_consistency_display đã xử lý đầy đủ hơn; method này không làm gì
         pass
 
-    def refresh_styles(self) -> None:
-        """Làm mới giao diện theo theme hiện tại."""
+    def refresh_styles(self, theme_name: str | None = None) -> None:
+        """Làm mới giao diện đồ thị theo theme hiện tại."""
         p = theme_manager.get_palette()
+        is_dark = theme_manager.current_theme == "dark"
+        axis_pen = QColor(p.TEXT_SECONDARY) if is_dark else QColor(p.TEXT_TERTIARY)
         for g in [self.graph1, self.graph2]:
             g.setBackground("transparent")
-            g.getAxis("left").setPen(p.TEXT_TERTIARY)
-            g.getAxis("bottom").setPen(p.TEXT_TERTIARY)
+            g.getAxis("left").setPen(axis_pen)
+            g.getAxis("left").setTextPen(axis_pen)
+            g.getAxis("bottom").setPen(axis_pen)
+            g.getAxis("bottom").setTextPen(axis_pen)
+            g.showGrid(x=True, y=True, alpha=0.15 if is_dark else 0.1)
 
     # ── Private methods ─────────────────────────
 
@@ -556,7 +577,7 @@ class PageRecord(QWidget):
         hint = make_hint(tr_ui("record_hint_controls"))
         hint.setWordWrap(True)
         # Giảm font size của hint để gọn hơn
-        hint.setStyleSheet("font-size: 10px; color: gray;")
+        hint.setStyleSheet("font-size: 11px;")
         layout.addWidget(hint)
         return card
 
@@ -652,7 +673,7 @@ class PageRecord(QWidget):
 
         self.lbl_consistency = QLabel("")
         self.lbl_consistency.setWordWrap(True)
-        self.lbl_consistency.setStyleSheet("font-size: 12px; font-weight: 500; color: #111827; margin: 3px 0;")
+        self.lbl_consistency.setStyleSheet("font-size: 12px; font-weight: 500; margin: 3px 0;")
         eval_layout.addWidget(self.lbl_consistency)
 
         layout.addWidget(eval_card)
@@ -701,6 +722,8 @@ class PageRecord(QWidget):
             self.lbl_wand_status.setText(f"⚠ {tr_ui('record_select_spell')}")
             return
         self.is_live = True
+        self.current_spell_name = spell
+        self.sig_spell_selected.emit(spell)
         self.btn_snip.setEnabled(False)
         self.crop_region.hide()
         self.set_recording_state(True)

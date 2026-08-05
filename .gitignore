@@ -15,7 +15,6 @@ __pycache__/
 .worktrees/
 
 # App local data (ignore everything except what we want to track)
-app_data/
 
 # Dataset (Tracked at root)
 !dataset/

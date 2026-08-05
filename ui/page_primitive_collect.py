@@ -12,7 +12,7 @@ import pyqtgraph as pg
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QProgressBar,
                              QScrollArea, QStackedWidget, QVBoxLayout, QWidget, QComboBox)
-from PyQt6.QtGui import QShortcut, QKeySequence
+from PyQt6.QtGui import QColor, QShortcut, QKeySequence
 
 from logic.locale_manager import locale_manager
 from logic.primitive_i18n import get_primitive_catalog
@@ -89,6 +89,7 @@ class PagePrimitiveCollect(QWidget):
 
         self.shortcut_capture = QShortcut(QKeySequence("Ctrl+X"), self)
         self.shortcut_capture.activated.connect(self._trigger_capture)
+        theme_manager.theme_changed.connect(self.refresh_styles)
 
     def _trigger_start(self) -> None:
         if self.btn_start_collect.isEnabled():
@@ -132,13 +133,19 @@ class PagePrimitiveCollect(QWidget):
         if hasattr(self, '_sec_training'):
             self._sec_training.setText("ENCODER TRAINING")
 
-    def refresh_styles(self) -> None:
+    def refresh_styles(self, theme_name: str | None = None) -> None:
         """Làm mới style theo theme hiện tại."""
         p = theme_manager.get_palette()
-        self.preview_plot_accel.setBackground("transparent")
-        self.preview_plot_gyro.setBackground("transparent")
-        self.preview_plot_accel.getAxis("left").setPen(p.TEXT_TERTIARY)
-        self.preview_plot_gyro.getAxis("left").setPen(p.TEXT_TERTIARY)
+        is_dark = theme_manager.current_theme == "dark"
+        axis_pen = QColor(p.TEXT_SECONDARY) if is_dark else QColor(p.TEXT_TERTIARY)
+        for plot in [self.preview_plot_accel, self.preview_plot_gyro]:
+            plot.setBackground("transparent")
+            plot.getAxis("left").setPen(axis_pen)
+            plot.getAxis("left").setTextPen(axis_pen)
+            plot.getAxis("bottom").setPen(axis_pen)
+            plot.getAxis("bottom").setTextPen(axis_pen)
+            plot.showGrid(x=True, y=True, alpha=0.15 if is_dark else 0.1)
+
         if not self._card_widgets:
             self._rebuild_cards()
         elif hasattr(self, '_stats'):

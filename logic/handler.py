@@ -644,7 +644,16 @@ class Handler(QObject):
             if proto_path:
                 self.spell_recognizer.load(proto_path)
                 self.store.set_registered_prototypes(set(self.spell_recognizer.prototypes.keys()))
+            
+            # Cập nhật prototypes từ dataset ngay khi encoder load xong lúc khởi động app
+            self._update_spell_prototypes()
+            
             log.info(f"Loaded encoder and {len(self.spell_recognizer.prototypes) if self.spell_recognizer else 0} prototypes.")
+            
+            # Re-run consistency analysis for currently selected spell on Record Page
+            current_spell = getattr(self.ui_record, 'current_spell_name', None)
+            if current_spell:
+                self._run_consistency_analysis(current_spell)
         except Exception as e:
             log.error(f"Failed to initialize recognizer: {e}")
             if hasattr(self, 'ui_wand') and self.ui_wand:

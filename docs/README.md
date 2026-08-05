@@ -3,13 +3,14 @@
 Status: Active
 Language: English
 Owner: Core Maintainers
-Last Updated: 2026-04-21
+Last Updated: 2026-08-05
 
 This is the canonical documentation system for STEM AI.
 Do not treat files under worktree snapshots as source of truth.
 
 ## Navigation
 
+- CURRENT_STATE: Current system state, release summary, and architecture highlights.
 - 00 Getting Started: project onboarding and conventions.
 - 01 Architecture: runtime structure, data flow, worker threading.
 - 02 Design System: visual tokens and UI styling rules.
@@ -28,6 +29,7 @@ Do not treat files under worktree snapshots as source of truth.
 
 ## Canonical Entry Points
 
+- CURRENT_STATE.md
 - 00_GETTING_STARTED/README.md
 - 01_ARCHITECTURE/OVERVIEW.md
 - 02_DESIGN_SYSTEM/DESIGN_SYSTEM.md

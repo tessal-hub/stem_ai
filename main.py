@@ -58,13 +58,13 @@ def main():
     user_settings = data_store.get_settings_snapshot()
     locale_manager.current_language = user_settings.get("ui_language", "en")
 
-    current_theme = "light"
-    theme_manager.current_theme = current_theme
-    apply_modern_theme(app, current_theme)
+    user_theme = user_settings.get("theme", "light")
+    theme_manager.current_theme = user_theme
+    apply_modern_theme(app, user_theme)
 
     # Kết nối signal đổi theme toàn cục
     theme_manager.theme_changed.connect(
-        lambda _t: app.setStyleSheet(get_modern_stylesheet("light"))
+        lambda t: app.setStyleSheet(get_modern_stylesheet(t))
     )
 
     # 3. Khởi tạo UI và Handler điều phối

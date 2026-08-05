@@ -49,7 +49,7 @@ class SettingsStore:
         "window_overlap": 0,
         "ml_pipeline": "Random Forest (Edge)",
         "project_name": "",
-        "auto_save": False,
+        "auto_save": True,
         "selected_port": "",
         "baud_rate": "115200",
         "model_path": str(DEFAULT_MODEL_PATH),

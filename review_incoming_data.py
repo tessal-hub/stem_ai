@@ -57,7 +57,54 @@ def _is_active_gesture(name: str) -> bool:
     return _normalize_key(name) not in {_normalize_key(s) for s in STANDBY_NAMES}
 
 
-def scan_gesture_folder(gesture_dir: Path, gesture_name: str) -> dict:
+def _matches_filter(gesture_name: str, csv_file: Path, only_tokens: list[str] | None, exclude_tokens: list[str] | None) -> bool:
+    norm_g = _normalize_key(gesture_name)
+
+    if only_tokens:
+        matched = False
+        for tok in only_tokens:
+            tok_clean = tok.strip()
+            if not tok_clean:
+                continue
+            tok_norm = _normalize_key(tok_clean)
+            # Match 1: Tên folder cử chỉ trùng khớp (ví dụ SPIRAL, ROLL_WAND)
+            if norm_g == tok_norm:
+                matched = True
+                break
+            # Match 2: Tên file CSV bắt đầu bằng prefix (như A_..., B_..., A-..., B_speed_...)
+            fname_upper = csv_file.name.upper()
+            tok_upper = tok_clean.upper()
+            if (
+                fname_upper.startswith(tok_upper + "_")
+                or fname_upper.startswith(tok_upper + "-")
+                or fname_upper == tok_upper + ".CSV"
+            ):
+                matched = True
+                break
+        if not matched:
+            return False
+
+    if exclude_tokens:
+        for tok in exclude_tokens:
+            tok_clean = tok.strip()
+            if not tok_clean:
+                continue
+            tok_norm = _normalize_key(tok_clean)
+            if norm_g == tok_norm:
+                return False
+            fname_upper = csv_file.name.upper()
+            tok_upper = tok_clean.upper()
+            if (
+                fname_upper.startswith(tok_upper + "_")
+                or fname_upper.startswith(tok_upper + "-")
+                or fname_upper == tok_upper + ".CSV"
+            ):
+                return False
+
+    return True
+
+
+def scan_gesture_folder(gesture_dir: Path, gesture_name: str, file_filter=None) -> dict:
     """Scan 1 folder gesture theo đúng logic pipeline.
 
     Trả dict:
@@ -65,6 +112,9 @@ def scan_gesture_folder(gesture_dir: Path, gesture_name: str) -> dict:
         windowable, windows_total, dead_files, issues
     """
     csv_files = sorted(gesture_dir.glob("*.csv"))
+    if file_filter is not None:
+        csv_files = [f for f in csv_files if file_filter(f)]
+
     result = {
         "csv_count": len(csv_files),
         "parseable": 0,       # file _read_csv_rows trả ≥1 row
@@ -106,8 +156,6 @@ def scan_gesture_folder(gesture_dir: Path, gesture_name: str) -> dict:
         else:
             result["dead_files"].append(f"{csv_file.name} ({len(rows)} rows < {WINDOW_SIZE})")
 
-    # avg tính bằng total_rows / csv_count (khớp worker: total_rows / sample_count)
-    # file lỗi (0 rows) kéo avg xuống, đúng hành vi production
     if result["csv_count"] > 0:
         result["rows_avg"] = result["rows_total"] / result["csv_count"]
 
@@ -128,6 +176,11 @@ def compute_grade(metrics: dict, target: int) -> str:
 
 
 def main():
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
+
     parser = argparse.ArgumentParser(
         description="Review incoming primitive data trước khi merge."
     )
@@ -142,6 +195,22 @@ def main():
         help="Copy windowable files vào dataset chính (dataset/primitives/)",
     )
     parser.add_argument(
+        "--force", action="store_true",
+        help="Bỏ qua các cảnh báo/từ chối của encoder, ép buộc merge toàn bộ data hợp lệ",
+    )
+    parser.add_argument(
+        "-y", "--yes", action="store_true",
+        help="Tự động đồng ý xác nhận merge mà không cần gõ [y/N]",
+    )
+    parser.add_argument(
+        "--only", nargs="+", default=None,
+        help="Chỉ lọc và merge các loại cử chỉ chỉ định (ví dụ: --only SPIRAL ROLL_WAND hoặc --only SPIRAL,ROLL_WAND)",
+    )
+    parser.add_argument(
+        "--exclude", nargs="+", default=None,
+        help="Bỏ qua các loại cử chỉ chỉ định khi review/merge (ví dụ: --exclude STAND_BY ZIGZAG)",
+    )
+    parser.add_argument(
         "--fix-labels", action="store_true",
         help="Tự động sửa nhãn bị đặt nhầm tên (Label Swap) trước khi merge",
     )
@@ -150,9 +219,6 @@ def main():
         help="Xóa các file CSV trong dataset/primitives/ trùng tên với folder incoming (Undo merge)",
     )
     args = parser.parse_args()
-
-    if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
-        sys.stdout.reconfigure(encoding="utf-8")
 
     root = Path(args.incoming_dir)
     if not root.is_dir():
@@ -166,6 +232,25 @@ def main():
     print("=" * 65)
     print("  INCOMING PRIMITIVE DATA REVIEW")
     print(f"  Source: {root}")
+
+    only_keys = set()
+    if args.only:
+        for item in args.only:
+            for part in item.split(","):
+                part_clean = part.strip()
+                if part_clean:
+                    only_keys.add(_normalize_key(part_clean))
+        print(f"  Filter --only: {', '.join(sorted(only_keys))}")
+
+    exclude_keys = set()
+    if args.exclude:
+        for item in args.exclude:
+            for part in item.split(","):
+                part_clean = part.strip()
+                if part_clean:
+                    exclude_keys.add(_normalize_key(part_clean))
+        print(f"  Filter --exclude: {', '.join(sorted(exclude_keys))}")
+
     print("=" * 65)
 
     # Scan tất cả subfolder
@@ -180,13 +265,22 @@ def main():
     total_windows = 0
     gesture_results = []
 
+    only_tokens = args.only if args.only else None
+    exclude_tokens = args.exclude if args.exclude else None
+
     for gesture_dir in all_subdirs:
         name = gesture_dir.name.strip()
         norm_key = _normalize_key(name)
         is_known = norm_key in known_keys
         target = 150  # default
 
-        metrics = scan_gesture_folder(gesture_dir, name)
+        def _ffilter(csv_p: Path, gname=name) -> bool:
+            return _matches_filter(gname, csv_p, only_tokens, exclude_tokens)
+
+        metrics = scan_gesture_folder(gesture_dir, name, file_filter=_ffilter)
+        if metrics["csv_count"] == 0:
+            continue
+
         grade = compute_grade(metrics, target)
 
         total_csv += metrics["csv_count"]
@@ -238,8 +332,9 @@ def main():
     relabel_map = {}  # incoming_name -> (target_name, confidence)
     from config import APP_DATA_DIR
     keras_path = APP_DATA_DIR / "gesture_encoder.keras"
-    if args.with_encoder or (args.merge and keras_path.exists()):
-        rejected_gestures, relabel_map = _run_encoder_check(root, gesture_results)
+    if not args.force and (args.with_encoder or (args.merge and keras_path.exists())):
+        allowed_keys = {_normalize_key(name) for name, _, _, _ in gesture_results} if (only_keys or exclude_keys) else None
+        rejected_gestures, relabel_map = _run_encoder_check(root, gesture_results, allowed_keys=allowed_keys)
 
     # ── Optional: merge ──
     if args.merge:
@@ -248,6 +343,8 @@ def main():
             rejected_gestures=rejected_gestures,
             relabel_map=relabel_map,
             fix_labels=args.fix_labels,
+            force=args.force,
+            auto_yes=args.yes,
         )
 
     print("=" * 65)
@@ -258,12 +355,14 @@ def _merge_to_dataset(
     rejected_gestures: set[str] | None = None,
     relabel_map: dict[str, tuple[str, float]] | None = None,
     fix_labels: bool = False,
+    force: bool = False,
+    auto_yes: bool = False,
 ) -> None:
     """Copy các cử chỉ AN TOÀN (hoặc ĐÃ ĐỔI NHÃN CHUẨN nếu fix_labels=True) vào dataset/primitives/."""
     from config import DATASET_DIR
     from logic.dataset_layout import spell_write_dir
 
-    if rejected_gestures is None:
+    if rejected_gestures is None or force:
         rejected_gestures = set()
     if relabel_map is None:
         relabel_map = {}
@@ -339,10 +438,13 @@ def _merge_to_dataset(
 
     print("-" * 70)
     print(f"  👉 TỔNG CỘNG: Sẽ copy {len(to_copy)} files vào {DATASET_DIR / 'primitives'}")
-    answer = input("  Xác nhận merge? [y/N]: ").strip().lower()
-    if answer not in ("y", "yes"):
-        print("  Hủy merge.")
-        return
+    if auto_yes:
+        print("  [Auto-Yes] Tự động xác nhận merge!")
+    else:
+        answer = input("  Xác nhận merge? [y/N]: ").strip().lower()
+        if answer not in ("y", "yes"):
+            print("  Hủy merge.")
+            return
 
     # Copy
     copied = 0
@@ -401,7 +503,7 @@ def _rollback_merged_data(incoming_root: Path) -> None:
 
 
 
-def _run_encoder_check(incoming_root: Path, gesture_results: list):
+def _run_encoder_check(incoming_root: Path, gesture_results: list, allowed_keys: set[str] | None = None):
     """Đánh giá data incoming TRONG SO SÁNH VỚI DATASET HIỆN TẠI (MAIN DATASET)."""
     print("\n" + "═" * 70)
     print("  ĐÁNH GIÁ ĐỒNG NHẤT: INCOMING DATA vs DATASET HIỆN TẠI")
@@ -416,12 +518,12 @@ def _run_encoder_check(incoming_root: Path, gesture_results: list):
         L2NormalizeLayer = _get_l2_normalize_layer_class()
     except ImportError as e:
         print(f"  ❌ Thiếu dependency: {e}")
-        return
+        return set(), {}
 
     keras_path = APP_DATA_DIR / "gesture_encoder.keras"
     if not keras_path.exists():
         print(f"  ❌ Không tìm thấy encoder: {keras_path}")
-        return
+        return set(), {}
 
     # Load encoder
     try:
@@ -439,7 +541,18 @@ def _run_encoder_check(incoming_root: Path, gesture_results: list):
         input_shape = input_shape[0]
     expected_channels = input_shape[-1]
 
-    primitive_names = [k for k in PRIMITIVE_TARGETS.keys() if k != "STAND_BY"]
+    main_primitive_names = [k for k in PRIMITIVE_TARGETS.keys() if k != "STAND_BY"]
+    if allowed_keys:
+        filtered_main = [k for k in main_primitive_names if _normalize_key(k) in allowed_keys]
+        if filtered_main:
+            main_primitive_names = filtered_main
+
+    inc_primitive_names = [
+        k for k in PRIMITIVE_TARGETS.keys()
+        if k != "STAND_BY" and (allowed_keys is None or _normalize_key(k) in allowed_keys)
+    ]
+    if not inc_primitive_names and allowed_keys:
+        inc_primitive_names = list(allowed_keys)
 
     def _adapt_channels(X):
         if X.shape[2] != expected_channels:
@@ -457,21 +570,58 @@ def _run_encoder_check(incoming_root: Path, gesture_results: list):
 
     # 1. Load Main Dataset
     try:
-        X_main, y_main, cn_main = load_primitive_dataset(str(DATASET_DIR), primitive_names)
+        X_main, y_main, cn_main = load_primitive_dataset(str(DATASET_DIR), main_primitive_names)
         X_main = _adapt_channels(X_main)
         emb_main = encoder.predict(X_main, verbose=0)
     except Exception as e:
         print(f"  ❌ Không load được main dataset: {e}")
-        return
+        return set(), {}
 
-    # 2. Load Incoming Dataset
+    # 2. Load Incoming Dataset trực tiếp từ gesture_results đã lọc
     try:
-        X_inc, y_inc, cn_inc = load_primitive_dataset(str(incoming_root), primitive_names)
+        X_inc_list = []
+        y_inc_list = []
+        cn_inc = []
+
+        for name, is_known, metrics, grade in gesture_results:
+            if not _is_active_gesture(name):
+                continue
+
+            windowable_files = metrics.get("windowable_files", [])
+            if not windowable_files:
+                continue
+
+            is_active = _is_active_gesture(name)
+            class_windows = []
+            for csv_file in windowable_files:
+                rows = _read_csv_rows(csv_file)
+                if not rows:
+                    continue
+                windows = _windowize(rows, window_size=WINDOW_SIZE, step=WINDOW_STEP, is_active_gesture=is_active)
+                for w in windows:
+                    arr = np.asarray(w, dtype=np.float32)
+                    arr = np.clip(arr, -2.0, 2.0)
+                    class_windows.append(arr)
+
+            if class_windows:
+                if name not in cn_inc:
+                    cn_inc.append(name)
+                c_idx = cn_inc.index(name)
+                for w_arr in class_windows:
+                    X_inc_list.append(w_arr)
+                    y_inc_list.append(c_idx)
+
+        if not X_inc_list:
+            print("  ⚠️  Incoming dataset chưa có window hợp lệ nào để test encoder.")
+            return set(), {}
+
+        X_inc = np.array(X_inc_list, dtype=np.float32)
+        y_inc = np.array(y_inc_list, dtype=np.int32)
         X_inc = _adapt_channels(X_inc)
         emb_inc = encoder.predict(X_inc, verbose=0)
     except Exception as e:
-        print(f"  ⚠️  Incoming dataset chưa đủ data để test encoder: {e}")
-        return
+        print(f"  ⚠️  Lỗi xử lý incoming dataset cho encoder: {e}")
+        return set(), {}
 
     print(f"  Main dataset:  {len(X_main)} windows ({len(cn_main)} classes)")
     print(f"  Incoming data: {len(X_inc)} windows ({len(cn_inc)} classes)")

@@ -219,8 +219,15 @@ class MainWindow(QMainWindow):
         self.shell.set_nav_item_visible(1, show_prim)
 
     def _on_theme_changed(self, theme_name: str) -> None:
-        """Làm mới style của tất cả các trang khi theme đổi."""
+        """Làm mới style của tất cả các trang và shell khi theme đổi."""
         log.info("MainWindow: Đang áp dụng theme %s", theme_name)
+        from PyQt6.QtWidgets import QApplication
+        from theme import get_modern_stylesheet
+        app = QApplication.instance()
+        if app:
+            app.setStyleSheet(get_modern_stylesheet(theme_name))
+        if hasattr(self, "shell") and hasattr(self.shell, "refresh_styles"):
+            self.shell.refresh_styles()
         for page in self._pages:
             if hasattr(page, "refresh_styles"):
                 page.refresh_styles()

@@ -129,6 +129,8 @@ class MacShell(QWidget):
             btn.style().unpolish(btn)
             btn.style().polish(btn)
 
+        self._update_nav_icons()
+
         item = NAV_ITEMS[index]
         self.lbl_title.setText(tr_ui(item.label_key))
         self.lbl_subtitle.setText(tr_ui(item.subtitle_key))
@@ -145,7 +147,6 @@ class MacShell(QWidget):
         self._brand_title.setText(tr_ui("shell_brand_stem"))
         self._brand_subtitle.setText(tr_ui("shell_brand_book"))
         self._nav_label.setText(tr_ui("shell_nav_title"))
-        self._swipe_hint.setText(tr_ui("shell_nav_hint"))
 
         for i, item in enumerate(NAV_ITEMS):
             if i < len(self._buttons):
@@ -156,10 +157,28 @@ class MacShell(QWidget):
         self.lbl_title.setText(tr_ui(item.label_key))
         self.lbl_subtitle.setText(tr_ui(item.subtitle_key))
 
+    def _update_nav_icons(self) -> None:
+        """Cập nhật màu icon (tint) theo trạng thái active và theme."""
+        from ui.asset_utils import make_tinted_icon
+        is_dark = theme_manager.current_theme == "dark"
+        for i, btn in enumerate(self._buttons):
+            if i >= len(NAV_ITEMS):
+                continue
+            item = NAV_ITEMS[i]
+            is_active = (i == self._active_index)
+            if is_active:
+                color = "#FFFFFF"
+            elif is_dark:
+                color = "#F2F2F7"
+            else:
+                color = "#4A4A4A"
+            btn.setIcon(make_tinted_icon(item.icon, color))
+
     def refresh_styles(self) -> None:
         """Repaint shell chrome using current theme stylesheet."""
         from theme import get_modern_stylesheet
-        self._chrome.setStyleSheet(get_modern_stylesheet())
+        self._chrome.setStyleSheet(get_modern_stylesheet(theme_manager.current_theme))
+        self._update_nav_icons()
     def event(self, event: QEvent) -> bool:
         """Xử lý sự kiện chung, bao gồm cử chỉ."""
         if event.type() == QEvent.Type.Gesture:
@@ -195,12 +214,6 @@ class MacShell(QWidget):
 
         layout.addStretch()
 
-        # 3. Hint vuốt
-        self._swipe_hint = QLabel(tr_ui("shell_nav_hint"))
-        self._swipe_hint.setProperty("type", "shell_nav_hint")
-        self._swipe_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self._swipe_hint)
-
         return sidebar
 
     def _build_brand_section(self) -> QFrame:
@@ -232,10 +245,14 @@ class MacShell(QWidget):
 
     def _make_nav_button(self, index: int, item: NavItem) -> QToolButton:
         """Tạo một nút bấm điều hướng."""
+        from ui.asset_utils import make_tinted_icon
+        is_dark = theme_manager.current_theme == "dark"
+        icon_color = "#FFFFFF" if index == self._active_index else ("#F2F2F7" if is_dark else "#4A4A4A")
+
         btn = QToolButton()
         btn.setObjectName("StemNavBtn")
         btn.setText(f"  {tr_ui(item.label_key)}")
-        btn.setIcon(QIcon(resolve_asset_path(item.icon)))
+        btn.setIcon(make_tinted_icon(item.icon, icon_color))
         btn.setIconSize(QSize(20, 20))
         btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         btn.setFixedHeight(44)

@@ -81,5 +81,37 @@ LIGHT_PALETTE = Palette(
 )
 
 
-# ── Dark palette được bỏ qua (mapping về Light để tránh nhầm lẫn) ──────────────
-DARK_PALETTE = LIGHT_PALETTE
+# ── Bảng màu Obsidian Dark Palette (Apple Dark Theme) ──────────────────────
+DARK_PALETTE = Palette(
+    PRIMARY="#0A84FF",           # Apple System Blue (Dark)
+    PRIMARY_LIGHT="rgba(10, 132, 255, 0.25)",
+    PRIMARY_DARK="#0066CC",
+
+    SURFACE_PRIMARY="#242426",   # Brighter raised card
+    SURFACE_SECONDARY="#0A0A0C", # Nền chính ứng dụng
+    SURFACE_TERTIARY="#333336",  # Nền input / inner frame
+
+    TEXT_PRIMARY="#FFFFFF",      
+    TEXT_SECONDARY="#E0E0E6",    # Brighter secondary text
+    TEXT_TERTIARY="#A1A1A6",     # Brighter tertiary text
+
+    BORDER="rgba(255, 255, 255, 0.22)",
+    BORDER_LIGHT="rgba(255, 255, 255, 0.15)",
+
+    STATUS_SUCCESS="#30D158",
+    STATUS_WARNING="#FF9F0A",
+    STATUS_ERROR="#FF453A",
+    STATUS_SUCCESS_TEXT="#FFFFFF",
+    STATUS_ERROR_TEXT="#FFFFFF",
+    STATUS_WARNING_TEXT="#FFFFFF",
+
+    HOVER_BG="rgba(10, 132, 255, 0.22)",
+    TERM_BG="#0B0B0C",
+    TERM_FG="#F2F2F7",
+
+    GLASS_BG="rgba(28, 28, 30, 0.85)",
+    GLASS_BG_STRONG="rgba(28, 28, 30, 0.95)",
+    GLASS_EDGE="rgba(255, 255, 255, 0.16)",
+
+    SHADOW_COLOR="rgba(0, 0, 0, 0.60)"
+)

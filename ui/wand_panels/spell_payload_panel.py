@@ -83,9 +83,10 @@ class WandSpellPayloadPanel(QWidget):
         self.list_firmware = self.list_selected_spells
 
     def _init_signals(self) -> None:
-        """Kết nối signal khi người dùng click chọn spell."""
+        """Kết nối signal khi người dùng click chọn spell và khi theme đổi."""
         self.list_selected_spells.itemClicked.connect(self._on_selected_item_clicked)
         self.list_available_spells.itemClicked.connect(self._on_available_item_clicked)
+        theme_manager.theme_changed.connect(self.refresh_styles)
 
     # ── Public methods ──────────────────────────
 

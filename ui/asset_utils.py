@@ -28,3 +28,25 @@ def resolve_asset_path(asset_path: str) -> str:
             return str(png_fallback)
 
     return str(resolved)
+
+
+def make_tinted_icon(asset_path: str, color_hex: str) -> QIcon:
+    """Tạo QIcon từ file SVG/PNG và phủ màu (tint) theo color_hex."""
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtGui import QColor, QIcon, QPainter, QPixmap
+
+    abs_path = resolve_asset_path(asset_path)
+    pixmap = QPixmap(abs_path)
+    if pixmap.isNull():
+        return QIcon(abs_path)
+
+    tinted = QPixmap(pixmap.size())
+    tinted.fill(Qt.GlobalColor.transparent)
+
+    painter = QPainter(tinted)
+    painter.drawPixmap(0, 0, pixmap)
+    painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+    painter.fillRect(tinted.rect(), QColor(color_hex))
+    painter.end()
+
+    return QIcon(tinted)

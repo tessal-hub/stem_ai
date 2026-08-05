@@ -23,26 +23,101 @@ from ui.tokens import (
 )
 
 
+from ui.palettes import LIGHT_PALETTE, DARK_PALETTE, Palette
+
+
 def get_modern_stylesheet(theme_name: str = "light") -> str:
     """
-    Tạo chuỗi stylesheet QSS dựa trên theme đã chọn.
+    Tạo chuỗi stylesheet QSS dựa trên theme đã chọn ("light" hoặc "dark").
     """
-    _ = theme_name
-    check_icon = resolve_asset_path("assets/icon/cooliocns SVG/Interface/Check.svg").replace("\\", "/")
+    is_dark = str(theme_name).lower() == "dark"
+    p: Palette = DARK_PALETTE if is_dark else LIGHT_PALETTE
 
-    # ── Additional color tokens for enhanced UI ──
-    SIDEBAR_BG = "#F7F5F2"          # Slightly warmer than SURFACE_0
-    SIDEBAR_BORDER = "rgba(0, 0, 0, 0.06)"
-    NAV_ACTIVE_BG = PRIMARY_COLOR
-    NAV_ACTIVE_TEXT = "#FFFFFF"
-    NAV_HOVER_BG = "rgba(155, 184, 215, 0.12)"
-    TOOLBAR_BORDER = "rgba(0, 0, 0, 0.06)"
-    CARD_SHADOW_BORDER = "rgba(0, 0, 0, 0.04)"
-    STATUS_SUCCESS_BG = "rgba(16, 185, 129, 0.12)"
-    STATUS_ERROR_BG = "rgba(239, 68, 68, 0.12)"
-    STATUS_WARNING_BG = "rgba(245, 158, 11, 0.12)"
-    STATUS_ACCENT_BG = "rgba(155, 184, 215, 0.15)"
+    check_icon = resolve_asset_path("assets/icon/cooliocns SVG/Interface/Check.svg").replace("\\", "/")
     COMBO_ARROW = resolve_asset_path("assets/icon/cooliocns SVG/Arrow/Caret_Down_SM.svg").replace("\\", "/")
+
+    # Token màu sắc động theo Palette chọn
+    SURFACE_0 = p.SURFACE_SECONDARY
+    SURFACE_1 = p.SURFACE_PRIMARY
+    SURFACE_2 = p.SURFACE_TERTIARY
+    TEXT_PRIMARY = p.TEXT_PRIMARY
+    TEXT_SECONDARY = p.TEXT_SECONDARY
+    TEXT_TERTIARY = p.TEXT_TERTIARY
+    PRIMARY_COLOR = p.PRIMARY
+    PRIMARY_LIGHT = p.PRIMARY_LIGHT
+    PRIMARY_DARK = p.PRIMARY_DARK
+    BORDER_COLOR = p.BORDER
+    BORDER_LIGHT = p.BORDER_LIGHT
+    BORDER_MID = p.BORDER
+
+    if is_dark:
+        SIDEBAR_BG = "#121214"
+        SIDEBAR_BORDER = "rgba(255, 255, 255, 0.12)"
+        NAV_ACTIVE_BG = p.PRIMARY
+        NAV_ACTIVE_TEXT = "#FFFFFF"
+        NAV_HOVER_BG = "rgba(10, 132, 255, 0.22)"
+        TOOLBAR_BORDER = "rgba(255, 255, 255, 0.12)"
+        CARD_SHADOW_BORDER = "rgba(0, 0, 0, 0.60)"
+        STATUS_SUCCESS_BG = "rgba(48, 209, 88, 0.20)"
+        STATUS_ERROR_BG = "rgba(255, 69, 58, 0.20)"
+        STATUS_WARNING_BG = "rgba(255, 159, 10, 0.20)"
+        STATUS_ACCENT_BG = "rgba(10, 132, 255, 0.22)"
+
+        FILL_PRIMARY = "rgba(255, 255, 255, 0.18)"
+        FILL_SECONDARY = "rgba(255, 255, 255, 0.14)"
+        FILL_TERTIARY = "rgba(255, 255, 255, 0.08)"
+
+        BTN_BASE_BG = "rgba(10, 132, 255, 0.22)"
+        BTN_BASE_TEXT = "#0A84FF"
+        BTN_OUTLINE_BG = "rgba(255, 255, 255, 0.10)"
+        BTN_OUTLINE_TEXT = "#FFFFFF"
+
+        INPUT_BG = "#2C2C2E"
+        INPUT_BORDER = "rgba(255, 255, 255, 0.16)"
+
+        COMBO_POPUP_BG = "#3A3A3C"
+        COMBO_POPUP_TEXT = "#FFFFFF"
+        COMBO_SEL_BG = "#0A84FF"
+        COMBO_SEL_TEXT = "#FFFFFF"
+
+        SCROLL_HANDLE = "rgba(255, 255, 255, 0.35)"
+        SCROLL_HANDLE_HOVER = "rgba(255, 255, 255, 0.50)"
+        ACCENT_TITLE_COLOR = "#32D74B" # changed to green for better contrast
+        BG_DARK = "#000000"
+    else:
+        SIDEBAR_BG = "#F7F5F2"
+        SIDEBAR_BORDER = "rgba(0, 0, 0, 0.06)"
+        NAV_ACTIVE_BG = PRIMARY_COLOR
+        NAV_ACTIVE_TEXT = "#FFFFFF"
+        NAV_HOVER_BG = "rgba(155, 184, 215, 0.12)"
+        TOOLBAR_BORDER = "rgba(0, 0, 0, 0.06)"
+        CARD_SHADOW_BORDER = "rgba(0, 0, 0, 0.04)"
+        STATUS_SUCCESS_BG = "rgba(16, 185, 129, 0.12)"
+        STATUS_ERROR_BG = "rgba(239, 68, 68, 0.12)"
+        STATUS_WARNING_BG = "rgba(245, 158, 11, 0.12)"
+        STATUS_ACCENT_BG = "rgba(155, 184, 215, 0.15)"
+
+        FILL_PRIMARY = "rgba(0, 0, 0, 0.08)"
+        FILL_SECONDARY = "rgba(0, 0, 0, 0.05)"
+        FILL_TERTIARY = "rgba(0, 0, 0, 0.03)"
+
+        BTN_BASE_BG = "rgba(155, 184, 215, 0.12)"
+        BTN_BASE_TEXT = PRIMARY_COLOR
+        BTN_OUTLINE_BG = "rgba(0, 0, 0, 0.03)"
+        BTN_OUTLINE_TEXT = TEXT_SECONDARY
+
+        INPUT_BG = SURFACE_0
+        INPUT_BORDER = BORDER_LIGHT
+
+        COMBO_POPUP_BG = SURFACE_1
+        COMBO_POPUP_TEXT = TEXT_PRIMARY
+        COMBO_SEL_BG = PRIMARY_LIGHT
+        COMBO_SEL_TEXT = PRIMARY_COLOR
+
+        SCROLL_HANDLE = "rgba(0, 0, 0, 0.10)"
+        SCROLL_HANDLE_HOVER = "rgba(0, 0, 0, 0.20)"
+        ACCENT_TITLE_COLOR = PRIMARY_DARK
+        BG_DARK = "#1D1D1D"
 
     return f"""
         /* ══════════════════════════════════════════════
@@ -153,7 +228,7 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
         QFrame#ModernCard {{
             background-color: {SURFACE_1};
             border: 1px solid {BORDER_COLOR};
-            border-bottom: 2px solid {CARD_SHADOW_BORDER};
+            border-bottom: 2px solid {BORDER_LIGHT};
             border-radius: {RADIUS_LG}px;
         }}
 
@@ -185,12 +260,12 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
 
         /* Base / Back */
         QPushButton[type="base"], QPushButton[type="back"] {{
-            background-color: rgba(155, 184, 215, 0.12);
-            color: {PRIMARY_COLOR};
+            background-color: {BTN_BASE_BG};
+            color: {BTN_BASE_TEXT};
             font-weight: 600;
         }}
         QPushButton[type="base"]:hover, QPushButton[type="back"]:hover {{
-            background-color: rgba(155, 184, 215, 0.22);
+            background-color: {NAV_HOVER_BG};
         }}
 
         /* Stop / Danger (filled on hover) */
@@ -218,11 +293,11 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
 
         /* Outline / Snip */
         QPushButton[type="outline"], QPushButton[type="snip"] {{
-            background-color: {FILL_TERTIARY};
-            color: {TEXT_SECONDARY};
+            background-color: {BTN_OUTLINE_BG};
+            color: {BTN_OUTLINE_TEXT};
         }}
         QPushButton[type="outline"]:hover, QPushButton[type="snip"]:hover {{
-            background-color: {FILL_SECONDARY};
+            background-color: {FILL_PRIMARY};
             color: {TEXT_PRIMARY};
         }}
 
@@ -246,8 +321,8 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
            INPUTS — Refined form controls
            ══════════════════════════════════════════════ */
         QLineEdit, QSpinBox, QTimeEdit, QDateEdit {{
-            background-color: {SURFACE_0};
-            border: 1px solid {BORDER_LIGHT};
+            background-color: {INPUT_BG};
+            border: 1px solid {INPUT_BORDER};
             border-radius: {RADIUS_SM}px;
             padding: 8px 12px;
             color: {TEXT_PRIMARY};
@@ -260,8 +335,8 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
 
         /* ComboBox — styled with custom arrow */
         QComboBox {{
-            background-color: {SURFACE_0};
-            border: 1px solid {BORDER_LIGHT};
+            background-color: {INPUT_BG};
+            border: 1px solid {INPUT_BORDER};
             border-radius: {RADIUS_SM}px;
             padding: 8px 28px 8px 12px;
             color: {TEXT_PRIMARY};
@@ -285,13 +360,14 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
             height: 12px;
         }}
         QComboBox QAbstractItemView {{
-            background-color: {SURFACE_1};
+            background-color: {COMBO_POPUP_BG};
             border: 1px solid {BORDER_COLOR};
             border-radius: {RADIUS_SM}px;
             padding: 4px;
             outline: none;
-            selection-background-color: {PRIMARY_LIGHT};
-            selection-color: {PRIMARY_COLOR};
+            selection-background-color: {COMBO_SEL_BG};
+            selection-color: {COMBO_SEL_TEXT};
+            color: {COMBO_POPUP_TEXT};
         }}
 
         /* ══════════════════════════════════════════════
@@ -317,8 +393,8 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
             background-color: {NAV_HOVER_BG};
         }}
         QListWidget::item:selected {{
-            background-color: {PRIMARY_LIGHT};
-            color: {PRIMARY_DARK};
+            background-color: {COMBO_SEL_BG};
+            color: {COMBO_SEL_TEXT};
             font-weight: 600;
         }}
 
@@ -347,12 +423,12 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
             margin: 4px 0px;
         }}
         QScrollBar::handle:vertical {{
-            background: rgba(0, 0, 0, 0.10);
+            background: {SCROLL_HANDLE};
             min-height: 30px;
             border-radius: 3px;
         }}
         QScrollBar::handle:vertical:hover {{
-            background: rgba(0, 0, 0, 0.20);
+            background: {SCROLL_HANDLE_HOVER};
         }}
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
             border: none;
@@ -371,12 +447,12 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
             margin: 0px 4px;
         }}
         QScrollBar::handle:horizontal {{
-            background: rgba(0, 0, 0, 0.10);
+            background: {SCROLL_HANDLE};
             min-width: 30px;
             border-radius: 3px;
         }}
         QScrollBar::handle:horizontal:hover {{
-            background: rgba(0, 0, 0, 0.20);
+            background: {SCROLL_HANDLE_HOVER};
         }}
         QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
             border: none;
@@ -459,7 +535,7 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
             color: {TEXT_PRIMARY};
         }}
         QLabel[type="section_title"][status="accent"] {{
-            color: {PRIMARY_DARK};
+            color: {ACCENT_TITLE_COLOR};
         }}
         /* Section subtitle */
         QLabel[type="section_subtitle"] {{

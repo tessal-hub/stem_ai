@@ -66,7 +66,7 @@ class WandStatsPanel(QWidget):
         card_layout.addWidget(self.chart_stack, stretch=1)
         layout.addWidget(card, stretch=1)
 
-        # Requirement 3: Empty state handling inside update_spell_chart
+        theme_manager.theme_changed.connect(self.refresh_styles)
         self.refresh_styles()
 
     # ── Public methods ──────────────────────────
