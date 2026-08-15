@@ -78,22 +78,23 @@ class PageSetting(QWidget):
         columns = QHBoxLayout()
         columns.setSpacing(18)
 
-        # ── Cột TRÁI: System & Appearance, IMU Hardware, Hardware Metrics, Dataset Quality ──
-        left_col = QVBoxLayout()
-        left_col.setSpacing(16)
-        left_col.addWidget(self._build_general_settings())
-        left_col.addWidget(self._build_hardware_column())
-        left_col.addWidget(self._build_hardware_info_card())
-        left_col.addWidget(self._build_quality_card())
-        left_col.addStretch()
+        self._left_col = QVBoxLayout()
+        self._left_col.setSpacing(16)
 
-        # ── Cột PHẢI: Firmware Flasher & Console Terminal ──
-        right_col = QVBoxLayout()
-        right_col.setSpacing(16)
-        right_col.addWidget(self._build_firmware_section(), stretch=1)
+        self._right_col = QVBoxLayout()
+        self._right_col.setSpacing(16)
 
-        columns.addLayout(left_col, stretch=11)
-        columns.addLayout(right_col, stretch=11)
+        # Khởi tạo các khối chức năng
+        self._sec_general = self._build_general_settings()
+        self._sec_hardware = self._build_hardware_column()
+        self._sec_metrics = self._build_hardware_info_card()
+        self.quality_card_widget = self._build_quality_card()
+        self._sec_firmware = self._build_firmware_section()
+
+        self._rebalance_layout(True)
+
+        columns.addLayout(self._left_col, stretch=11)
+        columns.addLayout(self._right_col, stretch=11)
 
         content_layout.addLayout(columns, stretch=1)
         scroll.setWidget(scroll_content)
@@ -116,6 +117,7 @@ class PageSetting(QWidget):
         self.combo_ui_language = self._make_combo([])
         self.combo_ui_theme = self._make_combo(["Light Mode", "Dark Mode"])
         self.chk_show_primitives = QCheckBox()
+        self.chk_show_primitives.setToolTip("Bật giao diện đầy đủ (Console, UART Terminal, Primitives)" if self._lang == "vi" else "Enable full interface (Console, UART Terminal, Primitives)")
 
         form = self._make_form_layout()
         form.setContentsMargins(0, 0, 0, 0)
@@ -169,8 +171,8 @@ class PageSetting(QWidget):
         model_row.addWidget(self.btn_browse_model)
         self._add_i18n_form_row(form, "label_model_path", model_container)
 
-        # Primitives Menu Checkbox
-        self.lbl_show_primitives = QLabel("Hiển thị menu Primitives" if self._lang == "vi" else "Show Primitives Menu")
+        # Advanced Mode Checkbox
+        self.lbl_show_primitives = QLabel("Chế độ nâng cao" if self._lang == "vi" else "Advanced Mode")
         self.lbl_show_primitives.setProperty("type", "settings_form_label")
         form.addRow(self.lbl_show_primitives, self.chk_show_primitives)
 
@@ -416,6 +418,7 @@ class PageSetting(QWidget):
         self.combo_ui_theme.currentIndexChanged.connect(self._on_ui_theme_changed)
         self.btn_scan_quality.clicked.connect(self._on_btn_scan_quality_clicked)
         self.btn_stop_scan.clicked.connect(self._on_btn_stop_scan_clicked)
+        self.chk_show_primitives.toggled.connect(self.set_advanced_mode)
 
     def _load_data(self) -> None:
         """Nạp dữ liệu cài đặt từ store."""
@@ -436,6 +439,7 @@ class PageSetting(QWidget):
             "dataset_dir": self.txt_dataset_dir,
             "model_path": self.txt_model_path,
             "show_primitives_menu": self.chk_show_primitives,
+            "advanced_mode": self.chk_show_primitives,
         }
         for key, w in widgets.items():
             if key in config:
@@ -450,6 +454,10 @@ class PageSetting(QWidget):
                     w.setChecked(bool(config[key]))
                 w.blockSignals(False)
 
+        adv = config.get("advanced_mode", config.get("show_primitives_menu", True))
+        self.chk_show_primitives.setChecked(bool(adv))
+        self.set_advanced_mode(bool(adv))
+
         self._set_combo_data(self.combo_ui_language, normalize_ui_language(config.get("ui_language")))
 
         current_theme = config.get("theme", theme_manager.current_theme)
@@ -458,6 +466,43 @@ class PageSetting(QWidget):
         self.combo_ui_theme.setCurrentIndex(theme_idx)
         self.combo_ui_theme.blockSignals(False)
         theme_manager.current_theme = current_theme
+
+    def _rebalance_layout(self, advanced: bool) -> None:
+        """Cân bằng lại vị trí các khối giữa 2 cột theo chế độ."""
+        if not hasattr(self, "_left_col") or not hasattr(self, "_right_col"):
+            return
+
+        while self._left_col.count():
+            self._left_col.takeAt(0)
+        while self._right_col.count():
+            self._right_col.takeAt(0)
+
+        if advanced:
+            # Chế độ nâng cao
+            self._left_col.addWidget(self._sec_general)
+            self._left_col.addWidget(self._sec_hardware)
+            self._left_col.addWidget(self.quality_card_widget)
+            self._left_col.addStretch()
+
+            self._right_col.addWidget(self._sec_firmware, stretch=1)
+            self._right_col.addWidget(self._sec_metrics)
+        else:
+            # Chế độ tiêu chuẩn (Không nâng cao) - Cân đối 2 bên (2 cards mỗi cột)
+            self._left_col.addWidget(self._sec_general)
+            self._left_col.addWidget(self._sec_hardware)
+            self._left_col.addStretch()
+
+            self._right_col.addWidget(self._sec_firmware)
+            self._right_col.addWidget(self._sec_metrics)
+            self._right_col.addStretch()
+
+    def set_advanced_mode(self, enabled: bool) -> None:
+        """Bật/tắt chế độ nâng cao (ẩn/hiện Console & Primitive Quality Scan) và tái cân bằng layout."""
+        if hasattr(self, "console_log") and self.console_log:
+            self.console_log.setVisible(enabled)
+        if hasattr(self, "quality_card_widget") and self.quality_card_widget:
+            self.quality_card_widget.setVisible(enabled)
+        self._rebalance_layout(enabled)
 
     def apply_ui_language(self) -> None:
         """Cập nhật ngôn ngữ hiển thị toàn trang."""
@@ -549,7 +594,7 @@ class PageSetting(QWidget):
             w.setText(prefix + tr(lang, key))
 
         if hasattr(self, "lbl_show_primitives"):
-            self.lbl_show_primitives.setText("Hiển thị menu Primitives" if lang == "vi" else "Show Primitives Menu")
+            self.lbl_show_primitives.setText("Chế độ nâng cao" if lang == "vi" else "Advanced Mode")
 
         if hasattr(self, "lbl_hw_metrics_title"):
             self.lbl_hw_metrics_title.setText("CẤU HÌNH PHẦN CỨNG & MÔ HÌNH" if lang == "vi" else "HARDWARE & MODEL METRICS")
@@ -584,6 +629,7 @@ class PageSetting(QWidget):
             "dataset_dir": self.txt_dataset_dir.text().strip(),
             "model_path": self.txt_model_path.text().strip(),
             "show_primitives_menu": self.chk_show_primitives.isChecked(),
+            "advanced_mode": self.chk_show_primitives.isChecked(),
         }
         self._last_saved = config
         self.sig_settings_saved.emit(config)

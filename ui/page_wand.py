@@ -62,18 +62,12 @@ class PageWand(QWidget):
         self.terminal_panel = WandTerminalPanel()
         self.payload_panel = WandSpellPayloadPanel()
 
-        # Cột trái: Setup
-        left_col = QVBoxLayout()
-        left_col.addWidget(self.connection_panel)
-        left_col.addWidget(self.payload_panel, stretch=1)
-        grid.addLayout(left_col, 0, 0)
+        self._left_col = QVBoxLayout()
+        self._right_col = QVBoxLayout()
+        grid.addLayout(self._left_col, 0, 0)
+        grid.addLayout(self._right_col, 0, 1)
 
-        # Cột phải: Monitoring & Flash
-        right_col = QVBoxLayout()
-        # Ưu tiên không gian cho UART terminal để dễ theo dõi log thời gian thực.
-        right_col.addWidget(self.terminal_panel, stretch=2)
-        right_col.addWidget(self.flash_panel, stretch=1)
-        grid.addLayout(right_col, 0, 1)
+        self._rebalance_layout(True)
 
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
@@ -133,6 +127,39 @@ class PageWand(QWidget):
     def update_esp_stats(self, stats: dict[str, str]) -> None:
         """No-op: ESP32 stats display removed."""
         pass
+
+    def _rebalance_layout(self, advanced: bool) -> None:
+        """Tái cân đối các panel giữa 2 cột theo chế độ nâng cao / cơ bản."""
+        if not hasattr(self, "_left_col") or not hasattr(self, "_right_col"):
+            return
+
+        while self._left_col.count():
+            self._left_col.takeAt(0)
+        while self._right_col.count():
+            self._right_col.takeAt(0)
+
+        if advanced:
+            # Chế độ nâng cao
+            # Cột trái: Kết nối + Danh sách Spell
+            self._left_col.addWidget(self.connection_panel)
+            self._left_col.addWidget(self.payload_panel, stretch=1)
+            # Cột phải: UART Terminal + Nạp/Flash Firmware
+            self._right_col.addWidget(self.terminal_panel, stretch=2)
+            self._right_col.addWidget(self.flash_panel, stretch=1)
+        else:
+            # Chế độ cơ bản (không nâng cao): Cân đối 2 bên
+            # Cột trái: Kết nối + Nạp/Flash Firmware
+            self._left_col.addWidget(self.connection_panel)
+            self._left_col.addWidget(self.flash_panel)
+            self._left_col.addStretch()
+            # Cột phải: Danh sách Spell bung toàn bộ chiều cao
+            self._right_col.addWidget(self.payload_panel, stretch=1)
+
+    def set_advanced_mode(self, enabled: bool) -> None:
+        """Bật/tắt chế độ nâng cao (ẩn/hiện panel UART Terminal) và cân bằng lại layout."""
+        if hasattr(self, "terminal_panel") and self.terminal_panel:
+            self.terminal_panel.setVisible(enabled)
+        self._rebalance_layout(enabled)
 
     def load_spell_payload_list(self, counts: dict[str, int]) -> None:
         """Cập nhật danh sách spell vào chart và panel payload."""

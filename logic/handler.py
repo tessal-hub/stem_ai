@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 """
-logic/handler.py — Bộ điều phối trung tâm (MVC Controller).
+logic/handler.py - Bộ điều phối trung tâm (MVC Controller).
 
 Trách nhiệm:
     - Kết nối signal từ các Worker nền tới các trang giao diện UI.
@@ -345,15 +346,14 @@ class Handler(QObject):
         self.ui_record.sig_spell_selected.connect(self.on_spell_selected)
         self.ui_record.sig_spell_deleted.connect(self.on_spell_deleted)
 
-        if hasattr(self, 'on_clear_buffer'):
-            self.ui_record.sig_clear_buffer.connect(self.on_clear_buffer)
-        if hasattr(self, 'on_export_csv'):
+        self.ui_record.sig_clear_buffer.connect(self.on_clear_buffer)
+        if hasattr(self.ui_record, 'sig_export_csv'):
             self.ui_record.sig_export_csv.connect(self.on_export_csv)
 
         self.ui_wand.sig_train_build_firmware_requested.connect(self.on_build_firmware)
 
         self.ui_setting.sig_settings_saved.connect(self.on_settings_saved)
-        if hasattr(self, 'on_clear_database'):
+        if hasattr(self.ui_setting, 'sig_clear_database'):
             self.ui_setting.sig_clear_database.connect(self.on_clear_database)
         self.ui_setting.sig_flash_data_firmware.connect(self.on_flash_data_firmware)
         self.ui_setting.sig_flash_inference_firmware.connect(self.on_flash_inference_firmware)
@@ -379,6 +379,7 @@ class Handler(QObject):
         self.data_io_worker.sig_save_done.connect(self._on_io_done, type=Qt.ConnectionType.QueuedConnection)
         self.data_io_worker.sig_db_refreshed.connect(self.store.update_counts_from_worker, type=Qt.ConnectionType.QueuedConnection)
         self.data_io_worker.sig_delete_sample_done.connect(self._on_io_delete_sample_done, type=Qt.ConnectionType.QueuedConnection)
+        self.data_io_worker.sig_export_done.connect(self._on_export_done, type=Qt.ConnectionType.QueuedConnection)
         self.data_io_worker.sig_queue_warning.connect(
             self.ui_wand.append_terminal_text, type=Qt.ConnectionType.QueuedConnection)
         self.feature_worker.sig_features_ready.connect(self.store.update_live_features, type=Qt.ConnectionType.QueuedConnection)
@@ -486,6 +487,50 @@ class Handler(QObject):
             self._pending_save_spell = spell
             self.data_io_worker.enqueue_save(spell, data)
 
+    def on_clear_buffer(self) -> None:
+        """Xóa sạch bộ đệm dữ liệu đang ghi và reset trạng thái."""
+        self.store.clear_live_buffer()
+        if hasattr(self, "ui_record") and self.ui_record:
+            self.ui_record.is_live = False
+            if hasattr(self.ui_record, "clear_plots"):
+                self.ui_record.clear_plots()
+        self.ui_wand.append_terminal_text(">> RECORD BUFFER CLEARED")
+
+    def on_export_csv(self) -> None:
+        """Xuất dữ liệu trong live buffer ra file CSV."""
+        buf = self.store.get_live_buffer_snapshot()
+        if not buf:
+            self.ui_wand.append_terminal_text("[WARN] Live buffer is empty. Nothing to export.")
+            return
+
+        from PyQt6.QtWidgets import QFileDialog
+        parent_widget = getattr(self, "ui_record", None)
+        path, _ = QFileDialog.getSaveFileName(
+            parent_widget,
+            "Export Live Buffer to CSV",
+            "recorded_samples.csv",
+            "CSV Files (*.csv)"
+        )
+        if not path:
+            return
+
+        self.data_io_worker.enqueue_export(buf, path)
+
+    def _on_export_done(self, success: bool, message: str) -> None:
+        """Nhận kết quả xuất CSV từ DataIOWorker."""
+        prefix = ">> [EXPORT DONE]" if success else ">> [EXPORT ERROR]"
+        self.ui_wand.append_terminal_text(f"{prefix} {message}")
+
+    def on_clear_database(self) -> None:
+        """Xóa sạch live buffer và refresh lại dataset."""
+        self.store.clear_live_buffer()
+        if hasattr(self, "ui_record") and self.ui_record:
+            self.ui_record.is_live = False
+            if hasattr(self.ui_record, "clear_plots"):
+                self.ui_record.clear_plots()
+        self.data_io_worker.enqueue_refresh()
+        self.ui_wand.append_terminal_text(">> ALL COLLECTED DATA CLEARED")
+
     def on_udp_sensor_data(self, values: list[float]) -> None:
         """Route normalized UDP sensor frame through the standard data path.
 
@@ -522,6 +567,8 @@ class Handler(QObject):
 
         self.ui_wand.append_terminal_text(">> [START] Building NVS labels configuration (labels.bin)...")
         self.ui_wand.update_flash_progress(0, "Building...")
+        # Reset session loaded spells when starting new NVS build
+        self.store.set_registered_prototypes(set())
 
         self._nvs_build_worker = NVSBuildWorker(
             spell_names=spell_names,
@@ -537,6 +584,8 @@ class Handler(QObject):
 
     def _on_nvs_build_finished(self, success: bool, message: str) -> None:
         if success:
+            if self._nvs_build_worker and hasattr(self._nvs_build_worker, "spell_names"):
+                self.store.set_registered_prototypes(set(self._nvs_build_worker.spell_names))
             self.ui_wand.append_terminal_text(f">> [DONE] {message}")
             self.ui_wand.update_flash_progress(100, "Success")
         else:
@@ -565,6 +614,9 @@ class Handler(QObject):
         """Xử lý thay đổi trạng thái kết nối phần cứng."""
         self.ui_wand.set_serial_status(connected, self.serial_worker.port if connected else "")
         self.store.set_connection_status(connected, self.serial_worker.port if connected else "None")
+        if hasattr(self, "ui_record") and self.ui_record:
+            if hasattr(self.ui_record, "set_wand_ready"):
+                self.ui_record.set_wand_ready(connected)
         if not connected:
             self._set_mode(self._MODE_IDLE)
             with self._port_lock:
@@ -606,7 +658,7 @@ class Handler(QObject):
         self.serial_worker.sig_connection_status.connect(
             self._on_serial_status, type=Qt.ConnectionType.QueuedConnection)
         self.serial_worker.sig_raw_line_received.connect(
-            self.ui_wand.append_terminal_text, type=Qt.ConnectionType.QueuedConnection)
+            self._route_raw_line, type=Qt.ConnectionType.QueuedConnection)
         self.serial_worker.sig_prediction_received.connect(
             self.store.update_prediction, type=Qt.ConnectionType.QueuedConnection)
 
@@ -643,10 +695,9 @@ class Handler(QObject):
             self.spell_recognizer = PrototypicalRecognizer(encoder)
             if proto_path:
                 self.spell_recognizer.load(proto_path)
-                self.store.set_registered_prototypes(set(self.spell_recognizer.prototypes.keys()))
-            
-            # Cập nhật prototypes từ dataset ngay khi encoder load xong lúc khởi động app
-            self._update_spell_prototypes()
+            else:
+                # Cập nhật prototypes từ dataset nếu chưa có file cache spell_prototypes.json
+                self._update_spell_prototypes()
             
             log.info(f"Loaded encoder and {len(self.spell_recognizer.prototypes) if self.spell_recognizer else 0} prototypes.")
             
@@ -664,7 +715,6 @@ class Handler(QObject):
         """Cập nhật dữ liệu từ DB vào các trang UI."""
         self.ui_record.load_spell_list(counts)
         self.ui_wand.load_spell_payload_list(counts)
-        self._update_spell_prototypes()
 
         # Reload selected spell samples and re-run consistency analysis
         current_spell = getattr(self.ui_record, 'current_spell_name', None)
@@ -778,7 +828,6 @@ class Handler(QObject):
         if updated_any:
             proto_path = APP_DATA_DIR / "spell_prototypes.json"
             self.spell_recognizer.save(str(proto_path))
-            self.store.set_registered_prototypes(set(self.spell_recognizer.prototypes.keys()))
             log.info(f"Updated spell prototypes in {proto_path}")
 
     def _on_io_done(self, success: bool, msg: str) -> None:
@@ -797,10 +846,30 @@ class Handler(QObject):
             return
 
         import os
+        import shutil
         if not os.path.exists(model_path):
             self.ui_wand.append_terminal_text(f"[ERROR] Model file not found: {model_path}")
             self.ui_wand.update_flash_progress(0, "Error")
             return
+
+        # Copy external model into APP_DATA_DIR to pass FlashWorker's
+        # security whitelist (only allows files inside allowed_roots).
+        model_p = Path(model_path).resolve()
+        if not model_p.is_relative_to(APP_DATA_DIR.resolve()):
+            dest = APP_DATA_DIR / model_p.name
+            try:
+                APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(str(model_p), str(dest))
+                self.ui_wand.append_terminal_text(
+                    f"[INFO] Copied external model to {dest}"
+                )
+                model_path = str(dest)
+            except (OSError, shutil.SameFileError) as e:
+                self.ui_wand.append_terminal_text(
+                    f"[ERROR] Failed to copy model to app_data: {e}"
+                )
+                self.ui_wand.update_flash_progress(0, "Error")
+                return
 
         if self.store.get_recording_state() or self._mode == self._MODE_RECORD:
             self.ui_wand.append_terminal_text("[ERROR] Stop recording before starting model upload.")
@@ -1131,24 +1200,31 @@ class Handler(QObject):
         "PULL", "YAW_SWISH", "LASSO", "WHEEL", "SQUARE", "U_SHAPE", "WHIP", "TAP", "SPIRAL"
     ])
 
-    def _load_samples_for_analysis(
-        self, spell_name: str, window_size: int = 64
-    ) -> list:
-        """Đọc tất cả CSV files của spell_name, trả về list ndarray (window_size, 6).
-        
-        Tìm window có phương sai (variance/năng lượng) lớn nhất để tự động căn chỉnh gesture
-        và loại bỏ các đoạn tĩnh (silence) ở đầu/cuối file.
+    def _load_samples_for_analysis(self, spell_name: str, window_size: int = 64) -> list[tuple[str, np.ndarray | None, str | None]]:
+        """Đọc và trích xuất window đặc trưng cho từng file mẫu của spell.
+
+        Trả về danh sách tuple (filename, window_array_hoặc_None, error_reason_hoặc_None)
+        theo đúng thứ tự file trên đĩa để tránh lệch index trong UI.
         """
         from logic.dataset_layout import storage_dirs_for_spell
 
         dataset_root = Path(self.store.dataset_dir)
         dirs = storage_dirs_for_spell(dataset_root, spell_name)
-        csv_files: list[Path] = []
-        for d in dirs:
-            csv_files.extend(sorted(d.glob("*.csv")))
+        fnames = self.store.get_samples_for_spell(spell_name)
 
-        samples = []
-        for fpath in csv_files:
+        results: list[tuple[str, np.ndarray | None, str | None]] = []
+        for fname in fnames:
+            fpath = None
+            for d in dirs:
+                candidate = d / fname
+                if candidate.exists() and candidate.is_file():
+                    fpath = candidate
+                    break
+
+            if not fpath:
+                results.append((fname, None, "File không tồn tại"))
+                continue
+
             rows: list[list[float]] = []
             try:
                 with open(fpath, "r", encoding="utf-8", newline="") as f:
@@ -1160,21 +1236,22 @@ class Handler(QObject):
                                 rows.append([float(v) for v in line[:6]])
                             except ValueError:
                                 continue
-            except Exception:
+            except Exception as exc:
+                results.append((fname, None, f"Lỗi đọc file: {exc}"))
                 continue
 
             if len(rows) < window_size:
+                results.append((fname, None, f"< {window_size} hàng ({len(rows)})"))
                 continue
 
-            # Quét tìm window có tổng năng lượng (L1) lớn nhất để đồng bộ với pipeline
+            # Quét tìm window có tổng năng lượng (L1) lớn nhất
             best_window = None
             max_energy = -1.0
-            
-            # Slide qua toàn bộ dữ liệu với bước nhảy = 1 hoặc 2 để quét chính xác
+
             for start_idx in range(0, len(rows) - window_size + 1, 2):
                 w_list = rows[start_idx:start_idx + window_size]
                 energy = sum(
-                    abs(row[0]) + abs(row[1]) + abs(row[2]) + 
+                    abs(row[0]) + abs(row[1]) + abs(row[2]) +
                     abs(row[3]) + abs(row[4]) + abs(row[5])
                     for row in w_list
                 )
@@ -1188,22 +1265,14 @@ class Handler(QObject):
                     best_window = window
 
             if best_window is not None:
-                # Sanity-check: normalized IMU data must live in [-20, 20].
-                # Values far outside this range indicate raw un-normalized
-                # int16 data was written to CSV — clipping would produce
-                # a flat, misleading signal. Skip and warn instead.
                 if float(np.max(np.abs(best_window))) > 20.0:
-                    log.warning(
-                        "_load_samples_for_analysis: '%s' - %s appears to contain "
-                        "raw (un-normalized) data (max |value|=%.1f). "
-                        "Sample skipped to avoid false consistency scores.",
-                        spell_name, fpath.name,
-                        float(np.max(np.abs(best_window))),
-                    )
+                    results.append((fname, None, "Dữ liệu raw chưa chuẩn hóa"))
                     continue
-                samples.append(best_window)
+                results.append((fname, best_window, None))
+            else:
+                results.append((fname, None, "Không tìm thấy window hợp lệ"))
 
-        return samples
+        return results
 
     def _run_consistency_analysis(self, spell_name: str) -> None:
         """Load mẫu, chạy analyze, đẩy kết quả lên UI."""
@@ -1218,20 +1287,76 @@ class Handler(QObject):
         window_size = 64
 
         def _do_analysis() -> None:
-            if self.spell_recognizer is None:
-                # Không có encoder — vẫn đẩy result lên để UI hiển thị thông báo
-                n = len(self._load_samples_for_analysis(spell_name, window_size))
+            entries = self._load_samples_for_analysis(spell_name, window_size)
+            n = len(entries)
+            if n == 0:
+                result = dict(
+                    n_samples=0,
+                    ready_to_register=False,
+                    overall_consistency=None,
+                    per_sample_scores=[],
+                    per_sample_status={},
+                    worst_sample_idx=None,
+                    recommendation="",
+                )
+            elif self.spell_recognizer is None or getattr(self.spell_recognizer, "encoder", None) is None:
+                per_status = {fname: r for fname, _, r in entries if r}
                 result = dict(
                     n_samples=n,
                     ready_to_register=False,
                     overall_consistency=None,
-                    per_sample_scores=[],
+                    per_sample_scores=[None] * n,
+                    per_sample_status=per_status,
                     worst_sample_idx=None,
                     recommendation="⚙️ Encoder chưa được load. Train encoder trước để xem phân tích.",
                 )
             else:
-                samples = self._load_samples_for_analysis(spell_name, window_size)
-                result = self.spell_recognizer.analyze_spell_samples(samples)
+                valid_entries = [(idx, fname, w) for idx, (fname, w, r) in enumerate(entries) if w is not None]
+                per_scores: list[float | None] = [0.0 if r else None for _, _, r in entries]
+                per_status = {fname: r for fname, _, r in entries if r}
+
+                if len(valid_entries) < 3:
+                    invalid_indices = [i for i, (_, w, _) in enumerate(entries) if w is None]
+                    rec = f"📥 {len(valid_entries)}/3 mẫu hợp lệ — cần thêm {max(0, 3 - len(valid_entries))} mẫu nữa để bắt đầu đánh giá."
+                    if invalid_indices:
+                        rec += f" (Phát hiện {len(invalid_indices)} mẫu lỗi)"
+                    result = dict(
+                        n_samples=n,
+                        ready_to_register=False,
+                        overall_consistency=None,
+                        per_sample_scores=per_scores,
+                        per_sample_status=per_status,
+                        worst_sample_idx=invalid_indices[0] if invalid_indices else None,
+                        recommendation=rec,
+                    )
+                else:
+                    valid_samples = [w for _, _, w in valid_entries]
+                    sub_result = self.spell_recognizer.analyze_spell_samples(valid_samples)
+
+                    sub_scores = sub_result.get("per_sample_scores", [])
+                    for sub_i, (orig_i, _, _) in enumerate(valid_entries):
+                        if sub_i < len(sub_scores):
+                            per_scores[orig_i] = sub_scores[sub_i]
+
+                    invalid_indices = [i for i, (_, w, _) in enumerate(entries) if w is None]
+                    if invalid_indices:
+                        worst_orig_idx = invalid_indices[0]
+                        rec = f"🔴 Có {len(invalid_indices)} mẫu lỗi/quá ngắn. Xem xét xóa để hoàn thiện dataset."
+                    else:
+                        worst_valid_idx = sub_result.get("worst_sample_idx")
+                        worst_orig_idx = valid_entries[worst_valid_idx][0] if (worst_valid_idx is not None and worst_valid_idx < len(valid_entries)) else None
+                        rec = sub_result.get("recommendation", "")
+
+                    result = dict(
+                        n_samples=n,
+                        ready_to_register=sub_result.get("ready_to_register", False) and not invalid_indices,
+                        overall_consistency=sub_result.get("overall_consistency"),
+                        per_sample_scores=per_scores,
+                        per_sample_status=per_status,
+                        worst_sample_idx=worst_orig_idx,
+                        recommendation=rec,
+                    )
+
             if hasattr(self.ui_record, 'update_consistency_display'):
                 self.ui_record.update_consistency_display(result)
 
@@ -1470,7 +1595,7 @@ class Handler(QObject):
 
 
     def on_settings_saved(self, config: dict) -> None:
-        """Called when settings are saved — update runtime components.
+        """Called when settings are saved - update runtime components.
 
         Note: DataStore persistence is handled by MainWindow._on_settings_saved.
         This method updates only the live worker state.
@@ -1484,19 +1609,33 @@ class Handler(QObject):
         self.serial_worker.set_scale_profile(build_scale_profile(config))
 
     def shutdown(self) -> None:
-        """Dừng toàn bộ hệ thống an toàn."""
+        """Dừng toàn bộ hệ thống an toàn không gây nghẽn GUI."""
         if getattr(self, '_shutdown_done', False):
             return
         self._shutdown_done = True
-        self._feature_timer.stop()
-        self.serial_worker.stop()
-        self.recorder.stop()
-        self.data_io_worker.stop()
-        self.feature_worker.stop()
-        if self._quality_worker and self._quality_worker.isRunning():
-            self._quality_worker.stop()
-        if self._nvs_build_worker and self._nvs_build_worker.isRunning():
-            self._nvs_build_worker.terminate()
-            self._nvs_build_worker.wait()
-        if hasattr(self, '_encoder_worker') and self._encoder_worker and self._encoder_worker.isRunning():
-            self._encoder_worker.wait()
+        if hasattr(self, '_feature_timer') and self._feature_timer:
+            self._feature_timer.stop()
+
+        for worker in (
+            getattr(self, "serial_worker", None),
+            getattr(self, "recorder", None),
+            getattr(self, "data_io_worker", None),
+            getattr(self, "feature_worker", None),
+            getattr(self, "_quality_worker", None),
+        ):
+            if worker is not None:
+                try:
+                    worker.stop()
+                except Exception:
+                    pass
+
+        for async_worker_name in ("_nvs_build_worker", "_encoder_worker", "_model_build_worker"):
+            w = getattr(self, async_worker_name, None)
+            if w is not None and w.isRunning():
+                try:
+                    w.requestInterruption()
+                    w.wait(100)
+                    if w.isRunning():
+                        w.terminate()
+                except Exception:
+                    pass

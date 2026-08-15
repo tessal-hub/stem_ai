@@ -49,6 +49,7 @@ class WandSpellPayloadPanel(QWidget):
         left_layout = QVBoxLayout(left_col)
         left_layout.setContentsMargins(0, 0, 0, 0)
         self._left_title = QLabel(tr_ui("wand_selected_title"))
+        self._left_title.setProperty("type", "settings_section_label")
         left_layout.addWidget(self._left_title)
 
         self.list_selected_spells = QListWidget()
@@ -66,6 +67,7 @@ class WandSpellPayloadPanel(QWidget):
         right_layout = QVBoxLayout(right_col)
         right_layout.setContentsMargins(0, 0, 0, 0)
         self._right_title = QLabel(tr_ui("wand_available_title"))
+        self._right_title.setProperty("type", "settings_section_label")
         right_layout.addWidget(self._right_title)
 
         self.list_available_spells = QListWidget()

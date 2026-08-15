@@ -8,10 +8,18 @@ các mẫu cử chỉ (Spells) hiện có trong tập dữ liệu.
 from __future__ import annotations
 
 import numpy as np
-import pyqtgraph as pg
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (QGridLayout, QLabel, QStackedWidget, QVBoxLayout,
                              QWidget)
+
+_pg = None
+
+def _get_pg():
+    global _pg
+    if _pg is None:
+        import pyqtgraph as _pg_mod
+        _pg = _pg_mod
+    return _pg
 
 from logic.theme_manager import theme_manager
 from ui.i18n_bridge import tr_ui
@@ -50,6 +58,7 @@ class WandStatsPanel(QWidget):
 
         # Biểu đồ dataset
         # Requirement 6: Height 300px
+        pg = _get_pg()
         self.stats_plot = pg.PlotWidget()
         self.stats_plot.setFixedHeight(300)
         self.stats_plot.setBackground("transparent")
@@ -91,6 +100,7 @@ class WandStatsPanel(QWidget):
 
     def update_spell_chart(self, spell_counts: dict[str, int]) -> None:
         """Vẽ lại biểu đồ cột phân bổ dataset (Requirement 3: Empty State)."""
+        pg = _get_pg()
         self.stats_plot.clear()
         palette = theme_manager.get_palette()
         ax_bottom = self.stats_plot.getAxis("bottom")

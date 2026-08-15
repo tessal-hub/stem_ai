@@ -57,9 +57,11 @@ class SettingsStore:
         "idf_main_dir": "",
         "dataset_dir": str(DATASET_DIR),
         "demo_spell_cleanup_done": False,
+        "legacy_meta_migration_done": False,
         "theme": "light",
         "ui_language": "en",
         "show_primitives_menu": True,
+        "advanced_mode": True,
     }
 
     def __init__(self) -> None:
@@ -95,9 +97,11 @@ class SettingsStore:
             "idf_main_dir": self.get_str("idf_main_dir", ""),
             "dataset_dir": self.get_str("dataset_dir", self._DEFAULTS["dataset_dir"]),
             "demo_spell_cleanup_done": self.get_bool("demo_spell_cleanup_done", False),
+            "legacy_meta_migration_done": self.get_bool("legacy_meta_migration_done", False),
             "theme": self.get_str("theme", "light"),
             "ui_language": self.get_str("ui_language", "en"),
             "show_primitives_menu": self.get_bool("show_primitives_menu", self._DEFAULTS["show_primitives_menu"]),
+            "advanced_mode": self.get_bool("advanced_mode", self.get_bool("show_primitives_menu", self._DEFAULTS["advanced_mode"])),
         }
 
     def save(self, config: Mapping[str, Any]) -> dict[str, Any]:
@@ -288,14 +292,17 @@ class DataStore(QObject):
 
     def save_settings(self, updates: Mapping[str, Any]) -> dict[str, Any]:
         """Lưu và cập nhật cấu hình ứng dụng."""
+        dataset_changed = False
         with self._state_lock:
             self.settings.update(dict(updates))
             self.settings = self.settings_store.save(self.settings)
-            if "dataset_dir" in updates:
+            if "dataset_dir" in updates and updates["dataset_dir"] != self.dataset_dir:
                 self.dataset_dir = str(Path(updates["dataset_dir"]))
+                dataset_changed = True
             if "model_path" in updates and updates["model_path"]:
                 self.settings["model_path"] = str(Path(updates["model_path"]).as_posix())
-        self.refresh_database(force=True)
+        if dataset_changed:
+            self.refresh_database(force=True)
         with self._state_lock:
             return dict(self.settings)
 
@@ -449,6 +456,31 @@ class DataStore(QObject):
                     pass
         return sorted(files)
 
+    def delete_samples(self, spell: str, sample_names: list[str]) -> int:
+        """Xóa một hoặc nhiều file mẫu của một spell và cập nhật lại DB."""
+        if not spell or not sample_names:
+            return 0
+
+        dirs = storage_dirs_for_spell(Path(self.dataset_dir), spell)
+        deleted = 0
+        for fname in sample_names:
+            clean_name = fname.strip()
+            if not clean_name:
+                continue
+            for d in dirs:
+                fpath = d / clean_name
+                if fpath.exists() and fpath.is_file():
+                    try:
+                        fpath.unlink()
+                        deleted += 1
+                        break
+                    except Exception as exc:
+                        log.error("DataStore: Delete sample '%s' failed: %s", clean_name, exc)
+
+        if deleted > 0:
+            self.refresh_database(force=True)
+        return deleted
+
     def delete_spell(self, spell: str) -> bool:
         """Xóa toàn bộ thư mục và file mẫu của một spell."""
         stripped = spell.strip()
@@ -530,6 +562,9 @@ class DataStore(QObject):
         """Chuẩn bị ngữ cảnh migration một lần để dừng ghi file .meta.json mới."""
         if self._legacy_meta_migration_prepared:
             return
+        if self.settings.get("legacy_meta_migration_done", False):
+            self._legacy_meta_migration_prepared = True
+            return
 
         meta_count = self._count_legacy_meta_files()
         if meta_count > 0:
@@ -546,6 +581,8 @@ class DataStore(QObject):
                     "proceeding without a backup snapshot.",
                     meta_count,
                 )
+        self.settings["legacy_meta_migration_done"] = True
+        self.settings_store.save({"legacy_meta_migration_done": True})
         self._legacy_meta_migration_prepared = True
 
     # ── Slots ───────────────────────────────────

@@ -8,11 +8,19 @@ và quản lý các nhóm cử chỉ cơ bản theo danh mục.
 from __future__ import annotations
 
 import numpy as np
-import pyqtgraph as pg
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QProgressBar,
                              QScrollArea, QStackedWidget, QVBoxLayout, QWidget, QComboBox)
 from PyQt6.QtGui import QColor, QShortcut, QKeySequence
+
+_pg = None
+
+def _get_pg():
+    global _pg
+    if _pg is None:
+        import pyqtgraph as _pg_mod
+        _pg = _pg_mod
+    return _pg
 
 from logic.locale_manager import locale_manager
 from logic.primitive_i18n import get_primitive_catalog
@@ -132,6 +140,11 @@ class PagePrimitiveCollect(QWidget):
         self._sec_preview.setText(tr_ui("primitive_signal_preview"))
         if hasattr(self, '_sec_training'):
             self._sec_training.setText("ENCODER TRAINING")
+
+    def set_advanced_mode(self, enabled: bool) -> None:
+        """Bật/tắt chế độ nâng cao (ẩn/hiện terminal huấn luyện)."""
+        if hasattr(self, 'console') and self.console:
+            self.console.setVisible(enabled)
 
     def refresh_styles(self, theme_name: str | None = None) -> None:
         """Làm mới style theo theme hiện tại."""
@@ -283,6 +296,7 @@ class PagePrimitiveCollect(QWidget):
         col = QWidget()
         lay = QVBoxLayout(col)
         lay.setSpacing(SPACING_LG)
+        pg = _get_pg()
 
         from ui.component_factory import make_card
 
@@ -374,6 +388,7 @@ class PagePrimitiveCollect(QWidget):
 
     def _setup_plot(self) -> None:
         """Cấu hình chi tiết đồ thị pyqtgraph — 6 kênh IMU tách biệt."""
+        pg = _get_pg()
         # Accelerometer Plot (ax, ay, az)
         self.preview_plot_accel.showGrid(x=True, y=True, alpha=0.1)
         self.curve_ax = self.preview_plot_accel.plot(pen=pg.mkPen(PLOT_AX_COLOR, width=2))

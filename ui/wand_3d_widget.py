@@ -22,12 +22,20 @@ import math
 import time
 
 import numpy as np
-import pyqtgraph.opengl as gl
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 from pyqtgraph import Transform3D
 
 log = logging.getLogger(__name__)
+
+_gl = None
+
+def _get_gl():
+    global _gl
+    if _gl is None:
+        import pyqtgraph.opengl as _gl_module
+        _gl = _gl_module
+    return _gl
 
 # ---------------------------------------------------------------------------
 # Colors (RGBA float 0–1)
@@ -65,8 +73,9 @@ def _make_box(
     cx: float, cy: float, cz: float,
     sx: float, sy: float, sz: float,
     color: tuple,
-) -> gl.GLMeshItem:
+):
     """Axis-aligned box mesh centred at (cx, cy, cz) with side lengths (sx, sy, sz)."""
+    gl = _get_gl()
     hx, hy, hz = sx / 2, sy / 2, sz / 2
     verts = np.array([
         [cx-hx, cy-hy, cz-hz], [cx+hx, cy-hy, cz-hz],
@@ -96,8 +105,9 @@ def _make_cylinder(
     cx: float, cy: float, z_bot: float,
     radius: float, height: float, n: int,
     color: tuple,
-) -> gl.GLMeshItem:
+):
     """Closed-side cylinder along +Z starting at z_bot."""
+    gl = _get_gl()
     theta = np.linspace(0, 2 * math.pi, n + 1)
     x = cx + radius * np.cos(theta)
     y = cy + radius * np.sin(theta)
@@ -169,24 +179,25 @@ class Wand3DWidget(QWidget):
     _HOME_AZIM: float = 45.0
 
     # ── Complementary-filter tuning ──────────────────────────────────────
-    # 96 % gyro (smooth, real-time) + 4 % accel (long-term drift correction).
-    # Raise _ACCEL_WEIGHT to reduce drift at the cost of more noise.
     _GYRO_WEIGHT:  float = 0.96
     _ACCEL_WEIGHT: float = 0.04
 
-    # Nominal sensor sample period (50 Hz ESP32 output).
     _DT: float = 1 / 50
     _MIN_DT: float = 1 / 240
     _MAX_DT: float = 0.1
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._initialized = False
+        self._parts: list = []
+        self.gl_view = None
+        self.grid_item = None
 
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
+        self._outer = QVBoxLayout(self)
+        self._outer.setContentsMargins(0, 0, 0, 0)
+        self._outer.setSpacing(0)
 
-        # ── Top bar ────────────────────────────────────────────────────
+        # Top bar
         top_bar = QHBoxLayout()
         top_bar.setContentsMargins(6, 4, 6, 0)
         top_bar.addStretch()
@@ -197,9 +208,23 @@ class Wand3DWidget(QWidget):
         self.btn_reset.setProperty("type", "small")
         self.btn_reset.clicked.connect(self.reset_camera)
         top_bar.addWidget(self.btn_reset)
-        outer.addLayout(top_bar)
+        self._outer.addLayout(top_bar)
 
-        # ── OpenGL viewport ────────────────────────────────────────────
+        # Orientation state
+        self._roll = 0.0
+        self._pitch = 0.0
+        self._yaw = 0.0
+        self._last_update_ts: float | None = None
+
+        # Defer OpenGL viewport creation until widget is displayed or requested
+        QTimer.singleShot(10, self._ensure_initialized)
+
+    def _ensure_initialized(self) -> None:
+        if self._initialized:
+            return
+        self._initialized = True
+        gl = _get_gl()
+
         self.gl_view = gl.GLViewWidget()
         self.gl_view.setBackgroundColor("w")
         self.gl_view.setCameraPosition(
@@ -207,36 +232,31 @@ class Wand3DWidget(QWidget):
             elevation=self._HOME_ELEV,
             azimuth=self._HOME_AZIM,
         )
-        outer.addWidget(self.gl_view, stretch=1)
+        self._outer.addWidget(self.gl_view, stretch=1)
 
-        # Reference grid
         self.grid_item = gl.GLGridItem()
         self.grid_item.setSize(6, 6, 1)
         self.grid_item.setSpacing(0.5, 0.5, 1)
         self.gl_view.addItem(self.grid_item)
 
-        # World-frame axis indicator (does not rotate with the wand)
         axis = gl.GLAxisItem()
         axis.setSize(1.2, 1.2, 1.2)
         self.gl_view.addItem(axis)
 
-        # Build 3-D wand model
-        self._parts: list[gl.GLMeshItem] = []
         self._build_wand()
 
-        # Connect theme
         from logic.theme_manager import theme_manager
         theme_manager.theme_changed.connect(self.refresh_styles)
         self.refresh_styles()
 
-        # ── Orientation state ─────────────────────────────────────────
-        self._roll = 0.0   # degrees
-        self._pitch = 0.0   # degrees
-        self._yaw = 0.0   # degrees
-        self._last_update_ts: float | None = None
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self._ensure_initialized()
 
     def refresh_styles(self, theme_name: str | None = None) -> None:
         """Cập nhật màu nền GL View và màu lưới theo theme."""
+        if not self._initialized or not self.gl_view:
+            return
         from logic.theme_manager import theme_manager
         is_dark = theme_manager.current_theme == "dark"
         if is_dark:
@@ -252,6 +272,8 @@ class Wand3DWidget(QWidget):
 
     def reset_camera(self) -> None:
         """Restore the GL camera to its default home position."""
+        if not self._initialized or not self.gl_view:
+            return
         self.gl_view.setCameraPosition(
             distance=self._HOME_DIST,
             elevation=self._HOME_ELEV,
@@ -263,19 +285,7 @@ class Wand3DWidget(QWidget):
         ax: float, ay: float, az: float,
         gx: float, gy: float, gz: float,
     ) -> None:
-        """
-        Update the wand's 3-D orientation from normalised 6-axis IMU data.
-
-        Uses a complementary filter:
-            90 % gyro integration  — fast, smooth, but accumulates drift.
-            10 % accel correction  — removes long-term roll/pitch drift.
-            Yaw is gyro-only (no magnetometer available).
-
-        Args:
-            ax, ay, az: Normalised acceleration (±1.0 g range).
-            gx, gy, gz: Angular velocity in degrees/second.
-        """
-        if not self.isVisible():
+        if not self._initialized or not self.isVisible():
             return
 
         now = time.perf_counter()

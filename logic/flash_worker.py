@@ -27,6 +27,63 @@ _PROCESS_CLEANUP_TIMEOUT_S = 2
 _FLASH_ADDRESS = "0x10000"
 
 
+class _RealtimeStreamCapture:
+    """Realtime stream wrapper for esptool stdout/stderr.
+
+    Emits log lines and progress percentage signals immediately as esptool writes them,
+    properly handling both newline (\n) and carriage return (\r) progress updates.
+    """
+
+    def __init__(self, on_line_cb, on_progress_cb=None) -> None:
+        self._on_line_cb = on_line_cb
+        self._on_progress_cb = on_progress_cb
+        self._buffer = ""
+        self._full_log: list[str] = []
+
+    def write(self, s: str) -> int:
+        if not s:
+            return 0
+        self._buffer += s
+
+        # Split on newline or carriage return (esptool uses \r for in-place progress)
+        while "\n" in self._buffer or "\r" in self._buffer:
+            idx_n = self._buffer.find("\n")
+            idx_r = self._buffer.find("\r")
+
+            if idx_n != -1 and (idx_r == -1 or idx_n < idx_r):
+                chunk = self._buffer[:idx_n].strip()
+                self._buffer = self._buffer[idx_n + 1 :]
+            else:
+                chunk = self._buffer[:idx_r].strip()
+                self._buffer = self._buffer[idx_r + 1 :]
+
+            if chunk:
+                self._full_log.append(chunk)
+                if self._on_progress_cb:
+                    match = re.search(r"\((\d{1,3})\s*%\)", chunk)
+                    if match:
+                        try:
+                            percent = int(match.group(1))
+                            if 0 <= percent <= 100:
+                                self._on_progress_cb(percent)
+                        except ValueError:
+                            pass
+                if self._on_line_cb:
+                    self._on_line_cb(chunk)
+        return len(s)
+
+    def flush(self) -> None:
+        if self._buffer.strip():
+            chunk = self._buffer.strip()
+            self._full_log.append(chunk)
+            if self._on_line_cb:
+                self._on_line_cb(chunk)
+            self._buffer = ""
+
+    def getvalue(self) -> str:
+        return "\n".join(self._full_log)
+
+
 class FlashWorker(QThread):
     """Flash firmware to ESP32-S3 via esptool in background thread."""
 
@@ -186,8 +243,6 @@ class FlashWorker(QThread):
         self.sig_progress.emit(0)
         try:
             import esptool
-            import io
-            import contextlib
 
             return self._run_esptool(esptool, args)
         except ImportError:
@@ -198,69 +253,44 @@ class FlashWorker(QThread):
             return False, str(exc)
 
     def _run_esptool(self, esptool, args: list[str], _retry_no_stub: bool = False) -> tuple[bool, str]:
-        """Run esptool.main() with output capture. Retries with --no-stub on stub error."""
-        import io
+        """Run esptool.main() with realtime output capture. Retries with --no-stub on stub error."""
         import contextlib
 
-        log_buf = io.StringIO()
+        stream_capture = _RealtimeStreamCapture(
+            on_line_cb=self.log_msg.emit,
+            on_progress_cb=self.sig_progress.emit,
+        )
+        code = 0
         try:
-            with contextlib.redirect_stdout(log_buf), contextlib.redirect_stderr(log_buf):
+            with contextlib.redirect_stdout(stream_capture), contextlib.redirect_stderr(stream_capture):
                 esptool.main(args)
         except SystemExit as exc:
-            output = log_buf.getvalue()
-            # Flush captured output before processing result
-            for line in output.splitlines():
-                self.log_msg.emit(line)
-            code = exc.code if exc.code is not None else -1
-            if code == 0:
-                self.sig_progress.emit(100)
-                self.log_msg.emit("[SUCCESS] Firmware flash completed!")
-                return True, "Flash successful"
-            self.log_msg.emit(f"[FAIL] esptool exited with code {code}")
-            return False, f"Flash failed (exit code: {code})"
+            stream_capture.flush()
+            code = exc.code if exc.code is not None else 0
         except Exception as exc:
-            output = log_buf.getvalue()
-            for line in output.splitlines():
-                self.log_msg.emit(line)
-            raise
+            stream_capture.flush()
+            self.log_msg.emit(f"[ERROR] esptool exception: {exc}")
+            return False, str(exc)
 
-        output = log_buf.getvalue()
+        stream_capture.flush()
+        output = stream_capture.getvalue()
 
-        # Check for stub-missing error BEFORE emitting lines — retry with --no-stub
+        # Check for stub-missing error BEFORE failing - retry with --no-stub
         _STUB_MISSING = "stub data is missing" in output.lower() or "stub files" in output.lower()
         if _STUB_MISSING and not _retry_no_stub:
-            self.log_msg.emit("[WARN] Stub files missing — retrying with --no-stub (slower but compatible)...")
+            self.log_msg.emit("[WARN] Stub files missing - retrying with --no-stub (slower but compatible)...")
             no_stub_args = ["--no-stub"] + args
             return self._run_esptool(esptool, no_stub_args, _retry_no_stub=True)
 
-        success = False
-        for line in output.splitlines():
-            self.log_msg.emit(line)
-            if "FINISH" in line or "Hard resetting" in line:
-                success = True
-            match = re.search(r"\((\d{1,3})%\)", line)
-            if match:
-                try:
-                    percent = int(match.group(1))
-                    if 0 <= percent <= 100:
-                        self.sig_progress.emit(percent)
-                except ValueError:
-                    pass
-
-        if success:
+        if code == 0:
             self.sig_progress.emit(100)
             self.log_msg.emit("=" * 70)
             self.log_msg.emit("[SUCCESS] Firmware flash completed!")
             return True, "Flash successful"
+
         self.log_msg.emit("=" * 70)
-        self.log_msg.emit("[FAIL] Firmware flash FAILED: " + ("Flasher stub data is missing for ESP32.\n"
-            "This means the esptool installation is incomplete or broken - "
-            "stub JSON files were removed or a third-party distribution package didn't ship them. "
-            "It is\nunlikely to be a defect in esptool itself.\n\n"
-            "Try reinstalling esptool or restoring the stub files from the upstream source tree. "
-            "As a workaround, you can pass --no-stub (slower operation, fewer\nfeatures)."
-            if _STUB_MISSING else "no completion marker detected"))
-        return False, "Flash failed (stub missing)" if _STUB_MISSING else "Flash failed (no completion marker)"
+        self.log_msg.emit(f"[FAIL] Firmware flash FAILED (exit code: {code})")
+        return False, f"Flash failed (exit code: {code})"
 
 
     def _check_esptool_available(self) -> bool:

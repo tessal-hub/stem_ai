@@ -35,16 +35,20 @@ _STAND_BY_NAMES = frozenset({"STAND BY", "STAND_BY"})
 
 
 def _add_shadow(widget: QWidget, blur: int = 16, alpha: int = 15, y_offset: int = 4) -> None:
-    """Thêm hiệu ứng đổ bóng mượt (Soft drop shadow) cho widget."""
-    shadow = QGraphicsDropShadowEffect(widget)
-    shadow.setBlurRadius(blur)
-    shadow.setColor(Qt.GlobalColor.black)
-    shadow.setOffset(0, y_offset)
-    # Qt shadow alpha controls translucency
-    effect_color = shadow.color()
-    effect_color.setAlpha(alpha)
-    shadow.setColor(effect_color)
-    widget.setGraphicsEffect(shadow)
+    """Thêm hiệu ứng đổ bóng mượt (Soft drop shadow) không gây nghẽn khởi động."""
+    def _apply() -> None:
+        try:
+            shadow = QGraphicsDropShadowEffect(widget)
+            shadow.setBlurRadius(blur)
+            shadow.setColor(Qt.GlobalColor.black)
+            shadow.setOffset(0, y_offset)
+            effect_color = shadow.color()
+            effect_color.setAlpha(alpha)
+            shadow.setColor(effect_color)
+            widget.setGraphicsEffect(shadow)
+        except Exception:
+            pass
+    QTimer.singleShot(100, _apply)
 
 
 class PageHome(QWidget):
@@ -119,6 +123,7 @@ class PageHome(QWidget):
     def _load_data(self) -> None:
         """Nạp dữ liệu ban đầu từ store."""
         self.set_connection_status(self.data_store.is_connected)
+        self.update_loaded_spells(getattr(self.data_store, "registered_prototypes", set()))
 
     # ── Public methods ──────────────────────────
 

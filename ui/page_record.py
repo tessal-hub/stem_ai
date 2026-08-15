@@ -10,13 +10,21 @@ from __future__ import annotations
 import logging
 
 import numpy as np
-import pyqtgraph as pg
 from PyQt6.QtCore import Qt, QElapsedTimer, QTime, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QShortcut, QKeySequence
 from PyQt6.QtWidgets import (QComboBox, QFormLayout, QFrame, QGridLayout,
                              QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
                              QMessageBox, QProgressBar, QSizePolicy,
                              QStackedWidget, QVBoxLayout, QWidget)
+
+_pg = None
+
+def _get_pg():
+    global _pg
+    if _pg is None:
+        import pyqtgraph as _pg_mod
+        _pg = _pg_mod
+    return _pg
 
 from constants import is_system_spell
 from logic.dataset_layout import _PRIMITIVE_LOGICAL_NAMES, folder_name_match_key
@@ -62,13 +70,12 @@ class PageRecord(QWidget):
     sig_spell_selected = pyqtSignal(str)
     sig_spell_deleted = pyqtSignal(str)
     sig_clear_buffer = pyqtSignal()
-    sig_export_csv = pyqtSignal()
 
     def __init__(self, data_store) -> None:
         super().__init__()
         self.store = data_store
         self._initial_counts = dict(getattr(data_store, "spell_counts", {}))
-        self.is_live = True
+        self.is_live = False
         self.current_spell_name = ""
         self._sample_sentinel = "__STEM_EMPTY_SAMPLES__"
         self._current_samples: list[str] = []          # filenames in display order
@@ -111,17 +118,11 @@ class PageRecord(QWidget):
         self.btn_start.clicked.connect(self._on_btn_start_clicked)
         self.btn_stop.clicked.connect(self._on_btn_stop_clicked)
         self.btn_snip.clicked.connect(self._on_btn_snip_clicked)
-        self.btn_zoom_in.clicked.connect(self._on_zoom_in_clicked)
-        self.btn_zoom_out.clicked.connect(self._on_zoom_out_clicked)
-        self.btn_zoom_fit.clicked.connect(self._on_zoom_fit_clicked)
         self.btn_delete_selected.clicked.connect(self._on_btn_delete_selected_clicked)
         self.btn_clear_samples.clicked.connect(self._on_btn_clear_clicked)
-        self.btn_export_csv.clicked.connect(self._on_btn_export_clicked)
         self.btn_back_spells.clicked.connect(self._on_btn_back_clicked)
         self.btn_delete_spell.clicked.connect(self._on_btn_delete_spell_clicked)
         self.spell_list.itemClicked.connect(self._on_spell_item_clicked)
-        self.chk_graph1.toggled.connect(self.graph1.setVisible)
-        self.chk_graph2.toggled.connect(self.graph2.setVisible)
         self._recording_timer.timeout.connect(self._update_recording_duration)
         self.shortcut_start = QShortcut(QKeySequence("Ctrl+S"), self)
         self.shortcut_start.activated.connect(self._trigger_start)
@@ -271,10 +272,18 @@ class PageRecord(QWidget):
                     font = item.font()
                     font.setBold(True)
                     item.setFont(font)
+                item.setData(Qt.ItemDataRole.UserRole, fname)
                 self.sample_list.addItem(item)
         else:
             if self.sample_stack.currentIndex() != 1:
                 self.sample_stack.setCurrentIndex(1)
+            self.btn_delete_selected.setEnabled(False)
+            self.btn_delete_selected.setText("🗑 Xóa đã chọn")
+            self._per_sample_scores.clear()
+            self.lbl_consistency.setText("")
+            self.consistency_bar.setValue(0)
+            self.consistency_bar.setFormat("Chưa có mẫu nào")
+
         if self.stacked_spells.currentIndex() != 1:
             self.stacked_spells.setCurrentIndex(1)
         # Apply any consistency result that arrived while we were on page 0
@@ -294,7 +303,23 @@ class PageRecord(QWidget):
         overall = result.get("overall_consistency")
         rec = result.get("recommendation", "")
         per_scores = result.get("per_sample_scores", [])
+        per_status = result.get("per_sample_status", {})
         ready = result.get("ready_to_register", False)
+
+        # Empty state check
+        if n == 0 or not self._current_samples:
+            self.sample_list.clear()
+            if self.sample_stack.currentIndex() != 1:
+                self.sample_stack.setCurrentIndex(1)
+            self.btn_delete_selected.setEnabled(False)
+            self.btn_delete_selected.setText("🗑 Xóa đã chọn")
+            self._per_sample_scores.clear()
+            self.lbl_consistency.setVisible(True)
+            self.lbl_consistency.setText(rec or "")
+            self.consistency_bar.setValue(0)
+            self.consistency_bar.setFormat("Chưa có mẫu nào (0/3)")
+            self.consistency_bar.setVisible(True)
+            return
 
         # Văn bản khuyến nghị
         self.lbl_consistency.setVisible(True)
@@ -315,8 +340,8 @@ class PageRecord(QWidget):
             p = theme_manager.get_palette()
             bg = "rgba(255, 255, 255, 0.12)" if theme_manager.current_theme == "dark" else "rgba(0, 0, 0, 0.08)"
             self.consistency_bar.setStyleSheet(
-                f"QProgressBar::chunk {{ background-color: {bar_color}; border-radius: 3px; }}"
-                f"QProgressBar {{ border-radius: 4px; background: {bg}; text-align: center; color: {p.TEXT_PRIMARY}; font-weight: 700; font-size: 12px; }}"
+                f"QProgressBar::chunk {{ background-color: {bar_color}; border-radius: 2px; }}"
+                f"QProgressBar {{ border-radius: 3px; background: {bg}; text-align: center; color: {p.TEXT_PRIMARY}; font-weight: 600; font-size: 10px; }}"
             )
         else:
             filled = "●" * min(n, 3)
@@ -326,51 +351,57 @@ class PageRecord(QWidget):
             p = theme_manager.get_palette()
             bg = "rgba(255, 255, 255, 0.12)" if theme_manager.current_theme == "dark" else "rgba(0, 0, 0, 0.08)"
             self.consistency_bar.setStyleSheet(
-                f"QProgressBar::chunk {{ background-color: #8E8E93; border-radius: 3px; }}"
-                f"QProgressBar {{ border-radius: 4px; background: {bg}; text-align: center; color: {p.TEXT_PRIMARY}; font-weight: 700; font-size: 12px; }}"
+                f"QProgressBar::chunk {{ background-color: #8E8E93; border-radius: 2px; }}"
+                f"QProgressBar {{ border-radius: 3px; background: {bg}; text-align: center; color: {p.TEXT_PRIMARY}; font-weight: 600; font-size: 10px; }}"
             )
             self.consistency_bar.setVisible(True)
 
         # Gắn điểm per_sample_scores cho các file mẫu
         self._per_sample_scores = {}
         for i, fname in enumerate(self._current_samples):
-            if i < len(per_scores):
+            if i < len(per_scores) and per_scores[i] is not None:
                 self._per_sample_scores[fname] = per_scores[i]
 
-        # Re-render danh sách mẫu với màu sắc điểm số chỉ khi có thay đổi
+        # Re-render danh sách mẫu với màu sắc điểm số và trạng thái lỗi
         samples_snapshot = list(self._current_samples)
         if samples_snapshot:
+            if self.sample_stack.currentIndex() != 0:
+                self.sample_stack.setCurrentIndex(0)
             current_texts = [self.sample_list.item(i).text() for i in range(self.sample_list.count())]
             target_items = []
             for fname in samples_snapshot:
+                err = per_status.get(fname)
                 score = self._per_sample_scores.get(fname)
-                if score is None:
-                    target_items.append((fname, None))
+                if err:
+                    target_items.append((f"{fname}  [⚠️ {err}]", -1.0, fname))
+                elif score is None:
+                    target_items.append((fname, None, fname))
                 else:
-                    target_items.append((f"{fname}  [{int(score*100)}%]", score))
+                    target_items.append((f"{fname}  [{int(score*100)}%]", score, fname))
 
             if current_texts != [t[0] for t in target_items]:
                 self.sample_list.clear()
-                for text, score in target_items:
+                for text, score, fname in target_items:
                     item = QListWidgetItem(text)
+                    item.setData(Qt.ItemDataRole.UserRole, fname)
                     if score is not None:
-                        if score >= 0.85:
-                            item.setForeground(QColor(SUCCESS))
-                        elif score >= 0.70:
-                            item.setForeground(QColor(WARNING))
-                        else:
+                        if score < 0.0 or score < 0.70:
                             item.setForeground(QColor(DANGER))
                             font = item.font()
                             font.setBold(True)
                             item.setFont(font)
+                        elif score >= 0.85:
+                            item.setForeground(QColor(SUCCESS))
+                        elif score >= 0.70:
+                            item.setForeground(QColor(WARNING))
                     self.sample_list.addItem(item)
 
-        # Highlight mẫu kém nhất
+        # Highlight mẫu kém nhất / lỗi
         worst_idx = result.get("worst_sample_idx")
-        if worst_idx is not None and worst_idx < len(self._current_samples):
+        if worst_idx is not None and worst_idx < self.sample_list.count():
             item = self.sample_list.item(worst_idx)
             if item:
-                item.setToolTip("⚠️ Mẫu có điểm thấp nhất trong tập — cân nhắc xóa để nâng cao độ đồng nhất.")
+                item.setToolTip("⚠️ Mẫu có vấn đề hoặc điểm thấp nhất trong tập — cân nhắc xóa để nâng cao độ đồng nhất.")
 
     def on_spell_registered(self, spell_name: str) -> None:
         """Được gọi sau khi nạp/đăng ký thành công."""
@@ -406,6 +437,7 @@ class PageRecord(QWidget):
             plot.setMenuEnabled(False)
             plot.setMouseEnabled(x=False, y=True)
 
+        pg = _get_pg()
         self.curve_ax = self.graph1.plot(pen=pg.mkPen(PLOT_AX_COLOR, width=2), name="aX")
         self.curve_ay = self.graph1.plot(pen=pg.mkPen(PLOT_AY_COLOR, width=2), name="aY")
         self.curve_az = self.graph1.plot(pen=pg.mkPen(PLOT_AZ_COLOR, width=2), name="aZ")
@@ -422,6 +454,7 @@ class PageRecord(QWidget):
 
     def _add_crop_overlay(self) -> None:
         """Thêm vùng chọn (crop) vào đồ thị gia tốc."""
+        pg = _get_pg()
         self.crop_region = pg.LinearRegionItem([_DEFAULT_CROP_START, _DEFAULT_CROP_END], brush=CROP_REGION)
         self.crop_region.setZValue(10)
         for handle in self.crop_region.lines:
@@ -472,6 +505,7 @@ class PageRecord(QWidget):
 
         card, card_layout = make_card(margins=(20, 20, 20, 20), spacing=SPACING_MD)
 
+        pg = _get_pg()
         self.graph1 = pg.PlotWidget()
         self.graph2 = pg.PlotWidget()
         self.graph1.setMinimumHeight(RECORD_GRAPH_MIN_H)
@@ -479,27 +513,7 @@ class PageRecord(QWidget):
         card_layout.addWidget(self.graph1)
         card_layout.addWidget(self.graph2, stretch=1)
         layout.addWidget(card, stretch=1)
-
-        layout.addLayout(self._build_left_controls())
         return widget
-
-    def _build_left_controls(self) -> QHBoxLayout:
-        """Các nút điều khiển đồ thị."""
-        row = QHBoxLayout()
-        self.chk_graph1 = make_checkbox(tr_ui("record_show_accel"), checked=True)
-        self.chk_graph2 = make_checkbox(tr_ui("record_show_gyro"), checked=True)
-
-        self.btn_zoom_in = IconButton("assets/icon/cooliocns SVG/Interface/Magnifying_Glass_Plus.svg", height=BTN_H)
-        self.btn_zoom_out = IconButton("assets/icon/cooliocns SVG/Interface/Magnifying_Glass_Minus.svg", height=BTN_H)
-        self.btn_zoom_fit = IconButton("assets/icon/cooliocns SVG/Arrow/Expand.svg", height=BTN_H)
-
-        row.addWidget(self.chk_graph1, stretch=1)
-        row.addWidget(self.chk_graph2, stretch=1)
-        row.addStretch()
-        row.addWidget(self.btn_zoom_in)
-        row.addWidget(self.btn_zoom_out)
-        row.addWidget(self.btn_zoom_fit)
-        return row
 
     def _build_right_column(self) -> QWidget:
         """Xây dựng cột chứa workflow điều khiển."""
@@ -600,13 +614,9 @@ class PageRecord(QWidget):
         self.btn_clear_samples = make_button(
             tr_ui("record_btn_clear"), "danger_outline", 28
         )
-        self.btn_export_csv = make_button(
-            tr_ui("record_btn_export"), "base", 28
-        )
 
         row.addWidget(self.btn_delete_selected, stretch=1)
         row.addWidget(self.btn_clear_samples, stretch=1)
-        row.addWidget(self.btn_export_csv, stretch=1)
         layout.addLayout(row)
         return card
 
@@ -657,10 +667,11 @@ class PageRecord(QWidget):
         layout.addLayout(top)
 
         # ── Evaluation Card ─────────────────────────────────
-        eval_card, eval_layout = make_card(margins=(10, 10, 10, 10), spacing=SPACING_XS)
+        eval_card, eval_layout = make_card(margins=(10, 8, 10, 8), spacing=SPACING_XS)
 
         eval_header = QHBoxLayout()
         eval_title = make_section_label("ĐÁNH GIÁ CỬ CHỈ", accent=True)
+        eval_title.setStyleSheet("font-size: 11px; font-weight: 700;")
         eval_header.addWidget(eval_title)
         eval_layout.addLayout(eval_header)
 
@@ -668,12 +679,12 @@ class PageRecord(QWidget):
         self.consistency_bar.setRange(0, 100)
         self.consistency_bar.setValue(0)
         self.consistency_bar.setTextVisible(True)
-        self.consistency_bar.setFixedHeight(20)
+        self.consistency_bar.setFixedHeight(14)
         eval_layout.addWidget(self.consistency_bar)
 
         self.lbl_consistency = QLabel("")
         self.lbl_consistency.setWordWrap(True)
-        self.lbl_consistency.setStyleSheet("font-size: 12px; font-weight: 500; margin: 3px 0;")
+        self.lbl_consistency.setStyleSheet("font-size: 11px; font-weight: 500; margin: 1px 0;")
         eval_layout.addWidget(self.lbl_consistency)
 
         layout.addWidget(eval_card)
@@ -773,30 +784,33 @@ class PageRecord(QWidget):
             ms = self._recording_start_time.elapsed()
             self.lbl_record_duration.setText(f"{ms//60000:02d}:{(ms % 60000)//1000:02d}")
 
-    def _on_zoom_in_clicked(self) -> None:
-        for g in [self.graph1, self.graph2]:
-            g.getViewBox().scaleBy((0.8, 0.8))
-
-    def _on_zoom_out_clicked(self) -> None:
-        for g in [self.graph1, self.graph2]:
-            g.getViewBox().scaleBy((1.25, 1.25))
-
-    def _on_zoom_fit_clicked(self) -> None:
-        for g in [self.graph1, self.graph2]:
-            g.getViewBox().autoRange()
+    def clear_plots(self) -> None:
+        """Xóa sạch toàn bộ đường vẽ trên đồ thị."""
+        self.curve_ax.setData([])
+        self.curve_ay.setData([])
+        self.curve_az.setData([])
+        self.curve_gx.setData([])
+        self.curve_gy.setData([])
+        self.curve_gz.setData([])
 
     def _on_btn_clear_clicked(self) -> None:
         """Xóa sạch bộ đệm dữ liệu tạm thời."""
-        if confirm_destructive(self, title=tr_ui("record_clear_title"), message=tr_ui("record_clear_msg")):
-            self.sig_clear_buffer.emit()
-            self.lbl_record_count.setText("0")
-            self.is_live = True
+        if confirm_destructive(
+            self,
+            title=tr_ui("record_clear_title"),
+            message=tr_ui("record_clear_msg"),
+            confirm_text=tr_ui("record_clear_confirm"),
+            cancel_text=tr_ui("record_clear_cancel"),
+        ):
+            self.is_live = False
+            self.store.clear_live_buffer()
+            self.clear_plots()
             self.crop_region.hide()
-
-    def _on_btn_export_clicked(self) -> None:
-        """Xuất dữ liệu thô ra file CSV."""
-        if self.store.get_live_buffer_snapshot():
-            self.sig_export_csv.emit()
+            self.btn_snip.setEnabled(False)
+            self.lbl_record_count.setText("0")
+            self.lbl_record_duration.setText("00:00")
+            self.lbl_wand_status.setText(tr_ui("record_cleared"))
+            self.sig_clear_buffer.emit()
 
     def _on_sample_selection_changed(self) -> None:
         """Bật/tắt nút xóa theo số mẫu đang được chọn."""
@@ -818,9 +832,16 @@ class PageRecord(QWidget):
         if not selected_items:
             return
 
-        # Strip score annotation to get bare filename
-        fnames = [item.text().split("  [")[0].strip() for item in selected_items]
+        # Lấy tên file chính xác từ UserRole hoặc tách chuỗi text
+        fnames = [
+            str(item.data(Qt.ItemDataRole.UserRole) or item.text().split("  [")[0].strip())
+            for item in selected_items
+        ]
+        fnames = [f for f in fnames if f]
         n = len(fnames)
+        if n == 0:
+            return
+
         label = f"'{fnames[0]}'" if n == 1 else f"{n} mẫu"
 
         if not confirm_destructive(
@@ -830,29 +851,20 @@ class PageRecord(QWidget):
         ):
             return
 
-        from pathlib import Path
-        from logic.dataset_layout import storage_dirs_for_spell
-        dataset_root = Path(self.store.dataset_dir)
-        dirs = storage_dirs_for_spell(dataset_root, spell)
-        deleted = 0
-        for fname in fnames:
-            for d in dirs:
-                fpath = d / fname
-                if fpath.exists():
-                    try:
-                        fpath.unlink()
-                        deleted += 1
-                    except Exception as exc:
-                        log.error("Delete sample '%s' failed: %s", fname, exc)
-                    break  # found in this dir, no need to check others
+        deleted = self.store.delete_samples(spell, fnames)
 
-        if deleted:
+        if deleted > 0:
             self.btn_delete_selected.setText("🗑 Xóa đã chọn")
             self.btn_delete_selected.setEnabled(False)
-            samples = self.store.get_samples_for_spell(spell)
-            self.load_samples_for_spell(spell, samples)
-            self.store.refresh_database(force=True)
+            remaining_samples = self.store.get_samples_for_spell(spell)
+            self.load_samples_for_spell(spell, remaining_samples)
             self.sig_spell_selected.emit(spell)
+        else:
+            QMessageBox.warning(
+                self,
+                "Không thể xóa",
+                f"Không tìm thấy file mẫu hợp lệ để xóa trên đĩa cho spell '{spell}'."
+            )
 
     def _on_spell_item_clicked(self, item: QListWidgetItem) -> None:
         """Khi chọn một spell từ danh sách thư viện."""

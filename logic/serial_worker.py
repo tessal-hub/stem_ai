@@ -74,12 +74,18 @@ class SerialWorker(QThread):
             return False
 
     def stop(self) -> None:
-        """Request the event loop to exit and wait up to 3 s for it to finish.
-
-        A bounded wait prevents the UI thread from hanging indefinitely if the
-        serial port stalls mid-read.
-        """
+        """Request the event loop to exit and unblock serial read immediately."""
         self._running = False
+        if hasattr(self, "_serial") and self._serial and getattr(self._serial, "is_open", False):
+            try:
+                if hasattr(self._serial, "cancel_read"):
+                    self._serial.cancel_read()
+            except Exception:
+                pass
+            try:
+                self._serial.close()
+            except Exception:
+                pass
 
     def set_scale_profile(self, profile: SensorScaleProfile) -> None:
         """Update accel/gyro normalization divisors used for CSV frames."""
@@ -94,7 +100,31 @@ class SerialWorker(QThread):
         success = False
         message = "Disconnected"
         try:
-            self._serial = serial.Serial(self.port, _BAUD, timeout=1.0)
+            ser = serial.Serial()
+            ser.port = self.port
+            ser.baudrate = _BAUD
+            ser.timeout = 1.0
+            # Explicitly deassert DTR/RTS before open to prevent ESP32 auto-reset
+            # from entering ROM download bootloader mode on first open.
+            ser.dtr = False
+            ser.rts = False
+            ser.open()
+            self._serial = ser
+
+            try:
+                self._serial.dtr = False
+                self._serial.rts = False
+            except Exception:
+                pass
+
+            # Allow UART line to settle and flush dirty/partial startup bytes
+            self.msleep(150)
+            try:
+                self._serial.reset_input_buffer()
+                self._serial.reset_output_buffer()
+            except Exception:
+                pass
+
             self._running = True
             self.sig_connection_status.emit(
                 True, f"Connected to {self.port} at {_BAUD} baud"

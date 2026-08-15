@@ -586,8 +586,8 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
         /* Record metric value */
         QLabel[type="record_metric_value"] {{
             font-family: {MONO_FONT_STACK};
-            font-size: 22px;
-            font-weight: 700;
+            font-size: 13px;
+            font-weight: 600;
             color: {TEXT_PRIMARY};
         }}
         /* Record field label */

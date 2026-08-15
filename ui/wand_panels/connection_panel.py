@@ -48,7 +48,6 @@ class WandConnectionPanel(QWidget):
         self._section_lbl = make_section_label(tr_ui("wand_section_connection"))
         layout.addWidget(self._section_lbl)
         layout.addWidget(self._build_serial_card())
-        layout.addStretch()
 
     def _init_signals(self) -> None:
         """Kết nối signal/slot nội bộ."""

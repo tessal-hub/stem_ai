@@ -3,7 +3,7 @@ ui/main_window.py — Cửa sổ chính của ứng dụng STEM Spell Book.
 
 Trách nhiệm:
     - Quản lý navigation giữa các trang thông qua MacShell.
-    - Khởi tạo và điều phối các trang giao diện con.
+    - Khởi tạo và điều phối các trang giao diện con (Lazy loading).
     - Sở hữu UdpWorker để thu thập dữ liệu không dây.
     - Chuyển tiếp dữ liệu từ các nguồn tới DataStore.
 """
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QCloseEvent, QIcon
 from PyQt6.QtWidgets import QMainWindow, QStackedWidget, QWidget
 
@@ -23,10 +23,6 @@ from ui.asset_utils import resolve_asset_path
 from ui.i18n_bridge import tr_ui
 from ui.mac_shell import MacShell
 from ui.page_home import PageHome
-from ui.page_primitive_collect import PagePrimitiveCollect
-from ui.page_record import PageRecord
-from ui.page_setting import PageSetting
-from ui.page_wand import PageWand
 
 log = logging.getLogger(__name__)
 
@@ -46,10 +42,94 @@ class MainWindow(QMainWindow):
         self.handler: object | None = None
         self._udp_log_count = 0
 
+        self._page_home = PageHome(self.data_store)
+        self._page_primitive_collect = None
+        self._page_record = None
+        self._page_wand = None
+        self._page_setting = None
+
         self._init_ui()
         self._init_signals()
         self._load_data()
         self._apply_ui_language()
+
+        # Asynchronously preload secondary pages in idle background time
+        QTimer.singleShot(100, self._preload_secondary_pages)
+
+    @property
+    def page_home(self) -> PageHome:
+        return self._page_home
+
+    @property
+    def page_primitive_collect(self):
+        if self._page_primitive_collect is None:
+            from ui.page_primitive_collect import PagePrimitiveCollect
+            self._page_primitive_collect = PagePrimitiveCollect(self.data_store)
+            self._page_primitive_collect.update_collection_stats(
+                self.data_store.get_primitive_collection_stats()
+            )
+            adv = self._is_advanced_mode()
+            self._page_primitive_collect.set_advanced_mode(adv)
+            self._replace_stack_page(1, self._page_primitive_collect)
+        return self._page_primitive_collect
+
+    @property
+    def page_record(self):
+        if self._page_record is None:
+            from ui.page_record import PageRecord
+            self._page_record = PageRecord(self.data_store)
+            self._replace_stack_page(2, self._page_record)
+        return self._page_record
+
+    @property
+    def page_wand(self):
+        if self._page_wand is None:
+            from ui.page_wand import PageWand
+            self._page_wand = PageWand(self.data_store)
+            adv = self._is_advanced_mode()
+            self._page_wand.set_advanced_mode(adv)
+            self._replace_stack_page(3, self._page_wand)
+        return self._page_wand
+
+    @property
+    def page_setting(self):
+        if self._page_setting is None:
+            from ui.page_setting import PageSetting
+            self._page_setting = PageSetting(self.data_store)
+            self._page_setting.sig_settings_saved.connect(self._on_settings_saved)
+            adv = self._is_advanced_mode()
+            self._page_setting.set_advanced_mode(adv)
+            self._replace_stack_page(4, self._page_setting)
+        return self._page_setting
+
+    def _is_advanced_mode(self) -> bool:
+        settings = self.data_store.get_settings_snapshot()
+        return bool(settings.get("advanced_mode", settings.get("show_primitives_menu", True)))
+
+    @property
+    def _pages(self) -> list[QWidget]:
+        pages = [self._page_home]
+        for p in (self._page_primitive_collect, self._page_record, self._page_wand, self._page_setting):
+            if p is not None:
+                pages.append(p)
+        return pages
+
+    def _replace_stack_page(self, index: int, widget: QWidget) -> None:
+        old = self.stack.widget(index)
+        self.stack.removeWidget(old)
+        if old is not None:
+            old.deleteLater()
+        self.stack.insertWidget(index, widget)
+
+    def _preload_secondary_pages(self) -> None:
+        """Nạp không đồng bộ các trang phụ ở background idle."""
+        try:
+            _ = self.page_primitive_collect
+            _ = self.page_record
+            _ = self.page_wand
+            _ = self.page_setting
+        except Exception as exc:
+            log.warning("MainWindow: Preload secondary pages encountered error: %s", exc)
 
     def _init_ui(self) -> None:
         """Khởi tạo giao diện và bố cục widget."""
@@ -62,29 +142,16 @@ class MainWindow(QMainWindow):
         self.shell = MacShell("STEM Spell Book")
         self.setCentralWidget(self.shell)
 
-        # 2. Khởi tạo các trang nội dung
-        self.page_home = PageHome(self.data_store)
-        self.page_primitive_collect = PagePrimitiveCollect(self.data_store)
-        self.page_record = PageRecord(self.data_store)
-        self.page_wand = PageWand(self.data_store)
-        self.page_setting = PageSetting(self.data_store)
-
-        self._pages: list[QWidget] = [
-            self.page_home,
-            self.page_primitive_collect,
-            self.page_record,
-            self.page_wand,
-            self.page_setting,
-        ]
-
-        # 3. Quản lý StackedWidget
+        # 2. Quản lý StackedWidget với page_home + 4 placeholder
         self.stack = QStackedWidget()
+        self.stack.addWidget(self._page_home)
+        for _ in range(4):
+            placeholder = QWidget()
+            self.stack.addWidget(placeholder)
 
-        for page in self._pages:
-            self.stack.addWidget(page)
         self.shell.content_layout.addWidget(self.stack, stretch=1)
 
-        # 4. Worker nền
+        # 3. Worker nền
         self.udp_worker = UdpWorker(port=5555)
 
     def _init_signals(self) -> None:
@@ -92,38 +159,33 @@ class MainWindow(QMainWindow):
         # Điều hướng
         self.shell.nav_requested.connect(self._on_shell_nav_requested)
 
-        # Cài đặt
-        self.page_setting.sig_settings_saved.connect(self._on_settings_saved)
-
         # Dữ liệu UDP
         self.udp_worker.sig_data_received.connect(self._on_udp_sensor_dispatch, type=Qt.ConnectionType.QueuedConnection)
         self.udp_worker.sig_status_change.connect(self._on_udp_status_changed, type=Qt.ConnectionType.QueuedConnection)
         self.udp_worker.sig_health_update.connect(self._on_udp_health_updated, type=Qt.ConnectionType.QueuedConnection)
 
         # Cập nhật từ DataStore
-        self.data_store.sig_connection_state_updated.connect(self.page_home.set_connection_status)
-        self.data_store.sig_primitive_stats_updated.connect(self.page_primitive_collect.update_collection_stats)
+        self.data_store.sig_connection_state_updated.connect(self._page_home.set_connection_status)
+        self.data_store.sig_primitive_stats_updated.connect(self._on_primitive_stats_updated)
 
         # Hệ thống
         locale_manager.language_changed.connect(self._apply_ui_language)
         theme_manager.theme_changed.connect(self._on_theme_changed)
 
+    def _on_primitive_stats_updated(self, stats: dict) -> None:
+        if self._page_primitive_collect is not None:
+            self._page_primitive_collect.update_collection_stats(stats)
+
     def _load_data(self) -> None:
         """Nạp dữ liệu ban đầu từ DataStore."""
         self._set_page(0)
 
-        settings = self.data_store.get_settings_snapshot()
-        show_prim = settings.get("show_primitives_menu", True)
-        self.shell.set_nav_item_visible(1, show_prim)
+        adv_mode = self._is_advanced_mode()
+        self.shell.set_nav_item_visible(1, adv_mode)
 
         # Đồng bộ trạng thái kết nối
         is_connected, _ = self.data_store.get_connection_state()
-        self.page_home.set_connection_status(is_connected)
-
-        # Cập nhật thống kê dataset ban đầu
-        if hasattr(self.data_store, "get_primitive_collection_stats"):
-            stats = self.data_store.get_primitive_collection_stats()
-            self.page_primitive_collect.update_collection_stats(stats)
+        self._page_home.set_connection_status(is_connected)
 
         # Khởi động listener UDP
         self.udp_worker.start()
@@ -147,10 +209,18 @@ class MainWindow(QMainWindow):
     # ── Private methods ─────────────────────────
 
     def _set_page(self, index: int) -> None:
-        """Chuyển đổi trang hiển thị trên stack."""
+        """Chuyển đổi trang hiển thị trên stack (trigger lazy load nếu cần)."""
+        if index == 1:
+            _ = self.page_primitive_collect
+        elif index == 2:
+            _ = self.page_record
+        elif index == 3:
+            _ = self.page_wand
+        elif index == 4:
+            _ = self.page_setting
+
         self.stack.setCurrentIndex(index)
         self.shell.set_active_index(index)
-        # Refresh primitive stats when user navigates to that page (index 1 is primitives)
         if index == 1 and hasattr(self.data_store, "refresh_primitive_stats"):
             self.data_store.refresh_primitive_stats()
 
@@ -180,11 +250,7 @@ class MainWindow(QMainWindow):
         self._set_page(index)
 
     def _on_udp_sensor_dispatch(self, data: dict) -> None:
-        """Dispatch UDP payload to Handler for standard routing.
-
-        Extracts 6-axis sensor values and hardware stats then delegates
-        to Handler, which applies the same guards and routing as serial.
-        """
+        """Dispatch UDP payload to Handler for standard routing."""
         handler = getattr(self, "handler", None)
         if handler is None:
             return
@@ -200,12 +266,12 @@ class MainWindow(QMainWindow):
             handler.on_udp_esp_stats(esp_update)
 
         self._udp_log_count += 1
-        if self._udp_log_count % 25 == 0:
+        if self._udp_log_count % 25 == 0 and self._page_wand is not None:
             self.page_wand.append_terminal_text(f">> UDP: {data}")
 
     def _on_udp_status_changed(self, active: bool) -> None:
         """Thông báo trạng thái kết nối UDP."""
-        if active:
+        if active and self._page_wand is not None:
             self.page_wand.append_terminal_text(">> UDP telemetry received.")
 
     def _on_udp_health_updated(self, health: dict) -> None:
@@ -215,8 +281,14 @@ class MainWindow(QMainWindow):
     def _on_settings_saved(self, config: dict) -> None:
         """Lưu cấu hình ứng dụng."""
         self.data_store.save_settings(config)
-        show_prim = config.get("show_primitives_menu", True)
-        self.shell.set_nav_item_visible(1, show_prim)
+        adv_mode = config.get("advanced_mode", config.get("show_primitives_menu", True))
+        self.shell.set_nav_item_visible(1, adv_mode)
+        if self._page_wand is not None:
+            self._page_wand.set_advanced_mode(adv_mode)
+        if self._page_setting is not None:
+            self._page_setting.set_advanced_mode(adv_mode)
+        if self._page_primitive_collect is not None:
+            self._page_primitive_collect.set_advanced_mode(adv_mode)
 
     def _on_theme_changed(self, theme_name: str) -> None:
         """Làm mới style của tất cả các trang và shell khi theme đổi."""

@@ -57,6 +57,10 @@ a = Analysis(
         ]
         + [(str(p), str(p.parent.relative_to(Path('logic').resolve().parent)))
            for p in Path('logic').resolve().rglob('*.json')]
+        # ── Bundle app_data model files for offline inference ──
+        + [(str(p), 'app_data') for p in Path('app_data').glob('*')
+           if p.suffix in ('.keras', '.tflite', '.json', '.bin', '.h5', '.cc')
+           and p.is_file()]
         + tf_datas + sc_datas + keras_datas + nvs_datas + esp_datas
     ),
 
@@ -107,20 +111,27 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='STEMSpellBook',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=False,  # Tắt UPX: tránh lỗi hỏng DLL PyQt6/TensorFlow (Fix vấn đề 2)
-    upx_exclude=[],
-    runtime_tmpdir=None,
+    upx=False,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name='STEMSpellBook',
 )

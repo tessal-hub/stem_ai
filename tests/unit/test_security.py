@@ -16,12 +16,12 @@ def test_spell_name_preserves_valid_names():
     assert normalize_spell_name("circle_cw") == "CIRCLE_CW"
     assert normalize_spell_name("STAND BY") == "STAND BY"
 
-def test_idf_worker_no_shell_true():
+def test_flash_worker_no_shell_true():
     import ast, inspect, textwrap
-    from logic.idf_worker import IDFBuildWorker
-    source = inspect.getsource(IDFBuildWorker.run)
+    from logic.flash_worker import FlashWorker
+    source = inspect.getsource(FlashWorker.run)
     tree = ast.parse(textwrap.dedent(source))
     for node in ast.walk(tree):
         if isinstance(node, ast.keyword) and node.arg == 'shell':
             assert not (isinstance(node.value, ast.Constant) and node.value.value is True), \
-                "idf_worker still uses shell=True"
+                "flash_worker still uses shell=True"

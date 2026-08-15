@@ -154,4 +154,12 @@ def storage_dirs_for_spell(dataset_root: Path, spell_name: str) -> list[Path]:
             continue
         for p in paths:
             seen[str(p.resolve())] = p
+
+    try:
+        w_dir = spell_write_dir(dataset_root, spell_name)
+        if w_dir.exists():
+            seen[str(w_dir.resolve())] = w_dir
+    except Exception:
+        pass
+
     return list(seen.values())

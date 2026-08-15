@@ -138,6 +138,9 @@ class RecordStub(QObject):
     def load_samples_for_spell(self, spell_name: str, samples: list[str]) -> None:
         self.current_spell_name = spell_name
 
+    def clear_plots(self) -> None:
+        self.plot_updates.clear()
+
     def set_save_status(self, spell_name: str) -> None:
         pass
 
@@ -669,3 +672,25 @@ def test_delete_system_spell_is_blocked_with_feedback(handler_harness: HandlerHa
     assert harness.handler._mode == harness.handler._MODE_IDLE
     assert harness.wand.flash_progress and harness.wand.flash_progress[-1][0] == 0
     assert any("Model upload FAILED" in msg for msg in harness.wand.logs)
+
+
+def test_on_clear_buffer_resets_store_and_record_state(handler_harness: HandlerHarness) -> None:
+    harness = handler_harness
+    harness.store.add_live_sample([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], emit=False)
+    harness.record.is_live = True
+
+    harness.handler.on_clear_buffer()
+
+    assert harness.store.get_live_buffer_snapshot() == []
+    assert harness.record.is_live is False
+    assert any("RECORD BUFFER CLEARED" in msg for msg in harness.wand.logs)
+
+
+def test_on_export_csv_when_buffer_empty(handler_harness: HandlerHarness) -> None:
+    harness = handler_harness
+    harness.store.clear_live_buffer()
+
+    harness.handler.on_export_csv()
+
+    assert any("Live buffer is empty" in msg for msg in harness.wand.logs)
+
