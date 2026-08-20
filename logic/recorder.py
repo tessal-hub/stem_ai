@@ -210,10 +210,14 @@ class DataRecorder(QThread):
             return
 
         try:
-            formatted_row = [f"{float(v):.6f}" for v in row]
-            self._writer.writerow(formatted_row)
-            if self._file is not None:
-                self._file.flush()
+            self._writer.writerow(row)
+            if len(row) >= 6:
+                try:
+                    g_val = max(abs(row[3]), abs(row[4]), abs(row[5]))
+                    if g_val > self._max_gyro:
+                        self._max_gyro = g_val
+                except (ValueError, TypeError):
+                    pass
             self._row_count += 1
             self.sig_record_count.emit(self._row_count)
             self.sig_progress.emit(self._row_count)
@@ -250,6 +254,7 @@ class DataRecorder(QThread):
 
             self._label_name = label
             self._row_count = 0
+            self._max_gyro = 0.0
             self._is_recording = True
 
             self.sig_record_count.emit(0)
@@ -299,24 +304,15 @@ class DataRecorder(QThread):
                 self._is_recording = False
                 self.sig_recording_state.emit(False)
 
-                max_gyro = 0.0
+                max_gyro = getattr(self, "_max_gyro", 0.0)
                 if success and file_path_to_evaluate and os.path.exists(file_path_to_evaluate):
                     try:
-                        with open(file_path_to_evaluate, "r", encoding="utf-8") as f:
-                            reader = csv.reader(f)
-                            next(reader, None) # skip header
-                            for r in reader:
-                                if len(r) == 6:
-                                    g_val = max(abs(float(r[3])), abs(float(r[4])), abs(float(r[5])))
-                                    if g_val > max_gyro:
-                                        max_gyro = g_val
-                        
                         if max_gyro < 50.0 and self._label_name != "STAND BY":
                             os.remove(file_path_to_evaluate)
                             success = False
                             error_message = f"File bị loại vì lực vung quá yếu (Gyro max = {max_gyro:.1f} < 50). Hãy múa dứt khoát hơn!"
-                    except Exception as e:
-                        pass # Ignore evaluation errors if any
+                    except Exception:
+                        pass
 
                 if success:
                     self.last_recorded_file = file_path_to_evaluate

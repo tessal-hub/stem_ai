@@ -99,7 +99,7 @@ class WandConnectionPanel(QWidget):
     def _build_serial_card(self) -> QFrame:
         """Xây dựng thẻ chứa các nút điều khiển kết nối."""
         card, layout = make_card(
-            margins=(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE),
+            margins=(16, 14, 16, 14),
             spacing=SPACING_SM,
         )
 

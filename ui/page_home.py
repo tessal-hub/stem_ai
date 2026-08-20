@@ -19,6 +19,7 @@ from logic.dataset_layout import _PRIMITIVE_LOGICAL_NAMES, folder_name_match_key
 from logic.home_tips_i18n import get_tip_pool
 from logic.locale_manager import locale_manager
 from logic.rarity_utils import resolve_confidence_level, resolve_rarity
+from logic.spell_config_store import SpellConfigStore
 from logic.tip_rotator import TipRotator
 from logic.theme_manager import theme_manager
 from ui.component_factory import (make_card, make_empty_state_card,
@@ -57,9 +58,15 @@ class PageHome(QWidget):
     Giao diện hiện đại, mượt mà với badge động và thẻ nổi.
     """
 
-    def __init__(self, data_store) -> None:
+    def __init__(self, data_store, spell_config_store: SpellConfigStore | None = None) -> None:
         super().__init__()
         self.data_store = data_store
+        if isinstance(spell_config_store, SpellConfigStore):
+            self.spell_config_store = spell_config_store
+        else:
+            cand = getattr(data_store, "spell_config_store", None)
+            self.spell_config_store = cand if isinstance(cand, SpellConfigStore) else SpellConfigStore()
+
         self._connected = False
         self._current_mode = "IDLE"
         self._last_hero_spell = ""
@@ -85,7 +92,7 @@ class PageHome(QWidget):
         )
         layout.setSpacing(SPACING_LG)
 
-        # 1. Status header bar (connection + mode + spell count)
+        # 1. System status bar (connection + mode)
         self._build_status_bar(layout)
 
         # 2. Tip banner
@@ -120,6 +127,10 @@ class PageHome(QWidget):
         self._pulse_timer.setSingleShot(True)
         self._pulse_timer.timeout.connect(self._on_pulse_timer_done)
 
+        self._orb_dim_timer = QTimer(self)
+        self._orb_dim_timer.setSingleShot(True)
+        self._orb_dim_timer.timeout.connect(self._set_orb_idle_style)
+
     def _load_data(self) -> None:
         """Nạp dữ liệu ban đầu từ store."""
         self.set_connection_status(self.data_store.is_connected)
@@ -128,7 +139,7 @@ class PageHome(QWidget):
     # ── Public methods ──────────────────────────
 
     def set_connection_status(self, connected: bool) -> None:
-        """Cập nhật nhãn trạng thái kết nối."""
+        """Cập nhật trạng thái kết nối phần cứng."""
         self._connected = connected
         self._refresh_status_bar()
 
@@ -145,6 +156,7 @@ class PageHome(QWidget):
             self.lbl_hero_confidence.setProperty("level", "")
             self.hero_confidence_bar.setValue(0)
             self.hero_confidence_bar.setVisible(False)
+            self._set_orb_idle_style()
             self._repolish(self.lbl_hero_confidence)
             return
 
@@ -161,10 +173,27 @@ class PageHome(QWidget):
         self.hero_confidence_bar.setVisible(True)
         self.hero_confidence_bar.setValue(pct)
 
-        # Pulse glow on new spell
+        # Pulse glow on new spell with spell's configured color
         if action != self._last_hero_spell:
             self._last_hero_spell = action
             self.lbl_hero_spell.setProperty("pulsing", True)
+            try:
+                cfg = self.spell_config_store.get_spell_config(action)
+                color = cfg.get("color") if isinstance(cfg, dict) else [255, 255, 255]
+                if not (isinstance(color, (list, tuple)) and len(color) >= 3):
+                    color = [255, 255, 255]
+                r, g, b = int(color[0]), int(color[1]), int(color[2])
+                self.lbl_hero_spell.setStyleSheet(f"color: rgb({r}, {g}, {b}); font-weight: 700;")
+                if hasattr(self, "orb_led"):
+                    self.orb_led.setStyleSheet(
+                        f"QLabel {{ background: qradialgradient(cx:0.5, cy:0.5, radius:0.65, fx:0.35, fy:0.35, "
+                        f"stop:0 #FFFFFF, stop:0.45 rgb({r}, {g}, {b}), stop:1 rgba({r}, {g}, {b}, 0.25)); "
+                        f"border-radius: 14px; border: 2px solid rgb({r}, {g}, {b}); }}"
+                    )
+                    self._orb_dim_timer.start(5000)
+            except Exception:
+                self.lbl_hero_spell.setStyleSheet("")
+                self._set_orb_idle_style()
             self._repolish(self.lbl_hero_spell)
             self._pulse_timer.start(_PULSE_DURATION_MS)
 
@@ -311,19 +340,42 @@ class PageHome(QWidget):
 
         parent_layout.addWidget(self.tip_card)
 
+    def _set_orb_idle_style(self) -> None:
+        """Đặt style cho quả cầu LED ma thuật ở trạng thái chờ."""
+        if hasattr(self, "orb_led"):
+            self.orb_led.setStyleSheet(
+                "QLabel { background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.35, fy:0.35, "
+                "stop:0 #E5E5EA, stop:1 #8E8E93); "
+                "border-radius: 14px; border: 2px solid rgba(0, 0, 0, 0.12); }"
+            )
+
     def _build_hero_banner(self, parent_layout: QVBoxLayout) -> None:
-        """Xây dựng hero banner hiển thị spell nhận diện với thanh confidence bar."""
+        """Xây dựng hero banner hiển thị spell nhận diện với thanh confidence bar và đèn LED ma thuật."""
         hero_card, hero_layout = make_card(
-            margins=(24, 18, 24, 18), spacing=SPACING_XS,
+            margins=(24, 16, 24, 16), spacing=SPACING_XS,
         )
         hero_card.setObjectName("HomeHeroCard")
-        hero_card.setFixedHeight(180)
+        hero_card.setFixedHeight(190)
         hero_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         _add_shadow(hero_card, blur=20, alpha=15, y_offset=4)
 
+        # Header hàng: Quả cầu LED ảo + Tiêu đề phụ
+        top_row = QHBoxLayout()
+        top_row.setSpacing(8)
+        top_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.orb_led = QLabel()
+        self.orb_led.setFixedSize(28, 28)
+        self.orb_led.setToolTip("Magic Wand LED Indicator")
+        self._set_orb_idle_style()
+        top_row.addWidget(self.orb_led)
+
         self._lbl_hero_subtitle = QLabel(tr_ui("home_hero_subtitle"))
         self._lbl_hero_subtitle.setProperty("type", "hero_subtitle")
-        self._lbl_hero_subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._lbl_hero_subtitle.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        top_row.addWidget(self._lbl_hero_subtitle)
+
+        hero_layout.addLayout(top_row)
 
         self.lbl_hero_spell = QLabel(tr_ui("home_hero_idle"))
         self.lbl_hero_spell.setProperty("type", "hero_spell_name")
@@ -343,7 +395,6 @@ class PageHome(QWidget):
         self.hero_confidence_bar.setTextVisible(False)
         self.hero_confidence_bar.setVisible(False)
 
-        hero_layout.addWidget(self._lbl_hero_subtitle)
         hero_layout.addWidget(self.lbl_hero_spell)
         hero_layout.addWidget(self.lbl_hero_confidence, alignment=Qt.AlignmentFlag.AlignCenter)
         hero_layout.addWidget(self.hero_confidence_bar, alignment=Qt.AlignmentFlag.AlignCenter)
@@ -372,7 +423,7 @@ class PageHome(QWidget):
 
         self._history_empty_card, _ = make_empty_state_card(
             tr_ui("home_history_empty"),
-            body="Thực hiện thao tác với đũa phép để bắt đầu ghi nhận lịch sử.",
+            body=tr_ui("home_history_empty_body"),
         )
         self._history_empty_card.setMinimumHeight(140)
 
@@ -397,7 +448,7 @@ class PageHome(QWidget):
 
         self._loaded_empty_card, _ = make_empty_state_card(
             tr_ui("home_loaded_empty"),
-            body="Chưa có thông số spell mẫu nào được tải vào phiên hiện tại.",
+            body=tr_ui("home_loaded_empty_body"),
         )
         self._loaded_empty_card.setMinimumHeight(140)
 
@@ -575,6 +626,7 @@ class PageHome(QWidget):
     def _on_pulse_timer_done(self) -> None:
         """Tắt hiệu ứng pulse sau thời gian quy định."""
         self.lbl_hero_spell.setProperty("pulsing", False)
+        self.lbl_hero_spell.setStyleSheet("")
         self._repolish(self.lbl_hero_spell)
 
     def _refresh_history_relative_times(self) -> None:

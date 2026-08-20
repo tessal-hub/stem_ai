@@ -105,7 +105,6 @@ class RecordStub(QObject):
     sig_start_record = pyqtSignal(str)
     sig_stop_record = pyqtSignal()
     sig_clear_buffer = pyqtSignal()
-    sig_export_csv = pyqtSignal()
     sig_register_prototype = pyqtSignal(str)
 
     def __init__(self) -> None:
@@ -684,13 +683,4 @@ def test_on_clear_buffer_resets_store_and_record_state(handler_harness: HandlerH
     assert harness.store.get_live_buffer_snapshot() == []
     assert harness.record.is_live is False
     assert any("RECORD BUFFER CLEARED" in msg for msg in harness.wand.logs)
-
-
-def test_on_export_csv_when_buffer_empty(handler_harness: HandlerHarness) -> None:
-    harness = handler_harness
-    harness.store.clear_live_buffer()
-
-    harness.handler.on_export_csv()
-
-    assert any("Live buffer is empty" in msg for msg in harness.wand.logs)
 

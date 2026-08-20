@@ -12,9 +12,9 @@ import logging
 import numpy as np
 from PyQt6.QtCore import Qt, QElapsedTimer, QTime, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QShortcut, QKeySequence
-from PyQt6.QtWidgets import (QComboBox, QFormLayout, QFrame, QGridLayout,
+from PyQt6.QtWidgets import (QColorDialog, QComboBox, QFormLayout, QFrame, QGridLayout,
                              QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-                             QMessageBox, QProgressBar, QSizePolicy,
+                             QMessageBox, QProgressBar, QPushButton, QSizePolicy,
                              QStackedWidget, QVBoxLayout, QWidget)
 
 _pg = None
@@ -28,6 +28,8 @@ def _get_pg():
 
 from constants import is_system_spell
 from logic.dataset_layout import _PRIMITIVE_LOGICAL_NAMES, folder_name_match_key
+from logic.sound_player import SoundPlayer
+from logic.spell_config_store import SpellConfigStore
 from logic.theme_manager import theme_manager
 from ui.component_factory import (IconButton, make_button, make_card,
                                   make_checkbox, make_empty_state_card,
@@ -36,6 +38,8 @@ from ui.confirm_dialog import confirm_destructive
 from ui.i18n_bridge import tr_ui
 from ui.modern_layout import (MARGIN_COMFORTABLE, SPACING_LG, SPACING_MD,
                               SPACING_SM, SPACING_XS)
+from ui.sound_selector_dialog import SoundSelectorDialog
+from ui.spell_card_widget import SpellCardWidget
 from ui.tokens import (ACCENT, BTN_H, CROP_REGION, DANGER, PLOT_AX_COLOR,
                        PLOT_AY_COLOR, PLOT_AZ_COLOR, PLOT_GX_COLOR,
                        PLOT_GY_COLOR, PLOT_GZ_COLOR, PLOT_HANDLE_HOVER_COLOR,
@@ -70,11 +74,30 @@ class PageRecord(QWidget):
     sig_spell_selected = pyqtSignal(str)
     sig_spell_deleted = pyqtSignal(str)
     sig_clear_buffer = pyqtSignal()
+    sig_show_similarity_matrix = pyqtSignal()
 
-    def __init__(self, data_store) -> None:
+    def __init__(
+        self,
+        data_store,
+        spell_config_store: SpellConfigStore | None = None,
+        sound_player: SoundPlayer | None = None,
+    ) -> None:
         super().__init__()
         self.store = data_store
-        self._initial_counts = dict(getattr(data_store, "spell_counts", {}))
+        if isinstance(spell_config_store, SpellConfigStore):
+            self.spell_config_store = spell_config_store
+        else:
+            cand = getattr(data_store, "spell_config_store", None)
+            self.spell_config_store = cand if isinstance(cand, SpellConfigStore) else SpellConfigStore()
+
+        if isinstance(sound_player, SoundPlayer):
+            self.sound_player = sound_player
+        else:
+            cand_sp = getattr(data_store, "sound_player", None)
+            self.sound_player = cand_sp if isinstance(cand_sp, SoundPlayer) else SoundPlayer(self.spell_config_store)
+
+        counts = getattr(data_store, "spell_counts", {})
+        self._initial_counts = dict(counts) if isinstance(counts, dict) else {}
         self.is_live = False
         self.current_spell_name = ""
         self._sample_sentinel = "__STEM_EMPTY_SAMPLES__"
@@ -138,6 +161,8 @@ class PageRecord(QWidget):
         self._plot_timer.start(_PLOT_REFRESH_MS)
         # Show/hide delete button based on list selection
         self.sample_list.itemSelectionChanged.connect(self._on_sample_selection_changed)
+        self.spell_config_store.sig_spell_config_changed.connect(self._on_spell_config_changed)
+        self.combo_spell.currentTextChanged.connect(self._update_active_spell_effects_ui)
         theme_manager.theme_changed.connect(self.refresh_styles)
         self.refresh_styles()
 
@@ -212,25 +237,124 @@ class PageRecord(QWidget):
             if self.spell_stack.currentIndex() != 0:
                 self.spell_stack.setCurrentIndex(0)
 
-            # Smart check if list items are unchanged to avoid clearing selection
-            current_items = [
-                (self.spell_list.item(i).data(Qt.ItemDataRole.UserRole), self.spell_list.item(i).text())
+            current_names = [
+                self.spell_list.item(i).data(Qt.ItemDataRole.UserRole)
                 for i in range(self.spell_list.count())
             ]
-            new_items = [(n, f"{n} ({spell_counts[n]})") for n in filtered_names]
 
-            if current_items != new_items:
+            if current_names != filtered_names:
                 self.spell_list.clear()
-                for name, text in new_items:
-                    item = QListWidgetItem(text)
+                for name in filtered_names:
+                    count = spell_counts.get(name, 0)
+                    cfg = self.spell_config_store.get_spell_config(name)
+                    item = QListWidgetItem()
                     item.setData(Qt.ItemDataRole.UserRole, name)
+                    card = SpellCardWidget(
+                        spell_name=name,
+                        sample_count=count,
+                        color=cfg["color"],
+                        sound_id=cfg["sound"],
+                    )
+                    card.sig_color_clicked.connect(self._on_spell_color_edit)
+                    card.sig_sound_clicked.connect(self._on_spell_sound_edit)
+                    item.setSizeHint(card.sizeHint())
                     self.spell_list.addItem(item)
+                    self.spell_list.setItemWidget(item, card)
+            else:
+                for i in range(self.spell_list.count()):
+                    item = self.spell_list.item(i)
+                    name = item.data(Qt.ItemDataRole.UserRole)
+                    count = spell_counts.get(name, 0)
+                    cfg = self.spell_config_store.get_spell_config(name)
+                    card = self.spell_list.itemWidget(item)
+                    if isinstance(card, SpellCardWidget):
+                        card.update_config(color=cfg["color"], sound_id=cfg["sound"], count=count)
         else:
             # Requirement 3: Empty State
             if self.spell_stack.currentIndex() != 1:
                 self.spell_stack.setCurrentIndex(1)
 
         self._update_combo_box(filtered_names)
+
+    def _open_spell_effects_dialog(self, spell_name: str) -> None:
+        """Mở hộp thoại cấu hình tổng hợp (Màu RGB LED + Âm thanh + Âm lượng) cho spell."""
+        if not spell_name or not spell_name.strip():
+            return
+        cfg = self.spell_config_store.get_spell_config(spell_name)
+        ok, new_color, new_sound, new_vol = SoundSelectorDialog.select_effects(
+            spell_name=spell_name,
+            current_color=cfg.get("color", [255, 255, 255]),
+            current_sound_id=cfg.get("sound"),
+            current_volume=cfg.get("volume", 1.0),
+            sound_player=self.sound_player,
+            parent=self,
+        )
+        if ok:
+            self.spell_config_store.set_spell_color(
+                spell_name, new_color[0], new_color[1], new_color[2]
+            )
+            self.spell_config_store.set_spell_sound(spell_name, new_sound)
+            self.spell_config_store.set_spell_volume(spell_name, new_vol)
+            self._update_active_spell_effects_ui()
+
+    def _on_spell_color_edit(self, spell_name: str) -> None:
+        """Mở hộp thoại cấu hình màu & âm thanh khi bấm nút màu trên spell card."""
+        self._open_spell_effects_dialog(spell_name)
+
+    def _on_spell_sound_edit(self, spell_name: str) -> None:
+        """Mở hộp thoại cấu hình màu & âm thanh khi bấm nút âm thanh trên spell card."""
+        self._open_spell_effects_dialog(spell_name)
+
+    def _on_active_effects_edit(self) -> None:
+        """Mở hộp thoại cấu hình màu & âm thanh cho spell đang chọn trong combo box."""
+        current_name = self.combo_spell.currentText().strip()
+        if not current_name:
+            current_name = "SPELL"
+        self._open_spell_effects_dialog(current_name)
+
+    def _update_active_spell_effects_ui(self) -> None:
+        """Cập nhật chấm màu và nhãn âm thanh trên card chọn spell."""
+        if not hasattr(self, "btn_active_color") or not hasattr(self, "btn_active_sound"):
+            return
+        current_name = self.combo_spell.currentText().strip()
+        if not current_name:
+            r, g, b = (255, 255, 255)
+            sound_id = None
+        else:
+            cfg = self.spell_config_store.get_spell_config(current_name)
+            color = cfg.get("color", [255, 255, 255])
+            r, g, b = (color[0], color[1], color[2]) if len(color) >= 3 else (255, 255, 255)
+            sound_id = cfg.get("sound")
+
+        self.btn_active_color.setStyleSheet(
+            f"QPushButton {{ background-color: rgb({r}, {g}, {b}); border-radius: 10px; "
+            f"border: 1.5px solid rgba(0, 0, 0, 0.25); }}"
+            f"QPushButton:hover {{ border: 2px solid #007AFF; }}"
+        )
+
+        if hasattr(self, "lbl_active_sound"):
+            if sound_id:
+                disp_sound = sound_id.split(":")[-1]
+                if sound_id.startswith("preset:"):
+                    trans = tr_ui(f"preset_{disp_sound}")
+                    if trans and trans != f"preset_{disp_sound}":
+                        disp_sound = trans.split("(")[0].strip()
+                self.lbl_active_sound.setText(f"🔊 {disp_sound}")
+            else:
+                self.lbl_active_sound.setText("🔇 " + tr_ui("no_sound"))
+
+    def _on_spell_config_changed(self, spell_name: str) -> None:
+        """Cập nhật lại widget hiển thị khi cấu hình của spell thay đổi."""
+        for i in range(self.spell_list.count()):
+            item = self.spell_list.item(i)
+            if item and item.data(Qt.ItemDataRole.UserRole) == spell_name:
+                card = self.spell_list.itemWidget(item)
+                if isinstance(card, SpellCardWidget):
+                    cfg = self.spell_config_store.get_spell_config(spell_name)
+                    card.update_config(color=cfg["color"], sound_id=cfg["sound"])
+                break
+        if self.combo_spell.currentText().strip() == spell_name:
+            self._update_active_spell_effects_ui()
 
     def _on_filter_changed(self) -> None:
         self._refresh_spell_list()
@@ -329,7 +453,7 @@ class PageRecord(QWidget):
         if overall is not None:
             pct = int(overall * 100)
             self.consistency_bar.setValue(pct)
-            self.consistency_bar.setFormat(f"Độ đồng nhất: {pct}%")
+            self.consistency_bar.setFormat(tr_ui("record_consistency_format", pct=pct))
             self.consistency_bar.setVisible(True)
             if pct >= 85:
                 bar_color = SUCCESS
@@ -347,7 +471,7 @@ class PageRecord(QWidget):
             filled = "●" * min(n, 3)
             empty  = "○" * max(0, 3 - n)
             self.consistency_bar.setValue(0)
-            self.consistency_bar.setFormat(f"Tiến độ: {filled}{empty} ({n}/3 mẫu)")
+            self.consistency_bar.setFormat(tr_ui("record_consistency_progress", filled=filled, empty=empty, n=n))
             p = theme_manager.get_palette()
             bg = "rgba(255, 255, 255, 0.12)" if theme_manager.current_theme == "dark" else "rgba(0, 0, 0, 0.08)"
             self.consistency_bar.setStyleSheet(
@@ -551,6 +675,27 @@ class PageRecord(QWidget):
         lbl = QLabel(tr_ui("record_spell_label"))
         lbl.setProperty("type", "record_field_label")
         form.addRow(lbl, self.combo_spell)
+
+        # Row cấu hình hiệu ứng: Chỉ 1 nút tròn màu ở đầu kiêm chức năng mở menu config
+        eff_container = QWidget()
+        eff_layout = QHBoxLayout(eff_container)
+        eff_layout.setContentsMargins(0, 0, 0, 0)
+        eff_layout.setSpacing(8)
+
+        self.btn_active_color = QPushButton()
+        self.btn_active_color.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_active_color.setFixedSize(20, 20)
+        self.btn_active_color.setToolTip(tr_ui("tooltip_color_dot"))
+        self.btn_active_color.clicked.connect(self._on_active_effects_edit)
+        eff_layout.addWidget(self.btn_active_color, 0)
+
+        self.lbl_active_sound = QLabel("🔇 " + tr_ui("no_sound"))
+        self.lbl_active_sound.setStyleSheet("font-size: 12px; font-weight: 500; color: #3A3A3C;")
+        eff_layout.addWidget(self.lbl_active_sound, 1)
+
+        lbl_eff = QLabel(tr_ui("record_effects_label"))
+        lbl_eff.setProperty("type", "record_field_label")
+        form.addRow(lbl_eff, eff_container)
         layout.addLayout(form)
 
         stats = QGridLayout()
@@ -568,6 +713,8 @@ class PageRecord(QWidget):
         stats.addWidget(self.lbl_record_count, 1, 0)
         stats.addWidget(self.lbl_record_duration, 1, 1)
         layout.addLayout(stats)
+
+        self._update_active_spell_effects_ui()
         return card
 
     def _build_controls_card(self) -> QFrame:
@@ -673,6 +820,20 @@ class PageRecord(QWidget):
         eval_title = make_section_label("ĐÁNH GIÁ CỬ CHỈ", accent=True)
         eval_title.setStyleSheet("font-size: 11px; font-weight: 700;")
         eval_header.addWidget(eval_title)
+        eval_header.addStretch()
+
+        self.btn_similarity = QPushButton("🔍 Ma trận")
+        self.btn_similarity.setFixedHeight(22)
+        self.btn_similarity.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_similarity.setStyleSheet(
+            "background: rgba(0, 122, 255, 0.1); color: #007AFF; "
+            "border: 1px solid rgba(0, 122, 255, 0.3); border-radius: 4px; "
+            "padding: 1px 6px; font-size: 10px; font-weight: 700;"
+        )
+        self.btn_similarity.setToolTip("Xem ma trận tương đồng giữa tất cả các thần chú")
+        self.btn_similarity.clicked.connect(lambda: self.sig_show_similarity_matrix.emit())
+        eval_header.addWidget(self.btn_similarity)
+
         eval_layout.addLayout(eval_header)
 
         self.consistency_bar = QProgressBar()

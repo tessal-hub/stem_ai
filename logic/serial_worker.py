@@ -156,12 +156,15 @@ class SerialWorker(QThread):
         while self._running:
             self._drain_outbound_commands()
 
-            if not self._serial.in_waiting:
-                self.msleep(2)     # yield CPU low latency
-                continue
-
             try:
+                if not self._serial.in_waiting:
+                    self.msleep(2)     # yield CPU low latency
+                    continue
+
                 line = self._serial.readline().decode("utf-8", errors="ignore").strip()
+            except (serial.SerialException, OSError, PermissionError) as e:
+                log.info("Serial device disconnected or port closed on %s (%s)", self.port, e)
+                break
             except Exception:
                 log.exception("SerialWorker: readline failed")
                 continue
@@ -210,7 +213,7 @@ class SerialWorker(QThread):
         if self._serial is None or not self._serial.is_open:
             return
 
-        while True:
+        while not self._outbound_commands.empty():
             try:
                 cmd = self._outbound_commands.get_nowait()
             except queue.Empty:

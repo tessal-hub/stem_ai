@@ -965,6 +965,11 @@ def build_gesture_model(
             model_save(str(h5_path))
             encoder_path = output_root / "gesture_encoder.keras"
             model_save(str(encoder_path))
+            try:
+                from ..prototypical_recognizer import export_keras_weights_to_npz
+                export_keras_weights_to_npz(encoder_path, output_root / "gesture_encoder_weights.npz")
+            except Exception:
+                pass
 
         # (Centroid computation moved to after TFLite conversion)
 

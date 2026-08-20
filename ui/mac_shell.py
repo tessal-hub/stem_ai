@@ -156,6 +156,8 @@ class MacShell(QWidget):
         item = NAV_ITEMS[self._active_index]
         self.lbl_title.setText(tr_ui(item.label_key))
         self.lbl_subtitle.setText(tr_ui(item.subtitle_key))
+        if hasattr(self, "btn_guide"):
+            self.btn_guide.setText(f"💡 {tr_ui('guide_btn_title')}")
 
     def _update_nav_icons(self) -> None:
         """Cập nhật màu icon (tint) theo trạng thái active và theme."""
@@ -294,7 +296,22 @@ class MacShell(QWidget):
 
         layout.addLayout(text_stack)
         layout.addStretch()
+
+        from ui.component_factory import make_outline_button
+        self.btn_guide = make_outline_button(f"💡 {tr_ui('guide_btn_title')}", height=34)
+        self.btn_guide.setObjectName("StemGuideBtn")
+        self.btn_guide.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_guide.clicked.connect(self._open_beginner_guide)
+        layout.addWidget(self.btn_guide, alignment=Qt.AlignmentFlag.AlignVCenter)
+
         return toolbar
+
+    def _open_beginner_guide(self) -> None:
+        """Mở popup hướng dẫn người mới cho trang đang hiển thị."""
+        from ui.beginner_guide_dialog import BeginnerGuideDialog
+        dlg = BeginnerGuideDialog(initial_page_index=self._active_index, parent=self)
+        dlg.sig_navigate_to.connect(self.set_active_index)
+        dlg.exec()
 
     def _handle_gesture(self, event: QGestureEvent) -> bool:
         """Điều phối cử chỉ vuốt ngang."""

@@ -62,6 +62,7 @@ class SettingsStore:
         "ui_language": "en",
         "show_primitives_menu": True,
         "advanced_mode": True,
+        "has_seen_beginner_guide": False,
     }
 
     def __init__(self) -> None:
@@ -102,6 +103,7 @@ class SettingsStore:
             "ui_language": self.get_str("ui_language", "en"),
             "show_primitives_menu": self.get_bool("show_primitives_menu", self._DEFAULTS["show_primitives_menu"]),
             "advanced_mode": self.get_bool("advanced_mode", self.get_bool("show_primitives_menu", self._DEFAULTS["advanced_mode"])),
+            "has_seen_beginner_guide": self.get_bool("has_seen_beginner_guide", False),
         }
 
     def save(self, config: Mapping[str, Any]) -> dict[str, Any]:
@@ -189,24 +191,37 @@ class DataStore(QObject):
         self.sensor_buffers = {k: collections.deque(maxlen=100) for k in ['ax', 'ay', 'az', 'gx', 'gy', 'gz']}
         self.recent_sensor_frames = collections.deque(maxlen=100)
         self.live_buffer = collections.deque(maxlen=500)
+        self._live_buffer_version = 0
+        self._cached_live_numpy = _EMPTY_LIVE_ARRAY
+        self._cached_live_numpy_version = -1
 
         self._last_sensor_emit = -0.1
         self._last_live_emit = 0.0
 
     # ── Public methods ──────────────────────────
 
-    def update_sensor_data(self, data: dict[str, float]) -> None:
+    def update_sensor_data(self, data: dict[str, float] | Sequence[float]) -> None:
         """Cập nhật dữ liệu cảm biến và phát signal cho UI."""
         now = time.perf_counter()
         snapshot = None
         with self._buffer_lock:
-            for k, v in data.items():
-                if k in self.sensor_buffers:
-                    self.sensor_buffers[k].append(v)
-            keys = ['ax', 'ay', 'az', 'gx', 'gy', 'gz']
-            if all(k in data for k in keys):
-                frame = [data[k] for k in keys]
-                self.recent_sensor_frames.append(frame)
+            if isinstance(data, (list, tuple)) and len(data) >= 6:
+                ax, ay, az, gx, gy, gz = data[0], data[1], data[2], data[3], data[4], data[5]
+                self.sensor_buffers['ax'].append(ax)
+                self.sensor_buffers['ay'].append(ay)
+                self.sensor_buffers['az'].append(az)
+                self.sensor_buffers['gx'].append(gx)
+                self.sensor_buffers['gy'].append(gy)
+                self.sensor_buffers['gz'].append(gz)
+                self.recent_sensor_frames.append([ax, ay, az, gx, gy, gz])
+            elif isinstance(data, dict):
+                for k, v in data.items():
+                    if k in self.sensor_buffers:
+                        self.sensor_buffers[k].append(v)
+                keys = ['ax', 'ay', 'az', 'gx', 'gy', 'gz']
+                if all(k in data for k in keys):
+                    frame = [data[k] for k in keys]
+                    self.recent_sensor_frames.append(frame)
             if now - self._last_sensor_emit >= 0.1:
                 self._last_sensor_emit = now
                 snapshot = {k: list(v) for k, v in self.sensor_buffers.items()}
@@ -219,16 +234,20 @@ class DataStore(QObject):
             return list(self.recent_sensor_frames)
 
     def add_live_sample(self, sample: list[float], *, emit: bool = True) -> list[list[float]]:
-        """Thêm mẫu dữ liệu vào bộ đệm hiển thị đồ thị và phát signal."""
-        try:
-            valid_sample = validate_six_axis_values(sample)
-        except FrameValidationError:
+        """Thêm mẫu dữ liệu vào bộ đệm hiển thị đồ thị và phát signal.
+
+        Caller is expected to pass pre-validated 6-axis data (e.g. from
+        ``parse_sensor_csv_frame``).  Invalid samples are still caught here
+        as a safety net but should not occur in normal streaming.
+        """
+        if not isinstance(sample, (list, tuple)) or len(sample) != 6:
             return []
 
         now = time.perf_counter()
         should_emit = False
         with self._buffer_lock:
-            self.live_buffer.append(valid_sample)
+            self.live_buffer.append(sample)
+            self._live_buffer_version += 1
             if emit and now - self._last_live_emit >= 0.05:
                 self._last_live_emit = now
                 should_emit = True
@@ -246,7 +265,11 @@ class DataStore(QObject):
         with self._buffer_lock:
             if not self.live_buffer:
                 return _EMPTY_LIVE_ARRAY
-            return np.array(self.live_buffer, dtype=np.float32)
+            if self._cached_live_numpy_version == self._live_buffer_version:
+                return self._cached_live_numpy
+            self._cached_live_numpy = np.array(self.live_buffer, dtype=np.float32)
+            self._cached_live_numpy_version = self._live_buffer_version
+            return self._cached_live_numpy
 
     def set_connection_status(self, connected: bool, port: str = "None") -> None:
         """Cập nhật trạng thái kết nối thiết bị."""
@@ -288,6 +311,7 @@ class DataStore(QObject):
         """Xóa sạch bộ đệm dữ liệu hiển thị đồ thị."""
         with self._buffer_lock:
             self.live_buffer.clear()
+            self._live_buffer_version += 1
         self.sig_live_buffer_updated.emit([])
 
     def save_settings(self, updates: Mapping[str, Any]) -> dict[str, Any]:

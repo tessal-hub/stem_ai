@@ -214,10 +214,10 @@ class PrimitiveQualityWorker(QThread):
 
             for csv_file in csv_files:
                 try:
-                    with open(csv_file, "r", encoding="utf-8", newline="") as f:
-                        reader = csv.reader(f)
-                        rows = sum(1 for _ in reader) - 1  # subtract header
-                        total_rows += max(0, rows)
+                    with open(csv_file, "rb") as f:
+                        line_count = sum(chunk.count(b"\n") for chunk in iter(lambda: f.read(65536), b""))
+                        rows = max(0, line_count - 1)
+                        total_rows += rows
                 except Exception:
                     pass
 

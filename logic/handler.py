@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import csv
 import logging
+import os
+import sys
 import numpy as np
 from pathlib import Path
 from threading import Lock
@@ -40,6 +42,8 @@ from logic.dataset_layout import (
     _PRIMITIVE_LOGICAL_NAMES,
     storage_dirs_for_spell,
 )
+from logic.sound_player import SoundPlayer
+from logic.spell_config_store import SpellConfigStore
 from logic.tensorflow.nvs_builder import build_config_bin
 from PyQt6.QtCore import QThread, pyqtSignal
 
@@ -48,12 +52,20 @@ class NVSBuildWorker(QThread):
     sig_progress = pyqtSignal(int)
     sig_finished = pyqtSignal(bool, str)
 
-    def __init__(self, spell_names: list[str], dataset_dir: str, spell_recognizer, app_data_dir) -> None:
+    def __init__(
+        self,
+        spell_names: list[str],
+        dataset_dir: str,
+        spell_recognizer,
+        app_data_dir,
+        colors: dict[str, tuple[int, int, int]] | None = None,
+    ) -> None:
         super().__init__()
         self.spell_names = spell_names
         self.dataset_dir = dataset_dir
         self.spell_recognizer = spell_recognizer
         self.app_data_dir = app_data_dir
+        self.colors = colors
 
     def run(self) -> None:
         try:
@@ -90,58 +102,49 @@ class NVSBuildWorker(QThread):
             is_spell_flags = []
             thresholds = []
 
+            # Nạp cache primitive prototypes nếu có để tăng tốc độ build
+            prim_cache_path = Path(self.app_data_dir) / "primitive_prototypes.json"
+            prim_cache: dict[str, list[float]] = {}
+            if prim_cache_path.exists():
+                try:
+                    prim_cache = json.loads(prim_cache_path.read_text(encoding="utf-8"))
+                except Exception:
+                    prim_cache = {}
+
+            from logic.tensorflow.pipeline import _read_csv_rows, _windowize
+            from logic.dataset_layout import storage_dirs_for_spell
+
             total_gestures = len(final_gestures)
             for idx, g in enumerate(final_gestures):
-                is_spell = g not in primitives
+                is_spell = (g in self.spell_names)
                 if is_spell:
                     self.sig_status.emit(f">> [NVS] Embedding spell '{g}'...")
                 self.sig_progress.emit(10 + int(70 * (idx / total_gestures)))
 
-                # Load samples locally
-                from logic.dataset_layout import storage_dirs_for_spell
+                # 1. Nếu là primitive và đã có trong cache
+                if not is_spell and g in prim_cache:
+                    gesture_names.append(g)
+                    centroids.append(prim_cache[g])
+                    is_spell_flags.append(False)
+                    thresholds.append(0.45)
+                    continue
+
+                # 2. Đọc mẫu từ dataset với đúng 9-channel feature pipeline chuẩn
                 dirs = storage_dirs_for_spell(dataset_root, g)
                 csv_files = []
                 for d in dirs:
                     csv_files.extend(sorted(d.glob("*.csv")))
 
+                is_active = (g not in ("STAND BY", "STAND_BY"))
                 samples = []
                 for fpath in csv_files:
-                    rows = []
-                    try:
-                        with open(fpath, "r", encoding="utf-8", newline="") as f:
-                            reader = csv.reader(f)
-                            next(reader, None)  # skip header
-                            for line in reader:
-                                if len(line) >= 6:
-                                    try:
-                                        rows.append([float(v) for v in line[:6]])
-                                    except ValueError:
-                                        continue
-                    except Exception:
+                    rows = _read_csv_rows(fpath)
+                    if not rows:
                         continue
-
-                    if len(rows) < 64:
-                        continue
-
-                    best_window = None
-                    max_energy = -1.0
-                    for start_idx in range(0, len(rows) - 64 + 1, 2):
-                        w_list = rows[start_idx:start_idx + 64]
-                        energy = sum(
-                            abs(row[0]) + abs(row[1]) + abs(row[2]) + 
-                            abs(row[3]) + abs(row[4]) + abs(row[5])
-                            for row in w_list
-                        )
-                        if energy > max_energy:
-                            max_energy = energy
-                            window = np.asarray(w_list, dtype=np.float32)
-                            window[:, 3] /= 125.0
-                            window[:, 4] /= 125.0
-                            window[:, 5] /= 125.0
-                            window = np.clip(window, -2.0, 2.0)
-                            best_window = window
-                    if best_window is not None:
-                        samples.append(best_window)
+                    windows = _windowize(rows, window_size=64, step=4, is_active_gesture=is_active)
+                    for w in windows:
+                        arr = np.clip(np.asarray(w, dtype=np.float32), -2.0, 2.0)
+                        samples.append(arr)
 
                 if not samples:
                     if is_spell:
@@ -163,10 +166,20 @@ class NVSBuildWorker(QThread):
                     centroid = mean_emb.tolist()
                     thresh = 0.45
 
+                    # Lưu vào cache nếu là primitive
+                    if not is_spell:
+                        prim_cache[g] = centroid
+
                 gesture_names.append(g)
                 centroids.append(centroid)
                 is_spell_flags.append(is_spell)
                 thresholds.append(thresh)
+
+            # Cập nhật file cache primitive
+            try:
+                prim_cache_path.write_text(json.dumps(prim_cache, indent=2), encoding="utf-8")
+            except Exception:
+                pass
 
             self.sig_status.emit(">> [NVS] Compiling labels.bin...")
             self.sig_progress.emit(90)
@@ -177,6 +190,7 @@ class NVSBuildWorker(QThread):
                 centroids=centroids,
                 is_spell_flags=is_spell_flags,
                 thresholds=thresholds,
+                colors=self.colors,
                 out_path=str(out_bin)
             )
             self.sig_finished.emit(True, f"labels.bin generated successfully w/ {len(self.spell_names)} spells.")
@@ -187,39 +201,212 @@ log = logging.getLogger(__name__)
 
 
 class _EncoderLoadWorker(QThread):
-    sig_done = pyqtSignal(object, object)
+    sig_done = pyqtSignal(object, object, str)
 
     def __init__(self, app_data_dir):
         super().__init__()
-        self.app_data_dir = app_data_dir
+        self.app_data_dir = Path(app_data_dir)
 
     def run(self):
         try:
-            path = self.app_data_dir / "gesture_encoder.keras"
             proto_path = self.app_data_dir / "spell_prototypes.json"
-            if not path.exists():
-                self.sig_done.emit(None, None)
-                return
-
-            import tensorflow as tf
-            from logic.tensorflow.encoder_pipeline import _get_l2_normalize_layer_class
-            
-            try:
-                encoder = tf.keras.models.load_model(
-                    str(path), compile=False,
-                    custom_objects={"L2NormalizeLayer": _get_l2_normalize_layer_class()},
-                )
-            except Exception:
-                log.warning("Loading legacy Lambda encoder — retrain to upgrade.")
-                encoder = tf.keras.models.load_model(
-                    str(path), compile=False, safe_mode=False,
-                )
-            
             p_path = str(proto_path) if proto_path.exists() else None
-            self.sig_done.emit(encoder, p_path)
+
+            # 1. Fast path: nạp trọng số siêu nhẹ qua NumpyEncoder (< 2ms!)
+            npz_path = self.app_data_dir / "gesture_encoder_weights.npz"
+            if npz_path.exists():
+                try:
+                    from logic.prototypical_recognizer import NumpyEncoder
+                    encoder = NumpyEncoder.from_npz(npz_path)
+                    log.info("Instant-loaded NumpyEncoder from %s", npz_path.name)
+                    self.sig_done.emit(encoder, p_path, "")
+                    return
+                except Exception as exc:
+                    log.warning("Fast-path NumpyEncoder failed: %s, trying extract...", exc)
+
+            # 2. Tự động trích xuất trọng số từ .keras sang .npz mà không cần import TF
+            keras_path = self.app_data_dir / "gesture_encoder.keras"
+            if keras_path.exists():
+                from logic.prototypical_recognizer import NumpyEncoder, export_keras_weights_to_npz
+                if export_keras_weights_to_npz(keras_path, npz_path):
+                    try:
+                        encoder = NumpyEncoder.from_npz(npz_path)
+                        log.info("Extracted and instant-loaded NumpyEncoder from %s", keras_path.name)
+                        self.sig_done.emit(encoder, p_path, "")
+                        return
+                    except Exception as exc:
+                        log.warning("Extracted NumpyEncoder load failed: %s", exc)
+
+            # 3. Fallback: nạp qua TensorFlow nếu đã cài đặt
+            if keras_path.exists():
+                try:
+                    import tensorflow as tf
+                    from logic.tensorflow.encoder_pipeline import _get_l2_normalize_layer_class
+                    try:
+                        encoder = tf.keras.models.load_model(
+                            str(keras_path), compile=False,
+                            custom_objects={"L2NormalizeLayer": _get_l2_normalize_layer_class()},
+                        )
+                    except Exception:
+                        log.warning("Loading legacy Lambda encoder — retrain to upgrade.")
+                        encoder = tf.keras.models.load_model(
+                            str(keras_path), compile=False, safe_mode=False,
+                        )
+                    self.sig_done.emit(encoder, p_path, "")
+                    return
+                except Exception as exc:
+                    log.warning("TensorFlow background load failed: %s", exc)
+
+            self.sig_done.emit(None, p_path, "No encoder model found")
         except Exception as e:
             log.error(f"Background encoder load failed: {e}")
-            self.sig_done.emit(None, None)
+            self.sig_done.emit(None, None, f"{type(e).__name__}: {e}")
+
+
+class _ConsistencyWorker(QThread):
+    sig_done = pyqtSignal(str, dict)
+
+    def __init__(self, spell_name: str, dataset_dir: str, spell_recognizer) -> None:
+        super().__init__()
+        self.spell_name = spell_name
+        self.dataset_dir = dataset_dir
+        self.spell_recognizer = spell_recognizer
+
+    def run(self) -> None:
+        try:
+            entries = Handler._load_samples_for_analysis_static(
+                self.dataset_dir, self.spell_name, window_size=64
+            )
+            n = len(entries)
+            if n == 0:
+                result = dict(
+                    n_samples=0,
+                    ready_to_register=False,
+                    overall_consistency=None,
+                    per_sample_scores=[],
+                    per_sample_status={},
+                    worst_sample_idx=None,
+                    recommendation="",
+                )
+            else:
+                valid_entries = [(idx, fname, w) for idx, (fname, w, r) in enumerate(entries) if w is not None]
+                per_scores: list[float | None] = [0.0 if r else None for _, _, r in entries]
+                per_status = {fname: r for fname, _, r in entries if r}
+
+                if len(valid_entries) < 3:
+                    invalid_indices = [i for i, (_, w, _) in enumerate(entries) if w is None]
+                    rec = f"📥 {len(valid_entries)}/3 mẫu hợp lệ — cần thêm {max(0, 3 - len(valid_entries))} mẫu nữa để bắt đầu đánh giá."
+                    if invalid_indices:
+                        rec += f" (Phát hiện {len(invalid_indices)} mẫu lỗi)"
+                    result = dict(
+                        n_samples=n,
+                        ready_to_register=False,
+                        overall_consistency=None,
+                        per_sample_scores=per_scores,
+                        per_sample_status=per_status,
+                        worst_sample_idx=invalid_indices[0] if invalid_indices else None,
+                        recommendation=rec,
+                    )
+                else:
+                    valid_samples = [w for _, _, w in valid_entries]
+                    recognizer = self.spell_recognizer
+                    if recognizer is None:
+                        from logic.prototypical_recognizer import PrototypicalRecognizer
+                        recognizer = PrototypicalRecognizer(encoder=None)
+
+                    sub_result = recognizer.analyze_spell_samples(valid_samples)
+
+                    sub_scores = sub_result.get("per_sample_scores", [])
+                    for sub_i, (orig_i, _, _) in enumerate(valid_entries):
+                        if sub_i < len(sub_scores):
+                            per_scores[orig_i] = sub_scores[sub_i]
+
+                    invalid_indices = [i for i, (_, w, _) in enumerate(entries) if w is None]
+                    if invalid_indices:
+                        worst_orig_idx = invalid_indices[0]
+                        rec = f"🔴 Có {len(invalid_indices)} mẫu lỗi/quá ngắn. Xem xét xóa để hoàn thiện dataset."
+                    else:
+                        worst_valid_idx = sub_result.get("worst_sample_idx")
+                        worst_orig_idx = valid_entries[worst_valid_idx][0] if (worst_valid_idx is not None and worst_valid_idx < len(valid_entries)) else None
+                        rec = sub_result.get("recommendation", "")
+
+                    result = dict(
+                        n_samples=n,
+                        ready_to_register=sub_result.get("ready_to_register", False) and not invalid_indices,
+                        overall_consistency=sub_result.get("overall_consistency"),
+                        per_sample_scores=per_scores,
+                        per_sample_status=per_status,
+                        worst_sample_idx=worst_orig_idx,
+                        recommendation=rec,
+                    )
+            self.sig_done.emit(self.spell_name, result)
+        except Exception as exc:
+            log.error(f"Consistency worker error for {self.spell_name}: {exc}")
+
+
+class _SpellPrototypesUpdateWorker(QThread):
+    sig_done = pyqtSignal(bool)
+
+    def __init__(self, dataset_dir: str, spell_recognizer, app_data_dir) -> None:
+        super().__init__()
+        self.dataset_dir = dataset_dir
+        self.spell_recognizer = spell_recognizer
+        self.app_data_dir = app_data_dir
+
+    def run(self) -> None:
+        if not self.spell_recognizer:
+            self.sig_done.emit(False)
+            return
+        try:
+            from logic.tensorflow.pipeline import _read_csv_rows, _windowize
+            from logic.dataset_layout import storage_dirs_for_spell
+
+            dataset_root = Path(self.dataset_dir)
+            spells_dir = dataset_root / "spells"
+
+            spell_names = []
+            if spells_dir.exists():
+                spell_names = [d.name for d in spells_dir.iterdir() if d.is_dir()]
+
+            all_spells = set(spell_names) | set(self.spell_recognizer.prototypes.keys())
+            updated_any = False
+
+            for spell in all_spells:
+                dirs = storage_dirs_for_spell(dataset_root, spell)
+                csv_files = []
+                for d in dirs:
+                    csv_files.extend(sorted(d.glob("*.csv")))
+
+                samples = []
+                for csv_file in csv_files:
+                    rows = _read_csv_rows(csv_file)
+                    if not rows:
+                        continue
+                    windows = _windowize(rows, window_size=64, step=4)
+                    for window in windows:
+                        data = np.asarray(window, dtype=np.float32)
+                        data = np.clip(data, -2.0, 2.0)
+                        samples.append(data)
+
+                if samples:
+                    try:
+                        self.spell_recognizer.register_spell(spell, samples)
+                        updated_any = True
+                    except Exception as e:
+                        log.error(f"Failed to register spell '{spell}': {e}")
+                else:
+                    if spell in self.spell_recognizer.prototypes:
+                        self.spell_recognizer.remove_spell(spell)
+                        updated_any = True
+
+            if updated_any:
+                proto_path = self.app_data_dir / "spell_prototypes.json"
+                self.spell_recognizer.save(str(proto_path))
+                log.info(f"Updated spell prototypes in {proto_path}")
+            self.sig_done.emit(True)
+        except Exception as e:
+            log.error(f"Failed to update spell prototypes: {e}")
+            self.sig_done.emit(False)
 
 
 class Handler(QObject):
@@ -255,6 +442,8 @@ class Handler(QObject):
         data_store: DataStore,
         ui_page_setting=None,
         ui_primitive_collect=None,
+        spell_config: SpellConfigStore | None = None,
+        sound_player: SoundPlayer | None = None,
     ) -> None:
         super().__init__()
         self.ui_wand = ui_page_wand
@@ -263,6 +452,17 @@ class Handler(QObject):
         self.ui_setting = ui_page_setting
         self.ui_primitive_collect = ui_primitive_collect
         self.store = data_store
+        if isinstance(spell_config, SpellConfigStore):
+            self.spell_config = spell_config
+        else:
+            cand_sc = getattr(data_store, "spell_config_store", None)
+            self.spell_config = cand_sc if isinstance(cand_sc, SpellConfigStore) else SpellConfigStore(APP_DATA_DIR)
+
+        if isinstance(sound_player, SoundPlayer):
+            self.sound_player = sound_player
+        else:
+            cand_sp = getattr(data_store, "sound_player", None)
+            self.sound_player = cand_sp if isinstance(cand_sp, SoundPlayer) else SoundPlayer(self.spell_config)
 
         self._init_workers()
         self._init_state()
@@ -296,6 +496,15 @@ class Handler(QObject):
         self._feature_timer = QTimer(self)
         self._feature_timer.setInterval(200)
         self._feature_timer.timeout.connect(self._on_feature_timer_tick)
+        self._last_feature_buffer_ver = -1
+
+        self._consistency_worker: _ConsistencyWorker | None = None
+        self._proto_update_worker: _SpellPrototypesUpdateWorker | None = None
+        self._pending_consistency_spell = ""
+        self._consistency_debounce_timer = QTimer(self)
+        self._consistency_debounce_timer.setSingleShot(True)
+        self._consistency_debounce_timer.setInterval(150)
+        self._consistency_debounce_timer.timeout.connect(self._start_consistency_analysis_worker)
 
         self.spell_recognizer: PrototypicalRecognizer | None = None
         self._model_build_worker: GestureModelBuildWorker | None = None
@@ -316,12 +525,16 @@ class Handler(QObject):
         self._pending_upload_port = ""
         self._pending_upload_model_path = None
 
+        self._known_ports: set[str] = set()
+        self._usb_hotplug_timer: QTimer | None = None
+
         self._shutdown_done = False
 
     def _load_initial_state(self) -> None:
         """Nạp trạng thái ban đầu sau khi khởi tạo."""
         self._start_async_encoder_load()
         self.on_serial_scan()
+        self._init_usb_hotplug()
         self.ui_home.set_mode(self._mode)
         self._feature_timer.start()
 
@@ -339,16 +552,18 @@ class Handler(QObject):
         self.ui_wand.sig_serial_connect.connect(self.on_serial_connect)
         self.ui_wand.sig_serial_disconnect.connect(self.on_serial_disconnect)
         self.ui_wand.sig_flash_upload.connect(self.on_flash_upload)
+        if hasattr(self.ui_wand, 'sig_show_similarity_matrix'):
+            self.ui_wand.sig_show_similarity_matrix.connect(self.on_show_similarity_matrix)
 
         self.ui_record.sig_data_cropped.connect(self.on_data_cropped)
         self.ui_record.sig_start_record.connect(self.on_record_start)
         self.ui_record.sig_stop_record.connect(self.on_record_stop)
         self.ui_record.sig_spell_selected.connect(self.on_spell_selected)
         self.ui_record.sig_spell_deleted.connect(self.on_spell_deleted)
+        if hasattr(self.ui_record, 'sig_show_similarity_matrix'):
+            self.ui_record.sig_show_similarity_matrix.connect(self.on_show_similarity_matrix)
 
         self.ui_record.sig_clear_buffer.connect(self.on_clear_buffer)
-        if hasattr(self.ui_record, 'sig_export_csv'):
-            self.ui_record.sig_export_csv.connect(self.on_export_csv)
 
         self.ui_wand.sig_train_build_firmware_requested.connect(self.on_build_firmware)
 
@@ -379,7 +594,6 @@ class Handler(QObject):
         self.data_io_worker.sig_save_done.connect(self._on_io_done, type=Qt.ConnectionType.QueuedConnection)
         self.data_io_worker.sig_db_refreshed.connect(self.store.update_counts_from_worker, type=Qt.ConnectionType.QueuedConnection)
         self.data_io_worker.sig_delete_sample_done.connect(self._on_io_delete_sample_done, type=Qt.ConnectionType.QueuedConnection)
-        self.data_io_worker.sig_export_done.connect(self._on_export_done, type=Qt.ConnectionType.QueuedConnection)
         self.data_io_worker.sig_queue_warning.connect(
             self.ui_wand.append_terminal_text, type=Qt.ConnectionType.QueuedConnection)
         self.feature_worker.sig_features_ready.connect(self.store.update_live_features, type=Qt.ConnectionType.QueuedConnection)
@@ -404,6 +618,18 @@ class Handler(QObject):
         self.store.sig_spell_history_updated.connect(self.ui_home.update_spell_history)
         self.store.sig_registered_prototypes_updated.connect(self.ui_home.update_loaded_spells)
         self.store.sig_prediction_updated.connect(self.ui_home.show_recognized_spell)
+        self.store.sig_prediction_updated.connect(self._on_prediction_for_sound)
+
+    def _on_prediction_for_sound(self, action: str, confidence: float) -> None:
+        """Phát hiệu ứng âm thanh khi hệ thống nhận diện thành công một spell."""
+        if not action or is_system_spell(action) or confidence < 0.50:
+            return
+        if self.sound_player and self.spell_config:
+            cfg = self.spell_config.get_spell_config(action)
+            sound_id = cfg.get("sound")
+            volume = float(cfg.get("volume", 1.0))
+            if sound_id:
+                self.sound_player.play(sound_id, volume)
 
     # ── Action Handlers ──────────────────────────
 
@@ -432,6 +658,71 @@ class Handler(QObject):
         if self.serial_worker.isRunning():
             self.serial_worker.finished.connect(self._on_serial_stopped)
             self.serial_worker.stop()
+
+    def _init_usb_hotplug(self) -> None:
+        """Khởi động bộ giám sát cắm/rút USB đũa phép tự động."""
+        try:
+            self._known_ports = set(SerialWorker.get_available_ports())
+            self._usb_hotplug_timer = QTimer(self)
+            self._usb_hotplug_timer.setInterval(1500)
+            self._usb_hotplug_timer.timeout.connect(self._check_usb_hotplug)
+            self._usb_hotplug_timer.start()
+        except Exception as exc:
+            log.warning("Handler: Init USB hotplug timer failed: %s", exc)
+
+    def _check_usb_hotplug(self) -> None:
+        """Quét định kỳ và tự động kết nối khi cắm USB / ngắt khi rút USB."""
+        if self._mode == self._MODE_UPDATE or self.store.get_recording_state():
+            return
+        try:
+            curr_ports = set(SerialWorker.get_available_ports())
+            if curr_ports != self._known_ports:
+                new_ports = curr_ports - self._known_ports
+                removed_ports = self._known_ports - curr_ports
+                self._known_ports = curr_ports
+
+                # Cập nhật danh sách cổng trên giao diện
+                self.ui_wand.update_serial_port_list(sorted(list(curr_ports)))
+
+                # 1. Phát hiện cắm đũa phép mới -> Tự động kết nối
+                if new_ports and not self.serial_worker.isRunning():
+                    target_port = sorted(new_ports)[0]
+                    self.ui_wand.append_terminal_text(
+                        f">> [AUTO USB] Đã phát hiện đũa phép tại {target_port}. Tự động kết nối..."
+                    )
+                    self.on_serial_connect(target_port)
+
+                # 2. Phát hiện rút đũa phép -> Tự động ngắt kết nối an toàn
+                if removed_ports and self.serial_worker.isRunning():
+                    if self.serial_worker.port in removed_ports:
+                        unplugged_port = self.serial_worker.port
+                        self.on_serial_disconnect()
+                        self.ui_wand.append_terminal_text(
+                            f">> [AUTO USB] Đũa phép tại {unplugged_port} đã bị rút. Đã ngắt kết nối an toàn."
+                        )
+        except Exception as exc:
+            log.debug("USB hotplug check error: %s", exc)
+
+    def on_show_similarity_matrix(self) -> None:
+        """Tính toán và hiển thị popup Ma Trận Tương Đồng & Phân Biệt Thần Chú."""
+        if not self.spell_recognizer or not self.spell_recognizer.prototypes:
+            self.ui_wand.append_terminal_text(
+                ">> [WARN] Chưa có mô hình thần chú nào được đăng ký để tính ma trận tương đồng."
+            )
+            return
+
+        names, matrix = self.spell_recognizer.compute_similarity_matrix()
+        conflicts = self.spell_recognizer.find_conflicting_spells(threshold=0.75)
+
+        from ui.similarity_matrix_dialog import SimilarityMatrixDialog
+        parent_widget = getattr(self, "ui_record", None) or getattr(self, "ui_wand", None)
+        dlg = SimilarityMatrixDialog(
+            spell_names=names,
+            matrix=matrix,
+            conflicts=conflicts,
+            parent=parent_widget,
+        )
+        dlg.exec()
 
     def on_record_start(self, spell: str) -> None:
         """Bắt đầu ghi mẫu cử chỉ mới."""
@@ -496,31 +787,6 @@ class Handler(QObject):
                 self.ui_record.clear_plots()
         self.ui_wand.append_terminal_text(">> RECORD BUFFER CLEARED")
 
-    def on_export_csv(self) -> None:
-        """Xuất dữ liệu trong live buffer ra file CSV."""
-        buf = self.store.get_live_buffer_snapshot()
-        if not buf:
-            self.ui_wand.append_terminal_text("[WARN] Live buffer is empty. Nothing to export.")
-            return
-
-        from PyQt6.QtWidgets import QFileDialog
-        parent_widget = getattr(self, "ui_record", None)
-        path, _ = QFileDialog.getSaveFileName(
-            parent_widget,
-            "Export Live Buffer to CSV",
-            "recorded_samples.csv",
-            "CSV Files (*.csv)"
-        )
-        if not path:
-            return
-
-        self.data_io_worker.enqueue_export(buf, path)
-
-    def _on_export_done(self, success: bool, message: str) -> None:
-        """Nhận kết quả xuất CSV từ DataIOWorker."""
-        prefix = ">> [EXPORT DONE]" if success else ">> [EXPORT ERROR]"
-        self.ui_wand.append_terminal_text(f"{prefix} {message}")
-
     def on_clear_database(self) -> None:
         """Xóa sạch live buffer và refresh lại dataset."""
         self.store.clear_live_buffer()
@@ -557,6 +823,10 @@ class Handler(QObject):
     def on_build_firmware(self, spell_names: list[str]) -> None:
         """Sinh ra file labels.bin chứa cấu hình NVS động cho các spell và primitive."""
         if not self.spell_recognizer or not self.spell_recognizer.encoder:
+            if hasattr(self, "_encoder_worker") and self._encoder_worker and self._encoder_worker.isRunning():
+                self.ui_wand.append_terminal_text(">> [WAIT] Encoder is currently loading in background. Please wait a few seconds and click again...")
+                self.ui_wand.update_flash_progress(0, "Loading Encoder...")
+                return
             self.ui_wand.append_terminal_text(">> [ERROR] Encoder is not trained or loaded. Please train encoder in Primitive page first.")
             self.ui_wand.update_flash_progress(0, "Failed")
             return
@@ -570,11 +840,13 @@ class Handler(QObject):
         # Reset session loaded spells when starting new NVS build
         self.store.set_registered_prototypes(set())
 
+        colors = self.spell_config.get_all_colors() if self.spell_config else None
         self._nvs_build_worker = NVSBuildWorker(
             spell_names=spell_names,
             dataset_dir=self.store.dataset_dir,
             spell_recognizer=self.spell_recognizer,
-            app_data_dir=APP_DATA_DIR
+            app_data_dir=APP_DATA_DIR,
+            colors=colors,
         )
         self._nvs_build_worker.sig_status.connect(self.ui_wand.append_terminal_text)
         self._nvs_build_worker.sig_progress.connect(self.ui_wand.update_flash_progress)
@@ -597,11 +869,8 @@ class Handler(QObject):
         if len(values) < 6:
             return
 
-        # 1. Đẩy vào DataStore
-        self.store.update_sensor_data({
-            "ax": values[0], "ay": values[1], "az": values[2],
-            "gx": values[3], "gy": values[4], "gz": values[5]
-        })
+        # 1. Đẩy vào DataStore (truyền list trực tiếp, tránh tạo dict mỗi khung)
+        self.store.update_sensor_data(values)
 
         # 3. Ghi vào buffer Record (nếu đang bật)
         if self.ui_record.is_live:
@@ -639,28 +908,23 @@ class Handler(QObject):
             self.ui_wand.append_terminal_text(line)
 
     def _on_feature_timer_tick(self) -> None:
-        """Kích hoạt trích xuất đặc trưng định kỳ."""
+        """Kích hoạt trích xuất đặc trưng định kỳ nếu buffer có dữ liệu mới."""
+        curr_ver = getattr(self.store, "_live_buffer_version", 0)
+        if curr_ver == self._last_feature_buffer_ver:
+            return
         arr = self.store.get_live_buffer_numpy()
         if arr.size > 0:
+            self._last_feature_buffer_ver = curr_ver
             self.feature_worker.enqueue(arr)
 
     def _on_serial_stopped(self) -> None:
         """Dọn dẹp sau khi luồng Serial dừng hẳn."""
         try:
             self.serial_worker.finished.disconnect(self._on_serial_stopped)
-        except TypeError:
+        except (TypeError, RuntimeError):
             pass
         with self._port_lock:
             self._port_owner = None
-        self.serial_worker = SerialWorker()
-        
-        self.serial_worker.sig_data_received.connect(self._on_serial_frame, type=Qt.ConnectionType.QueuedConnection)
-        self.serial_worker.sig_connection_status.connect(
-            self._on_serial_status, type=Qt.ConnectionType.QueuedConnection)
-        self.serial_worker.sig_raw_line_received.connect(
-            self._route_raw_line, type=Qt.ConnectionType.QueuedConnection)
-        self.serial_worker.sig_prediction_received.connect(
-            self.store.update_prediction, type=Qt.ConnectionType.QueuedConnection)
 
     # ── Private methods ─────────────────────────
 
@@ -687,8 +951,15 @@ class Handler(QObject):
         if not self._encoder_worker.isRunning():
             self._encoder_worker.start()
 
-    def _on_encoder_loaded(self, encoder, proto_path):
+    def _on_encoder_loaded(self, encoder, proto_path, error_msg: str = ""):
         if not encoder:
+            if hasattr(self, "ui_wand") and self.ui_wand:
+                keras_path = APP_DATA_DIR / "gesture_encoder.keras"
+                if keras_path.exists():
+                    self.ui_wand.append_terminal_text(f">> [WARN] Found gesture_encoder.keras but failed to load: {error_msg}")
+                    if "ModuleNotFoundError" in error_msg or "tensorflow" in error_msg:
+                        self.ui_wand.append_terminal_text(f">> [HINT] Missing TensorFlow in Python: {sys.executable}")
+                        self.ui_wand.append_terminal_text(">> [HINT] Run app using: .venv\\Scripts\\python.exe main.py")
             return
         
         try:
@@ -696,10 +967,13 @@ class Handler(QObject):
             if proto_path:
                 self.spell_recognizer.load(proto_path)
             else:
-                # Cập nhật prototypes từ dataset nếu chưa có file cache spell_prototypes.json
-                self._update_spell_prototypes()
+                # Cập nhật prototypes từ dataset bất đồng bộ nếu chưa có file cache spell_prototypes.json
+                self._update_spell_prototypes_async()
             
-            log.info(f"Loaded encoder and {len(self.spell_recognizer.prototypes) if self.spell_recognizer else 0} prototypes.")
+            n_protos = len(self.spell_recognizer.prototypes) if self.spell_recognizer else 0
+            log.info(f"Loaded encoder and {n_protos} prototypes.")
+            if hasattr(self, 'ui_wand') and self.ui_wand:
+                self.ui_wand.append_terminal_text(f">> [READY] Base Encoder model loaded ({n_protos} spell prototypes ready).")
             
             # Re-run consistency analysis for currently selected spell on Record Page
             current_spell = getattr(self.ui_record, 'current_spell_name', None)
@@ -709,6 +983,26 @@ class Handler(QObject):
             log.error(f"Failed to initialize recognizer: {e}")
             if hasattr(self, 'ui_wand') and self.ui_wand:
                 self.ui_wand.append_terminal_text(f"[ERROR] Recognizer init failed: {e}")
+
+    def _update_spell_prototypes_async(self) -> None:
+        """Cập nhật prototypes cho toàn bộ spell qua luồng nền."""
+        if not self.spell_recognizer:
+            return
+        if self._proto_update_worker is not None and self._proto_update_worker.isRunning():
+            return
+        self._proto_update_worker = _SpellPrototypesUpdateWorker(
+            dataset_dir=self.store.dataset_dir,
+            spell_recognizer=self.spell_recognizer,
+            app_data_dir=APP_DATA_DIR,
+        )
+        self._proto_update_worker.sig_done.connect(self._on_prototypes_updated)
+        self._proto_update_worker.start()
+
+    def _on_prototypes_updated(self, success: bool) -> None:
+        if success and self.spell_recognizer:
+            current_spell = getattr(self.ui_record, 'current_spell_name', None)
+            if current_spell:
+                self._run_consistency_analysis(current_spell)
 
 
     def _on_db_refreshed(self, counts: dict) -> None:
@@ -979,6 +1273,8 @@ class Handler(QObject):
                 self.ui_record.show_protected_spell_warning(canonical_system_spell(name))
             return
 
+        if self.spell_config:
+            self.spell_config.remove_spell_config(name)
         self.data_io_worker.enqueue_delete(name)
 
     def on_delete_latest_sample(self, spell_name: str) -> None:
@@ -1200,7 +1496,12 @@ class Handler(QObject):
         "PULL", "YAW_SWISH", "LASSO", "WHEEL", "SQUARE", "U_SHAPE", "WHIP", "TAP", "SPIRAL"
     ])
 
-    def _load_samples_for_analysis(self, spell_name: str, window_size: int = 64) -> list[tuple[str, np.ndarray | None, str | None]]:
+    @staticmethod
+    def _load_samples_for_analysis_static(
+        dataset_dir: str,
+        spell_name: str,
+        window_size: int = 64
+    ) -> list[tuple[str, np.ndarray | None, str | None]]:
         """Đọc và trích xuất window đặc trưng cho từng file mẫu của spell.
 
         Trả về danh sách tuple (filename, window_array_hoặc_None, error_reason_hoặc_None)
@@ -1208,9 +1509,19 @@ class Handler(QObject):
         """
         from logic.dataset_layout import storage_dirs_for_spell
 
-        dataset_root = Path(self.store.dataset_dir)
+        dataset_root = Path(dataset_dir)
         dirs = storage_dirs_for_spell(dataset_root, spell_name)
-        fnames = self.store.get_samples_for_spell(spell_name)
+        fnames: list[str] = []
+        for d in dirs:
+            if d.exists():
+                try:
+                    with os.scandir(d) as entries:
+                        for entry in entries:
+                            if entry.is_file() and entry.name.endswith(".csv"):
+                                fnames.append(entry.name)
+                except OSError:
+                    pass
+        fnames.sort()
 
         results: list[tuple[str, np.ndarray | None, str | None]] = []
         for fname in fnames:
@@ -1229,7 +1540,7 @@ class Handler(QObject):
             try:
                 with open(fpath, "r", encoding="utf-8", newline="") as f:
                     reader = csv.reader(f)
-                    header = next(reader, None)  # skip header
+                    next(reader, None)  # skip header
                     for line in reader:
                         if len(line) >= 6:
                             try:
@@ -1240,42 +1551,53 @@ class Handler(QObject):
                 results.append((fname, None, f"Lỗi đọc file: {exc}"))
                 continue
 
-            if len(rows) < window_size:
-                results.append((fname, None, f"< {window_size} hàng ({len(rows)})"))
+            if len(rows) < 16:
+                results.append((fname, None, f"< 16 hàng ({len(rows)})"))
                 continue
 
-            # Quét tìm window có tổng năng lượng (L1) lớn nhất
             best_window = None
-            max_energy = -1.0
-
-            for start_idx in range(0, len(rows) - window_size + 1, 2):
-                w_list = rows[start_idx:start_idx + window_size]
-                energy = sum(
-                    abs(row[0]) + abs(row[1]) + abs(row[2]) +
-                    abs(row[3]) + abs(row[4]) + abs(row[5])
-                    for row in w_list
-                )
-                if energy > max_energy:
-                    max_energy = energy
-                    window = np.asarray(w_list, dtype=np.float32)
-                    window[:, 3] /= 125.0
-                    window[:, 4] /= 125.0
-                    window[:, 5] /= 125.0
-                    window = np.clip(window, -2.0, 2.0)
-                    best_window = window
+            if len(rows) < window_size:
+                # Mẫu ngắn hơn 64 hàng nhưng >=16 hàng: Nội suy tuyến tính thành 64 hàng
+                orig_arr = np.asarray(rows, dtype=np.float32)
+                x_old = np.linspace(0.0, 1.0, len(rows))
+                x_new = np.linspace(0.0, 1.0, window_size)
+                resampled = np.zeros((window_size, 6), dtype=np.float32)
+                for c in range(6):
+                    resampled[:, c] = np.interp(x_new, x_old, orig_arr[:, c])
+                if np.max(np.abs(resampled[:, 3:6])) > 20.0:
+                    resampled[:, 3:6] /= 125.0
+                best_window = np.clip(resampled, -2.0, 2.0)
+            else:
+                # Quét tìm window có tổng năng lượng (L1) lớn nhất
+                max_energy = -1.0
+                for start_idx in range(0, len(rows) - window_size + 1, 2):
+                    w_list = rows[start_idx:start_idx + window_size]
+                    energy = sum(
+                        abs(row[0]) + abs(row[1]) + abs(row[2]) +
+                        abs(row[3]) + abs(row[4]) + abs(row[5])
+                        for row in w_list
+                    )
+                    if energy > max_energy:
+                        max_energy = energy
+                        window = np.asarray(w_list, dtype=np.float32)
+                        if np.max(np.abs(window[:, 3:6])) > 20.0:
+                            window[:, 3:6] /= 125.0
+                        window = np.clip(window, -2.0, 2.0)
+                        best_window = window
 
             if best_window is not None:
-                if float(np.max(np.abs(best_window))) > 20.0:
-                    results.append((fname, None, "Dữ liệu raw chưa chuẩn hóa"))
-                    continue
                 results.append((fname, best_window, None))
             else:
                 results.append((fname, None, "Không tìm thấy window hợp lệ"))
 
         return results
 
+    def _load_samples_for_analysis(self, spell_name: str, window_size: int = 64) -> list[tuple[str, np.ndarray | None, str | None]]:
+        """Instance wrapper delegating to static loader."""
+        return self._load_samples_for_analysis_static(self.store.dataset_dir, spell_name, window_size)
+
     def _run_consistency_analysis(self, spell_name: str) -> None:
-        """Load mẫu, chạy analyze, đẩy kết quả lên UI."""
+        """Kích hoạt phân tích consistency nền có debounce để không nghẽn UI."""
         if not spell_name:
             return
         # Bỏ qua primitives — không hiển thị consistency cho chúng
@@ -1283,85 +1605,36 @@ class Handler(QObject):
         if norm in {n.replace("_", " ") for n in self._PRIMITIVE_NAMES}:
             return
 
-        # Encoder input cố định 64 samples (shape=(None,64,6))
-        window_size = 64
+        self._pending_consistency_spell = spell_name
+        self._consistency_debounce_timer.start()
 
-        def _do_analysis() -> None:
-            entries = self._load_samples_for_analysis(spell_name, window_size)
-            n = len(entries)
-            if n == 0:
-                result = dict(
-                    n_samples=0,
-                    ready_to_register=False,
-                    overall_consistency=None,
-                    per_sample_scores=[],
-                    per_sample_status={},
-                    worst_sample_idx=None,
-                    recommendation="",
-                )
-            elif self.spell_recognizer is None or getattr(self.spell_recognizer, "encoder", None) is None:
-                per_status = {fname: r for fname, _, r in entries if r}
-                result = dict(
-                    n_samples=n,
-                    ready_to_register=False,
-                    overall_consistency=None,
-                    per_sample_scores=[None] * n,
-                    per_sample_status=per_status,
-                    worst_sample_idx=None,
-                    recommendation="⚙️ Encoder chưa được load. Train encoder trước để xem phân tích.",
-                )
-            else:
-                valid_entries = [(idx, fname, w) for idx, (fname, w, r) in enumerate(entries) if w is not None]
-                per_scores: list[float | None] = [0.0 if r else None for _, _, r in entries]
-                per_status = {fname: r for fname, _, r in entries if r}
+    def _start_consistency_analysis_worker(self) -> None:
+        """Bắt đầu luồng nền phân tích consistency sau khi debounce."""
+        spell_name = self._pending_consistency_spell
+        if not spell_name:
+            return
 
-                if len(valid_entries) < 3:
-                    invalid_indices = [i for i, (_, w, _) in enumerate(entries) if w is None]
-                    rec = f"📥 {len(valid_entries)}/3 mẫu hợp lệ — cần thêm {max(0, 3 - len(valid_entries))} mẫu nữa để bắt đầu đánh giá."
-                    if invalid_indices:
-                        rec += f" (Phát hiện {len(invalid_indices)} mẫu lỗi)"
-                    result = dict(
-                        n_samples=n,
-                        ready_to_register=False,
-                        overall_consistency=None,
-                        per_sample_scores=per_scores,
-                        per_sample_status=per_status,
-                        worst_sample_idx=invalid_indices[0] if invalid_indices else None,
-                        recommendation=rec,
-                    )
-                else:
-                    valid_samples = [w for _, _, w in valid_entries]
-                    sub_result = self.spell_recognizer.analyze_spell_samples(valid_samples)
+        if self._consistency_worker is not None and self._consistency_worker.isRunning():
+            try:
+                self._consistency_worker.requestInterruption()
+                self._consistency_worker.wait(50)
+            except Exception:
+                pass
 
-                    sub_scores = sub_result.get("per_sample_scores", [])
-                    for sub_i, (orig_i, _, _) in enumerate(valid_entries):
-                        if sub_i < len(sub_scores):
-                            per_scores[orig_i] = sub_scores[sub_i]
+        self._consistency_worker = _ConsistencyWorker(
+            spell_name=spell_name,
+            dataset_dir=self.store.dataset_dir,
+            spell_recognizer=self.spell_recognizer,
+        )
+        self._consistency_worker.sig_done.connect(self._on_consistency_analysis_done)
+        self._consistency_worker.start()
 
-                    invalid_indices = [i for i, (_, w, _) in enumerate(entries) if w is None]
-                    if invalid_indices:
-                        worst_orig_idx = invalid_indices[0]
-                        rec = f"🔴 Có {len(invalid_indices)} mẫu lỗi/quá ngắn. Xem xét xóa để hoàn thiện dataset."
-                    else:
-                        worst_valid_idx = sub_result.get("worst_sample_idx")
-                        worst_orig_idx = valid_entries[worst_valid_idx][0] if (worst_valid_idx is not None and worst_valid_idx < len(valid_entries)) else None
-                        rec = sub_result.get("recommendation", "")
-
-                    result = dict(
-                        n_samples=n,
-                        ready_to_register=sub_result.get("ready_to_register", False) and not invalid_indices,
-                        overall_consistency=sub_result.get("overall_consistency"),
-                        per_sample_scores=per_scores,
-                        per_sample_status=per_status,
-                        worst_sample_idx=worst_orig_idx,
-                        recommendation=rec,
-                    )
-
+    def _on_consistency_analysis_done(self, spell_name: str, result: dict) -> None:
+        """Cập nhật kết quả phân tích lên giao diện nếu user vẫn đang xem spell đó."""
+        current_spell = getattr(self.ui_record, 'current_spell_name', None)
+        if current_spell == spell_name:
             if hasattr(self.ui_record, 'update_consistency_display'):
                 self.ui_record.update_consistency_display(result)
-
-        # Non-blocking: defer to next event loop tick
-        QTimer.singleShot(0, _do_analysis)
 
     def on_register_spell_prototype(self, spell_name: str) -> None:
         """Đăng ký prototype khi user nhấn nút trên UI."""
@@ -1399,7 +1672,7 @@ class Handler(QObject):
         if hasattr(self.ui_record, 'on_spell_registered'):
             self.ui_record.on_spell_registered(spell_name)
 
-        self.store.refresh_database(force=True)
+        self.data_io_worker.enqueue_refresh()
 
     # ── IO Save Done ──────────────────────────────────────────────────
 
@@ -1615,6 +1888,10 @@ class Handler(QObject):
         self._shutdown_done = True
         if hasattr(self, '_feature_timer') and self._feature_timer:
             self._feature_timer.stop()
+        if hasattr(self, '_consistency_debounce_timer') and self._consistency_debounce_timer:
+            self._consistency_debounce_timer.stop()
+        if hasattr(self, '_usb_hotplug_timer') and self._usb_hotplug_timer:
+            self._usb_hotplug_timer.stop()
 
         for worker in (
             getattr(self, "serial_worker", None),
@@ -1629,13 +1906,16 @@ class Handler(QObject):
                 except Exception:
                     pass
 
-        for async_worker_name in ("_nvs_build_worker", "_encoder_worker", "_model_build_worker"):
+        for async_worker_name in ("_nvs_build_worker", "_encoder_worker", "_model_build_worker", "_consistency_worker", "_proto_update_worker"):
             w = getattr(self, async_worker_name, None)
-            if w is not None and w.isRunning():
+            if w is not None:
                 try:
-                    w.requestInterruption()
-                    w.wait(100)
-                    if w.isRunning():
-                        w.terminate()
+                    w.disconnect()
                 except Exception:
                     pass
+                if w.isRunning():
+                    try:
+                        w.requestInterruption()
+                        w.wait(300)
+                    except Exception:
+                        pass

@@ -189,21 +189,11 @@ class PageSetting(QWidget):
         lay.addWidget(self._make_section_label_i18n("section_imu"))
 
         card, c_lay = self._make_card(margins=(20, 18, 20, 18), spacing=14)
-        self.combo_sample_rate = self._make_combo(["50 Hz", "100 Hz", "200 Hz"])
         self.combo_accel_scale = self._make_combo(["±2g", "±4g", "±8g"])
         self.combo_gyro_scale = self._make_combo(["±250 dps", "±500 dps"])
 
         imu_row = QHBoxLayout()
         imu_row.setSpacing(16)
-
-        # Rate
-        rate_box = QVBoxLayout()
-        rate_box.setSpacing(4)
-        lbl_rate = QLabel(tr(self._lang, "label_sample_rate"))
-        lbl_rate.setProperty("type", "settings_form_label")
-        rate_box.addWidget(lbl_rate)
-        rate_box.addWidget(self.combo_sample_rate)
-        imu_row.addLayout(rate_box, stretch=1)
 
         # Accel Scale
         accel_box = QVBoxLayout()
@@ -433,7 +423,6 @@ class PageSetting(QWidget):
         """Đẩy giá trị cấu hình vào các widget UI."""
         from logic.theme_manager import theme_manager
         widgets = {
-            "sample_rate": self.combo_sample_rate,
             "accel_scale": self.combo_accel_scale,
             "gyro_scale": self.combo_gyro_scale,
             "dataset_dir": self.txt_dataset_dir,
@@ -620,7 +609,6 @@ class PageSetting(QWidget):
     def _on_btn_save_clicked(self) -> None:
         from logic.theme_manager import theme_manager
         config = {
-            "sample_rate": self.combo_sample_rate.currentText(),
             "accel_scale": self.combo_accel_scale.currentText(),
             "gyro_scale": self.combo_gyro_scale.currentText(),
             "ui_language": self.combo_ui_language.currentData(),

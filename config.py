@@ -36,16 +36,29 @@ def _detect_workspace_file() -> Path:
         Đường dẫn tới file workspace đầu tiên tìm thấy,
         hoặc đường dẫn mặc định nếu không tìm thấy.
     """
-    candidates = sorted(WORKSPACE_ROOT.glob("*.code-workspace"))
-    if candidates:
-        return candidates[0]
+    try:
+        with os.scandir(WORKSPACE_ROOT) as entries:
+            for entry in entries:
+                if entry.is_file() and entry.name.endswith(".code-workspace"):
+                    return Path(entry.path)
+    except OSError:
+        pass
     return WORKSPACE_ROOT / f"{WORKSPACE_ROOT.name}.code-workspace"
 
 
 APP_DATA_DIR = WORKSPACE_ROOT / "app_data"
+USER_DATA_DIR = WORKSPACE_ROOT / "user_data"
 DATASET_DIR = WORKSPACE_ROOT / "dataset"
 SPELL_DIR = DATASET_DIR / "spells"
 PRIMITIVE_DIR = DATASET_DIR / "primitives"
+
+if getattr(sys, "frozen", False) and getattr(sys, "_MEIPASS", None):
+    _bundled_sounds = Path(sys._MEIPASS) / "assets" / "sounds"
+    SOUNDS_PRESET_DIR = _bundled_sounds if _bundled_sounds.is_dir() else (WORKSPACE_ROOT / "assets" / "sounds")
+else:
+    SOUNDS_PRESET_DIR = WORKSPACE_ROOT / "assets" / "sounds"
+
+SOUNDS_USER_DIR = USER_DATA_DIR / "sounds"
 FIRMWARE_PROJECT_ROOT = WORKSPACE_ROOT / "mpu6050"
 FIRMWARE_BIN_DIR = WORKSPACE_ROOT / "firmware"
 DEFAULT_MODEL_PATH = APP_DATA_DIR / "model.tflite"
@@ -60,9 +73,12 @@ def ensure_data_dir() -> Path:
         Đường dẫn tới thư mục app_data.
     """
     APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
     DATASET_DIR.mkdir(parents=True, exist_ok=True)
     SPELL_DIR.mkdir(parents=True, exist_ok=True)
     PRIMITIVE_DIR.mkdir(parents=True, exist_ok=True)
+    SOUNDS_PRESET_DIR.mkdir(parents=True, exist_ok=True)
+    SOUNDS_USER_DIR.mkdir(parents=True, exist_ok=True)
     FIRMWARE_BIN_DIR.mkdir(parents=True, exist_ok=True)
     return APP_DATA_DIR
 

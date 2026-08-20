@@ -21,6 +21,9 @@ from logic.theme_manager import theme_manager
 from logic.udp_worker import UdpWorker
 from ui.asset_utils import resolve_asset_path
 from ui.i18n_bridge import tr_ui
+from config import APP_DATA_DIR
+from logic.sound_player import SoundPlayer
+from logic.spell_config_store import SpellConfigStore
 from ui.mac_shell import MacShell
 from ui.page_home import PageHome
 
@@ -36,13 +39,20 @@ class MainWindow(QMainWindow):
     Điều phối luồng dữ liệu và quản lý trạng thái hiển thị các trang.
     """
 
-    def __init__(self, data_store) -> None:
+    def __init__(
+        self,
+        data_store,
+        spell_config_store: SpellConfigStore | None = None,
+        sound_player: SoundPlayer | None = None,
+    ) -> None:
         super().__init__()
         self.data_store = data_store
+        self.spell_config_store = spell_config_store or SpellConfigStore(APP_DATA_DIR)
+        self.sound_player = sound_player or SoundPlayer(self.spell_config_store)
         self.handler: object | None = None
         self._udp_log_count = 0
 
-        self._page_home = PageHome(self.data_store)
+        self._page_home = PageHome(self.data_store, spell_config_store=self.spell_config_store)
         self._page_primitive_collect = None
         self._page_record = None
         self._page_wand = None
@@ -55,6 +65,20 @@ class MainWindow(QMainWindow):
 
         # Asynchronously preload secondary pages in idle background time
         QTimer.singleShot(100, self._preload_secondary_pages)
+        # Tự động mở Hướng Dẫn cho người mới ở lần khởi động đầu tiên
+        QTimer.singleShot(400, self._check_first_run_guide)
+
+    def _check_first_run_guide(self) -> None:
+        """Tự động mở Hướng Dẫn cho người dùng mới khi lần đầu mở app."""
+        try:
+            settings = self.data_store.get_settings_snapshot()
+            has_seen = settings.get("has_seen_beginner_guide", False)
+            if not has_seen:
+                self.data_store.save_settings({"has_seen_beginner_guide": True})
+                if hasattr(self, "shell") and hasattr(self.shell, "_open_beginner_guide"):
+                    self.shell._open_beginner_guide()
+        except Exception as exc:
+            log.warning("MainWindow: Check first-run guide encountered error: %s", exc)
 
     @property
     def page_home(self) -> PageHome:
@@ -77,7 +101,11 @@ class MainWindow(QMainWindow):
     def page_record(self):
         if self._page_record is None:
             from ui.page_record import PageRecord
-            self._page_record = PageRecord(self.data_store)
+            self._page_record = PageRecord(
+                self.data_store,
+                spell_config_store=self.spell_config_store,
+                sound_player=self.sound_player,
+            )
             self._replace_stack_page(2, self._page_record)
         return self._page_record
 
@@ -86,6 +114,7 @@ class MainWindow(QMainWindow):
         if self._page_wand is None:
             from ui.page_wand import PageWand
             self._page_wand = PageWand(self.data_store)
+            self._page_wand.sig_settings_saved.connect(self._on_settings_saved)
             adv = self._is_advanced_mode()
             self._page_wand.set_advanced_mode(adv)
             self._replace_stack_page(3, self._page_wand)
@@ -182,6 +211,7 @@ class MainWindow(QMainWindow):
 
         adv_mode = self._is_advanced_mode()
         self.shell.set_nav_item_visible(1, adv_mode)
+        self.shell.set_nav_item_visible(4, adv_mode)
 
         # Đồng bộ trạng thái kết nối
         is_connected, _ = self.data_store.get_connection_state()
@@ -283,10 +313,19 @@ class MainWindow(QMainWindow):
         self.data_store.save_settings(config)
         adv_mode = config.get("advanced_mode", config.get("show_primitives_menu", True))
         self.shell.set_nav_item_visible(1, adv_mode)
+        self.shell.set_nav_item_visible(4, adv_mode)
+
+        # Nếu đang ở tab bị ẩn thì tự động chuyển về Wand (tab 3)
+        if not adv_mode and self.shell._active_index in (1, 4):
+            self.shell.set_active_index(3)
+            self._set_page(3)
+
         if self._page_wand is not None:
             self._page_wand.set_advanced_mode(adv_mode)
+            self._page_wand.load_settings(config)
         if self._page_setting is not None:
             self._page_setting.set_advanced_mode(adv_mode)
+            self._page_setting.load_settings(config)
         if self._page_primitive_collect is not None:
             self._page_primitive_collect.set_advanced_mode(adv_mode)
 

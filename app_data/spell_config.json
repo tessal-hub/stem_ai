@@ -1,0 +1,47 @@
+{
+  "BOOST": {
+    "color": [
+      170,
+      0,
+      255
+    ],
+    "sound": "preset:chime",
+    "volume": 1.0
+  },
+  "COPY": {
+    "color": [
+      255,
+      0,
+      0
+    ],
+    "sound": "preset:dark",
+    "volume": 1.0
+  },
+  "FIREBALL": {
+    "color": [
+      0,
+      255,
+      0
+    ],
+    "sound": "preset:beam",
+    "volume": 1.0
+  },
+  "REFLECT": {
+    "color": [
+      255,
+      230,
+      0
+    ],
+    "sound": "custom:heartsteel.mp3",
+    "volume": 1.0
+  },
+  "STOP": {
+    "color": [
+      0,
+      220,
+      255
+    ],
+    "sound": "custom:fahh.mp3",
+    "volume": 1.0
+  }
+}

@@ -50,7 +50,6 @@ class DataIOWorker(QThread):
     sig_save_done = pyqtSignal(bool, str)   # (success, message)
     sig_delete_done = pyqtSignal(bool, str)   # (success, message)
     sig_delete_sample_done = pyqtSignal(bool, str)  # (success, message)
-    sig_export_done = pyqtSignal(bool, str)   # (success, message)
     sig_queue_warning = pyqtSignal(str)        # queue drop/backpressure warnings
     # Emitted after any operation that changes the dataset directory layout.
     sig_db_refreshed = pyqtSignal(dict)        # spell_counts: {name: int}
@@ -121,16 +120,6 @@ class DataIOWorker(QThread):
             log.warning(msg)
             self.sig_queue_warning.emit(msg)
 
-    def enqueue_export(self, buf: list[list[float]], path: str) -> None:
-        """Schedule a buffer CSV export (non-blocking)."""
-        try:
-            self._job_queue.put_nowait(("export", buf, path))
-            self._warn_if_queue_pressure()
-        except queue.Full:
-            msg = "DataIOWorker queue full: export job dropped"
-            log.warning(msg)
-            self.sig_queue_warning.emit(msg)
-
     def enqueue_refresh(self) -> None:
         """Schedule a database directory rescan (non-blocking)."""
         try:
@@ -178,9 +167,6 @@ class DataIOWorker(QThread):
                 elif kind == "delete_latest_sample":
                     _, spell_name = job
                     self._do_delete_latest_sample(spell_name)
-                elif kind == "export":
-                    _, buf, path = job
-                    self._do_export(buf, path)
                 elif kind == "refresh":
                     self._do_refresh()
                 else:
@@ -275,19 +261,6 @@ class DataIOWorker(QThread):
             msg = f"Delete latest sample failed: {type(exc).__name__}: {exc}"
             log.exception("DataIOWorker._do_delete_latest_sample")
             self.sig_delete_sample_done.emit(False, msg)
-
-    def _do_export(self, buf: list[list[float]], path: str) -> None:
-        try:
-            Path(path).parent.mkdir(parents=True, exist_ok=True)
-            with open(path, "w", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
-                writer.writerow(["ax", "ay", "az", "gx", "gy", "gz"])
-                writer.writerows(buf)
-            self.sig_export_done.emit(True, f"Exported {len(buf)} samples → {path}")
-        except Exception as exc:
-            msg = f"Export failed: {type(exc).__name__}: {exc}"
-            log.exception("DataIOWorker._do_export")
-            self.sig_export_done.emit(False, msg)
 
     def _do_refresh(self) -> None:
         counts = self._scan_database()

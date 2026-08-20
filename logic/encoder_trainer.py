@@ -196,11 +196,19 @@ class EncoderTrainerWorker(QThread):
                 return
 
             keras_path = APP_DATA_DIR / "gesture_encoder.keras"
+            npz_path = APP_DATA_DIR / "gesture_encoder_weights.npz"
             tflite_path = APP_DATA_DIR / "gesture_encoder.tflite"
             keras_path.parent.mkdir(parents=True, exist_ok=True)
 
             self.sig_status.emit(f"[ENCODER] Saving encoder to {keras_path}...")
             encoder.save(str(keras_path))
+
+            try:
+                from logic.prototypical_recognizer import export_keras_weights_to_npz
+                export_keras_weights_to_npz(keras_path, npz_path)
+            except Exception as exp_err:
+                log.warning("Could not export weights to npz: %s", exp_err)
+
             self.sig_progress.emit(90)
 
             self._check_cancel()

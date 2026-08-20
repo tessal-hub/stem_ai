@@ -7,6 +7,7 @@ và giữ giao diện đồng nhất cho toàn bộ ứng dụng.
 
 from __future__ import annotations
 
+import functools
 from PyQt6.QtWidgets import QFrame, QWidget
 
 from ui.asset_utils import resolve_asset_path
@@ -26,6 +27,7 @@ from ui.tokens import (
 from ui.palettes import LIGHT_PALETTE, DARK_PALETTE, Palette
 
 
+@functools.lru_cache(maxsize=4)
 def get_modern_stylesheet(theme_name: str = "light") -> str:
     """
     Tạo chuỗi stylesheet QSS dựa trên theme đã chọn ("light" hoặc "dark").
@@ -166,7 +168,6 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
             font-size: 10px;
             font-weight: 700;
             color: {TEXT_SECONDARY};
-            text-transform: uppercase;
             letter-spacing: 1px;
             padding-left: 4px;
         }}
@@ -549,7 +550,6 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
             font-size: 10px;
             font-weight: 700;
             color: {TEXT_SECONDARY};
-            text-transform: uppercase;
             letter-spacing: 1.2px;
         }}
         /* Status label — pill badges with semantic colors */
@@ -781,7 +781,6 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
             font-weight: 700;
             letter-spacing: 1px;
             color: {PRIMARY_COLOR};
-            text-transform: uppercase;
         }}
         QProgressBar[type="hero_confidence_bar"] {{
             background-color: {FILL_TERTIARY};
@@ -806,7 +805,6 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
             font-weight: 800;
             color: {PRIMARY_COLOR};
             letter-spacing: 1.4px;
-            text-transform: uppercase;
         }}
         QLabel[type="tip_text"] {{
             font-size: 15px;

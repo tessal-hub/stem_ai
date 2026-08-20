@@ -14,6 +14,7 @@ from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_LG
 from ui.tokens import SPACE_32
 from ui.wand_panels.connection_panel import WandConnectionPanel
 from ui.wand_panels.flash_panel import WandFlashPanel
+from ui.wand_panels.settings_panel import WandSettingsPanel
 from ui.wand_panels.spell_payload_panel import WandSpellPayloadPanel
 from ui.wand_panels.terminal_panel import WandTerminalPanel
 
@@ -32,12 +33,15 @@ class PageWand(QWidget):
     # ── Signal Build & Flash ──────────────────────
     sig_flash_compile = pyqtSignal(list)
     sig_flash_upload = pyqtSignal()
+    sig_show_similarity_matrix = pyqtSignal()
     sig_term_clear = pyqtSignal()
     sig_train_build_requested = pyqtSignal()
     sig_train_build_firmware_requested = pyqtSignal(list)
+    sig_settings_saved = pyqtSignal(dict)
 
     def __init__(self, data_store) -> None:
         super().__init__()
+        self.data_store = data_store
         self._init_ui()
         self._expose_legacy_attributes()
         self._init_signals()
@@ -61,6 +65,7 @@ class PageWand(QWidget):
         self.connection_panel = WandConnectionPanel()
         self.terminal_panel = WandTerminalPanel()
         self.payload_panel = WandSpellPayloadPanel()
+        self.settings_panel = WandSettingsPanel(self.data_store)
 
         self._left_col = QVBoxLayout()
         self._right_col = QVBoxLayout()
@@ -81,9 +86,13 @@ class PageWand(QWidget):
         self.connection_panel.sig_serial_connect.connect(self.sig_serial_connect.emit)
         self.connection_panel.sig_serial_disconnect.connect(self.sig_serial_disconnect.emit)
 
-        # Thao tác Flash & Build
+        # Thao tác Flash & Build & Similarity
         self.flash_panel.sig_build_firmware_clicked.connect(self._on_btn_build_firmware_clicked)
         self.flash_panel.sig_upload_clicked.connect(self.sig_flash_upload.emit)
+        self.flash_panel.sig_similarity_clicked.connect(self.sig_show_similarity_matrix.emit)
+
+        # Cài đặt tích hợp
+        self.settings_panel.sig_settings_saved.connect(self.sig_settings_saved.emit)
 
         # Terminal
         self.terminal_panel.sig_clear_requested.connect(self.sig_term_clear.emit)
@@ -96,9 +105,9 @@ class PageWand(QWidget):
 
     def refresh_styles(self) -> None:
         """Làm mới style cho tất cả các panel con."""
-        panels = [self.connection_panel, self.flash_panel, self.terminal_panel, self.payload_panel]
+        panels = [self.connection_panel, self.flash_panel, self.terminal_panel, self.payload_panel, getattr(self, "settings_panel", None)]
         for panel in panels:
-            if hasattr(panel, "refresh_styles"):
+            if panel and hasattr(panel, "refresh_styles"):
                 panel.refresh_styles()
 
     def append_terminal_text(self, text: str) -> None:
@@ -111,6 +120,13 @@ class PageWand(QWidget):
         self.connection_panel.apply_ui_language()
         self.terminal_panel.apply_ui_language()
         self.payload_panel.apply_ui_language()
+        if hasattr(self, "settings_panel"):
+            self.settings_panel.apply_ui_language()
+
+    def load_settings(self, config: dict) -> None:
+        """Nạp cấu hình cho panel cài đặt tích hợp."""
+        if hasattr(self, "settings_panel"):
+            self.settings_panel.load_settings(config)
 
     def update_flash_progress(self, percentage: int, status: str = "") -> None:
         """Cập nhật tiến độ nạp firmware."""
@@ -139,7 +155,9 @@ class PageWand(QWidget):
             self._right_col.takeAt(0)
 
         if advanced:
-            # Chế độ nâng cao
+            # Chế độ nâng cao: Ẩn settings panel trên Wand (đã có tab Settings riêng)
+            if hasattr(self, "settings_panel"):
+                self.settings_panel.setVisible(False)
             # Cột trái: Kết nối + Danh sách Spell
             self._left_col.addWidget(self.connection_panel)
             self._left_col.addWidget(self.payload_panel, stretch=1)
@@ -147,10 +165,14 @@ class PageWand(QWidget):
             self._right_col.addWidget(self.terminal_panel, stretch=2)
             self._right_col.addWidget(self.flash_panel, stretch=1)
         else:
-            # Chế độ cơ bản (không nâng cao): Cân đối 2 bên
-            # Cột trái: Kết nối + Nạp/Flash Firmware
+            # Chế độ cơ bản (không nâng cao): Gộp Cài đặt & Wand vào một trang
+            if hasattr(self, "settings_panel"):
+                self.settings_panel.setVisible(True)
+            # Cột trái: Kết nối + Nạp/Flash Firmware + Cài đặt Hệ thống & Giao diện
             self._left_col.addWidget(self.connection_panel)
             self._left_col.addWidget(self.flash_panel)
+            if hasattr(self, "settings_panel"):
+                self._left_col.addWidget(self.settings_panel)
             self._left_col.addStretch()
             # Cột phải: Danh sách Spell bung toàn bộ chiều cao
             self._right_col.addWidget(self.payload_panel, stretch=1)

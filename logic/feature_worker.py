@@ -47,6 +47,7 @@ class FeatureWorker(QThread):
         )
         self._running = False
         self._sample_rate_hz: int = 50
+        self._hanning_cache = {}
 
     # ------------------------------------------------------------------
     # Public API — call from the main thread
@@ -115,7 +116,7 @@ class FeatureWorker(QThread):
             if len(snapshot) < 16:
                 return {}
 
-            arr = np.asarray(snapshot, dtype=float)
+            arr = np.asarray(snapshot, dtype=np.float32)
             if arr.ndim != 2 or arr.shape[1] != 6:
                 return {}
 
@@ -136,7 +137,11 @@ class FeatureWorker(QThread):
             }
 
             sample_rate_hz = self._sample_rate_hz
-            fft_values = np.fft.rfft(accel_mag * np.hanning(len(accel_mag)))
+            win_len = len(accel_mag)
+            if win_len not in self._hanning_cache:
+                self._hanning_cache[win_len] = np.hanning(win_len).astype(np.float32)
+            hanning_win = self._hanning_cache[win_len]
+            fft_values = np.fft.rfft(accel_mag * hanning_win)
             fft_mags = np.abs(fft_values)
             fft_freqs = np.fft.rfftfreq(len(accel_mag), d=1.0 / sample_rate_hz)
 

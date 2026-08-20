@@ -26,6 +26,7 @@ class WandFlashPanel(QWidget):
     # ── Signal xuất bản ───────────────────────────
     sig_build_firmware_clicked = pyqtSignal()
     sig_upload_clicked = pyqtSignal()
+    sig_similarity_clicked = pyqtSignal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -43,15 +44,17 @@ class WandFlashPanel(QWidget):
         layout.addWidget(self._title_lbl)
 
         card, card_layout = make_card(
-            margins=(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE),
-            spacing=SPACING_MD,
+            margins=(16, 14, 16, 14),
+            spacing=SPACING_SM,
         )
 
         btn_layout = QVBoxLayout()
         btn_layout.setSpacing(SPACING_SM)
+        self.btn_similarity = make_button("🔍 MA TRẬN TƯƠNG ĐỒNG", "outline", height=BTN_H)
         self.btn_build_firmware = make_button(tr_ui("wand_build_firmware"), "outline", height=BTN_H)
         self.btn_upload = make_button(tr_ui("wand_upload_model"), "primary", height=BTN_H)
 
+        btn_layout.addWidget(self.btn_similarity)
         btn_layout.addWidget(self.btn_build_firmware)
         btn_layout.addWidget(self.btn_upload)
         card_layout.addLayout(btn_layout)
@@ -70,6 +73,7 @@ class WandFlashPanel(QWidget):
 
     def _init_signals(self) -> None:
         """Kết nối signal/slot nội bộ."""
+        self.btn_similarity.clicked.connect(lambda _: self.sig_similarity_clicked.emit())
         self.btn_build_firmware.clicked.connect(lambda _: self.sig_build_firmware_clicked.emit())
         self.btn_upload.clicked.connect(lambda _: self.sig_upload_clicked.emit())
 
@@ -78,6 +82,7 @@ class WandFlashPanel(QWidget):
     def apply_ui_language(self) -> None:
         """Làm mới văn bản khi ngôn ngữ ứng dụng thay đổi."""
         self._title_lbl.setText(tr_ui("wand_section_model"))
+        self.btn_similarity.setText("🔍 " + tr_ui("wand_btn_similarity", default="MA TRẬN TƯƠNG ĐỒNG"))
         self.btn_build_firmware.setText(tr_ui("wand_build_firmware"))
         self.btn_upload.setText(tr_ui("wand_upload_model"))
 

@@ -76,11 +76,34 @@ def test_page_wand_advanced_mode_toggle(qapp):
 
     page.set_advanced_mode(True)
     assert page.terminal_panel.isHidden() is False
+    assert page.settings_panel.isHidden() is True
     assert page._left_col.itemAt(1).widget() == page.payload_panel
 
     page.set_advanced_mode(False)
     assert page.terminal_panel.isHidden() is True
+    assert page.settings_panel.isHidden() is False
     assert page._right_col.itemAt(0).widget() == page.payload_panel
+
+
+def test_main_window_sidebar_merge_in_simple_mode(qapp):
+    from ui.main_window import MainWindow
+    store = DataStore()
+    store.save_settings({"advanced_mode": False})
+    win = MainWindow(store)
+
+    # Primitives (tab 1) and Settings (tab 4) are hidden in non-advanced mode
+    assert win.shell._buttons[1].isHidden() is True
+    assert win.shell._buttons[4].isHidden() is True
+
+    # Wand (tab 3) has integrated settings
+    assert win.page_wand.settings_panel.isHidden() is False
+
+    # Switch to Advanced Mode
+    win._on_settings_saved({"advanced_mode": True})
+    assert win.shell._buttons[1].isHidden() is False
+    assert win.shell._buttons[4].isHidden() is False
+    assert win.page_wand.settings_panel.isHidden() is True
+    assert win.page_wand.terminal_panel.isHidden() is False
 
 
 def test_session_loaded_spells_in_home_page(qapp):

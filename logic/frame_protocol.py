@@ -85,11 +85,11 @@ def validate_six_axis_values(values: Sequence[object]) -> list[float]:
     if len(values) != 6:
         raise FrameValidationError(f"Expected 6 values, got {len(values)}")
 
-    parsed: list[float] = []
+    parsed: list[float] = [0.0] * 6
     for index, raw in enumerate(values):
+        if type(raw) is bool:
+            raise FrameValidationError(f"Non-numeric value at index {index}: {raw!r}")
         try:
-            if isinstance(raw, bool):
-                raise TypeError("boolean values are not supported")
             if not isinstance(raw, (int, float, str)):
                 raise TypeError(f"unsupported scalar type: {type(raw).__name__}")
             number = float(raw)
@@ -101,7 +101,7 @@ def validate_six_axis_values(values: Sequence[object]) -> list[float]:
             raise FrameValidationError(
                 f"Non-finite value at index {index}: {number!r}"
             )
-        parsed.append(number)
+        parsed[index] = number
 
     return parsed
 
@@ -112,13 +112,15 @@ def normalize_sensor_values(
 ) -> list[float]:
     """Normalize a 6-axis payload using one canonical accel/gyro path."""
     values = validate_six_axis_values(raw_values)
+    accel_div = profile.accel_lsb_per_g
+    gyro_div = profile.gyro_lsb_per_dps
     return [
-        values[0] / profile.accel_lsb_per_g,
-        values[1] / profile.accel_lsb_per_g,
-        values[2] / profile.accel_lsb_per_g,
-        values[3] / profile.gyro_lsb_per_dps,
-        values[4] / profile.gyro_lsb_per_dps,
-        values[5] / profile.gyro_lsb_per_dps,
+        values[0] / accel_div,
+        values[1] / accel_div,
+        values[2] / accel_div,
+        values[3] / gyro_div,
+        values[4] / gyro_div,
+        values[5] / gyro_div,
     ]
 
 
@@ -126,17 +128,36 @@ def parse_sensor_csv_frame(
     frame: str,
     profile: SensorScaleProfile = DEFAULT_SCALE_PROFILE,
 ) -> list[float]:
-    """Validate and normalize one CSV sensor frame."""
-    if not isinstance(frame, str):
+    """Validate and normalize one CSV sensor frame.
+
+    Fuses validation + normalization into a single pass to avoid
+    allocating two intermediate lists on every frame (~100 Hz).
+    """
+    if type(frame) is not str:
         raise FrameValidationError("Sensor frame must be a string")
 
-    parts = [part.strip() for part in frame.split(",")]
+    parts = frame.split(",")
     if len(parts) != 6:
         raise FrameValidationError(
             f"Sensor CSV requires 6 fields, got {len(parts)}"
         )
 
-    return normalize_sensor_values(parts, profile)
+    accel_div = profile.accel_lsb_per_g
+    gyro_div = profile.gyro_lsb_per_dps
+    result = [0.0] * 6
+    for i, raw in enumerate(parts):
+        try:
+            v = float(raw)
+        except (ValueError, TypeError):
+            raise FrameValidationError(
+                f"Non-numeric value at index {i}: {raw!r}"
+            )
+        if not math.isfinite(v):
+            raise FrameValidationError(
+                f"Non-finite value at index {i}: {v!r}"
+            )
+        result[i] = v / (accel_div if i < 3 else gyro_div)
+    return result
 
 
 def parse_prediction_frame(frame: str) -> tuple[str, float]:

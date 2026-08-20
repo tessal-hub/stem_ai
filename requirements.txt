@@ -1,5 +1,6 @@
 # requirements.txt — Core runtime (no TensorFlow)
 PyQt6>=6.5.0
+PyQt6-Multimedia>=6.5.0
 PyOpenGL>=3.1.0
 pyqtgraph>=0.13.3
 numpy>=1.26.0
