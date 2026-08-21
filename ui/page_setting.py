@@ -45,6 +45,7 @@ class PageSetting(QWidget):
         self.data_store = data_store
         self._i18n_text: list[tuple[QWidget, str, str]] = []
         self._lang = "en"
+        self._current_firmware = "disconnected"
         self._last_saved: dict[str, Any] = {}
 
         self._status_timer = QTimer(self)
@@ -332,6 +333,18 @@ class PageSetting(QWidget):
         card, c_lay = self._make_card(margins=(20, 20, 20, 20), spacing=14)
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
+        # Firmware status indicator
+        fw_row = QHBoxLayout()
+        self.lbl_cur_fw_title = QLabel(tr(self._lang, "label_current_firmware", default="Current ESP Firmware:"))
+        self.lbl_cur_fw_title.setProperty("type", "settings_form_label")
+        self.lbl_setting_fw_status = QLabel(tr(self._lang, "fw_status_disconnected", default="Not Connected"))
+        self.lbl_setting_fw_status.setProperty("type", "status_label")
+        self.lbl_setting_fw_status.setProperty("status", "muted")
+        fw_row.addWidget(self.lbl_cur_fw_title)
+        fw_row.addStretch()
+        fw_row.addWidget(self.lbl_setting_fw_status)
+        c_lay.addLayout(fw_row)
+
         # Buttons Row
         btns = QHBoxLayout()
         btns.setSpacing(12)
@@ -416,6 +429,8 @@ class PageSetting(QWidget):
         lang = normalize_ui_language(self._last_saved.get("ui_language"))
         self._refresh_ui_texts(lang)
         self.load_settings(self._last_saved)
+        fw_type = getattr(self.data_store, "get_detected_firmware", lambda: "disconnected")()
+        self.update_firmware_status(fw_type)
 
     # ── Public methods ──────────────────────────
 
@@ -496,6 +511,30 @@ class PageSetting(QWidget):
     def apply_ui_language(self) -> None:
         """Cập nhật ngôn ngữ hiển thị toàn trang."""
         self._refresh_ui_texts(locale_manager.current_language)
+
+    def update_firmware_status(self, fw_type: str) -> None:
+        """Cập nhật trạng thái firmware hiển thị trên trang Settings."""
+        self._current_firmware = fw_type
+        if not hasattr(self, "lbl_setting_fw_status") or self.lbl_setting_fw_status is None:
+            return
+        if fw_type == "data":
+            self.lbl_setting_fw_status.setText(f"⚡ {tr(self._lang, 'fw_status_data', default='Data Collection (collect.bin)')}")
+            self.lbl_setting_fw_status.setProperty("status", "success")
+        elif fw_type == "inference":
+            self.lbl_setting_fw_status.setText(f"🧠 {tr(self._lang, 'fw_status_inference', default='AI Inference (inference.bin)')}")
+            self.lbl_setting_fw_status.setProperty("status", "accent")
+        elif fw_type == "detecting":
+            self.lbl_setting_fw_status.setText(f"🔍 {tr(self._lang, 'fw_status_detecting', default='Detecting...')}")
+            self.lbl_setting_fw_status.setProperty("status", "warning")
+        elif fw_type == "unknown":
+            self.lbl_setting_fw_status.setText(f"❓ {tr(self._lang, 'fw_status_unknown', default='Unknown / Unrecognized')}")
+            self.lbl_setting_fw_status.setProperty("status", "warning")
+        else:
+            self.lbl_setting_fw_status.setText(tr(self._lang, 'fw_status_disconnected', default='Not Connected'))
+            self.lbl_setting_fw_status.setProperty("status", "muted")
+
+        self.lbl_setting_fw_status.style().unpolish(self.lbl_setting_fw_status)
+        self.lbl_setting_fw_status.style().polish(self.lbl_setting_fw_status)
 
     def append_console_text(self, msg: str) -> None:
         """Thêm log vào console flash."""
@@ -587,6 +626,11 @@ class PageSetting(QWidget):
 
         if hasattr(self, "lbl_hw_metrics_title"):
             self.lbl_hw_metrics_title.setText("CẤU HÌNH PHẦN CỨNG & MÔ HÌNH" if lang == "vi" else "HARDWARE & MODEL METRICS")
+
+        if hasattr(self, "lbl_cur_fw_title"):
+            self.lbl_cur_fw_title.setText(tr(lang, "label_current_firmware", default="Current ESP Firmware:"))
+        if hasattr(self, "lbl_setting_fw_status"):
+            self.update_firmware_status(getattr(self, "_current_firmware", "disconnected"))
 
         current_data = self.combo_ui_language.currentData()
         if not current_data:

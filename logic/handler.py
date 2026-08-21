@@ -28,6 +28,7 @@ from ui.asset_utils import resolve_asset_path
 from .data_io_worker import DataIOWorker
 from .data_store import DataStore
 from .feature_worker import FeatureWorker
+from .firmware_detector import FirmwareDetector
 from .flash_worker import FlashWorker
 from .frame_protocol import build_scale_profile
 from .model_uploader import ModelUploader
@@ -111,25 +112,19 @@ class NVSBuildWorker(QThread):
                 except Exception:
                     prim_cache = {}
 
+            # Pass A: Collect sample embeddings and calculate centroids for all gestures
             from logic.tensorflow.pipeline import _read_csv_rows, _windowize
             from logic.dataset_layout import storage_dirs_for_spell
 
             total_gestures = len(final_gestures)
+            gesture_data: list[dict] = []
+
             for idx, g in enumerate(final_gestures):
                 is_spell = (g in self.spell_names)
                 if is_spell:
                     self.sig_status.emit(f">> [NVS] Embedding spell '{g}'...")
-                self.sig_progress.emit(10 + int(70 * (idx / total_gestures)))
+                self.sig_progress.emit(10 + int(60 * (idx / max(1, total_gestures))))
 
-                # 1. Nếu là primitive và đã có trong cache
-                if not is_spell and g in prim_cache:
-                    gesture_names.append(g)
-                    centroids.append(prim_cache[g])
-                    is_spell_flags.append(False)
-                    thresholds.append(0.45)
-                    continue
-
-                # 2. Đọc mẫu từ dataset với đúng 9-channel feature pipeline chuẩn
                 dirs = storage_dirs_for_spell(dataset_root, g)
                 csv_files = []
                 for d in dirs:
@@ -147,32 +142,69 @@ class NVSBuildWorker(QThread):
                         samples.append(arr)
 
                 if not samples:
-                    if is_spell:
-                        self.sig_status.emit(f">> [WARN] No samples found for spell '{g}', using default zero centroid.")
-                    centroid = [0.0] * 16
-                    thresh = 0.45
+                    if not is_spell and g in prim_cache:
+                        centroid = prim_cache[g]
+                        normalized_embs = np.empty((0, 16), dtype=np.float32)
+                    else:
+                        if is_spell:
+                            self.sig_status.emit(f">> [WARN] No samples found for spell '{g}', using default zero centroid.")
+                        centroid = [0.0] * 16
+                        normalized_embs = np.empty((0, 16), dtype=np.float32)
                 else:
                     batch = np.asarray(samples, dtype=np.float32)
                     embeddings = self.spell_recognizer._embed_batch(batch)
-                    
+
                     norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
                     norms[norms == 0] = 1e-10
-                    normalized = embeddings / norms
-                    
-                    mean_emb = np.mean(normalized, axis=0)
+                    normalized_embs = embeddings / norms
+
+                    mean_emb = np.mean(normalized_embs, axis=0)
                     m_norm = np.linalg.norm(mean_emb)
                     if m_norm > 0:
                         mean_emb = mean_emb / m_norm
                     centroid = mean_emb.tolist()
-                    thresh = 0.45
 
-                    # Lưu vào cache nếu là primitive
                     if not is_spell:
                         prim_cache[g] = centroid
 
-                gesture_names.append(g)
-                centroids.append(centroid)
-                is_spell_flags.append(is_spell)
+                gesture_data.append({
+                    "name": g,
+                    "is_spell": is_spell,
+                    "centroid": centroid,
+                    "embeddings": normalized_embs,
+                })
+
+            # Pass B: Compute adaptive inter-class margin thresholds matching pipeline.py
+            for idx, item in enumerate(gesture_data):
+                self.sig_progress.emit(70 + int(20 * (idx / max(1, total_gestures))))
+                c_centroid = np.asarray(item["centroid"], dtype=np.float32)
+                c_embs = item["embeddings"]
+
+                if len(c_embs) > 0 and not np.all(c_centroid == 0):
+                    other_embs_list = [
+                        gd["embeddings"]
+                        for gd in gesture_data
+                        if gd["name"] != item["name"] and len(gd["embeddings"]) > 0
+                    ]
+                    if other_embs_list:
+                        other_embeddings = np.vstack(other_embs_list)
+                        other_cos_sims = np.dot(other_embeddings, c_centroid)
+                        max_other = float(np.max(other_cos_sims)) if len(other_cos_sims) > 0 else 0.0
+                    else:
+                        max_other = 0.0
+
+                    # Margin-based inter-class threshold (exact clamp range matching pipeline.py)
+                    thresh = max(0.55, min(max_other + 0.10, 0.70))
+                else:
+                    # Zero-vector centroid should never match legitimately; high reject bar (0.70) is safe rather than arbitrary
+                    max_other = 0.0
+                    thresh = 0.70
+
+                self.sig_status.emit(f">> [NVS] '{item['name']}' threshold={thresh:.3f} (margin vs nearest={max_other:.3f})")
+
+                gesture_names.append(item["name"])
+                centroids.append(item["centroid"])
+                is_spell_flags.append(item["is_spell"])
                 thresholds.append(thresh)
 
             # Cập nhật file cache primitive
@@ -475,6 +507,7 @@ class Handler(QObject):
         self.uploader = ModelUploader()
         self.recorder = DataRecorder(dataset_dir=self.store.dataset_dir)
         self.flash_worker = FlashWorker()
+        self.firmware_detector = FirmwareDetector(self.store, parent=self)
 
         self.data_io_worker = DataIOWorker(dataset_dir=self.store.dataset_dir)
         if not self.data_io_worker.isRunning():
@@ -586,10 +619,14 @@ class Handler(QObject):
         self.serial_worker.sig_data_received.connect(self._on_serial_frame, type=Qt.ConnectionType.QueuedConnection)
         self.serial_worker.sig_connection_status.connect(
             self._on_serial_status, type=Qt.ConnectionType.QueuedConnection)
+        self.serial_worker.sig_connection_status.connect(
+            self.firmware_detector.on_connection_status, type=Qt.ConnectionType.QueuedConnection)
         self.serial_worker.sig_raw_line_received.connect(
             self._route_raw_line, type=Qt.ConnectionType.QueuedConnection)
         self.serial_worker.sig_prediction_received.connect(
             self.store.update_prediction, type=Qt.ConnectionType.QueuedConnection)
+        self.serial_worker.sig_prediction_received.connect(
+            self.firmware_detector.on_prediction_received, type=Qt.ConnectionType.QueuedConnection)
 
         self.data_io_worker.sig_save_done.connect(self._on_io_done, type=Qt.ConnectionType.QueuedConnection)
         self.data_io_worker.sig_db_refreshed.connect(self.store.update_counts_from_worker, type=Qt.ConnectionType.QueuedConnection)
@@ -619,6 +656,10 @@ class Handler(QObject):
         self.store.sig_registered_prototypes_updated.connect(self.ui_home.update_loaded_spells)
         self.store.sig_prediction_updated.connect(self.ui_home.show_recognized_spell)
         self.store.sig_prediction_updated.connect(self._on_prediction_for_sound)
+        self.store.sig_firmware_detected.connect(self.ui_wand.set_firmware_status, type=Qt.ConnectionType.QueuedConnection)
+        self.store.sig_firmware_detected.connect(self.ui_home._on_firmware_updated, type=Qt.ConnectionType.QueuedConnection)
+        self.store.sig_firmware_detected.connect(self.ui_setting.update_firmware_status, type=Qt.ConnectionType.QueuedConnection)
+        self.store.sig_firmware_detected.connect(self.ui_record.update_firmware_status, type=Qt.ConnectionType.QueuedConnection)
 
     def _on_prediction_for_sound(self, action: str, confidence: float) -> None:
         """Phát hiệu ứng âm thanh khi hệ thống nhận diện thành công một spell."""
@@ -869,6 +910,10 @@ class Handler(QObject):
         if len(values) < 6:
             return
 
+        # 0. Thông báo bộ nhận diện firmware
+        if hasattr(self, "firmware_detector") and self.firmware_detector:
+            self.firmware_detector.on_sensor_frame(values)
+
         # 1. Đẩy vào DataStore (truyền list trực tiếp, tránh tạo dict mỗi khung)
         self.store.update_sensor_data(values)
 
@@ -895,6 +940,11 @@ class Handler(QObject):
         """Phân luồng log UART: Primitive sang màn hình thu thập, Spell sang Wand."""
         if not line:
             return
+
+        # 0. Thông báo bộ nhận diện firmware
+        if hasattr(self, "firmware_detector") and self.firmware_detector:
+            self.firmware_detector.on_raw_line(line)
+
         # Lọc bỏ các dòng CSV cảm biến thô để tránh gây nghẽn giao diện Terminal
         first = line[0]
         if (first.isdigit() or first in "-+") and "," in line and not line.startswith("ACK:"):
@@ -1242,6 +1292,8 @@ class Handler(QObject):
         self._set_mode(self._MODE_IDLE)
 
         if success:
+            if hasattr(self, "firmware_detector") and self.firmware_detector:
+                self.firmware_detector.on_flash_completed("inference")
             self.ui_wand.append_terminal_text(f">> [DONE] Model upload COMPLETE: {message}")
             self.ui_wand.update_flash_progress(100, "Success")
             if port:
@@ -1792,6 +1844,7 @@ class Handler(QObject):
 
     def _on_firmware_flash_finished(self, success: bool, message: str) -> None:
         """Called when FlashWorker finishes flashing."""
+        flashed_bin_type = self._pending_flash_bin_type
         self._clear_pending_flash_context()
         self._set_port_owner(None)
         self._set_mode(self._MODE_IDLE)
@@ -1799,6 +1852,8 @@ class Handler(QObject):
         if self.ui_setting:
             self.ui_setting.set_flash_buttons_enabled(True)
             if success:
+                if hasattr(self, "firmware_detector") and self.firmware_detector:
+                    self.firmware_detector.on_flash_completed(flashed_bin_type)
                 self.ui_setting.append_console_text(f">> [DONE] Firmware flash COMPLETE: {message}")
                 self.ui_setting.update_flash_progress(100)
             else:
@@ -1909,13 +1964,13 @@ class Handler(QObject):
         for async_worker_name in ("_nvs_build_worker", "_encoder_worker", "_model_build_worker", "_consistency_worker", "_proto_update_worker"):
             w = getattr(self, async_worker_name, None)
             if w is not None:
-                try:
-                    w.disconnect()
-                except Exception:
-                    pass
                 if w.isRunning():
                     try:
                         w.requestInterruption()
                         w.wait(300)
                     except Exception:
                         pass
+                try:
+                    w.disconnect()
+                except (TypeError, RuntimeError):
+                    pass

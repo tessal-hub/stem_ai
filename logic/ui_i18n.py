@@ -30,6 +30,9 @@ def normalize_ui_language(code: str | None) -> Lang:
     return "vi" if c in {"vi", "vn", "vietnamese"} else "en"
 
 
-def tr(lang: str | None, key: str) -> str:
+def tr(lang: str | None, key: str, default: str | None = None) -> str:
     lg = normalize_ui_language(lang)
-    return _TABLE.get(lg, {}).get(key) or _TABLE.get("en", {}).get(key, key)
+    val = _TABLE.get(lg, {}).get(key) or _TABLE.get("en", {}).get(key)
+    if val is not None:
+        return val
+    return default if default is not None else key

@@ -87,8 +87,8 @@ class _SoundRowWidget(QWidget):
         self.btn_preview.setFixedWidth(90)
         self.btn_preview.setStyleSheet(
             "QPushButton { font-size: 12px; padding: 2px 8px; border-radius: 4px; "
-            "background-color: #F0F0F2; color: #1C1C1E; border: 1px solid #D1D1D6; }"
-            "QPushButton:hover { background-color: #E5E5EA; }"
+            "background-color: rgba(128, 128, 128, 0.12); border: 1px solid rgba(128, 128, 128, 0.25); }"
+            "QPushButton:hover { background-color: rgba(128, 128, 128, 0.22); }"
         )
         self.btn_preview.clicked.connect(self._on_preview)
 
@@ -148,12 +148,12 @@ class SoundSelectorDialog(QDialog):
 
         # ── 1. Phần cấu hình màu RGB LED Phần cứng ──
         lbl_color_section = QLabel("💡 " + tr_ui("section_led_color"))
-        lbl_color_section.setStyleSheet("font-size: 13px; font-weight: 700; color: #3A3A3C;")
+        lbl_color_section.setStyleSheet("font-size: 13px; font-weight: 700;")
         layout.addWidget(lbl_color_section)
 
         color_card = QFrame()
         color_card.setStyleSheet(
-            "QFrame { background-color: #F9F9FB; border: 1px solid #E5E5EA; border-radius: 8px; padding: 6px; }"
+            "QFrame { background-color: rgba(128, 128, 128, 0.08); border: 1px solid rgba(128, 128, 128, 0.18); border-radius: 8px; padding: 6px; }"
         )
         color_card_layout = QHBoxLayout(color_card)
         color_card_layout.setContentsMargins(10, 8, 10, 8)
@@ -192,8 +192,8 @@ class SoundSelectorDialog(QDialog):
         self.btn_custom_color.setFixedHeight(28)
         self.btn_custom_color.setStyleSheet(
             "QPushButton { font-size: 12px; font-weight: 500; padding: 2px 10px; border-radius: 6px; "
-            "background-color: #FFFFFF; border: 1px solid #D1D1D6; color: #1C1C1E; }"
-            "QPushButton:hover { background-color: #F0F0F2; }"
+            "background-color: rgba(128, 128, 128, 0.12); border: 1px solid rgba(128, 128, 128, 0.25); }"
+            "QPushButton:hover { background-color: rgba(128, 128, 128, 0.22); }"
         )
         self.btn_custom_color.clicked.connect(self._on_choose_custom_color)
         color_card_layout.addWidget(self.btn_custom_color, 0)
@@ -202,12 +202,12 @@ class SoundSelectorDialog(QDialog):
 
         # ── 2. Phần cấu hình Âm thanh nhận diện ──
         lbl_sound_section = QLabel("🔊 " + tr_ui("section_sound_effect"))
-        lbl_sound_section.setStyleSheet("font-size: 13px; font-weight: 700; color: #3A3A3C; margin-top: 4px;")
+        lbl_sound_section.setStyleSheet("font-size: 13px; font-weight: 700; margin-top: 4px;")
         layout.addWidget(lbl_sound_section)
 
         self.tab_widget = QTabWidget()
         self.tab_widget.setStyleSheet(
-            "QTabWidget::pane { border: 1px solid #D1D1D6; border-radius: 6px; background: #FFFFFF; }"
+            "QTabWidget::pane { border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 6px; } "
             "QTabBar::tab { padding: 6px 16px; font-size: 13px; font-weight: 500; }"
         )
 
@@ -218,7 +218,7 @@ class SoundSelectorDialog(QDialog):
         self.preset_list = QListWidget()
         self.preset_list.setStyleSheet(
             "QListWidget { border: none; background: transparent; }"
-            "QListWidget::item:selected { background-color: #E5E5EA; border-radius: 6px; }"
+            "QListWidget::item:selected { background-color: rgba(10, 132, 255, 0.25); border-radius: 6px; }"
         )
         self.preset_list.itemClicked.connect(self._on_preset_clicked)
         self.preset_list.itemDoubleClicked.connect(self._on_preset_double_clicked)
@@ -232,7 +232,7 @@ class SoundSelectorDialog(QDialog):
         self.custom_list = QListWidget()
         self.custom_list.setStyleSheet(
             "QListWidget { border: none; background: transparent; }"
-            "QListWidget::item:selected { background-color: #E5E5EA; border-radius: 6px; }"
+            "QListWidget::item:selected { background-color: rgba(10, 132, 255, 0.25); border-radius: 6px; }"
         )
         self.custom_list.itemClicked.connect(self._on_custom_clicked)
         self.custom_list.itemDoubleClicked.connect(self._on_custom_double_clicked)
@@ -243,8 +243,8 @@ class SoundSelectorDialog(QDialog):
         btn_import.setFixedHeight(32)
         btn_import.setStyleSheet(
             "QPushButton { font-size: 13px; font-weight: 500; border-radius: 6px; "
-            "background-color: #F2F2F7; border: 1px dashed #8E8E93; color: #007AFF; }"
-            "QPushButton:hover { background-color: #E5E5EA; }"
+            "background-color: rgba(128, 128, 128, 0.08); border: 1px dashed rgba(128, 128, 128, 0.4); color: #0A84FF; }"
+            "QPushButton:hover { background-color: rgba(128, 128, 128, 0.18); }"
         )
         btn_import.clicked.connect(self._on_import_sound)
         custom_layout.addWidget(btn_import)
@@ -256,7 +256,7 @@ class SoundSelectorDialog(QDialog):
         volume_layout = QHBoxLayout()
         volume_layout.setSpacing(10)
         self.lbl_volume = QLabel(tr_ui("sound_volume_label").format(pct=int(self._selected_volume * 100)))
-        self.lbl_volume.setStyleSheet("font-size: 12px; font-weight: 500; color: #636366;")
+        self.lbl_volume.setStyleSheet("font-size: 12px; font-weight: 500; opacity: 0.85;")
         self.slider_volume = QSlider(Qt.Orientation.Horizontal)
         self.slider_volume.setRange(0, 100)
         self.slider_volume.setValue(int(self._selected_volume * 100))
@@ -275,8 +275,8 @@ class SoundSelectorDialog(QDialog):
         self.btn_clear.setFixedHeight(34)
         self.btn_clear.setStyleSheet(
             "QPushButton { font-size: 13px; padding: 4px 12px; border-radius: 6px; "
-            "background-color: #FFF0F0; color: #D32F2F; border: 1px solid #FFCDD2; }"
-            "QPushButton:hover { background-color: #FFEBEE; }"
+            "background-color: rgba(255, 69, 58, 0.15); color: #FF453A; border: 1px solid rgba(255, 69, 58, 0.35); }"
+            "QPushButton:hover { background-color: rgba(255, 69, 58, 0.25); }"
         )
         self.btn_clear.clicked.connect(self.on_clear_sound)
         action_layout.addWidget(self.btn_clear)

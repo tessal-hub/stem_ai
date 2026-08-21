@@ -293,6 +293,11 @@ class PageHome(QWidget):
         self.status_bar.setProperty("type", "status_label")
         self.status_bar.setProperty("status", "error")
 
+        self._fw_chip = QLabel(f"⚡ {tr_ui('fw_status_disconnected')}")
+        self._fw_chip.setFixedHeight(32)
+        self._fw_chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._fw_chip.setProperty("type", "status_label")
+
         self._mode_chip = QLabel(f"{tr_ui('home_mode_prefix')} IDLE")
         self._mode_chip.setFixedHeight(32)
         self._mode_chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -305,6 +310,7 @@ class PageHome(QWidget):
         self._spell_count_chip.setProperty("type", "status_label")
 
         bar.addWidget(self.status_bar, stretch=2)
+        bar.addWidget(self._fw_chip, stretch=2)
         bar.addWidget(self._mode_chip, stretch=1)
         bar.addWidget(self._spell_count_chip, stretch=1)
         parent_layout.addWidget(status_frame)
@@ -468,8 +474,12 @@ class PageHome(QWidget):
 
     # ── Private methods — helpers ───────────────
 
+    def _on_firmware_updated(self, _fw_type: str = "") -> None:
+        """Cập nhật giao diện khi firmware ESP32 thay đổi."""
+        self._refresh_status_bar()
+
     def _refresh_status_bar(self) -> None:
-        """Đồng bộ nội dung 3 chip trạng thái."""
+        """Đồng bộ nội dung 4 chip trạng thái (kết nối, firmware, mode, spell count)."""
         status_key = (
             "home_status_connected" if self._connected
             else "home_status_disconnected"
@@ -480,6 +490,32 @@ class PageHome(QWidget):
             "status", "success" if self._connected else "error",
         )
         self._repolish(self.status_bar)
+
+        fw_type = getattr(self.data_store, "get_detected_firmware", lambda: "disconnected")()
+        if not self._connected:
+            fw_type = "disconnected"
+
+        if fw_type == "data":
+            self._fw_chip.setText(f"⚡ {tr_ui('fw_status_data')}")
+            self._fw_chip.setProperty("status", "success")
+            self._fw_chip.setToolTip(tr_ui("fw_desc_data"))
+        elif fw_type == "inference":
+            self._fw_chip.setText(f"🧠 {tr_ui('fw_status_inference')}")
+            self._fw_chip.setProperty("status", "accent")
+            self._fw_chip.setToolTip(tr_ui("fw_desc_inference"))
+        elif fw_type == "detecting":
+            self._fw_chip.setText(f"🔍 {tr_ui('fw_status_detecting')}")
+            self._fw_chip.setProperty("status", "warning")
+            self._fw_chip.setToolTip(tr_ui("fw_desc_detecting"))
+        elif fw_type == "unknown":
+            self._fw_chip.setText(f"❓ {tr_ui('fw_status_unknown')}")
+            self._fw_chip.setProperty("status", "warning")
+            self._fw_chip.setToolTip(tr_ui("fw_desc_unknown"))
+        else:
+            self._fw_chip.setText(f"○ {tr_ui('fw_status_disconnected')}")
+            self._fw_chip.setProperty("status", "muted")
+            self._fw_chip.setToolTip("")
+        self._repolish(self._fw_chip)
 
         self._mode_chip.setText(f"⚡ {tr_ui('home_mode_prefix')} {self._current_mode}")
 

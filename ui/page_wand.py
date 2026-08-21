@@ -140,6 +140,11 @@ class PageWand(QWidget):
         """Cập nhật danh sách cổng COM khả dụng."""
         self.connection_panel.update_serial_port_list(ports)
 
+    def set_firmware_status(self, fw_type: str) -> None:
+        """Cập nhật trạng thái firmware hiển thị trên panel kết nối."""
+        if hasattr(self, "connection_panel") and self.connection_panel:
+            self.connection_panel.set_firmware_status(fw_type)
+
     def update_esp_stats(self, stats: dict[str, str]) -> None:
         """No-op: ESP32 stats display removed."""
         pass

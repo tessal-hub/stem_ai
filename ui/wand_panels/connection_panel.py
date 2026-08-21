@@ -33,6 +33,7 @@ class WandConnectionPanel(QWidget):
         super().__init__()
         self._serial_connected = False
         self._last_port = ""
+        self._current_firmware = "disconnected"
         self._combo_shows_no_ports = True
         self._status_presenter = ConnectionStatusPresenter()
 
@@ -67,6 +68,39 @@ class WandConnectionPanel(QWidget):
             connected=connected,
             device_label=port_name,
         )
+        if not connected:
+            self.set_firmware_status("disconnected")
+
+    def set_firmware_status(self, fw_type: str) -> None:
+        """Cập nhật trạng thái firmware hiển thị trên panel."""
+        self._current_firmware = fw_type
+        if not self._serial_connected or fw_type == "disconnected":
+            self.lbl_firmware_status.setText(tr_ui("fw_status_disconnected"))
+            self.lbl_firmware_status.setProperty("status", "muted")
+            self.lbl_firmware_status.setToolTip("")
+        elif fw_type == "data":
+            self.lbl_firmware_status.setText(f"⚡ {tr_ui('fw_status_data')}")
+            self.lbl_firmware_status.setProperty("status", "success")
+            self.lbl_firmware_status.setToolTip(tr_ui("fw_desc_data"))
+        elif fw_type == "inference":
+            self.lbl_firmware_status.setText(f"🧠 {tr_ui('fw_status_inference')}")
+            self.lbl_firmware_status.setProperty("status", "accent")
+            self.lbl_firmware_status.setToolTip(tr_ui("fw_desc_inference"))
+        elif fw_type == "detecting":
+            self.lbl_firmware_status.setText(f"🔍 {tr_ui('fw_status_detecting')}")
+            self.lbl_firmware_status.setProperty("status", "warning")
+            self.lbl_firmware_status.setToolTip(tr_ui("fw_desc_detecting"))
+        elif fw_type == "unknown":
+            self.lbl_firmware_status.setText(f"❓ {tr_ui('fw_status_unknown')}")
+            self.lbl_firmware_status.setProperty("status", "warning")
+            self.lbl_firmware_status.setToolTip(tr_ui("fw_desc_unknown"))
+        else:
+            self.lbl_firmware_status.setText(tr_ui("fw_status_disconnected"))
+            self.lbl_firmware_status.setProperty("status", "muted")
+            self.lbl_firmware_status.setToolTip("")
+
+        self.lbl_firmware_status.style().unpolish(self.lbl_firmware_status)
+        self.lbl_firmware_status.style().polish(self.lbl_firmware_status)
 
     def update_serial_port_list(self, ports: list[str]) -> None:
         """Cập nhật danh sách cổng COM khả dụng."""
@@ -85,14 +119,17 @@ class WandConnectionPanel(QWidget):
         """Làm mới văn bản khi ngôn ngữ ứng dụng thay đổi."""
         self._section_lbl.setText(tr_ui("wand_section_connection"))
         self._serial_heading.setText(tr_ui("wand_serial"))
+        self._fw_heading.setText(tr_ui("fw_label"))
         self.btn_serial_scan.setText(tr_ui("wand_scan"))
         if self._combo_shows_no_ports and self.combo_serial_ports.count() == 1:
             self.combo_serial_ports.setItemText(0, tr_ui("wand_no_ports"))
         self.set_serial_status(self._serial_connected, self._last_port)
+        self.set_firmware_status(self._current_firmware)
 
     def refresh_styles(self) -> None:
         """Làm mới style theo theme hiện tại."""
         self.set_serial_status(self._serial_connected, self.combo_serial_ports.currentText())
+        self.set_firmware_status(self._current_firmware)
 
     # ── Private methods ─────────────────────────
 
@@ -114,6 +151,18 @@ class WandConnectionPanel(QWidget):
         status_row.addStretch()
         status_row.addWidget(self.lbl_serial_status)
         layout.addLayout(status_row)
+
+        fw_row = QHBoxLayout()
+        self._fw_heading = QLabel(tr_ui("fw_label"))
+        self._fw_heading.setProperty("type", "settings_form_label")
+        self.lbl_firmware_status = QLabel(tr_ui("fw_status_disconnected"))
+        self.lbl_firmware_status.setProperty("type", "status_label")
+        self.lbl_firmware_status.setProperty("status", "muted")
+        self.lbl_firmware_status.setWordWrap(True)
+        fw_row.addWidget(self._fw_heading)
+        fw_row.addStretch()
+        fw_row.addWidget(self.lbl_firmware_status)
+        layout.addLayout(fw_row)
 
         self.combo_serial_ports = QComboBox()
         self.combo_serial_ports.setMinimumHeight(SETTINGS_INPUT_H)

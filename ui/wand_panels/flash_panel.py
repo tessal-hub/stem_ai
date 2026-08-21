@@ -50,7 +50,7 @@ class WandFlashPanel(QWidget):
 
         btn_layout = QVBoxLayout()
         btn_layout.setSpacing(SPACING_SM)
-        self.btn_similarity = make_button("🔍 MA TRẬN TƯƠNG ĐỒNG", "outline", height=BTN_H)
+        self.btn_similarity = make_button("🔍 " + tr_ui("wand_btn_similarity", default="MA TRẬN TƯƠNG ĐỒNG"), "outline", height=BTN_H)
         self.btn_build_firmware = make_button(tr_ui("wand_build_firmware"), "outline", height=BTN_H)
         self.btn_upload = make_button(tr_ui("wand_upload_model"), "primary", height=BTN_H)
 

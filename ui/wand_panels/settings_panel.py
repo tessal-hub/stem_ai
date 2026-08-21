@@ -71,7 +71,7 @@ class WandSettingsPanel(QWidget):
         form.addRow(self.lbl_language, self.combo_ui_language)
 
         # 2. Giao diện (Theme)
-        self.lbl_theme = QLabel("Theme:")
+        self.lbl_theme = QLabel(tr(self._lang, "label_theme"))
         self.lbl_theme.setProperty("type", "settings_form_label")
         self.combo_ui_theme = QComboBox()
         self.combo_ui_theme.setFixedHeight(SETTINGS_INPUT_H)
@@ -190,6 +190,7 @@ class WandSettingsPanel(QWidget):
         self._lang = locale_manager.current_language
         self._title_lbl.setText(tr_ui("section_appearance"))
         self.lbl_language.setText(tr(self._lang, "label_ui_language"))
+        self.lbl_theme.setText(tr(self._lang, "label_theme"))
         self.lbl_dataset_dir.setText(tr(self._lang, "label_dataset_dir"))
         self.lbl_model_path.setText(tr(self._lang, "label_model_path"))
         self.lbl_advanced_mode.setText("Chế độ nâng cao" if self._lang == "vi" else "Advanced Mode")

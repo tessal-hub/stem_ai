@@ -185,15 +185,35 @@ class PageRecord(QWidget):
     # ── Public methods ──────────────────────────
 
     def set_wand_ready(self, is_ready: bool) -> None:
-        """Cập nhật trạng thái sẵn sàng của thiết bị."""
-        if is_ready:
-            self.lbl_wand_status.setText(tr_ui('record_ready'))
-            self.lbl_wand_status.setProperty("status", "success")
-        else:
+        """Cập nhật trạng thái sẵn sàng của thiết bị và firmware."""
+        self._is_wand_ready = is_ready
+        fw_type = getattr(self.store, "get_detected_firmware", lambda: "disconnected")()
+        if not is_ready or fw_type == "disconnected":
             self.lbl_wand_status.setText(tr_ui('record_not_ready'))
             self.lbl_wand_status.setProperty("status", "error")
+            self.lbl_wand_status.setToolTip("")
+        elif fw_type == "inference":
+            self.lbl_wand_status.setText(f"⚠ {tr_ui('record_wand_ai_fw_warning')}")
+            self.lbl_wand_status.setProperty("status", "warning")
+            self.lbl_wand_status.setToolTip(tr_ui("record_wand_wrong_fw_warning"))
+        elif fw_type == "data":
+            self.lbl_wand_status.setText(f"● {tr_ui('record_ready_data_fw')}")
+            self.lbl_wand_status.setProperty("status", "success")
+            self.lbl_wand_status.setToolTip(tr_ui("fw_desc_data"))
+        elif fw_type == "detecting":
+            self.lbl_wand_status.setText(f"🔍 {tr_ui('fw_status_detecting')}")
+            self.lbl_wand_status.setProperty("status", "warning")
+            self.lbl_wand_status.setToolTip(tr_ui("fw_desc_detecting"))
+        else:
+            self.lbl_wand_status.setText(tr_ui('record_ready'))
+            self.lbl_wand_status.setProperty("status", "success")
+            self.lbl_wand_status.setToolTip("")
         self.lbl_wand_status.style().unpolish(self.lbl_wand_status)
         self.lbl_wand_status.style().polish(self.lbl_wand_status)
+
+    def update_firmware_status(self, _fw_type: str = "") -> None:
+        """Cập nhật trạng thái firmware hiển thị trên trang Record."""
+        self.set_wand_ready(getattr(self, "_is_wand_ready", False))
 
     def set_recording_state(self, recording: bool) -> None:
         """Thiết lập trạng thái UI khi đang ghi dữ liệu."""

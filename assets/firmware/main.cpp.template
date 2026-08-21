@@ -457,10 +457,11 @@ static void SamplingTask(void* /*arg*/) {
 static bool s_is_moving = false;
 static float s_best_spell_prob = 0.0f;
 static int s_best_spell_class = -1;
-static float s_best_spell_energy = 0.0f;
 static float s_best_primitive_prob = 0.0f;
 static int s_best_primitive_class = -1;
-static float s_best_primitive_energy = 0.0f;
+static int s_recent_classes[3] = {-1, -1, -1};
+static int s_recent_idx = 0;
+static int s_accepted_count_this_gesture = 0;
 static float s_local_buffer[BUFFER_LENGTH] = {0};
 
 __attribute__((weak)) void OnSpellDetected(int class_index) {
@@ -567,9 +568,24 @@ static void InferenceTask(void* /*arg*/) {
         s_is_moving = false;
         int predicted_class = -1;
         if (s_best_spell_class >= 0) {
-          const char* name = SpellNameFromClassIndex(s_best_spell_class);
-          printf("FINAL PREDICT:%s:%.2f\n", name, s_best_spell_prob);
-          predicted_class = s_best_spell_class;
+          // Temporal agreement check: adaptive quorum based on total accepted windows this gesture
+          int match_count = 0;
+          for (int r = 0; r < 3; ++r) {
+            if (s_recent_classes[r] == s_best_spell_class) {
+              match_count++;
+            }
+          }
+          int quorum_votes = (s_accepted_count_this_gesture < 3) ? 1 : 2;
+          if (match_count >= quorum_votes) {
+            const char* name = SpellNameFromClassIndex(s_best_spell_class);
+            printf("FINAL PREDICT:%s:%.2f\n", name, s_best_spell_prob);
+            predicted_class = s_best_spell_class;
+          } else {
+#if STEM_DEBUG_VERBOSE
+            ESP_LOGW(TAG, "Spell %s rejected by temporal agreement (%d/%d required)",
+                     SpellNameFromClassIndex(s_best_spell_class), match_count, quorum_votes);
+#endif
+          }
         } else if (s_best_primitive_class >= 0) {
           const char* name = SpellNameFromClassIndex(s_best_primitive_class);
 #if STEM_DEBUG_VERBOSE
@@ -583,10 +599,11 @@ static void InferenceTask(void* /*arg*/) {
 
         s_best_spell_prob = 0.0f;
         s_best_spell_class = -1;
-        s_best_spell_energy = 0.0f;
         s_best_primitive_prob = 0.0f;
         s_best_primitive_class = -1;
-        s_best_primitive_energy = 0.0f;
+        for (int r = 0; r < 3; ++r) s_recent_classes[r] = -1;
+        s_recent_idx = 0;
+        s_accepted_count_this_gesture = 0;
 
         if (xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
           for (int i = 0; i < WINDOW_SIZE; ++i) {
@@ -715,23 +732,21 @@ static void InferenceTask(void* /*arg*/) {
     }
 #endif
 
-    float window_energy = 0.0f;
-    for (int i = 0; i < BUFFER_LENGTH; ++i) {
-      float val = s_local_buffer[i];
-      window_energy += (val > 0) ? val : -val;
-    }
-
+    // Cập nhật candidate tốt nhất theo Cosine Confidence
     if (max_idx >= 0 && max_cos >= g_preloaded_spells[max_idx].threshold) {
+      // Track accepted window class and count for adaptive temporal agreement
+      s_recent_classes[s_recent_idx % 3] = max_idx;
+      s_recent_idx++;
+      s_accepted_count_this_gesture++;
+
       bool is_spell = g_preloaded_spells[max_idx].is_spell;
       if (is_spell) {
-        if (window_energy > s_best_spell_energy) {
-          s_best_spell_energy = window_energy;
+        if (max_cos > s_best_spell_prob) {
           s_best_spell_prob = max_cos;
           s_best_spell_class = max_idx;
         }
       } else {
-        if (window_energy > s_best_primitive_energy) {
-          s_best_primitive_energy = window_energy;
+        if (max_cos > s_best_primitive_prob) {
           s_best_primitive_prob = max_cos;
           s_best_primitive_class = max_idx;
         }

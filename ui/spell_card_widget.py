@@ -66,11 +66,11 @@ class SpellCardWidget(QWidget):
         mid_col.setSpacing(2)
 
         self.lbl_name = QLabel()
-        self.lbl_name.setStyleSheet("font-size: 13px; font-weight: 600; color: #1C1C1E;")
+        self.lbl_name.setStyleSheet("font-size: 13px; font-weight: 600;")
         mid_col.addWidget(self.lbl_name)
 
         self.lbl_subtitle = QLabel()
-        self.lbl_subtitle.setStyleSheet("font-size: 11px; color: #8E8E93;")
+        self.lbl_subtitle.setStyleSheet("font-size: 11px; opacity: 0.8; color: #8E8E93;")
         mid_col.addWidget(self.lbl_subtitle)
 
         layout.addLayout(mid_col, 1)
@@ -81,8 +81,9 @@ class SpellCardWidget(QWidget):
         self.btn_sound.setFixedSize(30, 30)
         self.btn_sound.setToolTip(tr_ui("tooltip_sound_icon"))
         self.btn_sound.setStyleSheet(
-            "QPushButton { font-size: 14px; border: 1px solid #E5E5EA; background: #F2F2F7; border-radius: 6px; }"
-            "QPushButton:hover { background-color: #E5E5EA; border-color: #D1D1D6; }"
+            "QPushButton { font-size: 14px; border: 1px solid rgba(128, 128, 128, 0.2); "
+            "background: rgba(128, 128, 128, 0.08); border-radius: 6px; padding: 0px; }"
+            "QPushButton:hover { background-color: rgba(128, 128, 128, 0.18); border-color: rgba(128, 128, 128, 0.35); }"
         )
         self.btn_sound.clicked.connect(self._on_sound_click)
         layout.addWidget(self.btn_sound, 0)

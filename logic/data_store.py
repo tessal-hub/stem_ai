@@ -146,6 +146,7 @@ class DataStore(QObject):
     sig_mode_updated = pyqtSignal(str)
     sig_connection_state_updated = pyqtSignal(bool, str)
     sig_udp_health_updated = pyqtSignal(dict)
+    sig_firmware_detected = pyqtSignal(str)
 
     def __init__(self, dataset_dir: str | None = None, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -178,6 +179,7 @@ class DataStore(QObject):
         self.settings = self.settings_store.load()
 
         self.is_connected = False
+        self.detected_firmware = "disconnected"
         self.current_mode = "IDLE"
         self.last_prediction = "None"
         self.prediction_confidence = 0.0
@@ -276,8 +278,27 @@ class DataStore(QObject):
         with self._state_lock:
             self.is_connected = connected
             self.system_stats["Port"] = port
+            if not connected:
+                self.detected_firmware = "disconnected"
         self.sig_stats_updated.emit(self.system_stats)
         self.sig_connection_state_updated.emit(connected, port)
+        if not connected:
+            self.sig_firmware_detected.emit("disconnected")
+
+    def set_detected_firmware(self, fw_type: str) -> None:
+        """Cập nhật firmware được nhận diện từ ESP32."""
+        with self._state_lock:
+            if self.detected_firmware == fw_type:
+                return
+            self.detected_firmware = fw_type
+            self.system_stats["Firmware"] = fw_type
+        self.sig_stats_updated.emit(self.system_stats)
+        self.sig_firmware_detected.emit(fw_type)
+
+    def get_detected_firmware(self) -> str:
+        """Lấy loại firmware hiện tại được nhận diện."""
+        with self._state_lock:
+            return self.detected_firmware
 
     def get_connection_state(self) -> tuple[bool, str]:
         """Lấy trạng thái kết nối an toàn đa luồng."""
