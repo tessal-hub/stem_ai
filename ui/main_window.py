@@ -57,6 +57,7 @@ class MainWindow(QMainWindow):
         self._page_record = None
         self._page_wand = None
         self._page_setting = None
+        self._ml_lab_window = None
 
         self._init_ui()
         self._init_signals()
@@ -187,6 +188,7 @@ class MainWindow(QMainWindow):
         """Kết nối toàn bộ signal và slot."""
         # Điều hướng
         self.shell.nav_requested.connect(self._on_shell_nav_requested)
+        self.shell.open_ml_lab_requested.connect(self._open_ml_lab)
 
         # Dữ liệu UDP
         self.udp_worker.sig_data_received.connect(self._on_udp_sensor_dispatch, type=Qt.ConnectionType.QueuedConnection)
@@ -200,6 +202,16 @@ class MainWindow(QMainWindow):
         # Hệ thống
         locale_manager.language_changed.connect(self._apply_ui_language)
         theme_manager.theme_changed.connect(self._on_theme_changed)
+
+    def _open_ml_lab(self) -> None:
+        """Mở cửa sổ độc lập ML Lab (Classic ML Studio)."""
+        from ml_lab.ui.window_ml_lab import MlLabWindow
+        from config import SPELL_DIR
+        if self._ml_lab_window is None:
+            self._ml_lab_window = MlLabWindow(spell_dataset_dir=str(SPELL_DIR))
+        self._ml_lab_window.show()
+        self._ml_lab_window.raise_()
+        self._ml_lab_window.activateWindow()
 
     def _on_primitive_stats_updated(self, stats: dict) -> None:
         if self._page_primitive_collect is not None:
@@ -225,6 +237,11 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None:
         """Xử lý khi đóng ứng dụng."""
         log.info("MainWindow: Ứng dụng đang đóng...")
+        if self._ml_lab_window is not None:
+            try:
+                self._ml_lab_window.close()
+            except Exception:
+                pass
         handler = getattr(self, "handler", None)
         if handler is not None:
             try:
@@ -315,10 +332,10 @@ class MainWindow(QMainWindow):
         self.shell.set_nav_item_visible(1, adv_mode)
         self.shell.set_nav_item_visible(4, adv_mode)
 
-        # Nếu đang ở tab bị ẩn thì tự động chuyển về Wand (tab 3)
+        # Nếu đang ở tab bị ẩn thì tự động chuyển về Home (tab 0)
         if not adv_mode and self.shell._active_index in (1, 4):
-            self.shell.set_active_index(3)
-            self._set_page(3)
+            self.shell.set_active_index(0)
+            self._set_page(0)
 
         if self._page_wand is not None:
             self._page_wand.set_advanced_mode(adv_mode)

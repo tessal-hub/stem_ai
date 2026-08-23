@@ -28,8 +28,13 @@ class ThemeManager(QObject):
             self._current_theme = theme
             self.theme_changed.emit(theme)
 
+    @property
+    def is_dark(self) -> bool:
+        """Kiểm tra xem theme hiện tại có phải là Dark Mode không."""
+        return self._current_theme == "dark"
+
     def get_palette(self) -> Palette:
-        if self._current_theme == "dark":
+        if self.is_dark:
             return DARK_PALETTE
         return LIGHT_PALETTE
 

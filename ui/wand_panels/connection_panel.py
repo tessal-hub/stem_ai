@@ -86,6 +86,10 @@ class WandConnectionPanel(QWidget):
             self.lbl_firmware_status.setText(f"🧠 {tr_ui('fw_status_inference')}")
             self.lbl_firmware_status.setProperty("status", "accent")
             self.lbl_firmware_status.setToolTip(tr_ui("fw_desc_inference"))
+        elif fw_type == "inference_no_nvs":
+            self.lbl_firmware_status.setText(f"🧠 {tr_ui('fw_status_inference_no_nvs')}")
+            self.lbl_firmware_status.setProperty("status", "warning")
+            self.lbl_firmware_status.setToolTip(tr_ui("fw_desc_inference_no_nvs"))
         elif fw_type == "detecting":
             self.lbl_firmware_status.setText(f"🔍 {tr_ui('fw_status_detecting')}")
             self.lbl_firmware_status.setProperty("status", "warning")

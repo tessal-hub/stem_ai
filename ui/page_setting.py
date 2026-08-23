@@ -521,8 +521,11 @@ class PageSetting(QWidget):
             self.lbl_setting_fw_status.setText(f"⚡ {tr(self._lang, 'fw_status_data', default='Data Collection (collect.bin)')}")
             self.lbl_setting_fw_status.setProperty("status", "success")
         elif fw_type == "inference":
-            self.lbl_setting_fw_status.setText(f"🧠 {tr(self._lang, 'fw_status_inference', default='AI Inference (inference.bin)')}")
+            self.lbl_setting_fw_status.setText(f"🧠 {tr(self._lang, 'fw_status_inference', default='AI Inference (Ready)')}")
             self.lbl_setting_fw_status.setProperty("status", "accent")
+        elif fw_type == "inference_no_nvs":
+            self.lbl_setting_fw_status.setText(f"🧠 {tr(self._lang, 'fw_status_inference_no_nvs', default='AI Firmware (No NVS / Unloaded)')}")
+            self.lbl_setting_fw_status.setProperty("status", "warning")
         elif fw_type == "detecting":
             self.lbl_setting_fw_status.setText(f"🔍 {tr(self._lang, 'fw_status_detecting', default='Detecting...')}")
             self.lbl_setting_fw_status.setProperty("status", "warning")

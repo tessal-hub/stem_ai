@@ -9,6 +9,7 @@ from logic.firmware_detector import (
     FW_DETECTING,
     FW_DISCONNECTED,
     FW_INFERENCE,
+    FW_INFERENCE_NO_NVS,
     FW_UNKNOWN,
     FirmwareDetector,
 )
@@ -53,19 +54,29 @@ def test_firmware_detector_identifies_data_firmware(qapp: QApplication, tmp_path
     assert store.get_detected_firmware() == FW_DATA
 
 
-def test_firmware_detector_identifies_inference_from_tflm_logs(qapp: QApplication, tmp_path) -> None:
-    """Verify TFLM and ESP-IDF log lines identify AI Inference firmware."""
+def test_firmware_detector_identifies_inference_no_nvs_from_error_logs(qapp: QApplication, tmp_path) -> None:
+    """Verify NVS failure and uninitialized logs identify AI Firmware (No NVS)."""
     store = DataStore(dataset_dir=str(tmp_path / "dataset"))
     detector = FirmwareDetector(data_store=store)
 
     detector.on_connection_status(True, "COM3")
-    detector.on_raw_line("I (1234) SPELLBOOK: TFLM ready, arena used: 34500 / 98304")
-    assert detector.current_firmware == FW_INFERENCE
-    assert store.get_detected_firmware() == FW_INFERENCE
+    detector.on_raw_line("E (123) SPELLBOOK: Failed to open NVS namespace 'cfg': ESP_ERR_NVS_NOT_FOUND")
+    assert detector.current_firmware == FW_INFERENCE_NO_NVS
+    assert store.get_detected_firmware() == FW_INFERENCE_NO_NVS
+
+
+def test_firmware_detector_identifies_inference_no_nvs_from_halting(qapp: QApplication, tmp_path) -> None:
+    """Verify Runtime initialization failed log identifies AI Firmware (No NVS)."""
+    store = DataStore(dataset_dir=str(tmp_path / "dataset"))
+    detector = FirmwareDetector(data_store=store)
+
+    detector.on_connection_status(True, "COM3")
+    detector.on_raw_line("E (456) MAIN: Runtime initialization failed - halting")
+    assert detector.current_firmware == FW_INFERENCE_NO_NVS
 
 
 def test_firmware_detector_identifies_inference_from_nvs_logs(qapp: QApplication, tmp_path) -> None:
-    """Verify Loaded gestures from NVS log line identifies AI Inference firmware."""
+    """Verify Loaded gestures from NVS log line identifies AI Inference firmware (Ready)."""
     store = DataStore(dataset_dir=str(tmp_path / "dataset"))
     detector = FirmwareDetector(data_store=store)
 
@@ -95,7 +106,7 @@ def test_firmware_detector_prediction_slot(qapp: QApplication, tmp_path) -> None
 
 
 def test_firmware_detector_identifies_from_flash_completion(qapp: QApplication, tmp_path) -> None:
-    """Verify on_flash_completed sets firmware state immediately."""
+    """Verify on_flash_completed distinguishes standalone AI flash vs trained model flash."""
     store = DataStore(dataset_dir=str(tmp_path / "dataset"))
     detector = FirmwareDetector(data_store=store)
 
@@ -104,7 +115,13 @@ def test_firmware_detector_identifies_from_flash_completion(qapp: QApplication, 
     assert detector.current_firmware == FW_DATA
     assert store.get_detected_firmware() == FW_DATA
 
+    # Standalone inference flash has no NVS yet
     detector.on_flash_completed("inference")
+    assert detector.current_firmware == FW_INFERENCE_NO_NVS
+    assert store.get_detected_firmware() == FW_INFERENCE_NO_NVS
+
+    # Model & labels upload completes NVS
+    detector.on_flash_completed("model")
     assert detector.current_firmware == FW_INFERENCE
     assert store.get_detected_firmware() == FW_INFERENCE
 
@@ -151,10 +168,13 @@ def test_wand_connection_panel_firmware_display(qapp: QApplication) -> None:
     assert "collect.bin" in panel.lbl_firmware_status.text()
     assert panel.lbl_firmware_status.property("status") == "success"
 
-    # Connected with inference firmware
+    # Connected with inference firmware (Ready)
     panel.set_firmware_status(FW_INFERENCE)
-    assert "inference.bin" in panel.lbl_firmware_status.text()
     assert panel.lbl_firmware_status.property("status") == "accent"
+
+    # Connected with inference firmware before NVS
+    panel.set_firmware_status(FW_INFERENCE_NO_NVS)
+    assert panel.lbl_firmware_status.property("status") == "warning"
 
     # Detecting
     panel.set_firmware_status(FW_DETECTING)

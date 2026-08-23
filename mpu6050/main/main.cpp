@@ -23,6 +23,10 @@
 #include "nvs.h"
 #include "esp_partition.h"
 #include "spi_flash_mmap.h"
+#include "esp_wifi.h"
+#include "esp_now.h"
+#include "esp_netif.h"
+#include "esp_event.h"
 
 // (Không dùng std::vector, std::string nữa)
 
@@ -122,7 +126,8 @@ namespace spellbook {
 #define CHANNELS 6
 #define ACCEL_SCALE 16384.0f
 #define GYRO_RAW_SCALE 131.0f
-#define GYRO_SCALE (131.0f * 125.0f)  // 131 LSB/(°/s) × 125 rescale → matches Python pipeline
+// 131 LSB/(°/s) × 125 rescale. Must match logic/tensorflow/pipeline.py :: _GYRO_RESCALE = 125.0 exactly.
+#define GYRO_SCALE (131.0f * 125.0f)
 #define BUFFER_LENGTH (WINDOW_SIZE * CHANNELS)   // 384 phần tử
 #define EMBEDDING_DIM 16
 
@@ -214,6 +219,83 @@ static bool InitRgbLed() {
     vTaskDelay(pdMS_TO_TICKS(250));
     SetRgbColor(0, 0, 0);
     return true;
+}
+
+// ========== ESP-NOW Protocol ==========
+// Packet broadcast to control other ESP32 devices when a spell is cast
+struct __attribute__((packed)) SpellEspNowPacket {
+    uint8_t magic[2];      // 'S', 'P' (0x53, 0x50)
+    uint8_t spell_index;   // Spell index: 0, 1, 2, ...
+    char spell_name[16];   // Name string (null-terminated)
+    uint8_t confidence;    // 0 - 100 (%)
+    uint8_t r;             // RGB color code
+    uint8_t g;
+    uint8_t b;
+};
+
+static uint8_t s_broadcast_mac[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+static bool s_esp_now_ready = false;
+
+static bool InitEspNow() {
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        nvs_flash_erase();
+        nvs_flash_init();
+    }
+
+    esp_netif_init();
+    esp_event_loop_create_default();
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    if (esp_wifi_init(&cfg) != ESP_OK) {
+        ESP_LOGW(TAG, "esp_wifi_init failed");
+        return false;
+    }
+    esp_wifi_set_storage(WIFI_STORAGE_RAM);
+    esp_wifi_set_mode(WIFI_MODE_STA);
+    esp_wifi_start();
+    esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
+
+    if (esp_now_init() != ESP_OK) {
+        ESP_LOGW(TAG, "esp_now_init failed");
+        return false;
+    }
+
+    esp_now_peer_info_t peer_info = {};
+    memcpy(peer_info.peer_addr, s_broadcast_mac, ESP_NOW_ETH_ALEN);
+    peer_info.channel = 1;
+    peer_info.encrypt = false;
+    if (esp_now_add_peer(&peer_info) != ESP_OK) {
+        ESP_LOGW(TAG, "esp_now_add_peer broadcast failed");
+        return false;
+    }
+
+    s_esp_now_ready = true;
+    ESP_LOGI(TAG, "ESP-NOW broadcast ready on channel 1");
+    return true;
+}
+
+static void SendSpellEspNow(int class_index, float confidence) {
+    if (!s_esp_now_ready || class_index < 0 || class_index >= g_preloaded_spell_count) {
+        return;
+    }
+    const auto& spell = g_preloaded_spells[class_index];
+    SpellEspNowPacket packet = {};
+    packet.magic[0] = 'S';
+    packet.magic[1] = 'P';
+    packet.spell_index = static_cast<uint8_t>(class_index);
+    strncpy(packet.spell_name, spell.name, sizeof(packet.spell_name) - 1);
+    float conf_clamped = confidence > 1.0f ? 1.0f : (confidence < 0.0f ? 0.0f : confidence);
+    packet.confidence = static_cast<uint8_t>(std::roundf(conf_clamped * 100.0f));
+    packet.r = spell.r;
+    packet.g = spell.g;
+    packet.b = spell.b;
+
+    esp_err_t err = esp_now_send(s_broadcast_mac, reinterpret_cast<const uint8_t*>(&packet), sizeof(packet));
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "ESP-NOW sent spell index: %d (%s) conf: %d%%", packet.spell_index, packet.spell_name, packet.confidence);
+    } else {
+        ESP_LOGW(TAG, "ESP-NOW send failed: %s", esp_err_to_name(err));
+    }
 }
 
 static const void* g_model_ptr = nullptr;
@@ -431,11 +513,10 @@ static void SamplingTask(void* /*arg*/) {
 static bool s_is_moving = false;
 static float s_best_spell_prob = 0.0f;
 static int s_best_spell_class = -1;
+static float s_best_spell_energy = 0.0f;
 static float s_best_primitive_prob = 0.0f;
 static int s_best_primitive_class = -1;
-static int s_recent_classes[3] = {-1, -1, -1};
-static int s_recent_idx = 0;
-static int s_accepted_count_this_gesture = 0;
+static float s_best_primitive_energy = 0.0f;
 
 // Buffer cục bộ dạng int16_t
 static int16_t s_local_buffer[BUFFER_LENGTH] = {0};
@@ -532,34 +613,16 @@ static void InferenceTask(void* /*arg*/) {
                 s_is_moving = false;
                 int predicted_class = -1;
                 if (s_best_spell_class >= 0) {
-                    // Temporal agreement check: adaptive quorum based on total accepted windows this gesture
-                    int match_count = 0;
-                    for (int r = 0; r < 3; ++r) {
-                        if (s_recent_classes[r] == s_best_spell_class) {
-                            match_count++;
-                        }
-                    }
-                    int quorum_votes = (s_accepted_count_this_gesture < 3) ? 1 : 2;
-                    if (match_count >= quorum_votes) {
-                        printf("FINAL PREDICT:%s:%.2f\n", SpellNameFromClassIndex(s_best_spell_class), s_best_spell_prob);
-                        predicted_class = s_best_spell_class;
-                    } else {
-#if STEM_DEBUG_VERBOSE
-                        ESP_LOGW(TAG, "Spell %s rejected by temporal agreement (%d/%d required)",
-                                 SpellNameFromClassIndex(s_best_spell_class), match_count, quorum_votes);
-#endif
-                    }
+                    printf("FINAL PREDICT:%s:%.2f\n", SpellNameFromClassIndex(s_best_spell_class), s_best_spell_prob);
+                    predicted_class = s_best_spell_class;
                 } else if (s_best_primitive_class >= 0) {
 #if STEM_DEBUG_VERBOSE
                     printf("DEBUG_BLACKHOLE:%s (prob: %.2f)\n", SpellNameFromClassIndex(s_best_primitive_class), s_best_primitive_prob);
 #endif
                 }
                 // Reset
-                s_best_spell_prob = 0.0f; s_best_spell_class = -1;
-                s_best_primitive_prob = 0.0f; s_best_primitive_class = -1;
-                for (int r = 0; r < 3; ++r) s_recent_classes[r] = -1;
-                s_recent_idx = 0;
-                s_accepted_count_this_gesture = 0;
+                s_best_spell_prob = 0.0f; s_best_spell_class = -1; s_best_spell_energy = 0.0f;
+                s_best_primitive_prob = 0.0f; s_best_primitive_class = -1; s_best_primitive_energy = 0.0f;
 
                 // Giữ lại frame cuối trong buffer để tránh glitch
                 if (xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
@@ -580,7 +643,10 @@ static void InferenceTask(void* /*arg*/) {
                     s_shared_version++;
                     xSemaphoreGive(s_buffer_mutex);
                 }
-                if (predicted_class != -1) OnSpellDetected(predicted_class);
+                if (predicted_class != -1) {
+                    OnSpellDetected(predicted_class);
+                    SendSpellEspNow(predicted_class, s_best_spell_prob);
+                }
                 continue;
             }
         } else {
@@ -591,7 +657,7 @@ static void InferenceTask(void* /*arg*/) {
             }
         }
 
-        // ---------- Chuẩn bị input cho TFLM (từ int16_t -> float -> clip[-2, 2] -> int8) ----------
+        // ---------- Chuẩn bị input cho TFLM (từ int16_t -> float -> int8) ----------
         int model_frames = s_input->dims->data[1];
         int model_channels = s_input->dims->data[2];
         if (model_channels != 6 && model_channels != 9) {
@@ -622,23 +688,21 @@ static void InferenceTask(void* /*arg*/) {
                 float jerkz = (idx >= 6) ? (az - (s_local_buffer[idx - 6 + 2] / ACCEL_SCALE)) : 0.0f;
                 float in_vals[9] = {ax, ay, az, gx, gy, gz, derived0, derived1, jerkz};
                 for (int c = 0; c < 9; c++) {
-                    float v_clipped = in_vals[c] > 2.0f ? 2.0f : (in_vals[c] < -2.0f ? -2.0f : in_vals[c]);
-                    int val = static_cast<int>(std::roundf(v_clipped * inv_scale)) + in_zp;
+                    int val = static_cast<int>(std::roundf(in_vals[c] * inv_scale)) + in_zp;
                     val = val > 127 ? 127 : (val < -128 ? -128 : val);
                     s_input->data.int8[f * 9 + c] = static_cast<int8_t>(val);
                 }
             } else { // 6 kênh
                 float in_vals[6] = {ax, ay, az, gx, gy, gz};
                 for (int c = 0; c < 6; c++) {
-                    float v_clipped = in_vals[c] > 2.0f ? 2.0f : (in_vals[c] < -2.0f ? -2.0f : in_vals[c]);
-                    int val = static_cast<int>(std::roundf(v_clipped * inv_scale)) + in_zp;
+                    int val = static_cast<int>(std::roundf(in_vals[c] * inv_scale)) + in_zp;
                     val = val > 127 ? 127 : (val < -128 ? -128 : val);
                     s_input->data.int8[f * 6 + c] = static_cast<int8_t>(val);
                 }
             }
         }
 
-#if STEM_DEBUG_VERBOSE
+        #if STEM_DEBUG_VERBOSE
         int64_t t_invoke_start = esp_timer_get_time();
 #endif
         if (s_interpreter->Invoke() != kTfLiteOk) {
@@ -686,21 +750,25 @@ static void InferenceTask(void* /*arg*/) {
             }
         }
 
-        // Cập nhật candidate tốt nhất theo Cosine Confidence
-        if (max_idx >= 0 && max_cos >= g_preloaded_spells[max_idx].threshold) {
-            // Track accepted window class and count for adaptive temporal agreement
-            s_recent_classes[s_recent_idx % 3] = max_idx;
-            s_recent_idx++;
-            s_accepted_count_this_gesture++;
+        // Window energy (L1 norm) dùng float từ raw
+        float window_energy = 0.0f;
+        for (int i = 0; i < BUFFER_LENGTH; ++i) {
+            float val = (i % 6 < 3) ? (s_local_buffer[i] / ACCEL_SCALE)
+                                    : (s_local_buffer[i] / GYRO_RAW_SCALE);
+            window_energy += (val > 0) ? val : -val;
+        }
 
+        if (max_idx >= 0 && max_cos >= g_preloaded_spells[max_idx].threshold) {
             bool is_spell = g_preloaded_spells[max_idx].is_spell;
             if (is_spell) {
-                if (max_cos > s_best_spell_prob) {
+                if (window_energy > s_best_spell_energy) {
+                    s_best_spell_energy = window_energy;
                     s_best_spell_prob = max_cos;
                     s_best_spell_class = max_idx;
                 }
             } else {
-                if (max_cos > s_best_primitive_prob) {
+                if (window_energy > s_best_primitive_energy) {
+                    s_best_primitive_energy = window_energy;
                     s_best_primitive_prob = max_cos;
                     s_best_primitive_class = max_idx;
                 }
@@ -823,6 +891,7 @@ bool InitializeSpellRuntime() {
     }
 
     InitRgbLed();
+    InitEspNow();
 
     if (!InitI2cBus() || !InitMpu6050() || !InitInference()) {
         return false;
@@ -850,8 +919,8 @@ extern "C" void app_main(void) {
     // Khởi tạo Task Watchdog toàn cục
     esp_task_wdt_config_t wdt_cfg = {
         .timeout_ms      = STEM_WDT_TIMEOUT_SEC * 1000,
-        .idle_core_mask  = 0,               // <-- second
-        .trigger_panic   = true,            // <-- third
+        .idle_core_mask  = 0,
+        .trigger_panic   = true,
     };
     esp_task_wdt_init(&wdt_cfg);
 

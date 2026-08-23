@@ -1,0 +1,31 @@
+{
+  "timestamp": "2026-08-21T16:56:33.092693",
+  "algo": "knn",
+  "algo_name": "K-Nearest Neighbors (KNN)",
+  "train_accuracy": 0.9801324503311258,
+  "val_accuracy": 0.9513888888888888,
+  "cv_mean": 0.9569559228650137,
+  "cv_std": 0.01421137868865138,
+  "class_names": [
+    "BOOST",
+    "COPY",
+    "FIREBALL",
+    "P",
+    "REFLECT",
+    "STOP"
+  ],
+  "num_features": 63,
+  "hyperparams": {
+    "k": 2,
+    "metric": "cosine",
+    "weights": "uniform"
+  },
+  "benchmark": {
+    "mcu_latency_ms": 0.45,
+    "mcu_ram_kb": 1.5,
+    "mcu_flash_kb": 2.0,
+    "explainability": "Trung bình (Khoảng cách)",
+    "pros": "Đơn giản, không cần huấn luyện",
+    "cons": "Tốn RAM lưu điểm mẫu"
+  }
+}

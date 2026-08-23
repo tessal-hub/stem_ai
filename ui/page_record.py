@@ -192,7 +192,7 @@ class PageRecord(QWidget):
             self.lbl_wand_status.setText(tr_ui('record_not_ready'))
             self.lbl_wand_status.setProperty("status", "error")
             self.lbl_wand_status.setToolTip("")
-        elif fw_type == "inference":
+        elif fw_type in ("inference", "inference_no_nvs"):
             self.lbl_wand_status.setText(f"⚠ {tr_ui('record_wand_ai_fw_warning')}")
             self.lbl_wand_status.setProperty("status", "warning")
             self.lbl_wand_status.setToolTip(tr_ui("record_wand_wrong_fw_warning"))

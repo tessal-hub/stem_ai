@@ -28,27 +28,50 @@ FW_DISCONNECTED = "disconnected"
 FW_DETECTING = "detecting"
 FW_DATA = "data"
 FW_INFERENCE = "inference"
+FW_INFERENCE_NO_NVS = "inference_no_nvs"
 FW_UNKNOWN = "unknown"
 
-# Signature patterns for on-device TinyML AI firmware (inference.bin)
-_INFERENCE_KEYWORDS: tuple[str, ...] = (
+# Patterns indicating AI Inference firmware with NVS uninitialized, empty, or missing
+_INFERENCE_NO_NVS_PATTERNS: tuple[str, ...] = (
+    "FAILED TO OPEN NVS NAMESPACE",
+    "FAILED TO READ COUNT FROM NVS",
+    "INVALID GESTURE COUNT",
+    "0 GESTURES PARSED",
+    "RUNTIME INITIALIZATION FAILED",
+    "NVS_FLASH_INIT_PARTITION",
+    "NVS_FLASH_ERASE_PARTITION",
+    "MODEL PARTITION NOT FOUND",
+    "FAILED TO MMAP MODEL PARTITION",
+    "MODEL SCHEMA MISMATCH",
+    "ALLOCATETENSORS FAILED",
+    "FAILED TO CREATE BUFFER MUTEX",
+    "RUNTIME INITIALIZATION FAILED - HALTING",
+)
+
+# Patterns confirming AI Inference firmware is loaded with active NVS gestures and ready
+_INFERENCE_READY_PATTERNS: tuple[str, ...] = (
     "PREDICT:",
     "FINAL PREDICT:",
+    "SAMPLING + INFERENCE TASKS STARTED",
+    "ONSPELLDETECTED",
+    "DEBUG_MOTION",
+    "DEBUG_BLACKHOLE",
+    "DEBUG_TIMING",
+)
+
+# General AI firmware signatures
+_INFERENCE_GENERAL_PATTERNS: tuple[str, ...] = (
     "SPELLBOOK",
     "TFLM",
     "TFLITE",
     "TENSORFLOW LITE",
-    "GESTURES FROM NVS",
-    "SAMPLING + INFERENCE TASKS STARTED",
     "GESTURE_INFERENCE",
     "IMU_SAMPLING",
-    "DEBUG_MOTION",
-    "DEBUG_BLACKHOLE",
-    "DEBUG_TIMING",
-    "ONSPELLDETECTED",
     "INITIALIZESPELLRUNTIME",
     "ARENA USED:",
-    "LABELS NVS PARTITION",
+    "MPU6050 READY",
+    "I2C BUS READY",
+    "MPU6050 ADD DEVICE",
 )
 
 
@@ -58,7 +81,7 @@ class FirmwareDetector(QObject):
     Listens to raw UART lines, sensor CSV frames, and flash events.
     """
 
-    sig_firmware_changed = pyqtSignal(str)  # fw_type: "disconnected"|"detecting"|"data"|"inference"|"unknown"
+    sig_firmware_changed = pyqtSignal(str)  # fw_type: "disconnected"|"detecting"|"data"|"inference"|"inference_no_nvs"|"unknown"
 
     def __init__(self, data_store: DataStore | None = None, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -108,10 +131,37 @@ class FirmwareDetector(QObject):
             return
 
         line_upper = line.upper()
-        for kw in _INFERENCE_KEYWORDS:
-            if kw in line_upper:
+
+        # 1. Check for uninitialized / missing NVS patterns in AI firmware
+        for pat in _INFERENCE_NO_NVS_PATTERNS:
+            if pat in line_upper:
+                self._detect_timer.stop()
+                self._set_firmware(FW_INFERENCE_NO_NVS)
+                return
+
+        # 2. Check for active inference and prediction patterns
+        for pat in _INFERENCE_READY_PATTERNS:
+            if pat in line_upper:
                 self._detect_timer.stop()
                 self._set_firmware(FW_INFERENCE)
+                return
+
+        # 3. Check for gesture count in NVS logs (e.g. "Loaded 4 gestures from NVS" vs "Loaded 0 gestures")
+        if "LOADED" in line_upper and "GESTURE" in line_upper:
+            self._detect_timer.stop()
+            if "LOADED 0 GESTURE" in line_upper:
+                self._set_firmware(FW_INFERENCE_NO_NVS)
+            else:
+                self._set_firmware(FW_INFERENCE)
+            return
+
+        # 4. General AI firmware signatures
+        for pat in _INFERENCE_GENERAL_PATTERNS:
+            if pat in line_upper:
+                self._detect_timer.stop()
+                # If already identified as inference ready or inference no nvs, preserve it; otherwise default to inference_no_nvs until ready signature seen
+                if self._current_firmware not in (FW_INFERENCE, FW_INFERENCE_NO_NVS):
+                    self._set_firmware(FW_INFERENCE_NO_NVS)
                 return
 
     def on_prediction_received(self, action: str, _confidence: float) -> None:
@@ -128,7 +178,10 @@ class FirmwareDetector(QObject):
         self._detect_timer.stop()
         if bin_type == "data":
             self._set_firmware(FW_DATA)
-        elif bin_type in ("inference", "model", "nvs"):
+        elif bin_type == "inference":
+            # Standalone inference.bin flash has no NVS labels yet until model upload
+            self._set_firmware(FW_INFERENCE_NO_NVS)
+        elif bin_type in ("model", "nvs", "trained"):
             self._set_firmware(FW_INFERENCE)
 
     def _on_detect_timeout(self) -> None:

@@ -236,11 +236,11 @@ class PageHome(QWidget):
             return
 
         self._show_loaded_empty(False)
-        # Rebuild loaded spells layout
         self._clear_layout(self._loaded_spells_content_layout)
-        for spell_name in sorted(filtered):
+        self._loaded_spells_content_layout.setSpacing(SPACING_XS)
+        for idx, spell_name in enumerate(sorted(filtered)):
             count = self.data_store.spell_counts.get(spell_name, 0)
-            row = self._make_loaded_spell_row(spell_name, count)
+            row = self._make_loaded_spell_row(spell_name, count, idx=idx)
             self._loaded_spells_content_layout.addWidget(row)
         self._loaded_spells_content_layout.addStretch()
 
@@ -503,6 +503,10 @@ class PageHome(QWidget):
             self._fw_chip.setText(f"🧠 {tr_ui('fw_status_inference')}")
             self._fw_chip.setProperty("status", "accent")
             self._fw_chip.setToolTip(tr_ui("fw_desc_inference"))
+        elif fw_type == "inference_no_nvs":
+            self._fw_chip.setText(f"🧠 {tr_ui('fw_status_inference_no_nvs')}")
+            self._fw_chip.setProperty("status", "warning")
+            self._fw_chip.setToolTip(tr_ui("fw_desc_inference_no_nvs"))
         elif fw_type == "detecting":
             self._fw_chip.setText(f"🔍 {tr_ui('fw_status_detecting')}")
             self._fw_chip.setProperty("status", "warning")
@@ -586,14 +590,21 @@ class PageHome(QWidget):
         return tr_ui("time_hours_ago", n=hours)
 
     def _make_loaded_spell_row(
-        self, spell_name: str, count: int,
+        self, spell_name: str, count: int, idx: int = -1,
     ) -> QFrame:
-        """Tạo một hàng hiển thị spell đã tải với rarity badge."""
+        """Tạo một hàng hiển thị spell đã tải với rarity badge và ESP-NOW index."""
         row = QFrame()
         row.setProperty("type", "loaded_spell_row")
         row_layout = QHBoxLayout(row)
         row_layout.setContentsMargins(8, 6, 8, 6)
         row_layout.setSpacing(SPACING_MD)
+
+        if idx >= 0:
+            idx_badge = QLabel(f"#{idx}")
+            idx_badge.setProperty("type", "settings_hint")
+            idx_badge.setStyleSheet("font-weight: 700; font-size: 11px; opacity: 0.8;")
+            idx_badge.setToolTip(f"ESP-NOW Index: {idx}")
+            row_layout.addWidget(idx_badge)
 
         icon_lbl = QLabel("✨")
         icon_lbl.setStyleSheet("font-size: 14px;")

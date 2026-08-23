@@ -52,6 +52,7 @@ class MacShell(QWidget):
     """
 
     nav_requested = pyqtSignal(int)
+    open_ml_lab_requested = pyqtSignal()
 
     def __init__(self, title: str = "Reboot") -> None:
         super().__init__()
@@ -298,6 +299,12 @@ class MacShell(QWidget):
         layout.addStretch()
 
         from ui.component_factory import make_outline_button
+        self.btn_ml_lab = make_outline_button("🔬 ML Lab", height=34)
+        self.btn_ml_lab.setObjectName("StemMlLabBtn")
+        self.btn_ml_lab.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_ml_lab.clicked.connect(self.open_ml_lab_requested.emit)
+        layout.addWidget(self.btn_ml_lab, alignment=Qt.AlignmentFlag.AlignVCenter)
+
         self.btn_guide = make_outline_button(f"💡 {tr_ui('guide_btn_title')}", height=34)
         self.btn_guide.setObjectName("StemGuideBtn")
         self.btn_guide.setCursor(Qt.CursorShape.PointingHandCursor)

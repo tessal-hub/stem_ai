@@ -43,5 +43,14 @@
     ],
     "sound": "custom:fahh.mp3",
     "volume": 1.0
+  },
+  "P": {
+    "color": [
+      255,
+      0,
+      0
+    ],
+    "sound": "custom:yeutruong.mp3",
+    "volume": 1.0
   }
 }

@@ -1,0 +1,30 @@
+{
+  "timestamp": "2026-08-22T07:51:47.087424",
+  "algo": "tree",
+  "algo_name": "Cây Quyết Định (Decision Tree)",
+  "train_accuracy": 0.9200652528548124,
+  "val_accuracy": 0.7887323943661971,
+  "cv_mean": 0.8580701052912169,
+  "cv_std": 0.028617129392579283,
+  "class_names": [
+    "A",
+    "BOOST",
+    "COPY",
+    "FIREBALL",
+    "P",
+    "REFLECT",
+    "STOP"
+  ],
+  "num_features": 63,
+  "hyperparams": {
+    "max_depth": 4,
+    "min_samples_split": 2,
+    "criterion": "gini"
+  },
+  "benchmark": {
+    "mcu_latency_ms": 0.043,
+    "mcu_ram_kb": 0.1,
+    "mcu_flash_kb": 1.69,
+    "complexity_score": 1.0
+  }
+}

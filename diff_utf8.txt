@@ -1,0 +1,390 @@
+﻿diff --git a/mpu6050/main/main.cpp b/mpu6050/main/main.cpp
+index 3c45d9f..f45eb1e 100644
+--- a/mpu6050/main/main.cpp
++++ b/mpu6050/main/main.cpp
+@@ -9,7 +9,9 @@
+ #include "freertos/semphr.h"
+ #include "esp_log.h"
+ #include "esp_timer.h"
++#include "driver/gpio.h"
+ #include "driver/i2c_master.h"
++#include "driver/ledc.h"
+ #include "esp_task_wdt.h"          // <-- Watchdog
+ 
+ #include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
+@@ -28,7 +30,27 @@ static const char* TAG = "SPELLBOOK";
+ 
+ namespace spellbook {
+ 
+-// ========== Cấu hình phần cứng & hệ thống (giữ nguyên) ==========
++// ========== Cấu hình phần cứng & hệ thống ==========
++#if CONFIG_IDF_TARGET_ESP32S3
++#ifndef STEM_I2C_PORT
++#define STEM_I2C_PORT I2C_NUM_0
++#endif
++#ifndef STEM_I2C_SDA_PIN
++#define STEM_I2C_SDA_PIN GPIO_NUM_8
++#endif
++#ifndef STEM_I2C_SCL_PIN
++#define STEM_I2C_SCL_PIN GPIO_NUM_9
++#endif
++#ifndef STEM_RGB_R_PIN
++#define STEM_RGB_R_PIN GPIO_NUM_4
++#endif
++#ifndef STEM_RGB_G_PIN
++#define STEM_RGB_G_PIN GPIO_NUM_5
++#endif
++#ifndef STEM_RGB_B_PIN
++#define STEM_RGB_B_PIN GPIO_NUM_6
++#endif
++#else
+ #ifndef STEM_I2C_PORT
+ #define STEM_I2C_PORT I2C_NUM_0
+ #endif
+@@ -38,6 +60,26 @@ namespace spellbook {
+ #ifndef STEM_I2C_SCL_PIN
+ #define STEM_I2C_SCL_PIN GPIO_NUM_22
+ #endif
++#ifndef STEM_RGB_R_PIN
++#define STEM_RGB_R_PIN GPIO_NUM_25
++#endif
++#ifndef STEM_RGB_G_PIN
++#define STEM_RGB_G_PIN GPIO_NUM_26
++#endif
++#ifndef STEM_RGB_B_PIN
++#define STEM_RGB_B_PIN GPIO_NUM_27
++#endif
++#endif
++#define STEM_RGB_LEDC_MODE LEDC_LOW_SPEED_MODE
++#define STEM_RGB_LEDC_TIMER LEDC_TIMER_0
++#define STEM_RGB_LEDC_DUTY_RES LEDC_TIMER_8_BIT
++#define STEM_RGB_LEDC_FREQ 5000
++#define STEM_RGB_CHANNEL_R LEDC_CHANNEL_0
++#define STEM_RGB_CHANNEL_G LEDC_CHANNEL_1
++#define STEM_RGB_CHANNEL_B LEDC_CHANNEL_2
++#ifndef STEM_RGB_TIMEOUT_MS
++#define STEM_RGB_TIMEOUT_MS 5000
++#endif
+ #ifndef STEM_I2C_FREQ_HZ
+ #define STEM_I2C_FREQ_HZ 400000
+ #endif
+@@ -90,11 +132,90 @@ struct PreloadedSpell {
+     float centroid[EMBEDDING_DIM];
+     bool is_spell;
+     float threshold;
++    uint8_t r;
++    uint8_t g;
++    uint8_t b;
+ };
+ 
+ static PreloadedSpell g_preloaded_spells[MAX_GESTURES];
+ static int g_preloaded_spell_count = 0;
+ 
++#ifndef STEM_RGB_ACTIVE_LOW
++#define STEM_RGB_ACTIVE_LOW 0
++#endif
++
++static void SetRgbColor(uint8_t r, uint8_t g, uint8_t b) {
++#if STEM_RGB_ACTIVE_LOW
++    r = 255 - r;
++    g = 255 - g;
++    b = 255 - b;
++#endif
++    ledc_set_duty(STEM_RGB_LEDC_MODE, STEM_RGB_CHANNEL_R, r);
++    ledc_update_duty(STEM_RGB_LEDC_MODE, STEM_RGB_CHANNEL_R);
++    ledc_set_duty(STEM_RGB_LEDC_MODE, STEM_RGB_CHANNEL_G, g);
++    ledc_update_duty(STEM_RGB_LEDC_MODE, STEM_RGB_CHANNEL_G);
++    ledc_set_duty(STEM_RGB_LEDC_MODE, STEM_RGB_CHANNEL_B, b);
++    ledc_update_duty(STEM_RGB_LEDC_MODE, STEM_RGB_CHANNEL_B);
++}
++
++static esp_timer_handle_t s_rgb_off_timer = nullptr;
++
++static void RgbOffTimerCallback(void* /*arg*/) {
++    SetRgbColor(0, 0, 0);
++}
++
++static bool InitRgbLed() {
++    ledc_timer_config_t ledc_timer = {};
++    ledc_timer.speed_mode       = STEM_RGB_LEDC_MODE;
++    ledc_timer.duty_resolution  = STEM_RGB_LEDC_DUTY_RES;
++    ledc_timer.timer_num        = STEM_RGB_LEDC_TIMER;
++    ledc_timer.freq_hz          = STEM_RGB_LEDC_FREQ;
++    ledc_timer.clk_cfg          = LEDC_AUTO_CLK;
++    if (ledc_timer_config(&ledc_timer) != ESP_OK) return false;
++
++    ledc_channel_config_t ledc_r = {};
++    ledc_r.gpio_num       = STEM_RGB_R_PIN;
++    ledc_r.speed_mode     = STEM_RGB_LEDC_MODE;
++    ledc_r.channel        = STEM_RGB_CHANNEL_R;
++    ledc_r.timer_sel      = STEM_RGB_LEDC_TIMER;
++    ledc_r.duty           = 0;
++    ledc_r.hpoint         = 0;
++    ledc_channel_config(&ledc_r);
++
++    ledc_channel_config_t ledc_g = {};
++    ledc_g.gpio_num       = STEM_RGB_G_PIN;
++    ledc_g.speed_mode     = STEM_RGB_LEDC_MODE;
++    ledc_g.channel        = STEM_RGB_CHANNEL_G;
++    ledc_g.timer_sel      = STEM_RGB_LEDC_TIMER;
++    ledc_g.duty           = 0;
++    ledc_g.hpoint         = 0;
++    ledc_channel_config(&ledc_g);
++
++    ledc_channel_config_t ledc_b = {};
++    ledc_b.gpio_num       = STEM_RGB_B_PIN;
++    ledc_b.speed_mode     = STEM_RGB_LEDC_MODE;
++    ledc_b.channel        = STEM_RGB_CHANNEL_B;
++    ledc_b.timer_sel      = STEM_RGB_LEDC_TIMER;
++    ledc_b.duty           = 0;
++    ledc_b.hpoint         = 0;
++    ledc_channel_config(&ledc_b);
++
++    const esp_timer_create_args_t timer_args = {
++        .callback = &RgbOffTimerCallback,
++        .arg = nullptr,
++        .dispatch_method = ESP_TIMER_TASK,
++        .name = "rgb_off_timer",
++        .skip_unhandled_events = false
++    };
++    esp_timer_create(&timer_args, &s_rgb_off_timer);
++
++    // Boot-up flash test (300ms trắng rồi tắt)
++    SetRgbColor(80, 80, 80);
++    vTaskDelay(pdMS_TO_TICKS(250));
++    SetRgbColor(0, 0, 0);
++    return true;
++}
++
+ static const void* g_model_ptr = nullptr;
+ static spi_flash_mmap_handle_t g_model_map_handle;
+ 
+@@ -306,20 +427,33 @@ static void SamplingTask(void* /*arg*/) {
+     esp_task_wdt_delete(NULL); // không bao giờ chạy tới
+ }
+ 
+-// Inference task giữ nguyên logic, chỉ thay đổi buffer thành int16_t và thêm watchdog
++// Inference task
+ static bool s_is_moving = false;
+ static float s_best_spell_prob = 0.0f;
+ static int s_best_spell_class = -1;
+-static float s_best_spell_energy = 0.0f;
+ static float s_best_primitive_prob = 0.0f;
+ static int s_best_primitive_class = -1;
+-static float s_best_primitive_energy = 0.0f;
++static int s_recent_classes[3] = {-1, -1, -1};
++static int s_recent_idx = 0;
++static int s_accepted_count_this_gesture = 0;
+ 
+ // Buffer cục bộ dạng int16_t
+ static int16_t s_local_buffer[BUFFER_LENGTH] = {0};
+ 
+ __attribute__((weak)) void OnSpellDetected(int class_index) {
+-    (void)class_index;
++    if (class_index >= 0 && class_index < g_preloaded_spell_count) {
++        const auto& spell = g_preloaded_spells[class_index];
++        SetRgbColor(spell.r, spell.g, spell.b);
++        if (s_rgb_off_timer != nullptr) {
++            esp_timer_stop(s_rgb_off_timer);
++            esp_timer_start_once(s_rgb_off_timer, (uint64_t)STEM_RGB_TIMEOUT_MS * 1000ULL);
++        }
++    } else {
++        SetRgbColor(0, 0, 0);
++        if (s_rgb_off_timer != nullptr) {
++            esp_timer_stop(s_rgb_off_timer);
++        }
++    }
+ }
+ 
+ static void InferenceTask(void* /*arg*/) {
+@@ -358,12 +492,11 @@ static void InferenceTask(void* /*arg*/) {
+             continue;
+         }
+ 
+-        // ----- Phát hiện chuyển động bằng tail variance (dữ liệu đã được chuyển sang float ngay tại đây) -----
++        // ----- Phát hiện chuyển động bằng tail variance (TAIL_LEN = 25 ~ 500ms) -----
+         const int TAIL_LEN = 25;
+         int start_idx = WINDOW_SIZE - TAIL_LEN;
+         float sum_ax = 0, sum_ay = 0, sum_az = 0, sum_gx = 0, sum_gy = 0, sum_gz = 0;
+         for (int i = start_idx; i < WINDOW_SIZE; ++i) {
+-            // Chuyển đổi từ raw sang float
+             float ax = s_local_buffer[i * CHANNELS + 0] / ACCEL_SCALE;
+             float ay = s_local_buffer[i * CHANNELS + 1] / ACCEL_SCALE;
+             float az = s_local_buffer[i * CHANNELS + 2] / ACCEL_SCALE;
+@@ -393,24 +526,42 @@ static void InferenceTask(void* /*arg*/) {
+         var_gyro /= TAIL_LEN;
+         float motion_energy = var_accel + (var_gyro / 10000.0f);
+ 
+-        // State machine (giữ nguyên, chỉ thay float bằng biến đã tính)
++        // Motion State Machine
+         if (s_is_moving) {
+             if (motion_energy < 0.02f) {
+                 s_is_moving = false;
+                 int predicted_class = -1;
+                 if (s_best_spell_class >= 0) {
+-                    printf("FINAL PREDICT:%s:%.2f\n", SpellNameFromClassIndex(s_best_spell_class), s_best_spell_prob);
+-                    predicted_class = s_best_spell_class;
++                    // Temporal agreement check: adaptive quorum based on total accepted windows this gesture
++                    int match_count = 0;
++                    for (int r = 0; r < 3; ++r) {
++                        if (s_recent_classes[r] == s_best_spell_class) {
++                            match_count++;
++                        }
++                    }
++                    int quorum_votes = (s_accepted_count_this_gesture < 3) ? 1 : 2;
++                    if (match_count >= quorum_votes) {
++                        printf("FINAL PREDICT:%s:%.2f\n", SpellNameFromClassIndex(s_best_spell_class), s_best_spell_prob);
++                        predicted_class = s_best_spell_class;
++                    } else {
++#if STEM_DEBUG_VERBOSE
++                        ESP_LOGW(TAG, "Spell %s rejected by temporal agreement (%d/%d required)",
++                                 SpellNameFromClassIndex(s_best_spell_class), match_count, quorum_votes);
++#endif
++                    }
+                 } else if (s_best_primitive_class >= 0) {
+ #if STEM_DEBUG_VERBOSE
+                     printf("DEBUG_BLACKHOLE:%s (prob: %.2f)\n", SpellNameFromClassIndex(s_best_primitive_class), s_best_primitive_prob);
+ #endif
+                 }
+                 // Reset
+-                s_best_spell_prob = 0.0f; s_best_spell_class = -1; s_best_spell_energy = 0.0f;
+-                s_best_primitive_prob = 0.0f; s_best_primitive_class = -1; s_best_primitive_energy = 0.0f;
++                s_best_spell_prob = 0.0f; s_best_spell_class = -1;
++                s_best_primitive_prob = 0.0f; s_best_primitive_class = -1;
++                for (int r = 0; r < 3; ++r) s_recent_classes[r] = -1;
++                s_recent_idx = 0;
++                s_accepted_count_this_gesture = 0;
+ 
+-                // Giữ lại frame cuối trong buffer (phải cập nhật raw int16)
++                // Giữ lại frame cuối trong buffer để tránh glitch
+                 if (xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+                     int16_t last_ax = s_local_buffer[BUFFER_LENGTH - 6];
+                     int16_t last_ay = s_local_buffer[BUFFER_LENGTH - 5];
+@@ -440,7 +591,7 @@ static void InferenceTask(void* /*arg*/) {
+             }
+         }
+ 
+-        // ---------- Chuẩn bị input cho TFLM (từ int16_t -> float -> int8) ----------
++        // ---------- Chuẩn bị input cho TFLM (từ int16_t -> float -> clip[-2, 2] -> int8) ----------
+         int model_frames = s_input->dims->data[1];
+         int model_channels = s_input->dims->data[2];
+         if (model_channels != 6 && model_channels != 9) {
+@@ -471,14 +622,16 @@ static void InferenceTask(void* /*arg*/) {
+                 float jerkz = (idx >= 6) ? (az - (s_local_buffer[idx - 6 + 2] / ACCEL_SCALE)) : 0.0f;
+                 float in_vals[9] = {ax, ay, az, gx, gy, gz, derived0, derived1, jerkz};
+                 for (int c = 0; c < 9; c++) {
+-                    int val = static_cast<int>(std::roundf(in_vals[c] * inv_scale)) + in_zp;
++                    float v_clipped = in_vals[c] > 2.0f ? 2.0f : (in_vals[c] < -2.0f ? -2.0f : in_vals[c]);
++                    int val = static_cast<int>(std::roundf(v_clipped * inv_scale)) + in_zp;
+                     val = val > 127 ? 127 : (val < -128 ? -128 : val);
+                     s_input->data.int8[f * 9 + c] = static_cast<int8_t>(val);
+                 }
+             } else { // 6 kênh
+                 float in_vals[6] = {ax, ay, az, gx, gy, gz};
+                 for (int c = 0; c < 6; c++) {
+-                    int val = static_cast<int>(std::roundf(in_vals[c] * inv_scale)) + in_zp;
++                    float v_clipped = in_vals[c] > 2.0f ? 2.0f : (in_vals[c] < -2.0f ? -2.0f : in_vals[c]);
++                    int val = static_cast<int>(std::roundf(v_clipped * inv_scale)) + in_zp;
+                     val = val > 127 ? 127 : (val < -128 ? -128 : val);
+                     s_input->data.int8[f * 6 + c] = static_cast<int8_t>(val);
+                 }
+@@ -504,7 +657,7 @@ static void InferenceTask(void* /*arg*/) {
+         }
+ #endif
+ 
+-        // Đọc embedding & cosine similarity (không đổi)
++        // Đọc embedding & tính L2-norm
+         const float out_scale = s_output->params.scale;
+         const int out_zp = s_output->params.zero_point;
+         float current_embedding[EMBEDDING_DIM];
+@@ -520,6 +673,7 @@ static void InferenceTask(void* /*arg*/) {
+         float inv_norm = 1.0f / (std::sqrt(norm_curr) + 1e-6f);
+         for (int i = 0; i < EMBEDDING_DIM; ++i) v_out[i] *= inv_norm;
+ 
++        // Cosine similarity matching (tìm best match theo cosine distance)
+         float max_cos = -1.0f;
+         int max_idx = -1;
+         for (int i = 0; i < g_preloaded_spell_count; ++i) {
+@@ -532,26 +686,21 @@ static void InferenceTask(void* /*arg*/) {
+             }
+         }
+ 
+-        // Window energy (L1 norm) dùng float từ raw
+-        float window_energy = 0.0f;
+-        for (int i = 0; i < BUFFER_LENGTH; ++i) {
+-            // cần giá trị tuyệt đối float
+-            float val = (i % 6 < 3) ? (s_local_buffer[i] / ACCEL_SCALE)
+-                                    : (s_local_buffer[i] / GYRO_RAW_SCALE);
+-            window_energy += (val > 0) ? val : -val;
+-        }
+-
++        // Cập nhật candidate tốt nhất theo Cosine Confidence
+         if (max_idx >= 0 && max_cos >= g_preloaded_spells[max_idx].threshold) {
++            // Track accepted window class and count for adaptive temporal agreement
++            s_recent_classes[s_recent_idx % 3] = max_idx;
++            s_recent_idx++;
++            s_accepted_count_this_gesture++;
++
+             bool is_spell = g_preloaded_spells[max_idx].is_spell;
+             if (is_spell) {
+-                if (window_energy > s_best_spell_energy) {
+-                    s_best_spell_energy = window_energy;
++                if (max_cos > s_best_spell_prob) {
+                     s_best_spell_prob = max_cos;
+                     s_best_spell_class = max_idx;
+                 }
+             } else {
+-                if (window_energy > s_best_primitive_energy) {
+-                    s_best_primitive_energy = window_energy;
++                if (max_cos > s_best_primitive_prob) {
+                     s_best_primitive_prob = max_cos;
+                     s_best_primitive_class = max_idx;
+                 }
+@@ -627,10 +776,11 @@ bool InitializeSpellRuntime() {
+             ESP_LOGW(TAG, "Failed to query blob for g%d_cen", i);
+             continue;
+         }
+-        size_t expected_size = EMBEDDING_DIM * sizeof(float) + sizeof(float) + sizeof(uint8_t);
+-        if (blob_size == expected_size) {
++        size_t v1_size = EMBEDDING_DIM * sizeof(float) + sizeof(float) + sizeof(uint8_t);
++        size_t v2_size = v1_size + 3 * sizeof(uint8_t);
++        if (blob_size == v2_size || blob_size == v1_size) {
+             uint8_t blob[128]; // đủ lớn
+-            if (expected_size > sizeof(blob)) continue;
++            if (blob_size > sizeof(blob)) continue;
+             err = nvs_get_blob(h, cen_key, blob, &blob_size);
+             if (err != ESP_OK) continue;
+ 
+@@ -647,12 +797,22 @@ bool InitializeSpellRuntime() {
+             memcpy(&spell.threshold, blob + EMBEDDING_DIM * sizeof(float), sizeof(float));
+             spell.is_spell = blob[EMBEDDING_DIM * sizeof(float) + sizeof(float)] != 0;
+ 
++            if (blob_size == v2_size) {
++                spell.r = blob[v1_size];
++                spell.g = blob[v1_size + 1];
++                spell.b = blob[v1_size + 2];
++            } else {
++                spell.r = 255;
++                spell.g = 255;
++                spell.b = 255;
++            }
++
+             if (g_preloaded_spell_count < MAX_GESTURES) {
+                 g_preloaded_spells[g_preloaded_spell_count] = spell;
+                 g_preloaded_spell_count++;
+             }
+         } else {
+-            ESP_LOGE(TAG, "Invalid blob size for gesture %d", i);
++            ESP_LOGE(TAG, "Invalid blob size for gesture %d (size: %u)", i, (unsigned)blob_size);
+         }
+     }
+     nvs_close(h);
+@@ -662,6 +822,8 @@ bool InitializeSpellRuntime() {
+         return false;
+     }
+ 
++    InitRgbLed();
++
+     if (!InitI2cBus() || !InitMpu6050() || !InitInference()) {
+         return false;
+     }

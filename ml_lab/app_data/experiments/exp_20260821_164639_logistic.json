@@ -1,0 +1,34 @@
+{
+  "timestamp": "2026-08-21T16:46:39.313168",
+  "algo": "logistic",
+  "algo_name": "Hồi quy Logistic (Logistic Regression)",
+  "train_accuracy": 0.9967845659163987,
+  "val_accuracy": 0.96,
+  "cv_mean": 0.9566451612903226,
+  "cv_std": 0.013824167108867802,
+  "class_names": [
+    "BOOST",
+    "COPY",
+    "FIREBALL",
+    "P",
+    "REFLECT",
+    "STOP",
+    "WAVE",
+    "WINDSHELD"
+  ],
+  "num_features": 63,
+  "hyperparams": {
+    "c": 1.0,
+    "penalty": "l2",
+    "max_iter": 300
+  },
+  "benchmark": {
+    "mcu_latency_ms": 0.08,
+    "mcu_ram_kb": 0.4,
+    "mcu_flash_kb": 0.9,
+    "explainability": "Cao (Tuyến tính + Softmax)",
+    "deep_latency_ms": 45.0,
+    "deep_ram_kb": 35.0,
+    "speedup_vs_deep": 562.5
+  }
+}

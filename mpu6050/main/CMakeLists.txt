@@ -15,4 +15,7 @@ idf_component_register(
         esp_driver_gpio
         esp_rom
         esp_system
+        esp_wifi
+        esp_event
+        esp_netif
 )
