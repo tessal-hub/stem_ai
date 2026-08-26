@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+import ml_lab.ui.lab_style as ls
 from ml_lab.core.esp32_flasher import Esp32FlashWorker, list_serial_ports
 from ml_lab.core.pipeline import TrainClassicResult
 
@@ -40,7 +41,7 @@ class FlashDialog(QDialog):
         self.result = result
         self._worker: Esp32FlashWorker | None = None
 
-        self.setWindowTitle("⚡ Nạp Mã Nguồn Trực Tiếp Vào ESP32 (1-Click Flasher)")
+        self.setWindowTitle("Nạp mô hình vào ESP32")
         self.resize(750, 520)
         self._init_ui()
         self.refresh_ports()
@@ -52,15 +53,15 @@ class FlashDialog(QDialog):
 
         # ── Header Card ─────────────────────────────────────
         head_box = QFrame()
-        head_box.setStyleSheet("background: rgba(0, 122, 255, 0.08); border-radius: 8px; padding: 10px 14px;")
+        head_box.setStyleSheet(f".QFrame {{ background: {ls.ACCENT_TINT_STRONG}; border: none; border-radius: {ls.RADIUS_MD}px; padding: 10px 14px; }}")
         h_layout = QHBoxLayout(head_box)
 
         info_vbox = QVBoxLayout()
         info_vbox.setSpacing(2)
-        lbl_title = QLabel(f"⚡ NẠP MÔ HÌNH: {self.result.algo_name.upper()}")
-        lbl_title.setStyleSheet("font-weight: 800; font-size: 13px; color: #007aff;")
+        lbl_title = QLabel(f"NẠP MÔ HÌNH: {self.result.algo_name.upper()}")
+        lbl_title.setStyleSheet(f"{ls.font(ls.FS_SECTION, 800)} color: {ls.ACCENT}; border: none; background: transparent;")
         lbl_sub = QLabel(f"Phép thuật: {', '.join(self.result.class_names)} • Độ chính xác: {self.result.val_accuracy*100:.1f}%")
-        lbl_sub.setStyleSheet("font-size: 11px; color: #4b5563;")
+        lbl_sub.setStyleSheet(f"{ls.font(ls.FS_CAPTION)} color: {ls.MUTED}; border: none; background: transparent;")
         info_vbox.addWidget(lbl_title)
         info_vbox.addWidget(lbl_sub)
         h_layout.addLayout(info_vbox, stretch=1)
@@ -68,26 +69,26 @@ class FlashDialog(QDialog):
 
         # ── Port Selector Card ──────────────────────────────
         port_box = QFrame()
-        port_box.setStyleSheet("background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px;")
+        port_box.setStyleSheet(ls.card())
         p_layout = QHBoxLayout(port_box)
         p_layout.setSpacing(10)
 
-        lbl_port = QLabel("🔌 Cổng ESP32 (COM Port):")
-        lbl_port.setStyleSheet("font-weight: 700; font-size: 12px;")
+        lbl_port = QLabel("Cổng ESP32 (COM):")
+        lbl_port.setStyleSheet(f"{ls.font(ls.FS_BODY, 700)} border: none; background: transparent;")
         p_layout.addWidget(lbl_port)
 
         self.combo_ports = QComboBox()
-        self.combo_ports.setStyleSheet("padding: 6px; font-weight: 600; border: 1px solid #d1d5db; border-radius: 6px;")
+        self.combo_ports.setStyleSheet(ls.INPUT_COMBO)
         p_layout.addWidget(self.combo_ports, stretch=1)
 
-        btn_rescan = QPushButton("🔄 Quét lại")
-        btn_rescan.setStyleSheet("padding: 6px 12px; font-weight: 600; border-radius: 6px; background: #f3f4f6; border: 1px solid #d1d5db;")
+        btn_rescan = QPushButton("Quét lại")
+        btn_rescan.setStyleSheet(ls.BTN_SECONDARY)
         btn_rescan.clicked.connect(self.refresh_ports)
         p_layout.addWidget(btn_rescan)
 
-        self.btn_flash = QPushButton("🔥 BẮT ĐẦU NẠP CODE (1-CLICK)")
+        self.btn_flash = QPushButton("BẮT ĐẦU NẠP")
         self.btn_flash.setStyleSheet(
-            "padding: 8px 18px; font-weight: 800; font-size: 12px; border-radius: 6px; background: #34c759; color: white;"
+            f"padding: 8px 18px; font-weight: 800; font-size: 12px; border-radius: 6px; background: {ls.SUCCESS}; color: white;"
         )
         self.btn_flash.clicked.connect(self.start_flash)
         p_layout.addWidget(self.btn_flash)
@@ -95,35 +96,30 @@ class FlashDialog(QDialog):
         layout.addWidget(port_box)
 
         # ── Chip Info Badge ─────────────────────────────────
-        self.lbl_chip_badge = QLabel("📟 Chưa phát hiện board. Vui lòng chọn cổng và bấm Nạp Code.")
-        self.lbl_chip_badge.setStyleSheet("font-size: 11px; color: #6b7280; font-weight: 500; padding: 0 4px;")
+        self.lbl_chip_badge = QLabel("Chưa phát hiện board — chọn cổng rồi bấm nạp.")
+        self.lbl_chip_badge.setStyleSheet(f"{ls.font(ls.FS_CAPTION, 500)} color: {ls.MUTED}; padding: 0 4px; border: none; background: transparent;")
         layout.addWidget(self.lbl_chip_badge)
 
         # ── Real-time Terminal Log ──────────────────────────
-        lbl_log = QLabel("📄 TIẾN TRÌNH & NHẬT KÝ NẠP FLASH (REAL-TIME LOG):")
-        lbl_log.setStyleSheet("font-weight: 700; font-size: 11px; color: #4b5563;")
+        lbl_log = QLabel("TIẾN TRÌNH & NHẬT KÝ NẠP")
+        lbl_log.setStyleSheet(ls.section_label())
         layout.addWidget(lbl_log)
 
         self.term_edit = QTextEdit()
         self.term_edit.setReadOnly(True)
         self.term_edit.setFont(QFont("Consolas", 10))
-        self.term_edit.setStyleSheet(
-            "background-color: #1a1a1f; color: #38bdf8; border-radius: 6px; padding: 10px; border: 1px solid #2e2e38;"
-        )
+        self.term_edit.setStyleSheet(ls.TERMINAL)
         layout.addWidget(self.term_edit, stretch=1)
 
         # ── Progress Bar & Status ───────────────────────────
         self.lbl_status = QLabel("Sẵn sàng.")
-        self.lbl_status.setStyleSheet("font-weight: 600; font-size: 11px; color: #007aff;")
+        self.lbl_status.setStyleSheet(f"{ls.font(ls.FS_CAPTION, 600)} color: {ls.ACCENT}; border: none; background: transparent;")
         layout.addWidget(self.lbl_status)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setFixedHeight(8)
         self.progress_bar.setValue(0)
-        self.progress_bar.setStyleSheet(
-            "QProgressBar { background-color: #e5e7eb; border-radius: 4px; } "
-            "QProgressBar::chunk { background-color: #34c759; border-radius: 4px; }"
-        )
+        self.progress_bar.setStyleSheet(ls.PROGRESS_BAR)
         layout.addWidget(self.progress_bar)
 
         # ── Bottom Action Buttons ───────────────────────────
@@ -131,7 +127,7 @@ class FlashDialog(QDialog):
         bot_layout.addStretch()
 
         self.btn_close = QPushButton("Đóng")
-        self.btn_close.setStyleSheet("padding: 8px 18px; font-weight: 600; border-radius: 6px; background: #f3f4f6; border: 1px solid #d1d5db;")
+        self.btn_close.setStyleSheet(ls.BTN_SECONDARY)
         self.btn_close.clicked.connect(self.accept)
         bot_layout.addWidget(self.btn_close)
 
@@ -155,7 +151,7 @@ class FlashDialog(QDialog):
             return
 
         self.btn_flash.setEnabled(False)
-        self.btn_flash.setText("⏳ Đang Nạp...")
+        self.btn_flash.setText("Đang nạp...")
         self.progress_bar.setValue(5)
         self.term_edit.clear()
 
@@ -169,7 +165,7 @@ class FlashDialog(QDialog):
 
     def _on_flash_finished(self, success: bool, msg: str) -> None:
         self.btn_flash.setEnabled(True)
-        self.btn_flash.setText("🔥 BẮT ĐẦU NẠP CODE (1-CLICK)")
+        self.btn_flash.setText("BẮT ĐẦU NẠP")
         if success:
             self.progress_bar.setValue(100)
             self.lbl_status.setText("✅ Nạp thành công 100%!")

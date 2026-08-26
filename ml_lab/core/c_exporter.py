@@ -1,7 +1,7 @@
 """
 ml_lab/core/c_exporter.py — Trình sinh mã C/C++ thuần cho ESP32 và MCU nhúng.
 
-Sinh file `model_classic.h` và `model_classic.cc` cho TẤT CẢ 9 thuật toán Classic & Shallow ML:
+Sinh file `model_classic.h` và `model_classic.cc` cho TẤT CẢ 15 thuật toán Classic & Shallow ML:
 - KNN (K-Nearest Neighbors)
 - Cây Quyết Định (Decision Tree)
 - Rừng Ngẫu Nhiên (Random Forest)
@@ -19,10 +19,11 @@ from __future__ import annotations
 
 import datetime
 from pathlib import Path
-from typing import Any, Sequence
+from typing import TYPE_CHECKING, Any, Sequence
 import numpy as np
 
-from ml_lab.core.pipeline import TrainClassicResult
+if TYPE_CHECKING:  # tránh kéo sklearn vào lúc mở app
+    from ml_lab.core.pipeline import TrainClassicResult
 
 
 class CCodeExporter:
@@ -96,13 +97,13 @@ class CCodeExporter:
             f"#define CLASSIC_NUM_FEATURES {num_features}",
             "#endif",
             "",
-            "/**",
-            " * Thực hiện suy luận phân loại cử chỉ từ vector đặc trưng 48 phần tử.",
-            " *",
-            " * @param raw_features: Mảng float chứa 48 đặc trưng IMU đầu vào.",
-            " * @param out_confidence: Con trỏ float nhận độ tin cậy dự đoán (0.0 -> 1.0).",
-            " * @return Chỉ số index của lớp dự đoán (0 -> CLASSIC_NUM_CLASSES - 1).",
-            " */",
+        "/**",
+        " * Thực hiện suy luận phân loại cử chỉ từ vector đặc trưng IMU đầu vào.",
+        " *",
+        f" * @param raw_features: Mảng float gồm {num_features} đặc trưng IMU (đúng thứ tự feature_names).",
+        " * @param out_confidence: Con trỏ float nhận độ tin cậy dự đoán (0.0 -> 1.0).",
+        " * @return Chỉ số index của lớp dự đoán (0 -> CLASSIC_NUM_CLASSES - 1).",
+        " */",
             "int classic_predict(const float* raw_features, float* out_confidence);",
             "",
             "/**",
@@ -142,7 +143,8 @@ class CCodeExporter:
             f"static const char* const CLASS_NAMES[{num_classes}] = {{",
         ]
         for name in class_names:
-            lines.append(f'    "{name}",')
+            safe = str(name).replace("\\", "\\\\").replace('"', '\\"')
+            lines.append(f'    "{safe}",')
         lines.extend([
             "};",
             "",
@@ -180,9 +182,13 @@ class CCodeExporter:
             lines.append(self._generate_tree_source(result))
         elif algo == "forest":
             lines.append(self._generate_forest_source(result))
+        elif algo == "extra_trees":
+            lines.append(self._generate_forest_source(result))
+        elif algo == "adaboost":
+            lines.append(self._generate_adaboost_source(result))
         elif algo == "gbdt":
             lines.append(self._generate_gbdt_source(result))
-        elif algo == "logistic":
+        elif algo in ("logistic", "ridge", "sgd"):
             lines.append(self._generate_logistic_source(result))
         elif algo == "svm":
             lines.append(self._generate_svm_source(result))
@@ -191,7 +197,11 @@ class CCodeExporter:
         elif algo == "nb":
             lines.append(self._generate_nb_source(result))
         elif algo == "lda":
-            lines.append(self._generate_lda_source(result))
+            lines.append(self._generate_logistic_source(result))
+        elif algo == "nearest_centroid":
+            lines.append(self._generate_nearest_centroid_source(result))
+        elif algo == "qda":
+            lines.append(self._generate_qda_source(result))
         elif algo == "mlp":
             lines.append(self._generate_mlp_source(result))
         else:
@@ -529,6 +539,199 @@ class CCodeExporter:
             "        }",
             "    }",
             "    if (out_confidence) *out_confidence = 0.95f;",
+            "    return best_cls;",
+            "}",
+        ])
+        return "\n".join(lines)
+
+    def _generate_adaboost_source(self, result: TrainClassicResult) -> str:
+        """AdaBoost: bỏ phiếu có trọng số từ chuỗi cây nhỏ."""
+        model = result.model
+        num_classes = len(result.class_names)
+        num_features = len(result.feature_names)
+        estimators = list(model.estimators_)
+        weights = list(getattr(model, "estimator_weights_", [1.0] * len(estimators)))
+        n_est = len(estimators)
+
+        lines: list[str] = [
+            f"// Thuật toán: AdaBoost ({n_est} cây nhỏ, bỏ phiếu có trọng số)",
+            f"#define ADABOOST_N_TREES {n_est}",
+            "",
+        ]
+
+        for t_idx, est in enumerate(estimators):
+            tree = est.tree_
+            lines.append(f"static int predict_stump_{t_idx}(const float* x) {{")
+            lines.append(f"    // trọng số bỏ phiếu: {float(weights[t_idx]):.6f}f")
+
+            def recurse(node: int, indent_level: int) -> list[str]:
+                indent = "    " * indent_level
+                if tree.feature[node] != -2:
+                    feat = tree.feature[node]
+                    thresh = tree.threshold[node]
+                    res = [f"{indent}if (x[{feat}] <= {thresh:.6f}f) {{"]
+                    res.extend(recurse(tree.children_left[node], indent_level + 1))
+                    res.append(f"{indent}}} else {{")
+                    res.extend(recurse(tree.children_right[node], indent_level + 1))
+                    res.append(f"{indent}}}")
+                    return res
+                best_cls = int(np.argmax(tree.value[node][0]))
+                return [f"{indent}return {best_cls};"]
+
+            lines.extend(recurse(0, 1))
+            lines.append("}\n")
+
+        lines.extend([
+            "int classic_predict(const float* raw_features, float* out_confidence) {",
+            "    if (raw_features == nullptr) {",
+            "        if (out_confidence) *out_confidence = 0.0f;",
+            "        return 0;",
+            "    }",
+            "",
+            f"    float x[{num_features}];",
+            "    scale_features(raw_features, x);",
+            "",
+            f"    float scores[{num_classes}] = {{0.0f}};",
+        ])
+        for t_idx in range(n_est):
+            lines.append(f"    scores[predict_stump_{t_idx}(x)] += {float(weights[t_idx]):.6f}f;")
+        lines.extend([
+            "",
+            "    int best_cls = 0;",
+            "    float max_score = scores[0];",
+            f"    for (int c = 1; c < {num_classes}; ++c) {{",
+            "        if (scores[c] > max_score) {",
+            "            max_score = scores[c];",
+            "            best_cls = c;",
+            "        }",
+            "    }",
+            "    if (out_confidence) *out_confidence = 0.9f;",
+            "    return best_cls;",
+            "}",
+        ])
+        return "\n".join(lines)
+
+    def _generate_nearest_centroid_source(self, result: TrainClassicResult) -> str:
+        """Nearest Centroid: so khoảng cách tới tâm trung bình mỗi lớp."""
+        model = result.model
+        num_classes = len(result.class_names)
+        num_features = len(result.feature_names)
+        centroids = np.asarray(model.centroids_, dtype=np.float64)
+
+        lines: list[str] = [
+            "// Thuật toán: Nearest Centroid (so với tâm điển hình của mỗi lớp)",
+            f"static const float CENTROIDS[{num_classes}][{num_features}] = {{",
+        ]
+        for c in range(num_classes):
+            lines.append("    { " + self._format_float_array(centroids[c]) + " },")
+        lines.extend([
+            "};",
+            "",
+            "int classic_predict(const float* raw_features, float* out_confidence) {",
+            "    if (raw_features == nullptr) {",
+            "        if (out_confidence) *out_confidence = 0.0f;",
+            "        return 0;",
+            "    }",
+            "",
+            f"    float x[{num_features}];",
+            "    scale_features(raw_features, x);",
+            "",
+            "    int best_cls = 0;",
+            "    float best_dist = 1e9f;",
+            f"    float dists[{num_classes}];",
+            f"    for (int c = 0; c < {num_classes}; ++c) {{",
+            "        float dist = 0.0f;",
+            f"        for (int j = 0; j < {num_features}; ++j) {{",
+            "            float d = x[j] - CENTROIDS[c][j];",
+            "            dist += d * d;",
+            "        }",
+            "        dists[c] = dist;",
+            "        if (dist < best_dist) {",
+            "            best_dist = dist;",
+            "            best_cls = c;",
+            "        }",
+            "    }",
+            "    // Độ tin cậy: khoảng cách gần nhất so với tổng (gần = chắc)",
+            "    float total = 1e-6f;",
+            f"    for (int c = 0; c < {num_classes}; ++c) total += dists[c];",
+            "    if (out_confidence) *out_confidence = 1.0f - best_dist / total;",
+            "    return best_cls;",
+            "}",
+        ])
+        return "\n".join(lines)
+
+    def _generate_qda_source(self, result: TrainClassicResult) -> str:
+        """QDA: log-likelihood Gauss với ma trận hiệp phương sai từng lớp."""
+        model = result.model
+        num_classes = len(result.class_names)
+        num_features = len(result.feature_names)
+
+        priors = np.asarray(model.priors_, dtype=np.float64)
+        means = np.asarray(model.means_, dtype=np.float64)
+        covs = np.asarray(model.covariance_, dtype=np.float64)
+
+        log_priors = np.log(priors + 1e-12)
+        inv_covs = np.zeros_like(covs)
+        log_dets = np.zeros(num_classes)
+        for c in range(num_classes):
+            sign, logdet = np.linalg.slogdet(covs[c])
+            inv_covs[c] = np.linalg.inv(covs[c])
+            log_dets[c] = logdet if sign > 0 else 0.0
+
+        lines: list[str] = [
+            "// Thuật toán: Quadratic Discriminant Analysis (ranh giới cong theo phân phối từng lớp)",
+            f"static const float QDA_LOG_PRIOR[{num_classes}] = {{ {self._format_float_array(log_priors)} }};",
+            f"static const float QDA_LOG_DET[{num_classes}] = {{ {self._format_float_array(log_dets)} }};",
+            f"static const float QDA_MEANS[{num_classes}][{num_features}] = {{",
+        ]
+        for c in range(num_classes):
+            lines.append("    { " + self._format_float_array(means[c]) + " },")
+        lines.append("};")
+        lines.append(f"static const float QDA_INV_COV[{num_classes}][{num_features}][{num_features}] = {{")
+        for c in range(num_classes):
+            lines.append("    {")
+            for i in range(num_features):
+                lines.append("        { " + self._format_float_array(inv_covs[c][i]) + " },")
+            lines.append("    },")
+        lines.extend([
+            "};",
+            "",
+            "int classic_predict(const float* raw_features, float* out_confidence) {",
+            "    if (raw_features == nullptr) {",
+            "        if (out_confidence) *out_confidence = 0.0f;",
+            "        return 0;",
+            "    }",
+            "",
+            f"    float x[{num_features}];",
+            "    scale_features(raw_features, x);",
+            "",
+            f"    float logp[{num_classes}];",
+            f"    for (int c = 0; c < {num_classes}; ++c) {{",
+            "        float lp = QDA_LOG_PRIOR[c] - 0.5f * QDA_LOG_DET[c];",
+            f"        float diff[{num_features}];",
+            f"        for (int i = 0; i < {num_features}; ++i) diff[i] = x[i] - QDA_MEANS[c][i];",
+            f"        for (int i = 0; i < {num_features}; ++i) {{",
+            "            float row = 0.0f;",
+            f"            for (int j = 0; j < {num_features}; ++j) row += QDA_INV_COV[c][i][j] * diff[j];",
+            "            lp += -0.5f * diff[i] * row;",
+            "        }",
+            "        logp[c] = lp;",
+            "    }",
+            "",
+            "    int best_cls = 0;",
+            "    float max_lp = logp[0];",
+            f"    for (int c = 1; c < {num_classes}; ++c) {{",
+            "        if (logp[c] > max_lp) { max_lp = logp[c]; best_cls = c; }",
+            "    }",
+            "",
+            "    // Softmax để ra độ tin cậy",
+            "    float sum_exp = 1e-7f;",
+            f"    float probs[{num_classes}];",
+            f"    for (int c = 0; c < {num_classes}; ++c) {{",
+            "        probs[c] = expf(logp[c] - max_lp);",
+            "        sum_exp += probs[c];",
+            "    }",
+            "    if (out_confidence) *out_confidence = probs[best_cls] / sum_exp;",
             "    return best_cls;",
             "}",
         ])

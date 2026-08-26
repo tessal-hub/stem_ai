@@ -16,6 +16,9 @@ import numpy as np
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QHeaderView,
@@ -27,15 +30,16 @@ from PyQt6.QtWidgets import (
     QSplitter,
     QTableWidget,
     QTableWidgetItem,
-    QTabWidget,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
+import ml_lab.ui.lab_style as ls
 from ml_lab.core.c_exporter import CCodeExporter
+from ml_lab.core.experiment_store import ExperimentStore
 from ml_lab.core.pipeline import TrainClassicResult
 from ml_lab.data.feature_analysis import compute_local_feature_contributions
+from ml_lab.ui.friendly_terms import friendly_feature_name
 from ml_lab.ui.widgets.flash_dialog import FlashDialog
 
 
@@ -63,25 +67,25 @@ class TabSimulatorExport(QWidget):
 
         # ── Left: What-If Interactive Simulator & SHAP ──────
         left_box = QFrame()
-        left_box.setStyleSheet("background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;")
+        left_box.setStyleSheet(ls.card())
         l_layout = QVBoxLayout(left_box)
 
-        lbl_sim_t = QLabel("🎮 GIẢ LẬP ĐẶC TRƯNG ẢO (WHAT-IF SIMULATOR)")
-        lbl_sim_t.setStyleSheet("font-weight: 700; font-size: 11px; color: #007aff;")
+        lbl_sim_t = QLabel("THỬ NGHIỆM NHANH: MÁY SẼ ĐOÁN GÌ?")
+        lbl_sim_t.setStyleSheet(ls.section_label())
         l_layout.addWidget(lbl_sim_t)
 
         # Live Outcome Card
         self.outcome_card = QFrame()
-        self.outcome_card.setStyleSheet("background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px;")
+        self.outcome_card.setStyleSheet(f".QFrame {{ background: {ls.SURFACE_SUNK}; border: none; border-radius: {ls.RADIUS_MD}px; padding: {ls.SP_3}px; }}")
         oc_layout = QVBoxLayout(self.outcome_card)
         oc_layout.setSpacing(2)
 
-        lbl_o_tag = QLabel("DỰ ĐOÁN TỨC THỜI:")
-        lbl_o_tag.setStyleSheet("font-size: 10px; font-weight: 700; color: #64748b;")
-        self.lbl_pred_class = QLabel("CHƯA CÓ MODEL")
-        self.lbl_pred_class.setStyleSheet("font-size: 18px; font-weight: 800; color: #007aff;")
-        self.lbl_pred_conf = QLabel("Độ tin cậy: --%")
-        self.lbl_pred_conf.setStyleSheet("font-size: 11px; font-weight: 600; color: #166534;")
+        lbl_o_tag = QLabel("KẾT LUẬN CỦA MÁY:")
+        lbl_o_tag.setStyleSheet("font-size: 11px; font-weight: 700; color: #5b6b7f;; border: none; background: transparent;")
+        self.lbl_pred_class = QLabel("CHƯA CÓ MÔ HÌNH")
+        self.lbl_pred_class.setStyleSheet(ls.font(20, 800) + f"color: {ls.ACCENT};; border: none; background: transparent;")
+        self.lbl_pred_conf = QLabel("Mức chắc chắn: --%")
+        self.lbl_pred_conf.setStyleSheet("font-size: 11px; font-weight: 600; color: #166534;; border: none; background: transparent;")
 
         oc_layout.addWidget(lbl_o_tag)
         oc_layout.addWidget(self.lbl_pred_class)
@@ -89,8 +93,8 @@ class TabSimulatorExport(QWidget):
         l_layout.addWidget(self.outcome_card)
 
         # Sliders Area
-        lbl_adj = QLabel("Kéo thanh trượt để thay đổi giá trị đặc trưng:")
-        lbl_adj.setStyleSheet("font-size: 11px; color: #64748b; font-weight: 500;")
+        lbl_adj = QLabel("Kéo các thanh để giả lập giá trị đo được — máy sẽ đoán lại ngay:")
+        lbl_adj.setStyleSheet("font-size: 11px; color: #5b6b7f; font-weight: 500;; border: none; background: transparent;")
         l_layout.addWidget(lbl_adj)
 
         scroll = QScrollArea()
@@ -103,78 +107,85 @@ class TabSimulatorExport(QWidget):
         l_layout.addWidget(scroll, stretch=1)
 
         # SHAP Attribution Table
-        lbl_shap = QLabel("🔍 TẠI SAO MÁY ĐOÁN NHƯ VẬY? (SHAP ATTRIBUTION):")
-        lbl_shap.setStyleSheet("font-weight: 700; font-size: 11px; color: #007aff; margin-top: 6px;")
+        lbl_shap = QLabel("VÌ SAO MÁY QUYẾT ĐỊNH NHƯ VẬY?")
+        lbl_shap.setStyleSheet(ls.section_label())
         l_layout.addWidget(lbl_shap)
 
         self.table_shap = QTableWidget()
         self.table_shap.setColumnCount(3)
-        self.table_shap.setHorizontalHeaderLabels(["Đặc Trưng", "Đóng Góp", "Tác Động"])
+        self.table_shap.setHorizontalHeaderLabels(["Đặc trưng", "Đóng góp", "Nghĩa là"])
         self.table_shap.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table_shap.verticalHeader().setVisible(False)
-        self.table_shap.setStyleSheet("QTableWidget { border: 1px solid #e2e8f0; border-radius: 6px; }")
+        self.table_shap.setStyleSheet(ls.DATA_TABLE)
         l_layout.addWidget(self.table_shap, stretch=1)
 
         splitter.addWidget(left_box)
 
         # ── Right: C++ Exporter & 1-Click Flasher ────────────
         right_box = QFrame()
-        right_box.setStyleSheet("background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;")
+        right_box.setStyleSheet(ls.card())
         r_layout = QVBoxLayout(right_box)
 
         top_r_row = QHBoxLayout()
-        lbl_code_t = QLabel("🚀 XUẤT MÃ NGUỒN C++ & NẠP FIRMWARE ESP32")
-        lbl_code_t.setStyleSheet("font-weight: 700; font-size: 11px; color: #007aff;")
+        lbl_code_t = QLabel("XUẤT MÃ C++ & NẠP LÊN WAND")
+        lbl_code_t.setStyleSheet(ls.section_label())
         top_r_row.addWidget(lbl_code_t)
         top_r_row.addStretch()
 
-        btn_copy = QPushButton("📋 Copy Code")
-        btn_copy.setStyleSheet("padding: 5px 10px; font-size: 11px; font-weight: 600; border-radius: 5px; background: #f8fafc; border: 1px solid #cbd5e1;")
+        btn_copy = QPushButton("Copy mã")
+        btn_copy.setStyleSheet(ls.BTN_SECONDARY)
         btn_copy.clicked.connect(self._copy_current_code)
         top_r_row.addWidget(btn_copy)
 
-        self.btn_flash = QPushButton("🔥 Nạp Code Sang ESP32 (1-Click)")
-        self.btn_flash.setStyleSheet(
-            "QPushButton { background: #34c759; color: white; font-weight: 700; font-size: 11px; padding: 6px 14px; border-radius: 6px; border: none; } "
-            "QPushButton:hover { background: #2fb34f; }"
-        )
+        btn_save = QPushButton("Lưu mã ra file")
+        btn_save.setToolTip("Lưu model_classic.h & model_classic.cc ra thư mục tùy chọn")
+        btn_save.setStyleSheet(ls.BTN_SECONDARY)
+        btn_save.clicked.connect(self._save_code_to_files)
+        top_r_row.addWidget(btn_save)
+
+        self.btn_flash = QPushButton("Nạp lên wand")
+        self.btn_flash.setStyleSheet(ls.BTN_SUCCESS)
         self.btn_flash.clicked.connect(self._open_flash_dialog)
         top_r_row.addWidget(self.btn_flash)
 
         r_layout.addLayout(top_r_row)
 
-        self.code_tabs = QTabWidget()
-        self.code_tabs.setStyleSheet("QTabBar::tab { font-weight: 600; padding: 6px 12px; }")
-
-        # Tab 1: C++ Source
-        self.cc_code_edit = QTextEdit()
-        self.cc_code_edit.setReadOnly(True)
-        self.cc_code_edit.setFont(QFont("Consolas", 10))
-        self.cc_code_edit.setStyleSheet(
-            "background-color: #18181b; color: #d4d4d8; border-radius: 6px; padding: 10px; border: 1px solid #27272a;"
+        # Mã C++ được tạo tự động theo mô hình — xem đầy đủ bằng "Lưu mã ra file"
+        code_note = QLabel(
+            "Mô hình huấn luyện xong sẽ được tự động chuyển thành 2 file C++ "
+            "(model_classic.h + model_classic.cc) sẵn sàng biên dịch. "
+            "Dùng “Lưu mã ra file” hoặc “Copy mã” để xem và mang đi nơi khác."
         )
-        self.code_tabs.addTab(self.cc_code_edit, "📄 model_classic.cc (C++ Logic)")
+        code_note.setWordWrap(True)
+        code_note.setStyleSheet(ls.note_box(ls.ACCENT))
+        r_layout.addWidget(code_note)
 
-        # Tab 2: Header
-        self.h_code_edit = QTextEdit()
-        self.h_code_edit.setReadOnly(True)
-        self.h_code_edit.setFont(QFont("Consolas", 10))
-        self.h_code_edit.setStyleSheet(
-            "background-color: #18181b; color: #d4d4d8; border-radius: 6px; padding: 10px; border: 1px solid #27272a;"
+        # Tóm tắt mô hình hiện tại
+        self.lbl_model_summary = QLabel("Chưa có mô hình nào — hãy huấn luyện ở tab 2.")
+        self.lbl_model_summary.setWordWrap(True)
+        self.lbl_model_summary.setStyleSheet(
+            ls.font(ls.FS_BODY, 600) + f"color: {ls.BODY}; border: none; background: transparent;"
         )
-        self.code_tabs.addTab(self.h_code_edit, "📄 model_classic.h (Header)")
+        r_layout.addWidget(self.lbl_model_summary)
 
-        # Tab 3: ESP32 main.cpp reference
-        self.main_cpp_edit = QTextEdit()
-        self.main_cpp_edit.setReadOnly(True)
-        self.main_cpp_edit.setFont(QFont("Consolas", 10))
-        self.main_cpp_edit.setStyleSheet(
-            "background-color: #18181b; color: #d4d4d8; border-radius: 6px; padding: 10px; border: 1px solid #27272a;"
+        # Chọn file + trình xem mã C++ sinh tự động
+        self.code_file_combo = QComboBox()
+        self.code_file_combo.setStyleSheet(ls.INPUT_COMBO)
+        self.code_file_combo.addItem("model_classic.cc", "cc")
+        self.code_file_combo.addItem("model_classic.h", "h")
+        self.code_file_combo.setEnabled(False)
+        self.code_file_combo.currentIndexChanged.connect(self._refresh_code_view)
+        r_layout.addWidget(self.code_file_combo)
+
+        self.code_view = QTextEdit()
+        self.code_view.setReadOnly(True)
+        self.code_view.setFont(QFont("Consolas", 10))
+        self.code_view.setStyleSheet(ls.TERMINAL)
+        self.code_view.setPlainText(
+            "// Chưa có mô hình — hãy huấn luyện ở tab 2.\n"
+            "// Mã C++ (model_classic.cc / .h) sẽ được sinh tự động tại đây.\n"
         )
-        self._load_main_cpp_reference()
-        self.code_tabs.addTab(self.main_cpp_edit, "🚀 esp32_classic_ml/main/main.cpp")
-
-        r_layout.addWidget(self.code_tabs, stretch=1)
+        r_layout.addWidget(self.code_view, stretch=1)
 
         splitter.addWidget(right_box)
         splitter.setStretchFactor(0, 4)
@@ -187,6 +198,7 @@ class TabSimulatorExport(QWidget):
         self._rebuild_simulator_sliders()
         self._update_code_views()
         self._run_live_simulation()
+        self.lbl_empty_code.setVisible(False)
 
     def _rebuild_simulator_sliders(self) -> None:
         while self.slider_layout.count():
@@ -208,11 +220,12 @@ class TabSimulatorExport(QWidget):
         features = self._current_result.feature_names[:8]
         for f_idx, feat_name in enumerate(features):
             row = QHBoxLayout()
-            lbl = QLabel(feat_name)
-            lbl.setStyleSheet("font-size: 11px; font-weight: 500;")
+            lbl = QLabel(friendly_feature_name(feat_name))
+            lbl.setToolTip(f"Mã kỹ thuật: {feat_name}")
+            lbl.setStyleSheet("font-size: 11px; font-weight: 500;; border: none; background: transparent;")
             
             val_lbl = QLabel("0.00")
-            val_lbl.setStyleSheet("font-size: 11px; font-weight: 700; color: #007aff;")
+            val_lbl.setStyleSheet(ls.slider_value_label())
             val_lbl.setFixedWidth(40)
 
             slider = QSlider(Qt.Orientation.Horizontal)
@@ -268,15 +281,17 @@ class TabSimulatorExport(QWidget):
         )
         self.table_shap.setRowCount(len(attribs))
         for r_idx, at in enumerate(attribs):
-            self.table_shap.setItem(r_idx, 0, QTableWidgetItem(at["name"]))
+            item_feat = QTableWidgetItem(friendly_feature_name(at["name"]))
+            item_feat.setToolTip(at["name"])
+            self.table_shap.setItem(r_idx, 0, item_feat)
             
             c_item = QTableWidgetItem(f"{at['contribution']:+.3f}")
             c_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             c_item.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
             if at["contribution"] >= 0:
-                c_item.setForeground(QColor(22, 101, 52))
+                c_item.setForeground(QColor(ls.SUCCESS_TEXT))
             else:
-                c_item.setForeground(QColor(225, 29, 72))
+                c_item.setForeground(QColor(ls.DANGER))
             self.table_shap.setItem(r_idx, 1, c_item)
 
             self.table_shap.setItem(r_idx, 2, QTableWidgetItem(at["impact"]))
@@ -284,25 +299,54 @@ class TabSimulatorExport(QWidget):
     def _update_code_views(self) -> None:
         if not self._current_result:
             return
-        h_code = self.c_exporter.generate_header_string(self._current_result)
-        cc_code = self.c_exporter.generate_source_string(self._current_result)
-        self.h_code_edit.setPlainText(h_code)
-        self.cc_code_edit.setPlainText(cc_code)
+        # Sinh mã C++ cho viewer + Copy/Lưu
+        self._cached_h_code = self.c_exporter.generate_header_string(self._current_result)
+        self._cached_cc_code = self.c_exporter.generate_source_string(self._current_result)
+        self.code_file_combo.setEnabled(True)
+        r = self._current_result
+        self.lbl_model_summary.setText(
+            f"Mô hình hiện tại: {r.algo_name} — đoán đúng {r.val_accuracy*100:.1f}% trên dữ liệu mới. "
+            f"Thần chú: {', '.join(r.class_names)}."
+        )
+        self._refresh_code_view()
 
-    def _load_main_cpp_reference(self) -> None:
-        main_cpp_path = Path("esp32_classic_ml/main/main.cpp")
-        if main_cpp_path.exists():
-            try:
-                self.main_cpp_edit.setPlainText(main_cpp_path.read_text(encoding="utf-8"))
-            except Exception:
-                pass
+    def _refresh_code_view(self) -> None:
+        want_h = self.code_file_combo.currentData() == "h"
+        code = self._cached_h_code if want_h else self._cached_cc_code
+        self.code_view.setPlainText(code or "// Chưa có mã — huấn luyện ở tab 2 trước.")
 
     def _copy_current_code(self) -> None:
-        curr = self.code_tabs.currentWidget()
-        if isinstance(curr, QTextEdit):
-            curr.selectAll()
-            curr.copy()
-            QMessageBox.information(self, "Đã Sao Chép", "Đã copy mã nguồn vào Clipboard!")
+        if not getattr(self, "_cached_cc_code", None):
+            QMessageBox.warning(self, "Chưa Có Mã", "Hãy huấn luyện mô hình ở tab 2 trước khi copy mã.")
+            return
+        if self.code_file_combo.currentData() == "h":
+            QApplication.clipboard().setText(self._cached_h_code)
+            QMessageBox.information(self, "Đã Sao Chép", "Đã copy model_classic.h vào Clipboard!")
+        else:
+            QApplication.clipboard().setText(self._cached_cc_code)
+            QMessageBox.information(self, "Đã Sao Chép", "Đã copy model_classic.cc vào Clipboard!")
+
+    def _save_code_to_files(self) -> None:
+        if not self._current_result:
+            QMessageBox.warning(self, "Chưa Có Model", "Vui lòng huấn luyện mô hình trước khi xuất mã nguồn.")
+            return
+        algo_clean = self._current_result.algo
+        default_dir = str(ExperimentStore().exports_dir)
+        target_dir = QFileDialog.getExistingDirectory(self, "Chọn Thư Mục Lưu Mã Nguồn C++", default_dir)
+        if not target_dir:
+            return
+        try:
+            h_path = Path(target_dir) / f"model_classic_{algo_clean}.h"
+            cc_path = Path(target_dir) / f"model_classic_{algo_clean}.cc"
+            h_path.write_text(self.c_exporter.generate_header_string(self._current_result), encoding="utf-8")
+            cc_path.write_text(self.c_exporter.generate_source_string(self._current_result), encoding="utf-8")
+            QMessageBox.information(
+                self,
+                "Đã Lưu Mã Nguồn",
+                f"Đã lưu 2 file C++ sẵn sàng biên dịch:\n• {h_path.name}\n• {cc_path.name}\n\nTại: {target_dir}",
+            )
+        except Exception as exc:
+            QMessageBox.critical(self, "Lỗi", f"Không thể lưu mã nguồn: {exc}")
 
     def _open_flash_dialog(self) -> None:
         if not self._current_result:

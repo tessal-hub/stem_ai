@@ -33,7 +33,7 @@ class WeightsBarWidget(QWidget):
 
         top_bar = QHBoxLayout()
         lbl = QLabel("🎯 Chọn Lớp Cử Chỉ Xem Trọng Số (W):")
-        lbl.setStyleSheet("font-weight: 600; font-size: 11px; color: #007aff;")
+        lbl.setStyleSheet("font-weight: 600; font-size: 11px; color: #0668d1;; border: none; background: transparent;")
         self.combo_class = QComboBox()
         self.combo_class.currentIndexChanged.connect(self._on_class_changed)
         top_bar.addWidget(lbl)
@@ -108,7 +108,7 @@ class _WeightsCanvas(QWidget):
                 self._draw_empty_state(painter, w, h)
                 return
 
-            margin_left = 110
+            margin_left = 165
             margin_right = 50
             margin_top = 10
             margin_bottom = 20
@@ -168,9 +168,9 @@ class _WeightsCanvas(QWidget):
 
     def _draw_empty_state(self, painter: QPainter, w: int, h: int) -> None:
         painter.setFont(QFont("Segoe UI", 11, QFont.Weight.Medium))
-        painter.setPen(QColor(140, 145, 155))
+        painter.setPen(QColor(100, 110, 122))
         painter.drawText(
             QRectF(0, 0, w, h),
             Qt.AlignmentFlag.AlignCenter,
-            "⚖️ Chưa có ma trận trọng số.\nHãy huấn luyện Hồi quy Logistic hoặc SVM Tuyến tính.",
+            "Chưa có ma trận trọng số.\nHãy huấn luyện Hồi quy Logistic hoặc SVM Tuyến tính.",
         )

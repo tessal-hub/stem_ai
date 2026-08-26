@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 import numpy as np
-from sklearn.feature_selection import f_classif, mutual_info_classif
 
 
 def compute_correlation_matrix(X: np.ndarray, feature_names: Sequence[str]) -> tuple[np.ndarray, list[dict[str, Any]]]:
@@ -58,6 +57,11 @@ def compute_feature_rankings(
     """
     if len(X) < 4 or len(np.unique(y)) < 2:
         return [{"name": f, "f_score": 1.0, "mi_score": 0.1, "rank": i + 1} for i, f in enumerate(feature_names)]
+
+    from ml_lab.core.lazy_sklearn import ensure_sklearn
+
+    ensure_sklearn()
+    from sklearn.feature_selection import f_classif, mutual_info_classif  # lazy import
 
     try:
         f_vals, _ = f_classif(X, y)

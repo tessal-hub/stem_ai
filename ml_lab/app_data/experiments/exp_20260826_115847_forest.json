@@ -1,0 +1,31 @@
+{
+  "timestamp": "2026-08-26T11:58:47.127287",
+  "algo": "forest",
+  "algo_name": "Rừng Ngẫu Nhiên (Random Forest)",
+  "train_accuracy": 0.8731707317073171,
+  "val_accuracy": 0.8456375838926175,
+  "cv_mean": 0.8390243902439025,
+  "cv_std": 0.02205635766870003,
+  "class_names": [
+    "A",
+    "B",
+    "BOOST",
+    "COPY",
+    "FIREBALL",
+    "P",
+    "REFLECT",
+    "STOP"
+  ],
+  "num_features": 63,
+  "hyperparams": {
+    "n_estimators": 5,
+    "max_depth": 4,
+    "max_features": "sqrt"
+  },
+  "benchmark": {
+    "mcu_latency_ms": 0.171,
+    "mcu_ram_kb": 0.2,
+    "mcu_flash_kb": 6.23,
+    "complexity_score": 3.0
+  }
+}

@@ -43,10 +43,10 @@ def test_window_ml_lab_model_switch(qapp):
 
         # Switch to KNN
         tab_m.combo_algo.setCurrentIndex(0)
-        assert hasattr(tab_m, "slider_k")
-        assert tab_m.slider_k.value() == 3
+        assert hasattr(tab_m, "spin_k")
+        assert tab_m.spin_k.value() == 3
 
         # Switch to Tree
         tab_m.combo_algo.setCurrentIndex(1)
-        assert hasattr(tab_m, "slider_depth")
-        assert tab_m.slider_depth.value() == 4
+        assert hasattr(tab_m, "spin_depth")
+        assert tab_m.spin_depth.value() == 4

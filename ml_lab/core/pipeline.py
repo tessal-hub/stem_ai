@@ -1,7 +1,7 @@
 """
 ml_lab/core/pipeline.py — Pipeline Huấn Luyện ML Cổ Điển & Đánh Giá Không Rò Rỉ.
 
-Hỗ trợ 9 thuật toán:
+Hỗ trợ 15 thuật toán:
 - KNN
 - Decision Tree
 - Random Forest
@@ -23,34 +23,81 @@ from __future__ import annotations
 import time
 import warnings
 from dataclasses import dataclass, field
-from typing import Any, Sequence
+from typing import TYPE_CHECKING, Any, Sequence
 
 import numpy as np
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
-from sklearn.metrics import accuracy_score, confusion_matrix
-from sklearn.model_selection import StratifiedKFold, cross_val_score
-from sklearn.naive_bayes import GaussianNB
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.neural_network import MLPClassifier
-from sklearn.preprocessing import StandardScaler
-from sklearn.svm import SVC
-from sklearn.linear_model import LogisticRegression
 
 from ml_lab.core.hyperparam_schema import (
+    AdaBoostConfig,
     DecisionTreeConfig,
+    ExtraTreesConfig,
     GradientBoostingConfig,
     KNNConfig,
     LDAConfig,
     LogisticRegressionConfig,
     MLPConfig,
     NaiveBayesConfig,
+    NearestCentroidConfig,
+    QDAConfig,
     RandomForestConfig,
+    RidgeConfig,
     SearchConfig,
+    SGDConfig,
     SVMConfig,
 )
 from ml_lab.core.pca_visualizer import PCAResult, compute_pca_decision_boundary
-from sklearn.tree import DecisionTreeClassifier
+
+if TYPE_CHECKING:  # sklearn nặng — chỉ import khi thực sự huấn luyện (lazy)
+    from sklearn.preprocessing import StandardScaler
+
+
+def _sklearn():
+    """Import sklearn lazily (chỉ khi huấn luyện/đánh giá) để mở app nhanh."""
+    from ml_lab.core.lazy_sklearn import ensure_sklearn
+
+    ensure_sklearn()  # khóa toàn cục: tránh 2 thread cùng init DLL OpenMP
+    from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+    from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.metrics import accuracy_score, confusion_matrix
+    from sklearn.model_selection import StratifiedKFold, cross_val_score
+    from sklearn.naive_bayes import GaussianNB
+    from sklearn.neighbors import KNeighborsClassifier
+    from sklearn.neural_network import MLPClassifier
+    from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.svm import SVC
+    from sklearn.tree import DecisionTreeClassifier
+    from sklearn.ensemble import ExtraTreesClassifier, AdaBoostClassifier
+    from sklearn.linear_model import RidgeClassifier, SGDClassifier
+    from sklearn.neighbors import NearestCentroid
+    from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
+
+    g = globals()
+    g.update(
+        LinearDiscriminantAnalysis=LinearDiscriminantAnalysis,
+        GradientBoostingClassifier=GradientBoostingClassifier,
+        RandomForestClassifier=RandomForestClassifier,
+        LogisticRegression=LogisticRegression,
+        accuracy_score=accuracy_score,
+        confusion_matrix=confusion_matrix,
+        StratifiedKFold=StratifiedKFold,
+        cross_val_score=cross_val_score,
+        GaussianNB=GaussianNB,
+        KNeighborsClassifier=KNeighborsClassifier,
+        MLPClassifier=MLPClassifier,
+        Pipeline=Pipeline,
+        StandardScaler=StandardScaler,
+        SVC=SVC,
+        DecisionTreeClassifier=DecisionTreeClassifier,
+        ExtraTreesClassifier=ExtraTreesClassifier,
+        AdaBoostClassifier=AdaBoostClassifier,
+        RidgeClassifier=RidgeClassifier,
+        SGDClassifier=SGDClassifier,
+        NearestCentroid=NearestCentroid,
+        QuadraticDiscriminantAnalysis=QuadraticDiscriminantAnalysis,
+    )
+    return g
 
 
 @dataclass
@@ -72,6 +119,9 @@ class TrainClassicResult:
     train_time_ms: float
     config_dict: dict[str, Any]
     curve_data: dict[str, Any] | None = None
+    feature_config: Any | None = None  # FeatureGroupConfig dùng lúc huấn luyện (cho suy luận trực tiếp)
+    val_samples: Any | None = None     # list[(cửa sổ 64x6, nhãn)] — phục vụ inspector mẫu lỗi
+    val_predictions: Any | None = None # mảng dự đoán trên tập validation
 
     @property
     def hyperparams(self) -> dict[str, Any]:
@@ -83,6 +133,7 @@ def build_sklearn_model(algo: str, config: Any = None) -> tuple[Any, bool]:
     Khởi tạo model Scikit-Learn và xác định xem có cần Scaler hay không.
     Returns: (model_instance, requires_scaler)
     """
+    _sklearn()
     if algo == "knn":
         cfg = config if isinstance(config, KNNConfig) else KNNConfig()
         return KNeighborsClassifier(n_neighbors=cfg.k, metric=cfg.metric, weights=cfg.weights), True
@@ -92,6 +143,7 @@ def build_sklearn_model(algo: str, config: Any = None) -> tuple[Any, bool]:
         return DecisionTreeClassifier(
             max_depth=cfg.max_depth,
             min_samples_split=cfg.min_samples_split,
+            min_samples_leaf=cfg.min_samples_leaf,
             criterion=cfg.criterion,
             random_state=42,
         ), False
@@ -102,6 +154,8 @@ def build_sklearn_model(algo: str, config: Any = None) -> tuple[Any, bool]:
         return RandomForestClassifier(
             n_estimators=cfg.n_estimators,
             max_depth=cfg.max_depth,
+            criterion=cfg.criterion,
+            min_samples_leaf=cfg.min_samples_leaf,
             max_features=max_feat,
             random_state=42,
         ), False
@@ -112,6 +166,7 @@ def build_sklearn_model(algo: str, config: Any = None) -> tuple[Any, bool]:
             n_estimators=cfg.n_estimators,
             max_depth=cfg.max_depth,
             learning_rate=cfg.learning_rate,
+            subsample=cfg.subsample,
             random_state=42,
         ), False
 
@@ -124,7 +179,7 @@ def build_sklearn_model(algo: str, config: Any = None) -> tuple[Any, bool]:
             pass
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=FutureWarning)
-            return SVC(C=cfg.c, kernel=cfg.kernel, gamma=gamma_val, probability=True, random_state=42), True
+            return SVC(C=cfg.c, kernel=cfg.kernel, gamma=gamma_val, degree=cfg.degree, probability=True, random_state=42), True
 
     elif algo == "logistic":
         cfg = config if isinstance(config, LogisticRegressionConfig) else LogisticRegressionConfig()
@@ -140,7 +195,14 @@ def build_sklearn_model(algo: str, config: Any = None) -> tuple[Any, bool]:
 
     elif algo == "lda":
         cfg = config if isinstance(config, LDAConfig) else LDAConfig()
-        return LinearDiscriminantAnalysis(solver=cfg.solver), True
+        # shrinkage giúp LDA chịu được số đặc trưng > số mẫu (tránh covariance singular)
+        if cfg.solver == "svd":
+            shrinkage = None
+        elif isinstance(cfg.shrinkage, str):
+            shrinkage = None if cfg.shrinkage == "none" else cfg.shrinkage
+        else:
+            shrinkage = cfg.shrinkage
+        return LinearDiscriminantAnalysis(solver=cfg.solver, shrinkage=shrinkage), True
 
     elif algo == "mlp":
         cfg = config if isinstance(config, MLPConfig) else MLPConfig()
@@ -148,9 +210,52 @@ def build_sklearn_model(algo: str, config: Any = None) -> tuple[Any, bool]:
             hidden_layer_sizes=(cfg.hidden_units,),
             activation=cfg.activation,
             learning_rate_init=cfg.learning_rate_init,
+            alpha=cfg.alpha,
             max_iter=cfg.max_iter,
             random_state=42,
         ), True
+
+    elif algo == "extra_trees":
+        cfg = config if isinstance(config, ExtraTreesConfig) else ExtraTreesConfig()
+        return ExtraTreesClassifier(
+            n_estimators=cfg.n_estimators,
+            max_depth=cfg.max_depth,
+            criterion=cfg.criterion,
+            min_samples_leaf=cfg.min_samples_leaf,
+            random_state=42,
+        ), False
+
+    elif algo == "adaboost":
+        cfg = config if isinstance(config, AdaBoostConfig) else AdaBoostConfig()
+        return AdaBoostClassifier(
+            n_estimators=cfg.n_estimators,
+            learning_rate=cfg.learning_rate,
+            random_state=42,
+        ), False
+
+    elif algo == "ridge":
+        cfg = config if isinstance(config, RidgeConfig) else RidgeConfig()
+        return RidgeClassifier(alpha=cfg.alpha, random_state=42), True
+
+    elif algo == "sgd":
+        cfg = config if isinstance(config, SGDConfig) else SGDConfig()
+        return SGDClassifier(
+            loss="log_loss",
+            alpha=cfg.alpha,
+            max_iter=cfg.max_iter,
+            penalty=cfg.penalty,
+            l1_ratio=cfg.l1_ratio,
+            tol=1e-3,
+            random_state=42,
+        ), True
+
+    elif algo == "nearest_centroid":
+        cfg = config if isinstance(config, NearestCentroidConfig) else NearestCentroidConfig()
+        return NearestCentroid(metric=cfg.metric), True
+
+    elif algo == "qda":
+        cfg = config if isinstance(config, QDAConfig) else QDAConfig()
+        return QuadraticDiscriminantAnalysis(reg_param=cfg.reg_param), False
 
     else:
         raise ValueError(f"Thuật toán không được hỗ trợ: {algo}")
@@ -166,6 +271,7 @@ def train_classic_model(
     algo: str = "knn",
     config: Any = None,
     search_config: SearchConfig | None = None,
+    feature_config: Any | None = None,
 ) -> TrainClassicResult:
     """
     Huấn luyện mô hình trên tập train và đánh giá nghiêm ngặt trên tập val.
@@ -174,6 +280,8 @@ def train_classic_model(
         raise ValueError("Tập dữ liệu huấn luyện rỗng.")
     if len(np.unique(y_train)) < 2:
         raise ValueError("Tập huấn luyện phải có ít nhất 2 lớp cử chỉ khác nhau.")
+
+    _sklearn()  # lazy import sklearn cho metrics/CV
 
     # 1. Validation config
     if hasattr(config, "validate"):
@@ -195,7 +303,10 @@ def train_classic_model(
 
     # 3. Huấn luyện mô hình
     t0 = time.perf_counter()
-    model.fit(X_train_proc, y_train)
+    with warnings.catch_warnings():
+        # sklearn >= 1.9 cảnh báo probability=True của SVC — vẫn cần cho predict_proba
+        warnings.filterwarnings("ignore", category=FutureWarning)
+        model.fit(X_train_proc, y_train)
     t1 = time.perf_counter()
     train_time_ms = (t1 - t0) * 1000.0
 
@@ -256,6 +367,12 @@ def train_classic_model(
         "nb": "Gaussian Naive Bayes (GNB)",
         "lda": "Linear Discriminant Analysis (LDA)",
         "mlp": "Mạng Nơ-ron (Shallow MLP)",
+        "extra_trees": "Extra Trees (Rừng siêu ngẫu nhiên)",
+        "adaboost": "AdaBoost (Tăng cường tuần tự)",
+        "ridge": "Ridge Classifier (Tuyến tính L2)",
+        "sgd": "SGD Classifier (Tuyến tính học nhanh)",
+        "nearest_centroid": "Nearest Centroid (So với tâm lớp)",
+        "qda": "Quadratic Discriminant Analysis (QDA)",
     }
 
     cfg_dict = config.__dict__ if hasattr(config, "__dict__") else {}
@@ -277,8 +394,8 @@ def train_classic_model(
         train_time_ms=train_time_ms,
         config_dict=cfg_dict,
         curve_data=curve_res,
+        feature_config=feature_config,
     )
-
 
 def _estimate_mcu_benchmarks(algo: str, model: Any, n_features: int, n_classes: int) -> dict[str, float]:
     """
@@ -300,6 +417,46 @@ def _estimate_mcu_benchmarks(algo: str, model: Any, n_features: int, n_classes: 
             "mcu_ram_kb": 0.2,
             "mcu_flash_kb": round(total_nodes * 0.03 + 2.0, 2),
             "complexity_score": 3.0,
+        }
+    elif algo == "extra_trees":
+        total_nodes = sum(e.tree_.node_count for e in model.estimators_) if hasattr(model, "estimators_") else 60
+        return {
+            "mcu_latency_ms": round(0.03 + total_nodes * 0.001, 3),
+            "mcu_ram_kb": 0.2,
+            "mcu_flash_kb": round(total_nodes * 0.03 + 2.0, 2),
+            "complexity_score": 3.0,
+        }
+    elif algo == "adaboost":
+        n_est = len(model.estimators_) if hasattr(model, "estimators_") else 5
+        return {
+            "mcu_latency_ms": round(0.04 + n_est * 0.008, 3),
+            "mcu_ram_kb": 0.3,
+            "mcu_flash_kb": round(n_est * 0.5 + 2.0, 2),
+            "complexity_score": 3.5,
+        }
+    elif algo == "ridge" or algo == "sgd":
+        ops = n_features * n_classes
+        return {
+            "mcu_latency_ms": round(0.01 + ops * 0.0001, 3),
+            "mcu_ram_kb": 0.1,
+            "mcu_flash_kb": round(ops * 0.004 + 1.0, 2),
+            "complexity_score": 1.5,
+        }
+    elif algo == "nearest_centroid":
+        ops = n_features * n_classes
+        return {
+            "mcu_latency_ms": round(0.01 + ops * 0.0001, 3),
+            "mcu_ram_kb": round(ops * 0.004 + 0.2, 2),
+            "mcu_flash_kb": round(ops * 0.004 + 0.8, 2),
+            "complexity_score": 1.0,
+        }
+    elif algo == "qda":
+        ops = n_features * n_features * n_classes
+        return {
+            "mcu_latency_ms": round(0.05 + ops * 0.0002, 3),
+            "mcu_ram_kb": 0.5,
+            "mcu_flash_kb": round(ops * 0.004 + 2.0, 2),
+            "complexity_score": 4.5,
         }
     elif algo == "gbdt":
         n_est = model.n_estimators_ if hasattr(model, "n_estimators_") else 5
@@ -372,6 +529,7 @@ def _run_parameter_sweep(
     """
     Quét siêu tham số trên tập train với 5-fold Stratified CV.
     """
+    _sklearn()
     train_scores: list[float] = []
     val_scores: list[float] = []
 
@@ -383,20 +541,19 @@ def _run_parameter_sweep(
         cfg = _create_config_with_param(algo, search_cfg.param_name, val)
         model, use_scaler = build_sklearn_model(algo, cfg)
 
-        # Scale nếu cần
         if use_scaler:
-            scaler = StandardScaler()
-            X_proc = scaler.fit_transform(X_train)
+            # Pipeline đảm bảo scaler fit riêng trên từng fold CV -> không rò rỉ dữ liệu
+            pipeline = Pipeline([("scaler", StandardScaler()), ("model", model)])
         else:
-            X_proc = X_train.copy()
+            pipeline = Pipeline([("model", model)])
 
         # Fit trên toàn bộ train để đo train score
-        model.fit(X_proc, y_train)
-        train_pred = model.predict(X_proc)
+        pipeline.fit(X_train, y_train)
+        train_pred = pipeline.predict(X_train)
         train_scores.append(float(accuracy_score(y_train, train_pred)))
 
-        # CV score
-        cvs = cross_val_score(model, X_proc, y_train, cv=skf, scoring="accuracy")
+        # CV score (scaler refit an toàn trong từng fold)
+        cvs = cross_val_score(pipeline, X_train, y_train, cv=skf, scoring="accuracy")
         val_scores.append(float(np.mean(cvs)))
 
     return {
@@ -434,4 +591,20 @@ def _create_config_with_param(algo: str, param_name: str, param_val: Any) -> Any
     elif algo == "mlp":
         hu = int(param_val) if param_name == "hidden_units" else 16
         return MLPConfig(hidden_units=hu)
+    elif algo == "extra_trees":
+        n = int(param_val) if param_name in ("n_estimators", "n_trees") else 5
+        return ExtraTreesConfig(n_estimators=n)
+    elif algo == "adaboost":
+        n = int(param_val) if param_name == "n_estimators" else 5
+        return AdaBoostConfig(n_estimators=n)
+    elif algo == "ridge":
+        alpha = float(param_val) if param_name == "alpha" else 1.0
+        return RidgeConfig(alpha=alpha)
+    elif algo == "sgd":
+        alpha = float(param_val) if param_name == "alpha" else 0.0001
+        return SGDConfig(alpha=alpha)
+    elif algo == "nearest_centroid":
+        return NearestCentroidConfig()
+    elif algo == "qda":
+        return QDAConfig()
     return None

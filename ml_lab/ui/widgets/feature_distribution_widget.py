@@ -149,9 +149,9 @@ class FeatureDistributionWidget(QWidget):
 
     def _draw_empty_state(self, painter: QPainter, w: int, h: int) -> None:
         painter.setFont(QFont("Segoe UI", 11, QFont.Weight.Medium))
-        painter.setPen(QColor(140, 145, 155))
+        painter.setPen(QColor(100, 110, 122))
         painter.drawText(
             QRectF(0, 0, w, h),
             Qt.AlignmentFlag.AlignCenter,
-            "📊 Chưa có dữ liệu phân phối đặc trưng.\nHãy nạp dataset để khám phá.",
+            "Chưa có dữ liệu phân phối đặc trưng.\nHãy nạp dataset để khám phá.",
         )

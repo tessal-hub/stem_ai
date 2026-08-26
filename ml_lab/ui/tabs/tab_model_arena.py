@@ -27,8 +27,16 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+import ml_lab.ui.lab_style as ls
 from ml_lab.core.hyperparam_schema import (
+    AdaBoostConfig,
     DecisionTreeConfig,
+    ExtraTreesConfig,
+    NearestCentroidConfig,
+    QDAConfig,
+    RandomForestConfig,
+    RidgeConfig,
+    SGDConfig,
     GradientBoostingConfig,
     KNNConfig,
     LDAConfig,
@@ -47,12 +55,14 @@ from ml_lab.ui.widgets.flash_dialog import FlashDialog
 
 class ArenaWorker(QThread):
     sig_progress = pyqtSignal(int, str)
+    sig_warning = pyqtSignal(str)
     sig_finished = pyqtSignal(list)  # list[TrainClassicResult]
     sig_error = pyqtSignal(str)
 
-    def __init__(self, dataset_dir: Path, parent: Any = None) -> None:
+    def __init__(self, dataset_dir: Path, include_standby: bool = False, parent: Any = None) -> None:
         super().__init__(parent)
         self.dataset_dir = dataset_dir
+        self.include_standby = include_standby
 
     def run(self) -> None:
         try:
@@ -61,7 +71,11 @@ class ArenaWorker(QThread):
 
                 self.sig_progress.emit(10, "Đang chia dataset file-level...")
                 train_wins, val_wins, class_names = split_user_dataset_file_level(
-                    self.dataset_dir, val_fraction=0.2, window_size=64, step_size=16
+                    self.dataset_dir,
+                    val_fraction=0.2,
+                    window_size=64,
+                    step_size=16,
+                    include_standby=self.include_standby,
                 )
                 if len(class_names) < 2:
                     self.sig_error.emit("Cần ít nhất 2 lớp cử chỉ để so sánh.")
@@ -81,18 +95,37 @@ class ArenaWorker(QThread):
                     ("nb", NaiveBayesConfig()),
                     ("lda", LDAConfig()),
                     ("mlp", MLPConfig(hidden_units=16)),
+                    ("extra_trees", ExtraTreesConfig(n_estimators=5)),
+                    ("adaboost", AdaBoostConfig(n_estimators=5)),
+                    ("ridge", RidgeConfig(alpha=1.0)),
+                    ("sgd", SGDConfig(alpha=0.0001)),
+                    ("nearest_centroid", NearestCentroidConfig()),
+                    ("qda", QDAConfig()),
                 ]
 
                 results: list[TrainClassicResult] = []
+                failed: list[tuple[str, str]] = []
+                step = 85 / max(1, len(algos))
                 for i, (algo_key, cfg) in enumerate(algos):
-                    self.sig_progress.emit(int(15 + i * 9), f"Đang huấn luyện {algo_key.upper()}...")
-                    res = train_classic_model(
-                        X_train, y_train, X_val, y_val, class_names, extractor.feature_names, algo=algo_key, config=cfg
-                    )
-                    results.append(res)
+                    self.sig_progress.emit(int(10 + i * step), f"Đang huấn luyện {algo_key.upper()}...")
+                    try:
+                        res = train_classic_model(
+                            X_train, y_train, X_val, y_val, class_names, extractor.feature_names, algo=algo_key, config=cfg
+                        )
+                        results.append(res)
+                    except Exception as algo_exc:
+                        # 1 mô hình lỗi không cản trở 14 mô hình còn lại
+                        failed.append((algo_key, str(algo_exc)))
+
+                if not results:
+                    self.sig_error.emit("Cả 15 mô hình đều lỗi. Chi tiết lỗi đầu tiên:\n" + (failed[0][1] if failed else ""))
+                    return
 
                 self.sig_progress.emit(100, "Hoàn tất đấu trường!")
                 self.sig_finished.emit(results)
+                if failed:
+                    names = ", ".join(a for a, _ in failed)
+                    self.sig_warning.emit(f"{len(failed)} mô hình bỏ qua vì lỗi: {names}")
         except Exception as exc:
             self.sig_error.emit(str(exc))
 
@@ -117,24 +150,20 @@ class TabModelArena(QWidget):
 
         # Header Box
         header_box = QFrame()
-        header_box.setStyleSheet("background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;")
+        header_box.setStyleSheet(ls.card())
         h_layout = QHBoxLayout(header_box)
 
         t_vbox = QVBoxLayout()
-        lbl_t = QLabel("⚔️ ĐẤU TRƯỜNG SO SÁNH CÁC THUẬT TOÁN HỌC MÁY (MODEL ARENA)")
-        lbl_t.setStyleSheet("font-weight: 700; color: #007aff; font-size: 13px;")
-        lbl_d = QLabel("Huấn luyện đối đầu đồng loạt tất cả mô hình trên cùng một tập dữ liệu.")
-        lbl_d.setStyleSheet("color: #64748b; font-size: 11px;")
+        lbl_t = QLabel("SO SÁNH 15 THUẬT TOÁN — THUẬT NÀO PHÙ HỢP NHẤT?")
+        lbl_t.setStyleSheet(f"{ls.font(ls.FS_SECTION, 700)} color: {ls.ACCENT}; border: none; background: transparent;")
+        lbl_d = QLabel("Huấn luyện thử cả 15 thuật toán trên đúng dữ liệu của bạn, xếp hạng theo độ chính xác và tốc độ.")
+        lbl_d.setStyleSheet("color: #5b6b7f; font-size: 11px;; border: none; background: transparent;")
         t_vbox.addWidget(lbl_t)
         t_vbox.addWidget(lbl_d)
         h_layout.addLayout(t_vbox, stretch=1)
 
-        self.btn_run_arena = QPushButton("⚔️ Khởi Động Đấu Trường (Train All)")
-        self.btn_run_arena.setStyleSheet(
-            "QPushButton { background: #007aff; color: white; font-weight: 700; padding: 10px 18px; border-radius: 6px; border: none; } "
-            "QPushButton:hover { background: #0066d6; } "
-            "QPushButton:pressed { background: #0052ad; }"
-        )
+        self.btn_run_arena = QPushButton("Huấn luyện thử cả 15 mô hình")
+        self.btn_run_arena.setStyleSheet(ls.BTN_PRIMARY)
         self.btn_run_arena.clicked.connect(self.run_arena)
         h_layout.addWidget(self.btn_run_arena)
 
@@ -142,40 +171,37 @@ class TabModelArena(QWidget):
 
         # Comparison Table Card
         table_box = QFrame()
-        table_box.setStyleSheet("background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;")
+        table_box.setStyleSheet(ls.card())
         tb_layout = QVBoxLayout(table_box)
 
         self.table = QTableWidget()
         self.table.setColumnCount(8)
         self.table.setHorizontalHeaderLabels([
-            "Hạng", "Mô Hình", "Val Accuracy", "CV Score", "Độ Trễ ESP32", "RAM Tiêu Tốn", "Kích Thước Flash", "Thao Tác"
+            "Hạng", "Mô hình", "Đoán đúng (dữ liệu mới)", "Kiểm tra chéo", "Tốc độ ESP32", "RAM dùng", "Dung lượng Flash", ""
         ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
         self.table.verticalHeader().setVisible(False)
-        self.table.setStyleSheet(
-            "QTableWidget { border: 1px solid #e2e8f0; border-radius: 6px; } "
-            "QHeaderView::section { font-weight: 700; font-size: 11px; padding: 8px; background: #f8fafc; color: #475569; }"
-        )
+        self.table.setStyleSheet(ls.DATA_TABLE)
         tb_layout.addWidget(self.table, stretch=1)
 
         # Pedagogical Comparison Card
         pedagogy_box = QFrame()
-        pedagogy_box.setStyleSheet("background: rgba(0, 122, 255, 0.05); border-radius: 6px; padding: 10px 14px;")
+        pedagogy_box.setStyleSheet(f".QFrame {{ background: {ls.ACCENT_TINT}; border: none; border-radius: {ls.RADIUS_MD}px; padding: {ls.SP_2}px {ls.SP_3}px; }}")
         p_layout = QVBoxLayout(pedagogy_box)
         p_layout.setSpacing(4)
 
-        lbl_p_title = QLabel("🎓 <b>Bí Quyết Chọn Mô Hình Cho Thiết Bị Nhúng (Embedded AI Strategy)</b>:")
-        lbl_p_title.setStyleSheet("font-size: 12px; color: #1e3a8a;")
+        lbl_p_title = QLabel("<b>Chọn mô hình thế nào cho hợp lý?</b>")
+        lbl_p_title.setStyleSheet("font-size: 12px; color: #1e3a8a;; border: none; background: transparent;")
         lbl_p_desc = QLabel(
-            "• <b>Tốc độ tức thì &lt;0.02ms</b>: <b>Gaussian Naive Bayes (GNB)</b>, <b>Cây Quyết Định</b>, <b>Hồi quy Logistic</b>, <b>LDA</b>.<br>"
-            "• <b>Độ chính xác cao & chống rung lắc tay</b>: <b>Random Forest</b>, <b>Gradient Boosting (GBDT)</b>.<br>"
-            "• <b>Mạng nơ-ron thông minh không cần TFLM</b>: <b>Shallow MLP</b> (tầng ẩn ReLU thuần C++).<br>"
-            "• <b>Ranh giới cong phi tuyến phức tạp</b>: <b>SVM (RBF Kernel)</b>."
+            "• Cần <b>phản ứng tức thì</b>: Naive Bayes, Cây quyết định, Hồi quy logistic, LDA.<br>"
+            "• Cần <b>chính xác cao, ít bắt nhầm</b>: Random Forest, Gradient Boosting.<br>"
+            "• Cần <b>mạng nơ-ron</b> mà không muốn cài TensorFlow: Shallow MLP.<br>"
+            "• Cử chỉ <b>khó phân tách, cần ranh giới cong</b>: SVM (RBF)."
         )
         lbl_p_desc.setWordWrap(True)
-        lbl_p_desc.setStyleSheet("font-size: 11px; color: #1e3a8a; line-height: 1.4;")
+        lbl_p_desc.setStyleSheet("font-size: 11px; color: #1e3a8a; line-height: 1.4;; border: none; background: transparent;")
         p_layout.addWidget(lbl_p_title)
         p_layout.addWidget(lbl_p_desc)
         tb_layout.addWidget(pedagogy_box)
@@ -206,6 +232,9 @@ class TabModelArena(QWidget):
         self._worker = ArenaWorker(self.dataset_dir)
         self._worker.sig_progress.connect(lambda pct, msg: self.progress_bar.setValue(pct))
         self._worker.sig_finished.connect(self._on_arena_finished)
+        self._worker.sig_warning.connect(lambda msg: QMessageBox.warning(
+            self, "Một số mô hình bỏ qua", msg + "\n\nCác mô hình còn lại vẫn được xếp hạng bình thường."
+        ))
         self._worker.sig_error.connect(self._on_arena_error)
         self._worker.start()
 
@@ -217,7 +246,8 @@ class TabModelArena(QWidget):
         sorted_results = sorted(results, key=lambda r: r.val_accuracy, reverse=True)
         self._results = sorted_results
 
-        medals = ["🥇 Quán Quân", "🥈 Á Quân", "🥉 Hạng 3", "4️⃣ Hạng 4", "5️⃣ Hạng 5", "6️⃣ Hạng 6", "7️⃣ Hạng 7", "8️⃣ Hạng 8", "9️⃣ Hạng 9"]
+        medals = ["#1 · Quán quân", "#2 · Á quân", "#3", "#4", "#5", "#6", "#7", "#8", "#9",
+                      "#10", "#11", "#12", "#13", "#14", "#15"]
 
         self.table.setRowCount(len(sorted_results))
         for r_idx, res in enumerate(sorted_results):
@@ -241,7 +271,7 @@ class TabModelArena(QWidget):
             val_acc_item.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
             if r_idx == 0:
                 val_acc_item.setBackground(QColor(52, 199, 89, 60))
-                val_acc_item.setForeground(QColor(22, 101, 52))
+                val_acc_item.setForeground(QColor(ls.SUCCESS_TEXT))
             else:
                 val_acc_item.setBackground(QColor(52, 199, 89, 25))
             self.table.setItem(r_idx, 2, val_acc_item)
@@ -267,11 +297,8 @@ class TabModelArena(QWidget):
             self.table.setItem(r_idx, 6, flash_item)
 
             # Action Flash Button
-            btn_f = QPushButton("🔥 Nạp Code")
-            btn_f.setStyleSheet(
-                "QPushButton { background: #34c759; color: white; font-weight: 700; font-size: 11px; padding: 4px 10px; border-radius: 4px; border: none; } "
-                "QPushButton:hover { background: #2fb34f; }"
-            )
+            btn_f = QPushButton("Nạp lên wand")
+            btn_f.setStyleSheet(f"QPushButton {{ background: {ls.SUCCESS}; color: white; border: none; border-radius: {ls.RADIUS_SM}px; padding: 4px 10px; font-size: 11px; font-weight: 700; }} QPushButton:hover {{ background: {ls.SUCCESS_HOVER} }}")
             btn_f.clicked.connect(lambda _, r=res: self._flash_model(r))
             self.table.setCellWidget(r_idx, 7, btn_f)
 

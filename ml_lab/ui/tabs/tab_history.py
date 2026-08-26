@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+import ml_lab.ui.lab_style as ls
 from ml_lab.core.experiment_store import ExperimentStore
 
 
@@ -43,27 +44,21 @@ class TabHistory(QWidget):
 
         # Header Box
         header_box = QFrame()
-        header_box.setStyleSheet("background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;")
+        header_box.setStyleSheet(ls.card())
         h_layout = QHBoxLayout(header_box)
 
-        lbl = QLabel("📜 NHẬT KÝ THỬ NGHIỆM HUẤN LUYỆN (EXPERIMENT HISTORY)")
-        lbl.setStyleSheet("font-weight: 700; color: #007aff; font-size: 12px;")
+        lbl = QLabel("CÁC LẦN HUẤN LUYỆN ĐÃ LƯU")
+        lbl.setStyleSheet(ls.font(ls.FS_BODY, 800) + f"color: {ls.INK};; border: none; background: transparent;")
         h_layout.addWidget(lbl)
         h_layout.addStretch()
 
-        btn_clear = QPushButton("🗑️ Xóa Tất Cả")
-        btn_clear.setStyleSheet(
-            "QPushButton { padding: 6px 12px; font-weight: 600; border-radius: 5px; background: #fff1f2; color: #e11d48; border: 1px solid #fecdd3; } "
-            "QPushButton:hover { background: #ffe4e6; }"
-        )
+        btn_clear = QPushButton("Xóa tất cả")
+        btn_clear.setStyleSheet(f"QPushButton {{ padding: 6px 12px; font-weight: 600; border-radius: {ls.RADIUS_SM}px; background: {ls.DANGER_TINT}; color: {ls.DANGER}; border: none; }} QPushButton:hover {{ background: rgba(220, 38, 38, 0.15); }}")
         btn_clear.clicked.connect(self._clear_history)
         h_layout.addWidget(btn_clear)
 
-        btn_refresh = QPushButton("🔄 Tải lại")
-        btn_refresh.setStyleSheet(
-            "QPushButton { padding: 6px 12px; font-weight: 600; border-radius: 5px; background: #f8fafc; border: 1px solid #cbd5e1; } "
-            "QPushButton:hover { background: #f1f5f9; }"
-        )
+        btn_refresh = QPushButton("Tải lại")
+        btn_refresh.setStyleSheet(ls.BTN_SECONDARY)
         btn_refresh.clicked.connect(self.reload_history)
         h_layout.addWidget(btn_refresh)
 
@@ -71,21 +66,36 @@ class TabHistory(QWidget):
 
         # Table Card
         table_box = QFrame()
-        table_box.setStyleSheet("background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;")
+        table_box.setStyleSheet(ls.card())
         t_layout = QVBoxLayout(table_box)
 
         self.table = QTableWidget()
         self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels([
-            "Thời Gian", "Mô Hình", "Val Accuracy", "CV Score", "Số Đặc Trưng", "Độ Trễ ESP32"
+            "Thời điểm", "Mô hình", "Đoán đúng (dữ liệu mới)", "Kiểm tra chéo", "Số đặc trưng", "Tốc độ trên ESP32"
         ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.verticalHeader().setVisible(False)
-        self.table.setStyleSheet(
-            "QTableWidget { border: 1px solid #e2e8f0; border-radius: 6px; } "
-            "QHeaderView::section { font-weight: 700; font-size: 11px; padding: 8px; background: #f8fafc; color: #475569; }"
+        self.table.setStyleSheet(ls.DATA_TABLE)
+        t_layout.addWidget(self.table, stretch=3)
+
+        lbl_lb = QLabel("BẢNG VÀNG — KỶ LỤC CỦA TỪNG THUẬT TOÁN")
+        lbl_lb.setStyleSheet(f"{ls.font(ls.FS_CAPTION, 700)} color: {ls.WARNING}; margin-top: 6px; border: none; background: transparent;")
+        t_layout.addWidget(lbl_lb)
+
+        self.table_leaderboard = QTableWidget()
+        self.table_leaderboard.setColumnCount(5)
+        self.table_leaderboard.setHorizontalHeaderLabels([
+            "Hạng", "Mô hình", "Đoán đúng cao nhất", "Kiểm tra chéo", "Số đặc trưng"
+        ])
+        self.table_leaderboard.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table_leaderboard.verticalHeader().setVisible(False)
+        self.table_leaderboard.setMaximumHeight(170)
+        self.table_leaderboard.setStyleSheet(
+            ls.DATA_TABLE
+            + f"QHeaderView::section {{ background: {ls.SURFACE_GOLD}; color: {ls.WARNING}; }}"
         )
-        t_layout.addWidget(self.table, stretch=1)
+        t_layout.addWidget(self.table_leaderboard, stretch=1)
 
         layout.addWidget(table_box, stretch=1)
 
@@ -126,6 +136,44 @@ class TabHistory(QWidget):
             lat_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.table.setItem(r_idx, 5, lat_item)
 
+        self._populate_leaderboard()
+
+    def _populate_leaderboard(self) -> None:
+        """Đổ bảng vàng: mô hình tốt nhất từng thuật toán theo Val Accuracy."""
+        try:
+            board = sorted(
+                self.experiment_store.get_leaderboard(),
+                key=lambda e: e.get("val_accuracy", 0.0),
+                reverse=True,
+            )
+        except Exception:
+            board = []
+
+        medals = ["1", "2", "3"]
+        self.table_leaderboard.setRowCount(len(board))
+        for r_idx, exp in enumerate(board):
+            medal = medals[r_idx] if r_idx < len(medals) else f"#{r_idx + 1}"
+            rank_item = QTableWidgetItem(medal)
+            rank_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table_leaderboard.setItem(r_idx, 0, rank_item)
+
+            name_item = QTableWidgetItem(exp.get("algo_name", exp.get("algo", "")))
+            name_item.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+            self.table_leaderboard.setItem(r_idx, 1, name_item)
+
+            acc_item = QTableWidgetItem(f"{exp.get('val_accuracy', 0.0) * 100:.1f}%")
+            acc_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            acc_item.setForeground(QColor(ls.SUCCESS_TEXT))
+            self.table_leaderboard.setItem(r_idx, 2, acc_item)
+
+            cv_item = QTableWidgetItem(f"{exp.get('cv_mean', 0.0) * 100:.1f}%")
+            cv_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table_leaderboard.setItem(r_idx, 3, cv_item)
+
+            feat_item = QTableWidgetItem(str(exp.get("num_features", 0)))
+            feat_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table_leaderboard.setItem(r_idx, 4, feat_item)
+
     def _clear_history(self) -> None:
         if self.table.rowCount() == 0:
             return
@@ -137,9 +185,9 @@ class TabHistory(QWidget):
         )
         if ans == QMessageBox.StandardButton.Yes:
             try:
-                hist_file = self.experiment_store.store_path
-                if hist_file.exists():
-                    hist_file.write_text("[]", encoding="utf-8")
+                removed = self.experiment_store.clear_all()
                 self.reload_history()
+                if removed > 0:
+                    QMessageBox.information(self, "Đã Xóa", f"Đã xóa {removed} bản ghi thử nghiệm.")
             except Exception as exc:
                 QMessageBox.critical(self, "Lỗi", f"Không thể xóa lịch sử: {exc}")

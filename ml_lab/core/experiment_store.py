@@ -9,9 +9,10 @@ from __future__ import annotations
 import datetime
 import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from ml_lab.core.pipeline import TrainClassicResult
+if TYPE_CHECKING:  # tránh kéo sklearn vào lúc mở app
+    from ml_lab.core.pipeline import TrainClassicResult
 
 
 class ExperimentStore:
@@ -33,6 +34,7 @@ class ExperimentStore:
     def save_experiment(self, result: TrainClassicResult) -> Path:
         """
         Lưu kết quả huấn luyện vào file JSON định danh bằng timestamp.
+        Tên file luôn duy nhất (chống ghi đè khi lưu nhiều lần trong cùng 1 giây).
         """
         now = datetime.datetime.now()
         ts_str = now.strftime("%Y%m%d_%H%M%S")
@@ -51,6 +53,12 @@ class ExperimentStore:
         }
 
         file_path = self.experiments_dir / f"exp_{ts_str}_{result.algo}.json"
+        counter = 1
+        while file_path.exists():
+            file_path = self.experiments_dir / f"exp_{ts_str}_{counter:02d}_{result.algo}.json"
+            counter += 1
+            if counter > 99:
+                break
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(record, f, indent=2, ensure_ascii=False)
         return file_path
@@ -64,10 +72,39 @@ class ExperimentStore:
             try:
                 with open(p, "r", encoding="utf-8") as f:
                     data = json.load(f)
+                    data["_file"] = p.name
                     records.append(data)
             except Exception:
                 continue
         return records
+
+    def clear_all(self) -> int:
+        """
+        Xóa toàn bộ file lịch sử thử nghiệm.
+        Returns: số file đã xóa.
+        """
+        removed = 0
+        for p in self.experiments_dir.glob("*.json"):
+            try:
+                p.unlink()
+                removed += 1
+            except Exception:
+                continue
+        return removed
+
+    def delete_experiment(self, filename: str) -> bool:
+        """
+        Xóa 1 bản ghi lịch sử theo tên file (đã sanitize).
+        """
+        safe = Path(filename).name
+        target = self.experiments_dir / safe
+        if target.exists() and target.suffix == ".json":
+            try:
+                target.unlink()
+                return True
+            except Exception:
+                return False
+        return False
 
     def get_leaderboard(self) -> list[dict[str, Any]]:
         """

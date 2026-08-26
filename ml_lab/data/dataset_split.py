@@ -79,6 +79,7 @@ def split_user_dataset_file_level(
     window_size: int = 64,
     step_size: int = 16,
     seed: int = 42,
+    include_standby: bool = False,
 ) -> tuple[
     list[tuple[np.ndarray, int]],  # train_windows: list of (window_array, class_index)
     list[tuple[np.ndarray, int]],  # val_windows: list of (window_array, class_index)
@@ -91,7 +92,7 @@ def split_user_dataset_file_level(
         (train_samples, val_samples, class_names)
     """
     rng = random.Random(seed)
-    spell_classes = list_user_spell_classes(dataset_root)
+    spell_classes = list_user_spell_classes(dataset_root, include_standby=include_standby)
 
     # Lấy danh sách tên class có ít nhất 1 file CSV
     class_files_map: dict[str, list[Path]] = {}

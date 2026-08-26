@@ -151,7 +151,7 @@ class CurveChartWidget(QWidget):
             painter.drawText(
                 QRectF(margin_left, h - margin_bottom + 28, plot_w, 20),
                 Qt.AlignmentFlag.AlignCenter,
-                f"Giá trị siêu tham số: {self._param_name}",
+                f"Cài đặt được thử: {self._param_name}",
             )
 
             # 6. Legend ở góc trên
@@ -163,22 +163,22 @@ class CurveChartWidget(QWidget):
             painter.drawEllipse(QRectF(leg_x, leg_y, 8, 8))
             painter.setFont(QFont("Segoe UI", 9))
             painter.setPen(QColor(90, 90, 100))
-            painter.drawText(leg_x + 14, leg_y + 8, "Train Accuracy (Độ chính xác Train)")
+            painter.drawText(leg_x + 14, leg_y + 8, "Điểm trên dữ liệu cũ (máy đã học)")
 
             # Val dot
             painter.setBrush(QBrush(QColor(0, 122, 255)))
             painter.drawEllipse(QRectF(leg_x + 180, leg_y, 8, 8))
             painter.setPen(QColor(0, 122, 255))
-            painter.drawText(leg_x + 194, leg_y + 8, "Validation Score (Độ chính xác Kiểm thử)")
+            painter.drawText(leg_x + 194, leg_y + 8, "Điểm trên dữ liệu MỚI (quan trọng nhất)")
 
         finally:
             painter.end()
 
     def _draw_empty_state(self, painter: QPainter, w: int, h: int) -> None:
         painter.setFont(QFont("Segoe UI", 11, QFont.Weight.Medium))
-        painter.setPen(QColor(140, 145, 155))
+        painter.setPen(QColor(100, 110, 122))
         painter.drawText(
             QRectF(0, 0, w, h),
             Qt.AlignmentFlag.AlignCenter,
-            "📈 Chưa có dữ liệu quét đường cong học.\nHãy chọn tham số và nhấn 'Quét & Vẽ Đường Cong Bias-Variance'.",
+            "Chưa có dữ liệu thử nghiệm.\nChọn thuật toán và tham số ở bên trái rồi bấm 'Chạy thử & vẽ biểu đồ'.",
         )

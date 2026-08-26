@@ -22,6 +22,8 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from ml_lab.core.c_exporter import CCodeExporter
 from ml_lab.core.pipeline import TrainClassicResult
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
 
 def list_serial_ports() -> list[tuple[str, str]]:
     """
@@ -131,7 +133,7 @@ class Esp32FlashWorker(QThread):
 
         # ── Bước 1: Đồng bộ mã nguồn C++ vào esp32_classic_ml ─
         try:
-            esp32_main_dir = Path("esp32_classic_ml/main")
+            esp32_main_dir = PROJECT_ROOT / "esp32_classic_ml" / "main"
             h_path, cc_path = self.c_exporter.export_to_esp32_project(self.result, esp32_main_dir)
             self.log_msg.emit(f"✅ Đã sinh & đồng bộ mã nguồn C++:\n   • {h_path}\n   • {cc_path}")
         except Exception as exc:
@@ -203,9 +205,9 @@ class Esp32FlashWorker(QThread):
 
     def _flash_payload(self) -> tuple[bool, str]:
         """Thực thi lệnh nạp mã nguồn vào ESP32 qua esptool Python API."""
-        bin_target = Path("esp32_classic_ml/build/esp32_classic_ml.bin")
+        bin_target = PROJECT_ROOT / "esp32_classic_ml" / "build" / "esp32_classic_ml.bin"
         if not bin_target.exists():
-            bin_target = Path("assets/firmware/classic_inference.bin")
+            bin_target = PROJECT_ROOT / "assets" / "firmware" / "classic_inference.bin"
 
         if not bin_target.exists():
             return True, "Đã đồng bộ mã C++ thành công vào esp32_classic_ml/main/ (Sẵn sàng biên dịch)"

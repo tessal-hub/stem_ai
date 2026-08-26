@@ -15,13 +15,17 @@ import numpy as np
 
 def augment_sample_window(
     sample_64x6: np.ndarray,
-    noise_std: float = 0.03,
+    noise_std: float = 0.05,
     scale_range: tuple[float, float] = (0.85, 1.15),
     time_warp: bool = True,
     random_state: int | None = None,
 ) -> np.ndarray:
     """
     Tăng cường 1 cửa sổ 64x6 mẫu IMU.
+
+    noise_std là TỶ LỆ so với độ lệch chuẩn của từng kênh (không phải giá trị
+    tuyệt đối) — nhờ đó trục gyro (hàng trăm deg/s) và trục accel (~1g) biến
+    thiên cùng mức. Ví dụ noise_std=0.05 → nhiễu bằng 5% độ dao động kênh đó.
     """
     if sample_64x6.shape != (64, 6):
         raise ValueError(f"Kích thước mẫu phải là (64, 6), nhận được: {sample_64x6.shape}")
@@ -29,24 +33,24 @@ def augment_sample_window(
     rng = np.random.RandomState(random_state)
     aug = sample_64x6.astype(np.float32).copy()
 
-    # 1. Magnitude Scaling
+    # 1. Gaussian Jittering — nhiễu tương đối theo từng kênh
+    if noise_std > 0:
+        ch_std = aug.std(axis=0)
+        ch_std[ch_std < 1e-6] = 1.0  # kênh phẳng: dùng đơn vị tuyệt đối
+        noise = rng.normal(0.0, 1.0, size=aug.shape).astype(np.float32) * (ch_std * noise_std)
+        aug += noise
+
+    # 2. Magnitude Scaling
     scale_acc = rng.uniform(scale_range[0], scale_range[1])
     scale_gyr = rng.uniform(scale_range[0], scale_range[1])
     aug[:, :3] *= scale_acc
     aug[:, 3:] *= scale_gyr
 
-    # 2. Gaussian Jittering
-    if noise_std > 0:
-        noise = rng.normal(0, noise_std, size=aug.shape)
-        aug += noise
-
-    # 3. Time Warping (Resampling / Stretching)
+    # 3. Time Warping (biến dạng nhịp vung)
     if time_warp:
-        # Tạo lưới thời gian biến dạng nhẹ
         orig_t = np.linspace(0, 1, 64)
-        # Warp point
         mid = rng.uniform(0.3, 0.7)
-        mid_shift = mid + rng.uniform(-0.1, 0.1)
+        mid_shift = mid + rng.uniform(-0.15, 0.15)
         warped_t = np.interp(orig_t, [0, mid, 1], [0, mid_shift, 1])
 
         warped_sample = np.zeros_like(aug)
@@ -60,7 +64,7 @@ def augment_sample_window(
 def augment_dataset_windows(
     samples_by_class: dict[str, list[np.ndarray]],
     multiplier: int = 3,
-    noise_std: float = 0.03,
+    noise_std: float = 0.05,
     scale_range: tuple[float, float] = (0.88, 1.12),
 ) -> dict[str, list[np.ndarray]]:
     """

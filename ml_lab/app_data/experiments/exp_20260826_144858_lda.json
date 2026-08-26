@@ -1,0 +1,30 @@
+{
+  "timestamp": "2026-08-26T14:48:58.187101",
+  "algo": "lda",
+  "algo_name": "Linear Discriminant Analysis (LDA)",
+  "train_accuracy": 0.8482384823848238,
+  "val_accuracy": 0.8456375838926175,
+  "cv_mean": 0.8981029810298103,
+  "cv_std": 0.10595616809354928,
+  "class_names": [
+    "A",
+    "B",
+    "BOOST",
+    "COPY",
+    "FIREBALL",
+    "P",
+    "REFLECT",
+    "STOP"
+  ],
+  "num_features": 63,
+  "hyperparams": {
+    "solver": "lsqr",
+    "shrinkage": "none"
+  },
+  "benchmark": {
+    "mcu_latency_ms": 0.065,
+    "mcu_ram_kb": 0.1,
+    "mcu_flash_kb": 3.52,
+    "complexity_score": 1.5
+  }
+}

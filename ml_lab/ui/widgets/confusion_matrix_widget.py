@@ -6,6 +6,7 @@ Hiển thị Validation Accuracy, Cross-Validation, Train-Val gap và Heatmap tr
 
 from __future__ import annotations
 
+import ml_lab.ui.lab_style as ls
 import numpy as np
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont
@@ -34,7 +35,9 @@ class ConfusionMatrixWidget(QWidget):
 
         # ── Metrics Header Frame ────────────────────────────
         self.metrics_card = QFrame()
-        self.metrics_card.setStyleSheet("background: rgba(0, 122, 255, 0.06); border-radius: 8px; padding: 8px;")
+        self.metrics_card.setStyleSheet(
+            f".QFrame {{ background: {ls.ACCENT_TINT}; border: none; border-radius: {ls.RADIUS_MD}px; padding: 8px; }}"
+        )
         m_layout = QHBoxLayout(self.metrics_card)
         m_layout.setContentsMargins(10, 6, 10, 6)
         m_layout.setSpacing(16)
@@ -42,10 +45,11 @@ class ConfusionMatrixWidget(QWidget):
         # Val Accuracy
         vbox_val = QVBoxLayout()
         vbox_val.setSpacing(1)
-        lbl_v_title = QLabel("VAL ACCURACY")
-        lbl_v_title.setStyleSheet("font-size: 10px; font-weight: 700; color: #007aff;")
+        lbl_v_title = QLabel("ĐOÁN ĐÚNG TRÊN DỮ LIỆU MỚI")
+        lbl_v_title.setToolTip("Tỉ lệ đoán đúng trên dữ liệu mô hình chưa từng thấy — con số quan trọng nhất.")
+        lbl_v_title.setStyleSheet(f"{ls.font(ls.FS_CAPTION, 700)} color: {ls.ACCENT}; border: none; background: transparent;")
         self.lbl_val_acc = QLabel("--")
-        self.lbl_val_acc.setStyleSheet("font-size: 20px; font-weight: 800; color: #007aff;")
+        self.lbl_val_acc.setStyleSheet(f"{ls.font(ls.FS_DISPLAY, 800)} color: {ls.ACCENT}; border: none; background: transparent;")
         vbox_val.addWidget(lbl_v_title)
         vbox_val.addWidget(self.lbl_val_acc)
         m_layout.addLayout(vbox_val)
@@ -53,10 +57,11 @@ class ConfusionMatrixWidget(QWidget):
         # CV Score
         vbox_cv = QVBoxLayout()
         vbox_cv.setSpacing(1)
-        lbl_cv_title = QLabel("CROSS-VALIDATION")
-        lbl_cv_title.setStyleSheet("font-size: 10px; font-weight: 700; color: #34c759;")
+        lbl_cv_title = QLabel("KIỂM TRA CHÉO (5 LẦN)")
+        lbl_cv_title.setToolTip("Chia dữ liệu học thành 5 phần, luân phiên làm đề kiểm tra để đo độ ổn định.")
+        lbl_cv_title.setStyleSheet(f"{ls.font(ls.FS_CAPTION, 700)} color: {ls.SUCCESS}; border: none; background: transparent;")
         self.lbl_cv_score = QLabel("--")
-        self.lbl_cv_score.setStyleSheet("font-size: 16px; font-weight: 700; color: #34c759;")
+        self.lbl_cv_score.setStyleSheet(f"{ls.font(16, 700)} color: {ls.SUCCESS}; border: none; background: transparent;")
         vbox_cv.addWidget(lbl_cv_title)
         vbox_cv.addWidget(self.lbl_cv_score)
         m_layout.addLayout(vbox_cv)
@@ -64,10 +69,11 @@ class ConfusionMatrixWidget(QWidget):
         # Train Accuracy & Gap
         vbox_tr = QVBoxLayout()
         vbox_tr.setSpacing(1)
-        lbl_tr_title = QLabel("TRAIN GAP")
-        lbl_tr_title.setStyleSheet("font-size: 10px; font-weight: 700; color: #8e8e93;")
+        lbl_tr_title = QLabel("MỨC ĐỘ HỌC VỆT")
+        lbl_tr_title.setToolTip("Chênh lệch điểm train và điểm mới. Chênh lệch càng lớn càng học vẹt.")
+        lbl_tr_title.setStyleSheet(f"{ls.font(ls.FS_CAPTION, 700)} color: {ls.MUTED}; border: none; background: transparent;")
         self.lbl_train_gap = QLabel("--")
-        self.lbl_train_gap.setStyleSheet("font-size: 14px; font-weight: 600; color: #8e8e93;")
+        self.lbl_train_gap.setStyleSheet(f"{ls.font(14, 600)} color: {ls.MUTED}; border: none; background: transparent;")
         vbox_tr.addWidget(lbl_tr_title)
         vbox_tr.addWidget(self.lbl_train_gap)
         m_layout.addLayout(vbox_tr)
@@ -80,10 +86,7 @@ class ConfusionMatrixWidget(QWidget):
         self.table.setRowCount(0)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.table.setStyleSheet(
-            "QTableWidget { border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; } "
-            "QHeaderView::section { font-weight: 600; font-size: 11px; padding: 4px; }"
-        )
+        self.table.setStyleSheet(ls.DATA_TABLE)
         layout.addWidget(self.table, stretch=1)
 
     def set_results(
@@ -121,12 +124,12 @@ class ConfusionMatrixWidget(QWidget):
                 if r == c and val > 0:
                     # True Positives: Green intensity
                     alpha = int(40 + (val / max_val) * 160)
-                    item.setBackground(QColor(52, 199, 89, alpha))
+                    item.setBackground(QColor(ls.SUCCESS))
                     item.setForeground(QColor(0, 80, 20) if alpha < 120 else QColor(255, 255, 255))
                 elif val > 0:
                     # Confusion Errors: Red intensity
                     alpha = int(50 + (val / max_val) * 150)
-                    item.setBackground(QColor(255, 59, 48, alpha))
+                    item.setBackground(QColor(ls.DANGER))
                     item.setForeground(QColor(255, 255, 255))
                 else:
                     item.setForeground(QColor(160, 160, 160))

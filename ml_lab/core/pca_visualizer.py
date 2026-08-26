@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 import numpy as np
-from sklearn.decomposition import PCA
 
 PCAResult = dict[str, Any]
 
@@ -26,6 +25,11 @@ def compute_pca_decision_boundary(
     """
     if len(X_train) < 2:
         return {}
+
+    from ml_lab.core.lazy_sklearn import ensure_sklearn
+
+    ensure_sklearn()
+    from sklearn.decomposition import PCA  # lazy import
 
     # 1. Fit PCA trên X_train
     pca = PCA(n_components=2, random_state=42)

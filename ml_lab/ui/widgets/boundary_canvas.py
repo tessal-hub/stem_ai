@@ -23,6 +23,11 @@ class DecisionBoundaryCanvas(QWidget):
         super().__init__(parent)
         self.setMinimumSize(360, 280)
         self.setMouseTracking(True)
+        # Tooltip nền trắng chữ đậm — mặc định của hệ thống quá nhạt để đọc
+        self.setStyleSheet(
+            "QToolTip { background-color: #ffffff; color: #0f172a; "
+            "border: 1px solid #cdd6e1; padding: 5px; font-size: 12px; }"
+        )
 
         self._pca_result: dict[str, Any] = {}
         self._class_names: list[str] = []
@@ -84,7 +89,8 @@ class DecisionBoundaryCanvas(QWidget):
                 px, py = X_2d[nearest_idx, 0], X_2d[nearest_idx, 1]
                 QToolTip.showText(
                     event.globalPosition().toPoint(),
-                    f"✨ <b>{cls_name}</b><br>PC1: {px:.2f}, PC2: {py:.2f}",
+                    f"<b style='color:#0f172a;'>{cls_name}</b>"
+                    f"<br><span style='color:#334155;'>PC1: {px:.2f} · PC2: {py:.2f}</span>",
                     self,
                 )
 
@@ -187,9 +193,10 @@ class DecisionBoundaryCanvas(QWidget):
                     painter.drawEllipse(QPointF(sx, sy), 4.2, 4.2)
 
             # 4. Chú thích trục với phương sai giải thích
-            exp_var = self._pca_result.get("explained_variance", [0.0, 0.0])
-            pc1_text = f"Trục chính 1 (PC 1: {exp_var[0]*100:.1f}%)" if len(exp_var) > 0 else "Trục chính 1"
-            pc2_text = f"Trục 2 (PC 2: {exp_var[1]*100:.1f}%)" if len(exp_var) > 1 else "Trục chính 2"
+            var1 = float(self._pca_result.get("var_ratio_1", 0.0))
+            var2 = float(self._pca_result.get("var_ratio_2", 0.0))
+            pc1_text = f"Trục chính 1 (PC 1: {var1:.1f}%)"
+            pc2_text = f"Trục 2 (PC 2: {var2:.1f}%)"
 
             painter.setFont(QFont("Segoe UI", 9, QFont.Weight.Medium))
             text_color = QColor(180, 185, 195) if self._is_dark else QColor(90, 95, 105)
@@ -197,38 +204,47 @@ class DecisionBoundaryCanvas(QWidget):
             painter.drawText(margin + 6, h - margin + 22, pc1_text)
             painter.drawText(margin + 6, margin - 12, pc2_text)
 
-            # 5. Legend
-            leg_x = w - margin - 130
+            # 5. Legend — 2 cột, hiển thị TẤT CẢ các lớp
+            col_w = 150
+            leg_x = max(margin + 10, w - margin - 2 * col_w - 10)
             leg_y = margin + 14
-            for c_idx, c_name in enumerate(self._class_names[:6]):
+            col_w = 150
+            per_col = max(1, (len(self._class_names) + 1) // 2)
+            for c_idx, c_name in enumerate(self._class_names):
                 col = self._get_class_color(c_idx)
+                col_x = leg_x + (c_idx // per_col) * col_w
+                row_y = leg_y + (c_idx % per_col) * 16
                 painter.setBrush(QBrush(col))
                 painter.setPen(Qt.PenStyle.NoPen)
-                painter.drawEllipse(QRectF(leg_x, leg_y + c_idx * 16 - 7, 8, 8))
+                painter.drawEllipse(QRectF(col_x, row_y - 7, 8, 8))
                 painter.setPen(text_color)
-                painter.drawText(int(leg_x + 14), int(leg_y + c_idx * 16), c_name)
+                painter.drawText(int(col_x + 14), int(row_y), c_name[:14])
 
         finally:
             painter.end()
 
+    def _get_class_color(self, class_idx: int) -> QColor:
+        # 10 màu phân biệt rõ (đủ cho tối đa 10 lớp không trùng)
+        palette = [
+            QColor(0, 102, 204),    # Xanh dương
+            QColor(220, 38, 38),    # Đỏ
+            QColor(22, 138, 74),    # Xanh lục
+            QColor(217, 119, 6),    # Cam
+            QColor(109, 40, 217),   # Tím
+            QColor(219, 39, 119),   # Hồng đậm
+            QColor(8, 145, 178),    # Cyan đậm
+            QColor(101, 163, 13),   # Xanh chanh
+            QColor(120, 53, 15),    # Nâu đậm
+            QColor(71, 85, 105),    # Xám xanh đậm
+        ]
+        return palette[class_idx % len(palette)]
+
     def _draw_empty_state(self, painter: QPainter, w: int, h: int) -> None:
         painter.setFont(QFont("Segoe UI", 11, QFont.Weight.Medium))
-        text_color = QColor(130, 135, 145)
+        text_color = QColor(100, 110, 122)
         painter.setPen(text_color)
         painter.drawText(
             QRectF(0, 0, w, h),
             Qt.AlignmentFlag.AlignCenter,
-            "📊 Chưa có dữ liệu huấn luyện.\nHãy chọn tham số và nhấn 'Huấn Luyện & Đánh Giá'.",
+            "Chưa có dữ liệu huấn luyện.\nChọn thuật toán ở tab Huấn luyện rồi bấm 'Huấn luyện & đánh giá'.",
         )
-
-    def _get_class_color(self, class_idx: int) -> QColor:
-        palette = [
-            QColor(0, 122, 255),   # Apple Blue
-            QColor(255, 59, 48),   # Apple Red
-            QColor(52, 199, 89),   # Apple Green
-            QColor(255, 149, 0),   # Apple Orange
-            QColor(88, 86, 214),   # Apple Indigo
-            QColor(255, 45, 85),   # Apple Pink
-            QColor(0, 199, 190),   # Apple Teal
-        ]
-        return palette[class_idx % len(palette)]

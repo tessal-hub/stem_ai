@@ -1,0 +1,31 @@
+{
+  "timestamp": "2026-08-26T11:59:48.020401",
+  "algo": "gbdt",
+  "algo_name": "Gradient Boosting (GBDT)",
+  "train_accuracy": 0.9479674796747968,
+  "val_accuracy": 0.87248322147651,
+  "cv_mean": 0.8634146341463416,
+  "cv_std": 0.020178331131692474,
+  "class_names": [
+    "A",
+    "B",
+    "BOOST",
+    "COPY",
+    "FIREBALL",
+    "P",
+    "REFLECT",
+    "STOP"
+  ],
+  "num_features": 63,
+  "hyperparams": {
+    "n_estimators": 5,
+    "max_depth": 3,
+    "learning_rate": 0.1
+  },
+  "benchmark": {
+    "mcu_latency_ms": 0.09,
+    "mcu_ram_kb": 0.3,
+    "mcu_flash_kb": 6.0,
+    "complexity_score": 3.5
+  }
+}

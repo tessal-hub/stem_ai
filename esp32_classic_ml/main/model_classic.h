@@ -1,9 +1,9 @@
 /*
  * ============================================================================
  * AUTO-GENERATED CLASSIC MACHINE LEARNING MODEL HEADER (STEM ML LAB)
- * Generated at : 2026-08-22 08:19:43
- * Algorithm    : Mạng Nơ-ron (Shallow MLP)
- * Val Accuracy : 97.32% (CV: 95.28%)
+ * Generated at : 2026-08-26 14:51:07
+ * Algorithm    : Linear Discriminant Analysis (LDA)
+ * Val Accuracy : 96.64% (CV: 95.56%)
  * Classes (8)  : A, B, BOOST, COPY, FIREBALL, P, REFLECT, STOP
  * Features (63) : 63 extracted IMU statistics
  * Target: ESP32 / ESP32-S3 (ESP-IDF & Arduino)
@@ -20,16 +20,16 @@
 extern "C" {
 #endif
 
-#define CLASSIC_MODEL_ALGO "mlp"
+#define CLASSIC_MODEL_ALGO "lda"
 #define CLASSIC_NUM_CLASSES 8
 #ifndef CLASSIC_NUM_FEATURES
 #define CLASSIC_NUM_FEATURES 63
 #endif
 
 /**
- * Thực hiện suy luận phân loại cử chỉ từ vector đặc trưng 48 phần tử.
+ * Thực hiện suy luận phân loại cử chỉ từ vector đặc trưng IMU đầu vào.
  *
- * @param raw_features: Mảng float chứa 48 đặc trưng IMU đầu vào.
+ * @param raw_features: Mảng float gồm 63 đặc trưng IMU (đúng thứ tự feature_names).
  * @param out_confidence: Con trỏ float nhận độ tin cậy dự đoán (0.0 -> 1.0).
  * @return Chỉ số index của lớp dự đoán (0 -> CLASSIC_NUM_CLASSES - 1).
  */

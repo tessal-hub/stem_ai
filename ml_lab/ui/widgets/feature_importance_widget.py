@@ -50,7 +50,7 @@ class FeatureImportanceWidget(QWidget):
                 self._draw_empty_state(painter, w, h)
                 return
 
-            margin_left = 110
+            margin_left = 165
             margin_right = 50
             margin_top = 20
             margin_bottom = 20
@@ -111,9 +111,9 @@ class FeatureImportanceWidget(QWidget):
 
     def _draw_empty_state(self, painter: QPainter, w: int, h: int) -> None:
         painter.setFont(QFont("Segoe UI", 11, QFont.Weight.Medium))
-        painter.setPen(QColor(140, 145, 155))
+        painter.setPen(QColor(100, 110, 122))
         painter.drawText(
             QRectF(0, 0, w, h),
             Qt.AlignmentFlag.AlignCenter,
-            "📊 Chưa có dữ liệu tầm quan trọng đặc trưng.\nHãy huấn luyện Cây Quyết Định hoặc Rừng Ngẫu Nhiên.",
+            "Chưa có dữ liệu tầm quan trọng đặc trưng.\nHãy huấn luyện Cây Quyết Định hoặc Rừng Ngẫu Nhiên.",
         )
