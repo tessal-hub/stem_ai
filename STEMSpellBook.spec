@@ -25,11 +25,6 @@ try:
 except Exception:
     tf_datas, tf_binaries, tf_hiddenimports = [], [], []
 
-try:
-    sc_datas, sc_binaries, sc_hiddenimports = collect_all('scipy')
-    sc_hiddenimports = [h for h in sc_hiddenimports if '.tests' not in h and not h.endswith('.test')]
-except Exception:
-    sc_datas, sc_binaries, sc_hiddenimports = [], [], []
 
 try:
     keras_datas, keras_binaries, keras_hiddenimports = collect_all('keras')
@@ -58,7 +53,7 @@ except Exception:
 a = Analysis(
     ['main.py'],
     pathex=[],
-    binaries=vc_dlls + tf_binaries + sc_binaries + keras_binaries + nvs_binaries + esp_binaries + mm_binaries,
+    binaries=vc_dlls + tf_binaries + keras_binaries + nvs_binaries + esp_binaries + mm_binaries,
     datas=(
         [
             ('assets', 'assets'),          # icons, sounds, firmware .bin, templates
@@ -70,7 +65,7 @@ a = Analysis(
         + [(str(p), 'app_data') for p in Path('app_data').glob('*')
            if p.suffix in ('.keras', '.tflite', '.json', '.bin', '.h5', '.cc', '.npz')
            and p.is_file()]
-        + tf_datas + sc_datas + keras_datas + nvs_datas + esp_datas + mm_datas
+        + tf_datas + keras_datas + nvs_datas + esp_datas + mm_datas
     ),
 
     hiddenimports=[
@@ -87,9 +82,8 @@ a = Analysis(
         'esptool.targets.stub_flasher',
         'esp_idf_nvs_partition_gen',
         'esp_idf_nvs_partition_gen.nvs_partition_gen',
-        # ── Numpy & SciPy ──
+        # ── Numpy ──
         'numpy', 'numpy.core', 'numpy.core._multiarray_umath',
-        'scipy', 'scipy.interpolate', 'scipy.interpolate._interpolate',
         # ── TensorFlow/Keras ──
         'tensorflow', 'tensorflow.python',
         'tensorflow.lite', 'tensorflow.lite.python',
@@ -97,7 +91,7 @@ a = Analysis(
         'tensorflow.keras.models',
         'keras', 'keras.src',
         # ── Pyqtgraph ──
-        'pyqtgraph', 'pyqtgraph.opengl',
+        'pyqtgraph',
         'pyqtgraph.graphicsItems',
         'pyqtgraph.widgets',
         # ── App modules ──
@@ -107,7 +101,7 @@ a = Analysis(
         'ui.sound_selector_dialog', 'ui.spell_card_widget',
         'logic.tensorflow.pipeline', 'logic.tensorflow.encoder_pipeline',
         'logic.tensorflow.nvs_builder',
-    ] + tf_hiddenimports + sc_hiddenimports + keras_hiddenimports + nvs_hiddenimports + esp_hiddenimports + mm_hiddenimports,
+    ] + tf_hiddenimports + keras_hiddenimports + nvs_hiddenimports + esp_hiddenimports + mm_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

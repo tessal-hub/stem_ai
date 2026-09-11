@@ -1,0 +1,377 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-30T03:57:27.000Z",
+  "title": "Design System: STEM ML Lab",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Calibrated Blue",
+        "canonical": "oklch(52% 0.18 256)",
+        "tonalRamp": [
+          "oklch(22% 0.12 256)",
+          "oklch(32% 0.15 256)",
+          "oklch(42% 0.17 256)",
+          "oklch(52% 0.18 256)",
+          "oklch(62% 0.15 256)",
+          "oklch(72% 0.10 256)",
+          "oklch(82% 0.06 256)",
+          "oklch(92% 0.03 256)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(18% 0.02 260)",
+        "tonalRamp": [
+          "oklch(12% 0.02 260)",
+          "oklch(18% 0.02 260)",
+          "oklch(28% 0.02 260)",
+          "oklch(38% 0.02 260)",
+          "oklch(55% 0.02 260)",
+          "oklch(70% 0.02 260)",
+          "oklch(85% 0.01 260)",
+          "oklch(95% 0.005 260)"
+        ]
+      },
+      "bg-app": {
+        "role": "neutral",
+        "displayName": "App Canvas",
+        "canonical": "oklch(97% 0.005 260)",
+        "tonalRamp": [
+          "oklch(88% 0.005 260)",
+          "oklch(91% 0.005 260)",
+          "oklch(94% 0.005 260)",
+          "oklch(97% 0.005 260)",
+          "oklch(98% 0.003 260)",
+          "oklch(99% 0.002 260)",
+          "oklch(99.5% 0.001 260)",
+          "oklch(100% 0 0)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "canonical": "oklch(100% 0 0)",
+        "tonalRamp": [
+          "oklch(92% 0.005 260)",
+          "oklch(95% 0.003 260)",
+          "oklch(97% 0.002 260)",
+          "oklch(100% 0 0)",
+          "oklch(100% 0 0)",
+          "oklch(100% 0 0)",
+          "oklch(100% 0 0)",
+          "oklch(100% 0 0)"
+        ]
+      },
+      "success": {
+        "role": "success",
+        "displayName": "Signal Green",
+        "canonical": "oklch(55% 0.12 150)",
+        "tonalRamp": [
+          "oklch(25% 0.08 150)",
+          "oklch(35% 0.10 150)",
+          "oklch(45% 0.12 150)",
+          "oklch(55% 0.12 150)",
+          "oklch(65% 0.10 150)",
+          "oklch(75% 0.07 150)",
+          "oklch(85% 0.04 150)",
+          "oklch(95% 0.02 150)"
+        ]
+      },
+      "warning": {
+        "role": "warning",
+        "displayName": "Amber Warning",
+        "canonical": "oklch(62% 0.14 65)",
+        "tonalRamp": [
+          "oklch(30% 0.10 65)",
+          "oklch(42% 0.12 65)",
+          "oklch(52% 0.14 65)",
+          "oklch(62% 0.14 65)",
+          "oklch(72% 0.11 65)",
+          "oklch(82% 0.07 65)",
+          "oklch(90% 0.04 65)",
+          "oklch(96% 0.02 65)"
+        ]
+      },
+      "danger": {
+        "role": "danger",
+        "displayName": "Signal Red",
+        "canonical": "oklch(60% 0.20 28)",
+        "tonalRamp": [
+          "oklch(28% 0.14 28)",
+          "oklch(38% 0.17 28)",
+          "oklch(50% 0.20 28)",
+          "oklch(60% 0.20 28)",
+          "oklch(70% 0.15 28)",
+          "oklch(80% 0.10 28)",
+          "oklch(88% 0.06 28)",
+          "oklch(95% 0.02 28)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Slate",
+        "canonical": "oklch(55% 0.02 260)",
+        "tonalRamp": [
+          "oklch(25% 0.02 260)",
+          "oklch(35% 0.02 260)",
+          "oklch(45% 0.02 260)",
+          "oklch(55% 0.02 260)",
+          "oklch(65% 0.02 260)",
+          "oklch(75% 0.02 260)",
+          "oklch(85% 0.02 260)",
+          "oklch(95% 0.01 260)"
+        ]
+      },
+      "danger-text-on-tint": {
+        "role": "danger",
+        "displayName": "Danger Text on Tint",
+        "canonical": "#b91c1c",
+        "purpose": "Small error text on 8% red tint (dc2626 hụt AA 4.28:1)."
+      },
+      "plot-ax": {
+        "role": "dataviz",
+        "displayName": "Rose AX",
+        "canonical": "#c2417a",
+        "purpose": "IMU channel line, >=3:1 on white."
+      },
+      "plot-ay": {
+        "role": "dataviz",
+        "displayName": "Blue AY",
+        "canonical": "#2563eb",
+        "purpose": "IMU channel line, >=3:1 on white."
+      },
+      "plot-az": {
+        "role": "dataviz",
+        "displayName": "Teal AZ",
+        "canonical": "#0f766e",
+        "purpose": "IMU channel line, >=3:1 on white."
+      },
+      "plot-gx": {
+        "role": "dataviz",
+        "displayName": "Amber GX",
+        "canonical": "#b45309",
+        "purpose": "IMU channel line, >=3:1 on white."
+      },
+      "plot-gy": {
+        "role": "dataviz",
+        "displayName": "Violet GY",
+        "canonical": "#7c3aed",
+        "purpose": "IMU channel line, >=3:1 on white."
+      },
+      "plot-gz": {
+        "role": "dataviz",
+        "displayName": "Olive GZ",
+        "canonical": "#4d7c0f",
+        "purpose": "IMU channel line, >=3:1 on white."
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Verdict metric 20/800 only"
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Window header 15/800"
+      },
+      "section": {
+        "displayName": "Section",
+        "purpose": "Group label uppercase 13/700 ACCENT"
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Reading 12/400, 65-75ch"
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Chip, summary, hint 11/600-700"
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Terminal 12 mono"
+      }
+    },
+    "shadows": [
+      {
+        "name": "none",
+        "value": "none",
+        "purpose": "Default flat card/pane"
+      },
+      {
+        "name": "lifted-hover",
+        "value": "0 4px 12px rgba(15,23,42,0.06)",
+        "purpose": "Very subtle hover lift for card/primary button"
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-standard",
+        "value": "cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "150-250ms state transitions"
+      },
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Entrance/micro-feedback"
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "min",
+        "value": "1020px"
+      },
+      {
+        "name": "default",
+        "value": "1260px"
+      },
+      {
+        "name": "wide",
+        "value": "1440px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main action, Calibrated Blue, ≤10% surface.",
+      "html": "<button class=\"ds-btn-primary\">Huấn luyện & đánh giá</button>",
+      "css": ".ds-btn-primary{background:#0668d1;color:#fff;border:2px solid transparent;border-radius:8px;padding:8px 14px;font-family:'Segoe UI',system-ui,sans-serif;font-size:13px;font-weight:700;transition:background 150ms cubic-bezier(0.4,0,0.2,1),border-color 150ms}.ds-btn-primary:hover{background:#0557b0}.ds-btn-primary:active{background:#044a99}.ds-btn-primary:focus-visible{border-color:#0f172a;outline:none}.ds-btn-primary:disabled{background:#8494a7;color:#fff;opacity:1}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Secondary action, surface with border.",
+      "html": "<button class=\"ds-btn-secondary\">Chọn tất cả</button>",
+      "css": ".ds-btn-secondary{background:#ffffff;color:#334155;border:1px solid #cdd6e1;border-radius:8px;padding:6px 12px;font-family:'Segoe UI',system-ui,sans-serif;font-size:11px;font-weight:600;transition:background 150ms,border-color 150ms}.ds-btn-secondary:hover{background:#f1f5f9;border-color:#8494a7}.ds-btn-secondary:focus-visible{border-color:#0668d1;outline:none}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Tertiary, transparent.",
+      "html": "<button class=\"ds-btn-ghost\">Bỏ chọn hết</button>",
+      "css": ".ds-btn-ghost{background:transparent;color:#5b6b7f;border:none;border-radius:6px;padding:6px 8px;font-family:'Segoe UI',system-ui,sans-serif;font-size:11px;font-weight:600}.ds-btn-ghost:hover{background:#f1f5f9;color:#0f172a}"
+    },
+    {
+      "name": "Chip Filter",
+      "kind": "chip",
+      "refersTo": "chip-selected",
+      "description": "Pill 999, 32px touch, checked tint strong.",
+      "html": "<button class=\"ds-chip\" aria-pressed=\"true\">Lumos · 12</button><button class=\"ds-chip\">Nox · 8</button>",
+      "css": ".ds-chip{background:#ffffff;color:#334155;border:1px solid #cdd6e1;border-radius:999px;padding:7px 12px;font-family:'Segoe UI',system-ui,sans-serif;font-size:11px;font-weight:600;min-height:18px;transition:background 150ms,border-color 150ms,color 150ms}.ds-chip:hover{background:#f1f5f9;border-color:#8494a7}.ds-chip[aria-pressed=\"true\"]{background:rgba(10,122,255,0.14);color:#044a99;border-color:#0668d1;font-weight:700}.ds-chip:focus-visible{border:1.5px solid #0f172a;outline:none}"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Surface, 1px border, 10px radius, flat.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card__title\">CHỌN THẦN CHÚ ĐỂ LUYỆN</div><div class=\"ds-card__body\">Nội dung</div></div>",
+      "css": ".ds-card{background:#ffffff;border:1px solid #e4e9f0;border-radius:10px;padding:12px}.ds-card__title{font-family:'Segoe UI',system-ui,sans-serif;font-size:11px;font-weight:700;letter-spacing:0.05em;color:#0668d1;text-transform:uppercase}.ds-card:hover{box-shadow:0 4px 12px rgba(15,23,42,0.06)}"
+    },
+    {
+      "name": "Input Spin",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Spin with SUNK stepper.",
+      "html": "<div class=\"ds-input-wrap\"><input class=\"ds-input\" value=\"3\" /></div>",
+      "css": ".ds-input{background:#ffffff;color:#334155;border:1px solid #cdd6e1;border-radius:8px;padding:4px 8px;font-family:'Segoe UI',system-ui,sans-serif;font-size:12px;font-weight:600}.ds-input:focus{border-color:#0668d1;outline:none}"
+    },
+    {
+      "name": "Tab Bar",
+      "kind": "nav",
+      "refersTo": "tab-bar",
+      "description": "8 tabs, 2px accent underline selected.",
+      "html": "<div class=\"ds-tabs\"><button class=\"ds-tab ds-tab--active\">0 · Chọn thần chú · 3/5</button><button class=\"ds-tab\">1 · Dữ liệu</button></div>",
+      "css": ".ds-tabs{display:flex;gap:2px;border:1px solid #e4e9f0;border-radius:10px;background:#ffffff;padding:4px}.ds-tab{color:#5b6b7f;background:transparent;border:none;border-bottom:2px solid transparent;padding:9px 12px;font-family:'Segoe UI',system-ui,sans-serif;font-size:12px;font-weight:600}.ds-tab:hover{color:#0f172a;background:#f1f5f9}.ds-tab--active{color:#0668d1;border-bottom-color:#0668d1;font-weight:700}"
+    },
+    {
+      "name": "Data Table",
+      "kind": "custom",
+      "refersTo": "data-table",
+      "description": "Dense table, sunk header.",
+      "html": "<table class=\"ds-table\"><thead><tr><th>Thần chú</th><th>Số mẫu</th></tr></thead><tbody><tr><td>Lumos</td><td>12</td></tr></tbody></table>",
+      "css": ".ds-table{background:#ffffff;border:1px solid #e4e9f0;border-radius:8px;font-family:'Segoe UI',system-ui,sans-serif;font-size:12px;color:#334155;border-collapse:separate;border-spacing:0}.ds-table th{background:#f1f5f9;color:#5b6b7f;font-size:11px;font-weight:700;padding:7px 8px;border-bottom:1px solid #e4e9f0}.ds-table td{padding:4px 8px}"
+    },
+    {
+      "name": "Terminal",
+      "kind": "custom",
+      "refersTo": "terminal",
+      "description": "Dark log, mono.",
+      "html": "<pre class=\"ds-terminal\">>> UDP: ax=0.12 ...</pre>",
+      "css": ".ds-terminal{background:#16181d;color:#d7dde6;border:1px solid #262a33;border-radius:8px;padding:12px;font-family:Consolas,'Cascadia Mono',monospace;font-size:12px;line-height:1.6}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Guided Studio",
+    "overview": "The Guided Studio là phòng thí nghiệm ánh sáng trắng trên bàn học ký túc — mọi thao tác đều có trình tự 0→7, mỗi màn hình chỉ hỏi một việc và chỉ đường cho việc kế tiếp. Hệ thống từ chối Đồ chơi lòe loẹt, Dashboard ERP lạnh lẽo, và SaaS landing hero-metric. Thay vào đó là Restrained với một accent duy nhất, tonal layering thay shadow, và progress disclosure.",
+    "keyCharacteristics": [
+      "Dẫn dắt thầm lặng: Tab 0→7 là lộ trình",
+      "Số liệu kèm câu chuyện: mọi metric có một dòng note_box",
+      "Nhất quán tuyệt đối: cùng card, cùng gap, cùng cỡ chữ",
+      "Rỗng là cơ hội dạy: empty state nói cách sửa"
+    ],
+    "rules": [
+      {
+        "name": "The One Accent Rule",
+        "body": "Trên bất kỳ màn hình nào, chỉ #0668d1 được coi là tín hiệu hành động/chọn. Success/Warning/Danger không dùng cho trang trí.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tonal Layering Rule",
+        "body": "Chiều sâu đến từ BG_APP → SURFACE → SUNK, không phải blur. Shadow chỉ khi hover.",
+        "section": "colors"
+      },
+      {
+        "name": "The Single Family Rule",
+        "body": "Một Segoe UI stack gánh heading, button, label, data.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "Surface phẳng khi nghỉ; shadow chỉ xuất hiện như phản hồi hover/focus.",
+        "section": "elevation"
+      },
+      {
+        "name": "The No-Hard-Coded-Light Rule",
+        "body": "QSS dùng chung hai theme cấm hex light; mọi màu text/focus/disabled đi qua token theme.",
+        "section": "colors"
+      },
+      {
+        "name": "The 11px Floor Rule",
+        "body": "Không có chữ nào dưới 11px — kể cả badge, HUD tag, progress text.",
+        "section": "typography"
+      },
+      {
+        "name": "The Chart Title Rule",
+        "body": "section_label() chỉ cho legend nhóm trường; tiêu đề biểu đồ dùng chart_title() INK không caps.",
+        "section": "typography"
+      }
+    ],
+    "dos": [
+      "Do dùng lab_style token duy nhất — không hard-code #0668d1 lẻ.",
+      "Do giữ TAB_BAR 8 tabs ngang hàng (0 · Chọn thần chú là entry).",
+      "Do dùng note_box(hue) cho mọi giải thích sư phạm.",
+      "Do để empty state dạy: Chưa có thần chú nào. Hãy ghi thần chú đầu tiên ở trang Ghi dữ liệu.",
+      "Do tonal layering BG_APP → SURFACE → SUNK trước khi nghĩ đến shadow."
+    ],
+    "donts": [
+      "Don't làm Đồ chơi lòe loẹt — không emoji dày, không gradient.",
+      "Don't làm Dashboard ERP lạnh lẽo — không bảng số không giải thích.",
+      "Don't dùng SaaS hero-metric + eyebrow uppercase trên mọi section.",
+      "Don't border 1px + box-shadow 16px ghost-card.",
+      "Don't border-radius 32px+ trên card.",
+      "Don't nest card trong card.",
+      "Don't dùng repeating-linear-gradient stripe.",
+      "Don't dùng ACCENT cho success/warning.",
+      "Don't ghép alpha vào hex ({color}1F) — Qt parse #AARRGGBB alpha-trước, ra màu sai. Dùng rgba() qua _tint().",
+      "Don't tô text bằng màu spell người dùng chọn mà không guard contrast_ratio >= 3:1 so với surface.",
+      "Don't font dưới 11px.",
+      "Don't hard-code hex light trong QSS dùng chung hai theme."
+    ]
+  }
+}

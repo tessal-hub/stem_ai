@@ -40,46 +40,46 @@ SURFACE_PRIMARY  = SURFACE_1
 SURFACE_SECONDARY = SURFACE_0
 SURFACE_TERTIARY  = _GRAY_50
 
-# Text hierarchy
-TEXT_PRIMARY     = _GRAY_900
-TEXT_SECONDARY   = _GRAY_400    # rgba(60,60,67,0.6) equivalent
-TEXT_TERTIARY    = _GRAY_300
-TEXT_MUTED       = _GRAY_400
-TEXT_BODY        = _GRAY_900
+# Text hierarchy — aligned to DESIGN.md Bench (ink/body/muted) for AA contrast
+TEXT_PRIMARY     = "#0f172a"    # Ink — 10px tracked caps still legible
+TEXT_SECONDARY   = "#334155"    # Body — 10.35:1 on white
+TEXT_TERTIARY    = "#5b6b7f"    # Muted — 5.45:1 (AA) — for hints/status, not placeholder
+TEXT_MUTED       = "#5b6b7f"
+TEXT_BODY        = "#0f172a"
 
-# Interactive accent (Apple system blue)
-PRIMARY_COLOR    = _BLUE_500
-PRIMARY_LIGHT    = "#EBF5FF"    # tint — blue at 8% opacity on white
-PRIMARY_DARK     = "#0062CC"    # shade — blue darkened
+# Interactive accent — calibrated blue (DESIGN.md / lab_style)
+PRIMARY_COLOR    = "#0668d1"    # 5.37:1 on white
+PRIMARY_LIGHT    = "rgba(10, 122, 255, 0.07)"
+PRIMARY_DARK     = "#0557b0"
 
 ACCENT           = PRIMARY_COLOR
 ACCENT_DARK      = PRIMARY_DARK
 ACCENT_TEXT      = _WHITE
 
-# Semantic status
-SUCCESS          = _GREEN_500
-DANGER           = _RED_500
-WARNING          = _ORANGE_500
+# Semantic status — calibrated to DESIGN.md / WCAG AA (≥4.5:1 on white)
+SUCCESS          = "#1e7a46"   # 5.35:1 on white
+DANGER           = "#dc2626"   # 4.54:1 on white
+WARNING          = "#b45309"   # 4.56:1 on white
 
-STATUS_SUCCESS   = _GREEN_500
-STATUS_WARNING   = _ORANGE_500
-STATUS_ERROR     = _RED_500
+STATUS_SUCCESS   = "#1e7a46"
+STATUS_WARNING   = "#b45309"
+STATUS_ERROR     = "#dc2626"
 
-# Borders (Apple uses very subtle 1px separators)
-BORDER_COLOR     = "rgba(60, 60, 67, 0.18)"   # opaqueSeparator equivalent
-BORDER_LIGHT     = "rgba(60, 60, 67, 0.10)"
-BORDER_MID       = "rgba(60, 60, 67, 0.29)"
+# Borders — tonal ink-based (DESIGN.md)
+BORDER_COLOR     = "#e4e9f0"
+BORDER_LIGHT     = "rgba(15, 23, 42, 0.06)"
+BORDER_MID       = "#cdd6e1"
 
-# Fill colors (for interactive control backgrounds)
-FILL_PRIMARY     = "rgba(120, 120, 128, 0.20)"  # button resting state
-FILL_SECONDARY   = "rgba(120, 120, 128, 0.16)"
-FILL_TERTIARY    = "rgba(118, 118, 128, 0.12)"
+# Fill colors — tonal sunk layer (DESIGN.md)
+FILL_PRIMARY     = "#f1f5f9"
+FILL_SECONDARY   = "rgba(15, 23, 42, 0.06)"
+FILL_TERTIARY    = "rgba(15, 23, 42, 0.04)"
 
-# Surface states
-HOVER_BG         = PRIMARY_LIGHT
+# Surface states — bench layering
+HOVER_BG         = "rgba(10, 122, 255, 0.07)"
 BG_WHITE         = _WHITE
-BG_LIGHT         = SURFACE_0
-BG_DARK          = "#1C1C1E"   # terminal/graph dark background
+BG_LIGHT         = "#f6f7f9"
+BG_DARK          = "#16181d"   # terminal dark (DESIGN.md)
 
 # Legacy aliases — keep these pointing to new semantic tokens
 # (existing page files import these names)
@@ -104,7 +104,7 @@ SHADOW_LIGHT          = "transparent"
 SHADOW_MEDIUM         = "transparent"
 SHADOW_DARK           = "transparent"
 BORDER                = BORDER_COLOR
-TERM_FG               = "#32D74B"    # Apple terminal green
+TERM_FG               = "#d7dde6"    # DESIGN.md terminal_fg
 TERM_BG               = BG_DARK
 
 SETTINGS_ACCENT       = PRIMARY_COLOR
@@ -118,12 +118,12 @@ APP_FONT_STACK = "'Geist', 'Plus Jakarta Sans', 'Be Vietnam Pro', 'SF Pro Displa
 TITLE_FONT_STACK = "'PP Editorial New', 'Clash Display', 'Geist', 'Be Vietnam Pro', sans-serif"
 MONO_FONT_STACK = "'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace"
 
-# ── Geometry & Border Radius ───────────────────────────────────────────────
+# ── Geometry & Border Radius — aligned to DESIGN.md / lab_style (6/8/10/999)
 RADIUS_XS   = 6    # checkboxes, small tags
-RADIUS_SM   = 10   # buttons, inputs
-RADIUS_MD   = 14   # cards inner elements
-RADIUS_LG   = 16   # standard cards
-RADIUS_XL   = 20   # large hero cards
+RADIUS_SM   = 6    # chips (lab RADIUS_SM)
+RADIUS_MD   = 8    # buttons, inputs (lab RADIUS_MD)
+RADIUS_LG   = 10   # standard cards (lab RADIUS_LG)
+RADIUS_XL   = 10   # large hero cards — capped at 10 per Do's
 RADIUS_FULL = 999  # pill shape
 
 RADIUS_CARD = f"{RADIUS_LG}px"
@@ -134,25 +134,38 @@ RADIUS_PILL = "999px"
 CROP_REGION = (0, 122, 255, 40)
 
 # ── Spacing & Margins ──────────────────────────────────────────────────────
+SPACING_XS = 8
+SPACING_SM = 12
+SPACING_MD = 16
+SPACING_LG = 24
+SPACING_XL = 32
+SPACING_XXL = 48
+
+MARGIN_COMPACT = 12
+MARGIN_STANDARD = 16
+MARGIN_COMFORTABLE = 24
+MARGIN_SPACIOUS = 32
+MARGIN_LUXURIOUS = 48
+
 SPACE_PAGE = 24
 SPACE_CARD_PADDING = 20
 SPACE_SECTION_GAP = 16
 SPACE_ELEMENT_GAP = 12
 SPACE_TINY = 8
 
-# ── Dimensions ─────────────────────────────────────────────────────────────
+# ── Dimensions — breathable, touch-aware
 SHELL_SIDEBAR_W = 220
 SHELL_NAV_H = 48
 SHELL_BRAND_H = 72
 SHELL_BRAND_ICON = QSize(28, 28)
 SHELL_NAV_ICON = QSize(20, 20)
 
-BTN_H = 32
-BTN_SMALL_H = 28
-SETTINGS_BTN_H = 32
-SETTINGS_INPUT_H = 32
-SPELL_BTN_H = 32
-PROGRESS_H = 8
+BTN_H = 36            # touch min 36 (44 ideal — use padding for icon-only)
+BTN_SMALL_H = 32
+SETTINGS_BTN_H = 36
+SETTINGS_INPUT_H = 36
+SPELL_BTN_H = 36
+PROGRESS_H = 6
 LABEL_W = 180
 
 RECORD_GRAPH_MIN_H = 220
@@ -164,17 +177,17 @@ WAND_SPELL_LIST_MIN_H = 260
 WAND_TERMINAL_MIN_H = 260
 TERM_MIN_H = 260
 
-RIGHT_MAX_W = 500
-RIGHT_MIN_W = 500
+RIGHT_MAX_W = 420
+RIGHT_MIN_W = 320
 
-# ── Colors for Plotting (IMU) ──────────────────────────────────────────────
-PLOT_AX_COLOR = "#F28BA8"
-PLOT_AY_COLOR = "#9FB7F4"
-PLOT_AZ_COLOR = "#9ED9C7"
-PLOT_GX_COLOR = "#F0D48D"
-PLOT_GY_COLOR = "#B7A5F5"
-PLOT_GZ_COLOR = "#86C5F3"
-PLOT_HANDLE_HOVER_COLOR = "#7C9CE6"
+# ── Colors for Plotting (IMU) — all ≥3:1 on white (WCAG 1.4.11 chart lines) ──
+PLOT_AX_COLOR = "#c2417a"
+PLOT_AY_COLOR = "#2563eb"
+PLOT_AZ_COLOR = "#0f766e"
+PLOT_GX_COLOR = "#b45309"
+PLOT_GY_COLOR = "#7c3aed"
+PLOT_GZ_COLOR = "#4d7c0f"
+PLOT_HANDLE_HOVER_COLOR = "#5b7fc7"
 
 
 # ── Legacy Constants & QSS ───────────────────────────────────────────────
@@ -197,9 +210,6 @@ RARITY_COM = "#10B981"
 RARITY_UNC = "#3B82F6"
 RARITY_RARE = "#8B5CF6"
 RARITY_EPIC = "#F59E0B"
-
-WAND_ACCENT = PRIMARY_COLOR
-SETTINGS_ACCENT = PRIMARY_COLOR
 
 MARGIN_COMFORTABLE = SPACE_PAGE
 SPACING_LG = SPACE_PAGE
@@ -232,8 +242,8 @@ STYLE_SETTING_MAIN_CONTAINER = STYLE_PAGE_MAIN_CONTAINER
 STYLE_BTN_PRIMARY = f"background-color: {PRIMARY_COLOR}; color: {ACCENT_TEXT}; border-radius: {RADIUS_SM}px; font-weight: 600;"
 STYLE_BTN_START = STYLE_BTN_PRIMARY
 
-STYLE_BTN_BASE = f"background-color: rgba(0, 122, 255, 0.10); color: {PRIMARY_COLOR}; border-radius: {RADIUS_SM}px; font-weight: 600;"
-STYLE_BTN_STOP = f"background-color: rgba(255, 59, 48, 0.10); color: {DANGER}; border-radius: {RADIUS_SM}px;"
+STYLE_BTN_BASE = f"background-color: rgba(6, 104, 209, 0.10); color: {PRIMARY_COLOR}; border-radius: {RADIUS_SM}px; font-weight: 600;"
+STYLE_BTN_STOP = f"background-color: rgba(220, 38, 38, 0.10); color: #b91c1c; border-radius: {RADIUS_SM}px;"
 STYLE_BTN_DANGER_OUTLINE = STYLE_BTN_STOP
 
 STYLE_BTN_OUTLINE = f"background-color: {FILL_TERTIARY}; color: {TEXT_SECONDARY}; border-radius: {RADIUS_SM}px;"

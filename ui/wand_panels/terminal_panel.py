@@ -13,9 +13,8 @@ from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
 from ui.i18n_bridge import tr_ui
-from ui.modern_layout import SPACING_SM
 from ui.terminal_widget import TerminalWidget
-from ui.tokens import BTN_SMALL_H
+from ui.tokens import BTN_SMALL_H, SPACING_SM
 
 from .shared import make_section_label
 

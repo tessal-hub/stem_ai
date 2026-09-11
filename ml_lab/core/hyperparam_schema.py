@@ -272,15 +272,3 @@ class NearestCentroidConfig:
         if self.metric not in ("euclidean", "manhattan"):
             errors.append("metric chỉ hỗ trợ euclidean/manhattan")
         return errors
-
-
-@dataclass
-class QDAConfig:
-    """QDA: ranh giới cong theo phân phối Gauss của từng lớp."""
-    reg_param: float = 0.1
-
-    def validate(self) -> list[str]:
-        errors: list[str] = []
-        if self.reg_param < 0:
-            errors.append("reg_param phải >= 0")
-        return errors

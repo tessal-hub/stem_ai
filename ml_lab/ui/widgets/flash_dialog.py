@@ -28,6 +28,11 @@ from PyQt6.QtWidgets import (
 
 import ml_lab.ui.lab_style as ls
 from ml_lab.core.esp32_flasher import Esp32FlashWorker, list_serial_ports
+from ml_lab.core.serial_coordinator import (
+    ML_LAB_FLASH,
+    acquire as coord_acquire,
+    release as coord_release,
+)
 from ml_lab.core.pipeline import TrainClassicResult
 
 
@@ -40,6 +45,7 @@ class FlashDialog(QDialog):
         super().__init__(parent)
         self.result = result
         self._worker: Esp32FlashWorker | None = None
+        self._claimed_port: str | None = None
 
         self.setWindowTitle("Nạp mô hình vào ESP32")
         self.resize(750, 520)
@@ -150,6 +156,10 @@ class FlashDialog(QDialog):
             self.term_edit.append("[LỖI] Vui lòng chọn cổng COM kết nối với ESP32.")
             return
 
+        # Claim toàn cục: STEM / ML serial đang giữ cổng này thì tự nhả
+        # trước khi esptool mở — hết xung đột COM lúc nạp.
+        coord_acquire(ML_LAB_FLASH, port)
+        self._claimed_port = port
         self.btn_flash.setEnabled(False)
         self.btn_flash.setText("Đang nạp...")
         self.progress_bar.setValue(5)
@@ -166,6 +176,14 @@ class FlashDialog(QDialog):
     def _on_flash_finished(self, success: bool, msg: str) -> None:
         self.btn_flash.setEnabled(True)
         self.btn_flash.setText("BẮT ĐẦU NẠP")
+        try:
+            if self._claimed_port:
+                coord_release(ML_LAB_FLASH, self._claimed_port)
+            else:
+                coord_release(ML_LAB_FLASH)
+        except Exception:
+            pass
+        self._claimed_port = None
         if success:
             self.progress_bar.setValue(100)
             self.lbl_status.setText("✅ Nạp thành công 100%!")
@@ -175,4 +193,20 @@ class FlashDialog(QDialog):
     def closeEvent(self, event: Any) -> None:
         if self._worker and self._worker.isRunning():
             self._worker.cancel()
+            try:
+                self._worker.blockSignals(True)
+            except Exception:
+                pass
+            try:
+                self._worker.wait(2000)
+            except Exception:
+                pass
+        try:
+            if self._claimed_port:
+                coord_release(ML_LAB_FLASH, self._claimed_port)
+            else:
+                coord_release(ML_LAB_FLASH)
+        except Exception:
+            pass
+        self._claimed_port = None
         super().closeEvent(event)

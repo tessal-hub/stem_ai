@@ -31,16 +31,18 @@ class ConfusionMatrixWidget(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(10)
+        layout.setSpacing(ls.SP_2)
 
         # ── Metrics Header Frame ────────────────────────────
         self.metrics_card = QFrame()
+        self.metrics_card.setObjectName("CMMetrics")
         self.metrics_card.setStyleSheet(
-            f".QFrame {{ background: {ls.ACCENT_TINT}; border: none; border-radius: {ls.RADIUS_MD}px; padding: 8px; }}"
+            f"#CMMetrics {{ background: {ls.SURFACE_SUNK}; border: 1px solid {ls.BORDER}; "
+            f"border-radius: {ls.RADIUS_MD}px; padding: {ls.SP_2}px; }}"
         )
         m_layout = QHBoxLayout(self.metrics_card)
-        m_layout.setContentsMargins(10, 6, 10, 6)
-        m_layout.setSpacing(16)
+        m_layout.setContentsMargins(ls.SP_3, ls.SP_2, ls.SP_3, ls.SP_2)
+        m_layout.setSpacing(ls.SP_4)
 
         # Val Accuracy
         vbox_val = QVBoxLayout()
@@ -61,7 +63,7 @@ class ConfusionMatrixWidget(QWidget):
         lbl_cv_title.setToolTip("Chia dữ liệu học thành 5 phần, luân phiên làm đề kiểm tra để đo độ ổn định.")
         lbl_cv_title.setStyleSheet(f"{ls.font(ls.FS_CAPTION, 700)} color: {ls.SUCCESS}; border: none; background: transparent;")
         self.lbl_cv_score = QLabel("--")
-        self.lbl_cv_score.setStyleSheet(f"{ls.font(16, 700)} color: {ls.SUCCESS}; border: none; background: transparent;")
+        self.lbl_cv_score.setStyleSheet(f"{ls.font(ls.FS_TITLE, 700)} color: {ls.SUCCESS}; border: none; background: transparent;")
         vbox_cv.addWidget(lbl_cv_title)
         vbox_cv.addWidget(self.lbl_cv_score)
         m_layout.addLayout(vbox_cv)
@@ -73,7 +75,7 @@ class ConfusionMatrixWidget(QWidget):
         lbl_tr_title.setToolTip("Chênh lệch điểm train và điểm mới. Chênh lệch càng lớn càng học vẹt.")
         lbl_tr_title.setStyleSheet(f"{ls.font(ls.FS_CAPTION, 700)} color: {ls.MUTED}; border: none; background: transparent;")
         self.lbl_train_gap = QLabel("--")
-        self.lbl_train_gap.setStyleSheet(f"{ls.font(14, 600)} color: {ls.MUTED}; border: none; background: transparent;")
+        self.lbl_train_gap.setStyleSheet(f"{ls.font(ls.FS_SECTION, 600)} color: {ls.MUTED}; border: none; background: transparent;")
         vbox_tr.addWidget(lbl_tr_title)
         vbox_tr.addWidget(self.lbl_train_gap)
         m_layout.addLayout(vbox_tr)
@@ -114,6 +116,17 @@ class ConfusionMatrixWidget(QWidget):
 
         max_val = max(1, int(np.max(cm))) if cm.size > 0 else 1
 
+        def _heat(base_hex: str, ratio: float) -> QColor:
+            """Pha trắng → màu gốc theo mật độ (giữ số liệu làm kênh chính, màu phụ)."""
+            t = min(1.0, max(0.0, 0.15 + 0.85 * ratio))
+            base = base_hex.lstrip("#")
+            r, g, b = (int(base[i:i + 2], 16) for i in (0, 2, 4))
+            return QColor(
+                int(255 + (r - 255) * t),
+                int(255 + (g - 255) * t),
+                int(255 + (b - 255) * t),
+            )
+
         for r in range(num_classes):
             for c in range(num_classes):
                 val = int(cm[r, c]) if r < cm.shape[0] and c < cm.shape[1] else 0
@@ -122,16 +135,16 @@ class ConfusionMatrixWidget(QWidget):
                 item.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold if val > 0 else QFont.Weight.Normal))
 
                 if r == c and val > 0:
-                    # True Positives: Green intensity
-                    alpha = int(40 + (val / max_val) * 160)
-                    item.setBackground(QColor(ls.SUCCESS))
-                    item.setForeground(QColor(0, 80, 20) if alpha < 120 else QColor(255, 255, 255))
+                    # True Positives: đậm dần theo số lượng (số liệu là kênh chính)
+                    ratio = val / max_val
+                    item.setBackground(_heat(ls.SUCCESS, ratio))
+                    item.setForeground(QColor(255, 255, 255) if ratio >= 0.9 else QColor(ls.INK))
                 elif val > 0:
-                    # Confusion Errors: Red intensity
-                    alpha = int(50 + (val / max_val) * 150)
-                    item.setBackground(QColor(ls.DANGER))
-                    item.setForeground(QColor(255, 255, 255))
+                    # Confusion Errors: đỏ dần theo số lượng
+                    ratio = val / max_val
+                    item.setBackground(_heat(ls.DANGER, ratio))
+                    item.setForeground(QColor(255, 255, 255) if ratio >= 0.9 else QColor(ls.INK))
                 else:
-                    item.setForeground(QColor(160, 160, 160))
+                    item.setForeground(QColor(ls.MUTED))
 
                 self.table.setItem(r, c, item)

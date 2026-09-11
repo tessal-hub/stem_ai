@@ -15,8 +15,7 @@ from logic.rarity_utils import RARITY_TIERS, RarityTier
 from logic.theme_manager import theme_manager
 from ui.component_factory import make_rarity_badge_wand
 from ui.i18n_bridge import tr_ui
-from ui.modern_layout import SPACING_SM
-from ui.tokens import WAND_SPELL_LIST_MIN_H
+from ui.tokens import SPACING_SM, WAND_SPELL_LIST_MIN_H
 
 
 class WandSpellPayloadPanel(QWidget):

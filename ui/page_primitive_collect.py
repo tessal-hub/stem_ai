@@ -28,11 +28,10 @@ from logic.theme_manager import theme_manager
 from ui.component_factory import make_button, make_hint, make_section_label
 from ui.i18n_bridge import tr_ui
 from ui.layout_utils import clear_layout
-from ui.modern_layout import (MARGIN_COMFORTABLE, SPACING_LG, SPACING_MD,
-                              SPACING_SM)
-from ui.tokens import (PLOT_AX_COLOR, PLOT_AY_COLOR, PLOT_AZ_COLOR,
-                       PLOT_GX_COLOR, PLOT_GY_COLOR, PLOT_GZ_COLOR,
-                       RIGHT_MAX_W, RIGHT_MIN_W)
+from ui.tokens import (MARGIN_COMFORTABLE, PLOT_AX_COLOR, PLOT_AY_COLOR,
+                       PLOT_AZ_COLOR, PLOT_GX_COLOR, PLOT_GY_COLOR,
+                       PLOT_GZ_COLOR, RIGHT_MAX_W, RIGHT_MIN_W, SPACING_LG,
+                       SPACING_MD, SPACING_SM)
 
 
 class PagePrimitiveCollect(QWidget):
@@ -57,30 +56,32 @@ class PagePrimitiveCollect(QWidget):
         self._stats = {name: 0 for name in self._catalog}
         self._card_widgets = {}
 
+        self._plot_initialized = False
         self._init_ui()
-        self._setup_plot()
         self._init_signals()
         self._load_data()
 
-        # High-performance timer-based polling for plots (avoids UI choking at 100Hz)
+        # Timer lazy — start only khi visible, 20Hz (50ms) + downsample
         self._plot_timer = QTimer(self)
         self._plot_timer.timeout.connect(self._render_plots)
         if self.isVisible():
-            self._plot_timer.start(40)  # 25 Hz
+            self._plot_timer.start(50)
 
     def _init_ui(self) -> None:
-        """Khởi tạo giao diện trang thu thập mẫu gốc."""
+        """Khởi tạo giao diện fit toàn bộ trong một màn hình duy nhất."""
         layout = QVBoxLayout(self)
-        # Bỏ padding-bottom cứng để nội dung được bung hết cỡ
-        layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
-        layout.setSpacing(SPACING_LG)
+        layout.setContentsMargins(MARGIN_COMFORTABLE, 14, MARGIN_COMFORTABLE, 14)
+        layout.setSpacing(SPACING_MD)
 
-        content = QHBoxLayout()
-        content.setSpacing(SPACING_LG)
-        content.addWidget(self._build_monitor_column(), stretch=3)
-        content.addWidget(self._build_catalog_column(), stretch=2)
+        self._monitor_col = self._build_monitor_column()
+        self._catalog_col = self._build_catalog_column()
+        self._content_layout = QHBoxLayout()
+        self._content_layout.setSpacing(SPACING_MD)
+        self._content_layout.addWidget(self._monitor_col, stretch=3)
+        self._content_layout.addWidget(self._catalog_col, stretch=2)
+        self._is_stacked = False
 
-        layout.addLayout(content)
+        layout.addLayout(self._content_layout, stretch=1)
         self.refresh_styles()
 
     def _init_signals(self) -> None:
@@ -152,7 +153,7 @@ class PagePrimitiveCollect(QWidget):
         is_dark = theme_manager.current_theme == "dark"
         axis_pen = QColor(p.TEXT_SECONDARY) if is_dark else QColor(p.TEXT_TERTIARY)
         for plot in [self.preview_plot_accel, self.preview_plot_gyro]:
-            plot.setBackground("transparent")
+            plot.setBackground(p.SURFACE_PRIMARY)
             plot.getAxis("left").setPen(axis_pen)
             plot.getAxis("left").setTextPen(axis_pen)
             plot.getAxis("bottom").setPen(axis_pen)
@@ -169,7 +170,7 @@ class PagePrimitiveCollect(QWidget):
         pass
 
     def _render_plots(self) -> None:
-        """Vẽ lại đồ thị sensor thời gian thực định kỳ từ live buffer."""
+        """Vẽ 20Hz — batch read → downsample 300 → batch write."""
         if not self.isVisible():
             return
         arr = self.store.get_live_buffer_numpy()
@@ -181,6 +182,9 @@ class PagePrimitiveCollect(QWidget):
             self.preview_stack.setCurrentIndex(1)
         try:
             if arr.ndim == 2 and arr.shape[1] >= 6:
+                if arr.shape[0] > 300:
+                    step = max(1, arr.shape[0] // 300)
+                    arr = arr[::step]
                 self.curve_ax.setData(arr[:, 0])
                 self.curve_ay.setData(arr[:, 1])
                 self.curve_az.setData(arr[:, 2])
@@ -305,8 +309,15 @@ class PagePrimitiveCollect(QWidget):
         self._sec_preview = make_section_label(tr_ui("primitive_signal_preview"))
         
         # Double plots (Accel & Gyro separate) to avoid scale issues
+        p_init = theme_manager.get_palette()
         self.preview_plot_accel = pg.PlotWidget()
         self.preview_plot_gyro = pg.PlotWidget()
+        self.preview_plot_accel.getPlotItem().setDownsampling(auto=True, mode="peak")
+        self.preview_plot_accel.getPlotItem().setClipToView(True)
+        self.preview_plot_gyro.getPlotItem().setDownsampling(auto=True, mode="peak")
+        self.preview_plot_gyro.getPlotItem().setClipToView(True)
+        self.preview_plot_accel.setBackground(p_init.SURFACE_PRIMARY)
+        self.preview_plot_gyro.setBackground(p_init.SURFACE_PRIMARY)
         self.plots_container = QWidget()
         plots_lay = QVBoxLayout(self.plots_container)
         plots_lay.setContentsMargins(0, 0, 0, 0)
@@ -386,8 +397,14 @@ class PagePrimitiveCollect(QWidget):
         lay.addWidget(self.lbl_instruction)
         return col
 
+    def _ensure_plots(self) -> None:
+        if getattr(self, "_plot_initialized", False):
+            return
+        self._setup_plot()
+        self._plot_initialized = True
+
     def _setup_plot(self) -> None:
-        """Cấu hình chi tiết đồ thị pyqtgraph — 6 kênh IMU tách biệt."""
+        """Cấu hình chi tiết đồ thị pyqtgraph — lazy, downsample giữ 300pts."""
         pg = _get_pg()
         # Accelerometer Plot (ax, ay, az)
         self.preview_plot_accel.showGrid(x=True, y=True, alpha=0.1)
@@ -455,8 +472,9 @@ class PagePrimitiveCollect(QWidget):
         row.setSpacing(4)
         for g_name in info["groups"]:
             display_name = self._get_group_display_name(g_name)
-            btn = make_button(display_name, "base", height=30)
+            btn = make_button(display_name, "base", height=36)
             btn.setToolTip(info["groups"][g_name].get("instruction", ""))
+            btn.setAccessibleName(display_name)
             btn.clicked.connect(lambda _b, g=name, gn=g_name: self._on_group_selected(g, gn))
             row.addWidget(btn)
             group_btns[g_name] = btn
@@ -521,10 +539,39 @@ class PagePrimitiveCollect(QWidget):
         # This will be handled by Handler, so we just update UI.
         pass
 
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        try:
+            should_stack = self.width() < 880
+            if should_stack != getattr(self, "_is_stacked", False):
+                self._is_stacked = should_stack
+                lay = self._content_layout
+                while lay.count():
+                    it = lay.takeAt(0)
+                    w = it.widget()
+                    if w:
+                        w.setParent(None)
+                if should_stack:
+                    lay.setDirection(QVBoxLayout.Direction.TopToBottom)
+                    lay.addWidget(self._monitor_col)
+                    lay.addWidget(self._catalog_col)
+                    self._catalog_col.setMaximumWidth(16777215)
+                    self._catalog_col.setMinimumWidth(0)
+                else:
+                    lay.setDirection(QBoxLayout.Direction.LeftToRight)
+                    lay.addWidget(self._monitor_col, stretch=3)
+                    lay.addWidget(self._catalog_col, stretch=2)
+                    from ui.tokens import RIGHT_MAX_W, RIGHT_MIN_W
+                    self._catalog_col.setMinimumWidth(RIGHT_MIN_W)
+                    self._catalog_col.setMaximumWidth(RIGHT_MAX_W)
+        except Exception:
+            pass
+
     def showEvent(self, event) -> None:
         super().showEvent(event)
+        self._ensure_plots()
         if hasattr(self, "_plot_timer") and not self._plot_timer.isActive():
-            self._plot_timer.start(40)
+            self._plot_timer.start(50)
 
     def hideEvent(self, event) -> None:
         super().hideEvent(event)

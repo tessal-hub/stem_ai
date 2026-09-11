@@ -37,6 +37,14 @@ from PyQt6.QtWidgets import (
 import ml_lab.ui.lab_style as ls
 from ml_lab.core.esp32_flasher import list_serial_ports
 from ml_lab.core.live_inference import LiveGesturePredictor
+from ml_lab.core.serial_coordinator import (
+    ML_LAB_SERIAL,
+    acquire as coord_acquire,
+    owner_of as coord_owner_of,
+    register_owner as coord_register,
+    release as coord_release,
+)
+from ml_lab.data.window_config import MIN_CONFIDENCE, WINDOW_SAMPLES
 
 
 class MlLabSerialWorker(QThread):
@@ -120,6 +128,8 @@ class MlLabSerialWorker(QThread):
             m = re.search(r"(?:PREDICT:|\[PREDICT\]\s*)([A-Za-z0-9_ -]+)", line)
             if m:
                 spell = m.group(1).strip()
+                if spell.upper() in {"STAND BY", "STAND_BY", "IDLE", "NOTHING"}:
+                    return
                 conf = 95.0
                 m_conf = re.search(r"(?:conf=|:)([0-9.]+)", line)
                 if m_conf:
@@ -169,20 +179,25 @@ class TabSerialMonitor(QWidget):
         self._live_predictor: LiveGesturePredictor | None = None
         self._trained_result: Any = None
         self._detected_count = 0
+        self._claimed_port: str | None = None
+        # Đăng ký để app STEM xin cổng thì coordinator tự gọi disconnect này
+        coord_register(ML_LAB_SERIAL, self._coordinator_release)
 
         self._init_ui()
         self.refresh_ports()
 
     def _init_ui(self) -> None:
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(12, 12, 12, 12)
-        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
+        main_layout.setSpacing(ls.SP_3)
 
         # ── Top Control Bar ─────────────────────────────────
         top_box = QFrame()
+        top_box.setObjectName("SerialTopBar")
         top_box.setStyleSheet(ls.card(pad=ls.SP_2))
         t_layout = QHBoxLayout(top_box)
-        t_layout.setSpacing(8)
+        t_layout.setContentsMargins(ls.SP_2, ls.SP_2, ls.SP_2, ls.SP_2)
+        t_layout.setSpacing(ls.SP_2)
 
         lbl_port = QLabel("CỔNG")
         lbl_port.setStyleSheet(ls.font(ls.FS_CAPTION, 700) + f"color: {ls.MUTED}; border: none; background: transparent;")
@@ -208,15 +223,12 @@ class TabSerialMonitor(QWidget):
         t_layout.addWidget(self.combo_baud)
 
         self.btn_connect = QPushButton("Kết nối")
-        self.btn_connect.setStyleSheet(
-            f"QPushButton {{ padding: 6px 16px; font-weight: 700; border-radius: {ls.RADIUS_MD}px; background: {ls.ACCENT}; color: white; border: none; }} "
-            f"QPushButton:hover {{ background: {ls.ACCENT_HOVER} }}"
-        )
+        self.btn_connect.setStyleSheet(ls.BTN_PRIMARY)
         self.btn_connect.clicked.connect(self._toggle_connection)
         t_layout.addWidget(self.btn_connect)
 
         self.lbl_status = QLabel("Chưa kết nối")
-        self.lbl_status.setStyleSheet("font-weight: 600; font-size: 11px; color: #5b6b7f; padding-left: 6px;; border: none; background: transparent;")
+        self.lbl_status.setStyleSheet(ls.font(ls.FS_CAPTION, 600) + f"color: {ls.MUTED}; padding-left: 6px; border: none; background: transparent;")
         t_layout.addWidget(self.lbl_status)
 
         t_layout.addStretch()
@@ -248,9 +260,11 @@ class TabSerialMonitor(QWidget):
 
         # Left: Terminal Output
         left_box = QFrame()
-        left_box.setStyleSheet(ls.card())
+        left_box.setObjectName("SerialLeft")
+        left_box.setStyleSheet(ls.card(pad=ls.SP_3))
         l_layout = QVBoxLayout(left_box)
-        l_layout.setSpacing(6)
+        l_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
+        l_layout.setSpacing(ls.SP_2)
 
         lbl_term_t = QLabel("NHẬT KÝ KẾT NỐI (UART)")
         lbl_term_t.setStyleSheet(ls.section_label())
@@ -272,7 +286,7 @@ class TabSerialMonitor(QWidget):
             f"QLineEdit:focus {{ border-color: {ls.ACCENT}; }}"
         )
         _pal = self.line_cmd.palette()
-        _pal.setColor(_pal.ColorGroup.All, _pal.ColorRole.PlaceholderText, QColor("#5b6b7f"))
+        _pal.setColor(_pal.ColorGroup.All, _pal.ColorRole.PlaceholderText, QColor(ls.MUTED))
         self.line_cmd.setPalette(_pal)
         self.line_cmd.returnPressed.connect(self._send_command)
         cmd_layout.addWidget(self.line_cmd, stretch=1)
@@ -301,9 +315,11 @@ class TabSerialMonitor(QWidget):
 
         # Right: HUD Visual Predictor & Spell History
         right_box = QFrame()
-        right_box.setStyleSheet(ls.card())
+        right_box.setObjectName("SerialRight")
+        right_box.setStyleSheet(ls.card(pad=ls.SP_3))
         r_layout = QVBoxLayout(right_box)
-        r_layout.setSpacing(10)
+        r_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
+        r_layout.setSpacing(ls.SP_3)
 
         lbl_hud_t = QLabel("KẾT QUẢ MỚI NHẤT TỪ WAND")
         lbl_hud_t.setStyleSheet(ls.section_label())
@@ -312,17 +328,17 @@ class TabSerialMonitor(QWidget):
         # Live Spell Outcome Box
         self.hud_box = QFrame()
         self.hud_box.setStyleSheet(
-            f".QFrame {{ background: {ls.ACCENT_TINT_STRONG}; border-radius: {ls.RADIUS_LG}px; padding: {ls.SP_4}px; border: 1px solid rgba(10, 122, 255, 0.25); }}"
+            f".QFrame {{ background: {ls.ACCENT_TINT_STRONG}; border-radius: {ls.RADIUS_LG}px; padding: {ls.SP_4}px; border: 1px solid {ls.ACCENT}; }}"
         )
         hud_vbox = QVBoxLayout(self.hud_box)
         hud_vbox.setSpacing(4)
 
         lbl_h_tag = QLabel("THẦN CHÚ VỪA ĐƯỢC NHẬN DIỆN:")
-        lbl_h_tag.setStyleSheet(ls.font(ls.FS_MICRO, 700) + f"color: {ls.ACCENT};; border: none; background: transparent;")
+        lbl_h_tag.setStyleSheet(ls.font(ls.FS_MICRO, 700) + f"color: {ls.ACCENT}; border: none; background: transparent;")
         self.lbl_spell_name = QLabel("CHỜ CỬ CHỈ...")
-        self.lbl_spell_name.setStyleSheet(ls.font(22, 800) + f"color: {ls.ACCENT};; border: none; background: transparent;")
+        self.lbl_spell_name.setStyleSheet(ls.font(ls.FS_DISPLAY, 800) + f"color: {ls.ACCENT}; border: none; background: transparent;")
         self.lbl_conf_text = QLabel("Chưa có kết quả — hãy vung wand để cảm biến ghi dữ liệu.")
-        self.lbl_conf_text.setStyleSheet(ls.font(ls.FS_BODY, 600) + f"color: {ls.SUCCESS};; border: none; background: transparent;")
+        self.lbl_conf_text.setStyleSheet(ls.font(ls.FS_BODY, 600) + f"color: {ls.SUCCESS}; border: none; background: transparent;")
 
         hud_vbox.addWidget(lbl_h_tag)
         hud_vbox.addWidget(self.lbl_spell_name)
@@ -351,9 +367,13 @@ class TabSerialMonitor(QWidget):
         self.chk_live_predict.setEnabled(False)
         self.chk_live_predict.setStyleSheet(ls.font(ls.FS_CAPTION, 600) + f"color: {ls.BODY}; border: none; background: transparent;")
 
-        self.lbl_live_result = QLabel("—")
+        self.lbl_live_result = QLabel("")
         self.lbl_live_result.setStyleSheet(ls.font(16, 800) + f"color: {ls.SUCCESS}; border: none; background: transparent;")
-        self.lbl_live_detail = QLabel("Gom đủ 64 mẫu cảm biến (~1.3 giây vung) sẽ ra kết quả.")
+        self.lbl_live_detail = QLabel(
+            f"Vung dứt khoát — wand bắt ĐỈNH chuyển động trong {WINDOW_SAMPLES} mẫu "
+            f"(~{WINDOW_SAMPLES * 20 // 1000}.{WINDOW_SAMPLES * 20 % 1000 // 100}s), "
+            f"đủ {int(MIN_CONFIDENCE * 100)}% chắc mới ra kết quả. Tay khẽ rung không lọt."
+        )
         self.lbl_live_detail.setStyleSheet(ls.font(ls.FS_CAPTION) + f"color: {ls.MUTED}; border: none; background: transparent;")
 
         live_vbox.addWidget(lbl_live_t)
@@ -364,8 +384,8 @@ class TabSerialMonitor(QWidget):
         r_layout.addWidget(live_box)
 
         # History Table
-        lbl_hist = QLabel("CÁC LẦN NHẬN DIỆN VỪA QUA")
-        lbl_hist.setStyleSheet("font-weight: 700; font-size: 11px; color: #475569;; border: none; background: transparent;")
+        lbl_hist = QLabel("Các lần nhận diện vừa qua")
+        lbl_hist.setStyleSheet(ls.chart_title())
         r_layout.addWidget(lbl_hist)
 
         self.table_history = QTableWidget()
@@ -378,17 +398,34 @@ class TabSerialMonitor(QWidget):
 
         # Pedagogical Callout Box
         lbl_serial_guide = QLabel(
-            "<b>Máy đoán thế nào?</b> — Khi bạn vung wand, chip ghi 64 điểm cảm biến, nén thành 63 con số thống kê rồi đưa qua mô hình để chọn thần chú — mọi phép tính chỉ mất dưới 0.05 phần nghìn giây!"
+            "<b>Máy đoán thế nào?</b> — Khi bạn vung wand, chip chờ đến ĐỈNH chuyển động rồi mới "
+            "nén 64 điểm cảm biến thành con số thống kê để đoán — giống lúc học. Vung dứt khoát mới lọt, "
+            "tay khẽ rung bị bỏ qua. Mọi phép tính chỉ mất dưới 0.05 phần nghìn giây!"
         )
         lbl_serial_guide.setWordWrap(True)
-        lbl_serial_guide.setStyleSheet("background: rgba(0, 122, 255, 0.05); border-radius: 6px; padding: 8px 10px; font-size: 11px; color: #1e3a8a;")
+        lbl_serial_guide.setStyleSheet(ls.note_box(ls.ACCENT).replace(f"padding: {ls.SP_2}px {ls.SP_3}px", "padding: 8px 10px"))
         r_layout.addWidget(lbl_serial_guide)
 
         splitter.addWidget(right_box)
         splitter.setStretchFactor(0, 6)
-        splitter.setStretchFactor(1, 4)
-
         main_layout.addWidget(splitter, stretch=1)
+
+        self._configure_accessibility(btn_rescan, btn_clear, btn_save, btn_send)
+
+    def _configure_accessibility(self, btn_rescan: QPushButton, btn_clear: QPushButton, btn_save: QPushButton, btn_send: QPushButton) -> None:
+        self.combo_ports.setAccessibleName("Cổng kết nối Serial")
+        btn_rescan.setAccessibleName("Quét lại danh sách cổng Serial")
+        self.combo_baud.setAccessibleName("Tốc độ baudrate kết nối")
+        self.btn_connect.setAccessibleName("Nút kết nối hoặc ngắt kết nối Serial")
+        self.chk_autoscroll.setAccessibleName("Tự động cuộn terminal log")
+        self.chk_timestamps.setAccessibleName("Hiển thị dấu thời gian log")
+        btn_clear.setAccessibleName("Xóa sạch nhật ký terminal")
+        btn_save.setAccessibleName("Lưu nhật ký terminal ra file")
+        self.term_edit.setAccessibleName("Màn hình hiển thị dòng log UART")
+        self.line_cmd.setAccessibleName("Ô nhập lệnh gửi tới vi điều khiển qua UART")
+        btn_send.setAccessibleName("Gửi lệnh qua UART")
+        self.chk_live_predict.setAccessibleName("Bật đoán cử chỉ trực tiếp từ luồng dữ liệu cảm biến")
+        self.table_history.setAccessibleName("Bảng lịch sử các lần nhận diện thần chú gần nhất")
 
     def refresh_ports(self) -> None:
         """Quét cổng COM nền (Bluetooth serial có thể chặn UI vài giây)."""
@@ -419,10 +456,18 @@ class TabSerialMonitor(QWidget):
         if not port:
             QMessageBox.warning(self, "Chưa Chọn Cổng", "Vui lòng chọn cổng Serial COM để kết nối.")
             return
+        # Claim toàn cục trước: app STEM đang giữ cổng này thì tự ngắt —
+        # hết xung đột COM khi 2 bên cùng mở.
+        prev_holder = coord_owner_of(port)
+        coord_acquire(ML_LAB_SERIAL, port)
+        self._claimed_port = port
 
         baud = int(self.combo_baud.currentText())
         self.btn_connect.setEnabled(False)
-        self.lbl_status.setText("⏳ Đang kết nối...")
+        if prev_holder and prev_holder != ML_LAB_SERIAL:
+            self.lbl_status.setText("Đã xin cổng từ app STEM — đang kết nối...")
+        else:
+            self.lbl_status.setText("Đang kết nối...")
 
         self._worker = MlLabSerialWorker(port=port, baud_rate=baud)
         self._worker.sig_line_received.connect(self._on_raw_line)
@@ -433,6 +478,14 @@ class TabSerialMonitor(QWidget):
 
     def disconnect_serial(self) -> None:
         """Ngắt kết nối Serial (API công khai, an toàn gọi nhiều lần)."""
+        try:
+            if self._claimed_port:
+                coord_release(ML_LAB_SERIAL, self._claimed_port)
+            else:
+                coord_release(ML_LAB_SERIAL)
+        except Exception:
+            pass
+        self._claimed_port = None
         if self._worker and self._worker.isRunning():
             self._worker.stop()
             self._worker.wait(1000)
@@ -440,34 +493,37 @@ class TabSerialMonitor(QWidget):
         if self._live_predictor is not None:
             self._live_predictor.reset()
         self.btn_connect.setText("Kết nối")
-        self.btn_connect.setStyleSheet(
-            f"QPushButton {{ padding: 6px 16px; font-weight: 700; border-radius: {ls.RADIUS_MD}px; background: {ls.ACCENT}; color: white; border: none; }} "
-            f"QPushButton:hover {{ background: {ls.ACCENT_HOVER} }}"
-        )
+        self.btn_connect.setStyleSheet(ls.BTN_PRIMARY)
         self.lbl_status.setText("Chưa kết nối")
-        self.lbl_status.setStyleSheet(ls.font(ls.FS_CAPTION, 600) + f"color: {ls.MUTED};; border: none; background: transparent;")
+        self.lbl_status.setStyleSheet(ls.font(ls.FS_CAPTION, 600) + f"color: {ls.MUTED}; border: none; background: transparent;")
 
     def _disconnect_serial(self) -> None:
         self.disconnect_serial()
+
+    def _coordinator_release(self) -> None:
+        """Callback cho coordinator: app STEM xin cổng → tự nhả, không đấu COM."""
+        try:
+            self.disconnect_serial()
+        except Exception:
+            pass
 
     def _on_status_changed(self, is_connected: bool, msg: str) -> None:
         self.btn_connect.setEnabled(True)
         if is_connected:
             self.btn_connect.setText("Ngắt kết nối")
             self.btn_connect.setStyleSheet(
-                f"QPushButton {{ padding: 6px 16px; font-weight: 700; border-radius: {ls.RADIUS_MD}px; background: {ls.DANGER}; color: white; border: none; }} "
-                f"QPushButton:hover {{ background: #b91c1c }}"
+                f"QPushButton {{ padding: 6px 16px; font-weight: 700; border-radius: {ls.RADIUS_MD}px; background: {ls.DANGER}; color: white; border: 2px solid transparent; }} "
+                f"QPushButton:hover {{ background: {ls.DANGER_HOVER} }} "
+                f"QPushButton:focus {{ border-color: {ls.INK}; }} "
+                f"QPushButton:disabled {{ background: {ls.FAINT}; color: {ls.SURFACE}; }}"
             )
             self.lbl_status.setText(f"Đã kết nối · {msg}")
-            self.lbl_status.setStyleSheet(ls.font(ls.FS_CAPTION, 600) + f"color: {ls.SUCCESS};; border: none; background: transparent;")
+            self.lbl_status.setStyleSheet(ls.font(ls.FS_CAPTION, 600) + f"color: {ls.SUCCESS}; border: none; background: transparent;")
         else:
             self.btn_connect.setText("Kết nối")
-            self.btn_connect.setStyleSheet(
-                f"QPushButton {{ padding: 6px 16px; font-weight: 700; border-radius: {ls.RADIUS_MD}px; background: {ls.ACCENT}; color: white; border: none; }} "
-                f"QPushButton:hover {{ background: {ls.ACCENT_HOVER} }}"
-            )
+            self.btn_connect.setStyleSheet(ls.BTN_PRIMARY)
             self.lbl_status.setText(msg)
-            self.lbl_status.setStyleSheet(ls.font(ls.FS_CAPTION, 600) + f"color: {ls.DANGER};; border: none; background: transparent;")
+            self.lbl_status.setStyleSheet(ls.font(ls.FS_CAPTION, 600) + f"color: {ls.DANGER}; border: none; background: transparent;")
 
     def _on_raw_line(self, line: str) -> None:
         ts = f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] " if self.chk_timestamps.isChecked() else ""
@@ -487,7 +543,7 @@ class TabSerialMonitor(QWidget):
         
         spell_item = QTableWidgetItem(spell.upper())
         spell_item.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        spell_item.setForeground(QColor(0, 122, 255))
+        spell_item.setForeground(QColor(ls.ACCENT))
         self.table_history.setItem(0, 1, spell_item)
 
         conf_item = QTableWidgetItem(f"{conf:.1f}%")

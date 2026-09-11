@@ -13,6 +13,9 @@ from __future__ import annotations
 import numpy as np
 
 
+from ml_lab.data.window_config import WINDOW_SAMPLES
+
+
 def augment_sample_window(
     sample_64x6: np.ndarray,
     noise_std: float = 0.05,
@@ -27,8 +30,8 @@ def augment_sample_window(
     tuyệt đối) — nhờ đó trục gyro (hàng trăm deg/s) và trục accel (~1g) biến
     thiên cùng mức. Ví dụ noise_std=0.05 → nhiễu bằng 5% độ dao động kênh đó.
     """
-    if sample_64x6.shape != (64, 6):
-        raise ValueError(f"Kích thước mẫu phải là (64, 6), nhận được: {sample_64x6.shape}")
+    if sample_64x6.shape != (WINDOW_SAMPLES, 6):
+        raise ValueError(f"Kích thước mẫu phải là ({WINDOW_SAMPLES}, 6), nhận được: {sample_64x6.shape}")
 
     rng = np.random.RandomState(random_state)
     aug = sample_64x6.astype(np.float32).copy()
@@ -48,7 +51,7 @@ def augment_sample_window(
 
     # 3. Time Warping (biến dạng nhịp vung)
     if time_warp:
-        orig_t = np.linspace(0, 1, 64)
+        orig_t = np.linspace(0, 1, WINDOW_SAMPLES)
         mid = rng.uniform(0.3, 0.7)
         mid_shift = mid + rng.uniform(-0.15, 0.15)
         warped_t = np.interp(orig_t, [0, mid, 1], [0, mid_shift, 1])

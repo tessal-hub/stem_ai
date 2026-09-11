@@ -21,11 +21,11 @@ def qapp():
 
 
 def test_window_ml_lab_initialization(qapp):
-    """Verify MlLabWindow initializes all 7 studio tabs without error."""
+    """Verify MlLabWindow initializes all 8 studio tabs without error."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         win = MlLabWindow(spell_dataset_dir=tmp_dir)
         assert win is not None
-        assert win.tabs.count() == 7
+        assert win.tabs.count() == 8
         assert win.tab_data is not None
         assert win.tab_model is not None
         assert win.tab_curves is not None

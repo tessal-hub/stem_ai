@@ -98,16 +98,18 @@ class FeatureImportanceWidget(QWidget):
             painter.end()
 
     def _get_feature_color(self, name: str) -> QColor:
+        # Chấp nhận cả tên gốc (ax_std) lẫn tên thân thiện tiếng Việt (friendly_feature_name)
         name_lower = name.lower()
-        if name_lower.startswith("a") or "acc" in name_lower:
+        accel_keys = ("ax", "ay", "az", "acc", "gia tốc", "tăng tốc")
+        gyro_keys = ("gx", "gy", "gz", "gyro", "con quay", "góc")
+        if name_lower.startswith("a") or any(k in name_lower for k in accel_keys):
             return QColor(0, 122, 255, 180)    # Blue for accel
-        elif name_lower.startswith("g") or "gyro" in name_lower:
+        elif name_lower.startswith("g") or any(k in name_lower for k in gyro_keys):
             return QColor(255, 149, 0, 180)   # Orange for gyro
-        elif "jerk" in name_lower:
+        elif "jerk" in name_lower or "giật" in name_lower or "độ giật" in name_lower:
             return QColor(255, 59, 48, 180)    # Red for Jerk
         else:
             return QColor(88, 86, 214, 180)    # Indigo for combined
-        return QColor(52, 199, 89, 180)
 
     def _draw_empty_state(self, painter: QPainter, w: int, h: int) -> None:
         painter.setFont(QFont("Segoe UI", 11, QFont.Weight.Medium))

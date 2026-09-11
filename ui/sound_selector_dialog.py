@@ -29,6 +29,7 @@ from PyQt6.QtWidgets import (
 
 from config import SOUNDS_PRESET_DIR, SOUNDS_USER_DIR
 from logic.sound_player import SoundPlayer
+from logic.theme_manager import theme_manager
 from ui.i18n_bridge import tr_ui
 
 PRESET_IDS = [
@@ -83,12 +84,15 @@ class _SoundRowWidget(QWidget):
 
         self.btn_preview = QPushButton("▶ " + tr_ui("btn_preview"))
         self.btn_preview.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_preview.setFixedHeight(28)
+        self.btn_preview.setFixedHeight(32)
         self.btn_preview.setFixedWidth(90)
+        _p = theme_manager.get_palette()
+        _hover = "rgba(255, 255, 255, 0.14)" if theme_manager.current_theme == "dark" else _p.SURFACE_SECONDARY
         self.btn_preview.setStyleSheet(
-            "QPushButton { font-size: 12px; padding: 2px 8px; border-radius: 4px; "
-            "background-color: rgba(128, 128, 128, 0.12); border: 1px solid rgba(128, 128, 128, 0.25); }"
-            "QPushButton:hover { background-color: rgba(128, 128, 128, 0.22); }"
+            f"QPushButton {{ font-size: 12px; padding: 4px 10px; border-radius: 6px; "
+            f"background-color: {_p.SURFACE_TERTIARY}; border: 1px solid {_p.BORDER}; color: {_p.TEXT_SECONDARY}; }}"
+            f"QPushButton:hover {{ background-color: {_hover}; }}"
+            f"QPushButton:focus {{ border-color: {_p.PRIMARY}; }}"
         )
         self.btn_preview.clicked.connect(self._on_preview)
 
@@ -173,12 +177,15 @@ class SoundSelectorDialog(QDialog):
         for name, rgb in PALETTE_COLORS:
             btn_pal = QPushButton()
             btn_pal.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn_pal.setFixedSize(22, 22)
+            btn_pal.setFixedSize(32, 32)
             btn_pal.setToolTip(name)
+            btn_pal.setAccessibleName(name)
             btn_pal.setStyleSheet(
                 f"QPushButton {{ background-color: rgb({rgb[0]}, {rgb[1]}, {rgb[2]}); "
-                f"border-radius: 11px; border: 1.5px solid rgba(0, 0, 0, 0.2); }}"
-                f"QPushButton:hover {{ border: 2.5px solid #007AFF; }}"
+                f"border-radius: 16px; border: 2px solid rgba(15, 23, 42, 0.12); margin: 5px; }}"
+                f"QPushButton:hover {{ border: 2px solid #0668d1; }}"
+                f"QPushButton:focus {{ border: 2px solid "
+                f"{'#f2f2f7' if theme_manager.current_theme == 'dark' else '#0f172a'}; }}"
             )
             btn_pal.clicked.connect(lambda _, c=rgb: self._set_color(c))
             palette_layout.addWidget(btn_pal)
@@ -189,11 +196,14 @@ class SoundSelectorDialog(QDialog):
         # Nút chọn màu tùy biến (Color Dialog)
         self.btn_custom_color = QPushButton("🎨 " + tr_ui("btn_custom_color"))
         self.btn_custom_color.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_custom_color.setFixedHeight(28)
+        self.btn_custom_color.setFixedHeight(36)
+        _p = theme_manager.get_palette()
+        _hover = "rgba(255, 255, 255, 0.14)" if theme_manager.current_theme == "dark" else _p.SURFACE_SECONDARY
         self.btn_custom_color.setStyleSheet(
-            "QPushButton { font-size: 12px; font-weight: 500; padding: 2px 10px; border-radius: 6px; "
-            "background-color: rgba(128, 128, 128, 0.12); border: 1px solid rgba(128, 128, 128, 0.25); }"
-            "QPushButton:hover { background-color: rgba(128, 128, 128, 0.22); }"
+            f"QPushButton {{ font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 8px; "
+            f"background-color: {_p.SURFACE_TERTIARY}; border: 1px solid {_p.BORDER}; color: {_p.TEXT_SECONDARY}; }}"
+            f"QPushButton:hover {{ background-color: {_hover}; }}"
+            f"QPushButton:focus {{ border-color: {_p.PRIMARY}; }}"
         )
         self.btn_custom_color.clicked.connect(self._on_choose_custom_color)
         color_card_layout.addWidget(self.btn_custom_color, 0)
@@ -242,8 +252,9 @@ class SoundSelectorDialog(QDialog):
         btn_import.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_import.setFixedHeight(32)
         btn_import.setStyleSheet(
-            "QPushButton { font-size: 13px; font-weight: 500; border-radius: 6px; "
-            "background-color: rgba(128, 128, 128, 0.08); border: 1px dashed rgba(128, 128, 128, 0.4); color: #0A84FF; }"
+            f"QPushButton {{ font-size: 13px; font-weight: 500; border-radius: 6px; "
+            f"background-color: rgba(128, 128, 128, 0.08); border: 1px dashed rgba(128, 128, 128, 0.4); "
+            f"color: {theme_manager.get_palette().PRIMARY}; }}"
             "QPushButton:hover { background-color: rgba(128, 128, 128, 0.18); }"
         )
         btn_import.clicked.connect(self._on_import_sound)
@@ -256,7 +267,9 @@ class SoundSelectorDialog(QDialog):
         volume_layout = QHBoxLayout()
         volume_layout.setSpacing(10)
         self.lbl_volume = QLabel(tr_ui("sound_volume_label").format(pct=int(self._selected_volume * 100)))
-        self.lbl_volume.setStyleSheet("font-size: 12px; font-weight: 500; opacity: 0.85;")
+        self.lbl_volume.setStyleSheet(
+            f"font-size: 12px; font-weight: 500; color: {theme_manager.get_palette().TEXT_SECONDARY};"
+        )
         self.slider_volume = QSlider(Qt.Orientation.Horizontal)
         self.slider_volume.setRange(0, 100)
         self.slider_volume.setValue(int(self._selected_volume * 100))
@@ -273,10 +286,11 @@ class SoundSelectorDialog(QDialog):
         self.btn_clear = QPushButton("🔇 " + tr_ui("btn_remove_sound"))
         self.btn_clear.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_clear.setFixedHeight(34)
+        _err = theme_manager.get_palette().STATUS_ERROR
         self.btn_clear.setStyleSheet(
-            "QPushButton { font-size: 13px; padding: 4px 12px; border-radius: 6px; "
-            "background-color: rgba(255, 69, 58, 0.15); color: #FF453A; border: 1px solid rgba(255, 69, 58, 0.35); }"
-            "QPushButton:hover { background-color: rgba(255, 69, 58, 0.25); }"
+            f"QPushButton {{ font-size: 13px; padding: 4px 12px; border-radius: 6px; "
+            f"background-color: rgba(220, 38, 38, 0.10); color: {_err}; border: 1px solid rgba(220, 38, 38, 0.35); }}"
+            "QPushButton:hover { background-color: rgba(220, 38, 38, 0.20); }"
         )
         self.btn_clear.clicked.connect(self.on_clear_sound)
         action_layout.addWidget(self.btn_clear)
@@ -317,7 +331,7 @@ class SoundSelectorDialog(QDialog):
         self.btn_color_preview.setStyleSheet(
             f"QPushButton {{ background-color: rgb({r}, {g}, {b}); border-radius: 17px; "
             f"border: 2.5px solid rgba(0, 0, 0, 0.25); }}"
-            f"QPushButton:hover {{ border: 2.5px solid #007AFF; }}"
+            f"QPushButton:hover {{ border: 2.5px solid {theme_manager.get_palette().PRIMARY}; }}"
         )
 
     def _on_volume_changed(self, value: int) -> None:

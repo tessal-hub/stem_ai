@@ -118,16 +118,18 @@ def main():
     window.showMaximized()
     app.processEvents()
 
-    # 5. Khởi tạo Handler điều phối luồng nền
+    # 5. Khởi tạo Handler điều phối luồng nền.
+    # Chỉ chạm trang rẻ (Wand 0.06s / Setting 0.04s). Trang nặng (Record ~0.6s,
+    # PrimitiveCollect ~2.4s camera) được dựng trễ bởi preload idle — Handler
+    # wire signal qua hook khi từng trang lần đầu dựng xong.
     handler = Handler(
         ui_page_wand=window.page_wand,
-        ui_page_record=window.page_record,
         ui_page_home=window.page_home,
-        ui_primitive_collect=window.page_primitive_collect,
         ui_page_setting=window.page_setting,
         data_store=data_store,
         spell_config=spell_config_store,
         sound_player=sound_player,
+        ui_main_window=window,
     )
     window.handler = handler
     app.aboutToQuit.connect(handler.shutdown)

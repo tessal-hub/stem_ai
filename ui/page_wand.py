@@ -10,8 +10,7 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QGridLayout, QVBoxLayout, QWidget
 
-from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_LG
-from ui.tokens import SPACE_32
+from ui.tokens import MARGIN_COMFORTABLE, SPACE_32, SPACING_LG, SPACING_MD
 from ui.wand_panels.connection_panel import WandConnectionPanel
 from ui.wand_panels.flash_panel import WandFlashPanel
 from ui.wand_panels.settings_panel import WandSettingsPanel
@@ -49,16 +48,14 @@ class PageWand(QWidget):
         self._load_data(data_store)
 
     def _init_ui(self) -> None:
-        """Khởi tạo giao diện (Requirement 2: 2-column grid, Requirement 10: padding 80px)."""
+        """Khởi tạo giao diện fit toàn bộ trong một màn hình duy nhất."""
         layout = QVBoxLayout(self)
-        # Bỏ padding-bottom cứng để nội dung được bung hết cỡ
-        layout.setContentsMargins(MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE, MARGIN_COMFORTABLE)
-        layout.setSpacing(SPACING_LG)
+        layout.setContentsMargins(MARGIN_COMFORTABLE, 14, MARGIN_COMFORTABLE, 14)
+        layout.setSpacing(SPACING_MD)
 
-        # Requirement 2: 2-column layout, gap 32px
         grid = QGridLayout()
-        grid.setSpacing(SPACE_32)
-        grid.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self._grid = grid
+        grid.setSpacing(SPACING_MD)
 
         # Khởi tạo các panel thành phần
         self.flash_panel = WandFlashPanel()
@@ -78,6 +75,7 @@ class PageWand(QWidget):
         grid.setColumnStretch(1, 1)
 
         layout.addLayout(grid, stretch=1)
+        self._is_stacked = False
 
     def _init_signals(self) -> None:
         """Kết nối các signal từ panel con lên cấp trang."""
@@ -224,6 +222,33 @@ class PageWand(QWidget):
         self.list_firmware = self.payload_panel.list_firmware
         self.list_selected_spells = self.payload_panel.list_selected_spells
         self.list_available_spells = self.payload_panel.list_available_spells
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        try:
+            should_stack = self.width() < 880
+            if should_stack != getattr(self, "_is_stacked", False):
+                self._is_stacked = should_stack
+                # rebuild grid: 2 cols vs 1 col stacked
+                g = self._grid
+                # clear grid items but keep column layouts
+                while g.count():
+                    it = g.takeAt(0)
+                    lay = it.layout()
+                    if lay:
+                        lay.setParent(None)
+                if should_stack:
+                    g.addLayout(self._left_col, 0, 0)
+                    g.addLayout(self._right_col, 1, 0)
+                    g.setColumnStretch(0, 1)
+                    g.setColumnStretch(1, 0)
+                else:
+                    g.addLayout(self._left_col, 0, 0)
+                    g.addLayout(self._right_col, 0, 1)
+                    g.setColumnStretch(0, 1)
+                    g.setColumnStretch(1, 1)
+        except Exception:
+            pass
 
     def _configure_accessibility(self) -> None:
         """Cấu hình hỗ trợ trợ năng và thứ tự tab."""

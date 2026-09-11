@@ -7,6 +7,8 @@ Tự quản lý độc lập, KHÔNG thông qua Handler.
 
 from __future__ import annotations
 
+from ml_lab.data.window_config import STEP_SAMPLES, WINDOW_SAMPLES
+
 import warnings
 from pathlib import Path
 from typing import Any
@@ -39,7 +41,8 @@ class MlLabTrainWorker(QThread):
         search_config: SearchConfig | None = None,
         val_fraction: float = 0.2,
         augment_multiplier: int = 1,
-        include_standby: bool = False,
+        include_standby: bool = True,
+        allowed_spells: set[str] | None = None,
         parent: Any = None,
     ) -> None:
         super().__init__(parent)
@@ -51,6 +54,7 @@ class MlLabTrainWorker(QThread):
         self.val_fraction = val_fraction
         self.augment_multiplier = max(1, int(augment_multiplier))
         self.include_standby = include_standby
+        self.allowed_spells = set(allowed_spells) if allowed_spells is not None else None
 
     def run(self) -> None:
         try:
@@ -70,9 +74,10 @@ class MlLabTrainWorker(QThread):
             train_windows, val_windows, class_names = split_user_dataset_file_level(
                 self.dataset_root,
                 val_fraction=self.val_fraction,
-                window_size=64,
-                step_size=16,
+                window_size=WINDOW_SAMPLES,
+                step_size=STEP_SAMPLES,
                 include_standby=self.include_standby,
+                allowed_spells=self.allowed_spells,
             )
 
             if len(class_names) < 2:
@@ -89,19 +94,23 @@ class MlLabTrainWorker(QThread):
             self.sig_progress.emit(30, f"Đang trích xuất đặc trưng ({len(train_windows)} train, {len(val_windows)} val)...")
 
             # 2. Tăng cường dữ liệu (CHỈ trên tập train — tập val luôn giữ nguyên để đánh giá trung thực)
-            if self.augment_multiplier > 1 and len(train_windows) > 0:
+            eff_multiplier = self.augment_multiplier
+            if eff_multiplier == 1 and len(train_windows) < 30:
+                eff_multiplier = 3  # Tự động tăng cường 3x cho tập dữ liệu nhỏ
+
+            if eff_multiplier > 1 and len(train_windows) > 0:
                 n_orig = len(train_windows)
                 augmented: list[tuple[np.ndarray, int]] = list(train_windows)
-                for i in range(n_orig * (self.augment_multiplier - 1)):
+                for i in range(n_orig * (eff_multiplier - 1)):
                     window, cls_idx = train_windows[i % n_orig]
                     try:
-                        aug_win = augment_sample_window(window, noise_std=0.03, time_warp=True, random_state=42 + i)
+                        aug_win = augment_sample_window(window, noise_std=0.025, time_warp=True, random_state=42 + i)
                         augmented.append((aug_win, cls_idx))
                     except Exception:
                         continue
                 train_windows = augmented
                 self.sig_progress.emit(
-                    40, f"Đã tăng cường train lên {len(train_windows)} mẫu ({self.augment_multiplier}x — val giữ nguyên)..."
+                    40, f"Đã tăng cường train lên {len(train_windows)} mẫu ({eff_multiplier}x — val giữ nguyên)..."
                 )
 
             # 3. Trích xuất đặc trưng
@@ -112,6 +121,9 @@ class MlLabTrainWorker(QThread):
             self.sig_progress.emit(60, f"Đang huấn luyện mô hình {self.algo.upper()}...")
 
             # 4. Huấn luyện mô hình
+            from ml_lab.data.spell_reader import compute_standby_thresholds
+            standby_th = compute_standby_thresholds(self.dataset_root)
+
             result = train_classic_model(
                 X_train=X_train,
                 y_train=y_train,
@@ -123,6 +135,7 @@ class MlLabTrainWorker(QThread):
                 config=self.config,
                 search_config=self.search_config,
                 feature_config=self.feature_config,
+                standby_thresholds=standby_th,
             )
 
             # 5. Giữ lại mẫu validation + dự đoán cho inspector "xem tại sao máy nhầm"
@@ -133,7 +146,7 @@ class MlLabTrainWorker(QThread):
             except Exception:
                 pass
 
-            self.sig_progress.emit(100, "Hoàn tất huấn luyện!")
+            self.sig_progress.emit(95, "Đang tổng hợp kết quả đánh giá...")
             self.sig_finished.emit(result)
 
         except Exception as exc:
@@ -157,18 +170,24 @@ _SHORTLIST = [
 
 class AutoSelectWorker(QThread):
     """
-    Worker "Để máy tự chọn": thử nhanh danh sách mô hình nhẹ trên dữ liệu
-    của học sinh, trả về mô hình + tham số tốt nhất kèm điểm số từng mô hình.
+    Worker tự động thử 11 mô hình khác nhau trên tập dữ liệu và chọn mô hình tốt nhất.
     """
 
     sig_progress = pyqtSignal(int, str)
-    sig_finished = pyqtSignal(str, object, float, list)  # (algo_key, config, val_acc, tried)
+    sig_finished = pyqtSignal(str, object, float, list)  # (algo_key, best_config, best_acc, list_of_results)
     sig_error = pyqtSignal(str)
 
-    def __init__(self, dataset_root: Path | str, include_standby: bool = False, parent: Any = None) -> None:
+    def __init__(
+        self,
+        dataset_root: Path | str,
+        include_standby: bool = False,
+        allowed_spells: set[str] | None = None,
+        parent: Any = None,
+    ) -> None:
         super().__init__(parent)
         self.dataset_root = Path(dataset_root)
         self.include_standby = include_standby
+        self.allowed_spells = set(allowed_spells) if allowed_spells is not None else None
 
     def run(self) -> None:
         try:
@@ -193,6 +212,7 @@ class AutoSelectWorker(QThread):
             SGDConfig,
         )
         from ml_lab.core.lazy_sklearn import ensure_sklearn
+        from ml_lab.data.spell_reader import compute_standby_thresholds
 
         ensure_sklearn()
         self.sig_progress.emit(5, "Đang chuẩn bị dữ liệu...")
@@ -200,14 +220,29 @@ class AutoSelectWorker(QThread):
         train_windows, val_windows, class_names = split_user_dataset_file_level(
             self.dataset_root,
             val_fraction=0.2,
-            window_size=64,
-            step_size=16,
+            window_size=WINDOW_SAMPLES,
+            step_size=STEP_SAMPLES,
             include_standby=self.include_standby,
+            allowed_spells=self.allowed_spells,
         )
         if len(class_names) < 2:
-            self.sig_error.emit("Cần ít nhất 2 lớp thần chú để máy tự chọn.")
+            self.sig_error.emit("Cần ít nhất 2 lớp thần chú để máy tự chọn (kiểm tra bộ lọc ở đầu cửa sổ).")
             return
 
+        # Tự động tăng cường 3x cho tập train nếu số mẫu ít
+        if len(train_windows) < 30 and len(train_windows) > 0:
+            n_orig = len(train_windows)
+            augmented: list[tuple[np.ndarray, int]] = list(train_windows)
+            for i in range(n_orig * 2):
+                window, cls_idx = train_windows[i % n_orig]
+                try:
+                    aug_win = augment_sample_window(window, noise_std=0.025, time_warp=True, random_state=42 + i)
+                    augmented.append((aug_win, cls_idx))
+                except Exception:
+                    continue
+            train_windows = augmented
+
+        standby_th = compute_standby_thresholds(self.dataset_root)
         feature_config = FeatureGroupConfig()
         extractor = ClassicFeatureExtractor(feature_config)
         X_train, y_train = extractor.extract_from_samples(train_windows)
@@ -242,6 +277,7 @@ class AutoSelectWorker(QThread):
                     class_names, extractor.feature_names,
                     algo=key, config=candidates[key],
                     feature_config=feature_config,
+                    standby_thresholds=standby_th,
                 )
                 tried.append((key, float(res.val_accuracy)))
                 if res.val_accuracy > best_acc:

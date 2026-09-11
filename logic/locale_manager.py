@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
-from logic.setting_i18n import normalize_ui_language
+from logic.ui_i18n import normalize_ui_language
 
 
 class LocaleManager(QObject):

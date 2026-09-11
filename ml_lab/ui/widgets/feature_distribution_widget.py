@@ -13,6 +13,8 @@ from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QBrush, QColor, QFont, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import QWidget
 
+import ml_lab.ui.lab_style as ls
+
 
 class FeatureDistributionWidget(QWidget):
     """
@@ -138,14 +140,7 @@ class FeatureDistributionWidget(QWidget):
             painter.end()
 
     def _get_class_color(self, idx: int) -> QColor:
-        palette = [
-            QColor(0, 122, 255),
-            QColor(255, 59, 48),
-            QColor(52, 199, 89),
-            QColor(255, 149, 0),
-            QColor(88, 86, 214),
-        ]
-        return palette[idx % len(palette)]
+        return QColor(ls.CLASS_COLORS[idx % len(ls.CLASS_COLORS)])
 
     def _draw_empty_state(self, painter: QPainter, w: int, h: int) -> None:
         painter.setFont(QFont("Segoe UI", 11, QFont.Weight.Medium))

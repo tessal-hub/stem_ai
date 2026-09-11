@@ -58,16 +58,23 @@ class MainWindow(QMainWindow):
         self._page_wand = None
         self._page_setting = None
         self._ml_lab_window = None
+        # Hooks cho Handler wire signal trễ theo từng trang lazy (tránh dựng hết page ngay sau show)
+        self._page_hooks: dict[str, list] = {}
 
         self._init_ui()
         self._init_signals()
         self._load_data()
         self._apply_ui_language()
 
-        # Asynchronously preload secondary pages in idle background time
-        QTimer.singleShot(100, self._preload_secondary_pages)
-        # Tự động mở Hướng Dẫn cho người mới ở lần khởi động đầu tiên
-        QTimer.singleShot(400, self._check_first_run_guide)
+        # Staggered lazy preload — giãn cách rộng để không chặn main thread trong
+        # giây đầu sau show (record ~1.4s, primitive_collect ~2.4s camera).
+        # Bấm nav vẫn dựng trang ngay (property), preload chỉ để khởi động sẵn.
+        QTimer.singleShot(500, lambda: self._preload_one(1))
+        QTimer.singleShot(1600, lambda: self._preload_one(2))
+        QTimer.singleShot(2600, lambda: self._preload_one(3))
+        QTimer.singleShot(3200, lambda: self._preload_one(4))
+        # Hướng dẫn sau khi UI đã idle
+        QTimer.singleShot(1500, self._check_first_run_guide)
 
     def _check_first_run_guide(self) -> None:
         """Tự động mở Hướng Dẫn cho người dùng mới khi lần đầu mở app."""
@@ -96,6 +103,7 @@ class MainWindow(QMainWindow):
             adv = self._is_advanced_mode()
             self._page_primitive_collect.set_advanced_mode(adv)
             self._replace_stack_page(1, self._page_primitive_collect)
+            self._notify_page_created("primitive_collect", self._page_primitive_collect)
         return self._page_primitive_collect
 
     @property
@@ -108,6 +116,7 @@ class MainWindow(QMainWindow):
                 sound_player=self.sound_player,
             )
             self._replace_stack_page(2, self._page_record)
+            self._notify_page_created("record", self._page_record)
         return self._page_record
 
     @property
@@ -119,6 +128,7 @@ class MainWindow(QMainWindow):
             adv = self._is_advanced_mode()
             self._page_wand.set_advanced_mode(adv)
             self._replace_stack_page(3, self._page_wand)
+            self._notify_page_created("wand", self._page_wand)
         return self._page_wand
 
     @property
@@ -130,7 +140,29 @@ class MainWindow(QMainWindow):
             adv = self._is_advanced_mode()
             self._page_setting.set_advanced_mode(adv)
             self._replace_stack_page(4, self._page_setting)
+            self._notify_page_created("setting", self._page_setting)
         return self._page_setting
+
+    def add_page_created_hook(self, key: str, callback) -> None:
+        """Đăng ký callback chạy khi trang lazy lần đầu được dựng (Handler dùng để wire signal trễ)."""
+        self._page_hooks.setdefault(key, []).append(callback)
+
+    def cached_page(self, key: str):
+        """Trang đã dựng theo key, None nếu chưa."""
+        return {
+            "home": self._page_home,
+            "primitive_collect": self._page_primitive_collect,
+            "record": self._page_record,
+            "wand": self._page_wand,
+            "setting": self._page_setting,
+        }.get(key)
+
+    def _notify_page_created(self, key: str, page) -> None:
+        for callback in self._page_hooks.get(key, []):
+            try:
+                callback(page)
+            except Exception as exc:
+                log.warning("MainWindow: page hook %s failed: %s", key, exc)
 
     def _is_advanced_mode(self) -> bool:
         settings = self.data_store.get_settings_snapshot()
@@ -151,22 +183,30 @@ class MainWindow(QMainWindow):
             old.deleteLater()
         self.stack.insertWidget(index, widget)
 
-    def _preload_secondary_pages(self) -> None:
-        """Nạp không đồng bộ các trang phụ ở background idle."""
+    def _preload_one(self, idx: int) -> None:
         try:
-            _ = self.page_primitive_collect
-            _ = self.page_record
-            _ = self.page_wand
-            _ = self.page_setting
+            if idx == 1:
+                _ = self.page_record  # nhẹ (~0.6s), store events hay chạm tới — dựng trước
+            elif idx == 2:
+                _ = self.page_primitive_collect  # nặng (~2.4s camera), dựng khi UI đã thở
+            elif idx == 3:
+                _ = self.page_wand
+            elif idx == 4:
+                _ = self.page_setting
         except Exception as exc:
-            log.warning("MainWindow: Preload secondary pages encountered error: %s", exc)
+            log.warning("MainWindow: Preload %s failed: %s", idx, exc)
+
+    def _preload_secondary_pages(self) -> None:
+        """Legacy — giữ để tương thích test cũ."""
+        for i in (1, 2, 3, 4):
+            self._preload_one(i)
 
     def _init_ui(self) -> None:
         """Khởi tạo giao diện và bố cục widget."""
         self.setWindowTitle("STEM Spell Book")
         self.setWindowIcon(QIcon(resolve_asset_path("assets/icon/cooliocns SVG/Interface/Book_Open.svg")))
         self.resize(1100, 850)
-        self.setMinimumSize(1000, 700)
+        self.setMinimumSize(920, 640)
 
         # 1. Khởi tạo Shell điều hướng
         self.shell = MacShell("STEM Spell Book")
@@ -252,6 +292,16 @@ class MainWindow(QMainWindow):
         if self.udp_worker.isRunning():
             self.udp_worker.stop()
         event.accept()
+
+    def resizeEvent(self, event) -> None:
+        """Breakpoint-driven adapt: <960px → compact sidebar + vertical content reflow."""
+        super().resizeEvent(event)
+        try:
+            is_narrow = self.width() < 960
+            if hasattr(self, "shell") and hasattr(self.shell, "set_compact_mode"):
+                self.shell.set_compact_mode(is_narrow)
+        except Exception:
+            pass
 
     # ── Private methods ─────────────────────────
 

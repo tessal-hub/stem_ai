@@ -38,7 +38,6 @@ from ml_lab.core.hyperparam_schema import (
     MLPConfig,
     NaiveBayesConfig,
     NearestCentroidConfig,
-    QDAConfig,
     RandomForestConfig,
     RidgeConfig,
     SearchConfig,
@@ -71,7 +70,6 @@ def _sklearn():
     from sklearn.ensemble import ExtraTreesClassifier, AdaBoostClassifier
     from sklearn.linear_model import RidgeClassifier, SGDClassifier
     from sklearn.neighbors import NearestCentroid
-    from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 
     g = globals()
     g.update(
@@ -95,7 +93,6 @@ def _sklearn():
         RidgeClassifier=RidgeClassifier,
         SGDClassifier=SGDClassifier,
         NearestCentroid=NearestCentroid,
-        QuadraticDiscriminantAnalysis=QuadraticDiscriminantAnalysis,
     )
     return g
 
@@ -120,6 +117,7 @@ class TrainClassicResult:
     config_dict: dict[str, Any]
     curve_data: dict[str, Any] | None = None
     feature_config: Any | None = None  # FeatureGroupConfig dùng lúc huấn luyện (cho suy luận trực tiếp)
+    standby_thresholds: tuple[float, float] = (0.12, 20.0) # (acc_std_sum_max, gyr_std_sum_max) — khớp firmware
     val_samples: Any | None = None     # list[(cửa sổ 64x6, nhãn)] — phục vụ inspector mẫu lỗi
     val_predictions: Any | None = None # mảng dự đoán trên tập validation
 
@@ -136,7 +134,8 @@ def build_sklearn_model(algo: str, config: Any = None) -> tuple[Any, bool]:
     _sklearn()
     if algo == "knn":
         cfg = config if isinstance(config, KNNConfig) else KNNConfig()
-        return KNeighborsClassifier(n_neighbors=cfg.k, metric=cfg.metric, weights=cfg.weights), True
+        weights = cfg.weights if cfg.weights in ("uniform", "distance") else "distance"
+        return KNeighborsClassifier(n_neighbors=cfg.k, metric=cfg.metric, weights=weights), True
 
     elif algo == "tree":
         cfg = config if isinstance(config, DecisionTreeConfig) else DecisionTreeConfig()
@@ -145,6 +144,7 @@ def build_sklearn_model(algo: str, config: Any = None) -> tuple[Any, bool]:
             min_samples_split=cfg.min_samples_split,
             min_samples_leaf=cfg.min_samples_leaf,
             criterion=cfg.criterion,
+            class_weight="balanced",
             random_state=42,
         ), False
 
@@ -157,6 +157,7 @@ def build_sklearn_model(algo: str, config: Any = None) -> tuple[Any, bool]:
             criterion=cfg.criterion,
             min_samples_leaf=cfg.min_samples_leaf,
             max_features=max_feat,
+            class_weight="balanced",
             random_state=42,
         ), False
 
@@ -179,15 +180,30 @@ def build_sklearn_model(algo: str, config: Any = None) -> tuple[Any, bool]:
             pass
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=FutureWarning)
-            return SVC(C=cfg.c, kernel=cfg.kernel, gamma=gamma_val, degree=cfg.degree, probability=True, random_state=42), True
+            return SVC(
+                C=cfg.c,
+                kernel=cfg.kernel,
+                gamma=gamma_val,
+                degree=cfg.degree,
+                probability=True,
+                class_weight="balanced",
+                random_state=42,
+            ), True
 
     elif algo == "logistic":
         cfg = config if isinstance(config, LogisticRegressionConfig) else LogisticRegressionConfig()
         if cfg.penalty == "l1":
-            return LogisticRegression(C=cfg.c, solver="saga", l1_ratio=1.0, max_iter=cfg.max_iter, random_state=42), True
+            return LogisticRegression(
+                C=cfg.c, penalty="l1", solver="saga", max_iter=cfg.max_iter,
+                class_weight="balanced", random_state=42,
+            ), True
         elif cfg.penalty == "none":
-            return LogisticRegression(C=1e5, max_iter=cfg.max_iter, random_state=42), True
-        return LogisticRegression(C=cfg.c, max_iter=cfg.max_iter, random_state=42), True
+            return LogisticRegression(
+                penalty="none", max_iter=cfg.max_iter, class_weight="balanced", random_state=42,
+            ), True
+        return LogisticRegression(
+            C=cfg.c, max_iter=cfg.max_iter, class_weight="balanced", random_state=42
+        ), True
 
     elif algo == "nb":
         cfg = config if isinstance(config, NaiveBayesConfig) else NaiveBayesConfig()
@@ -222,6 +238,7 @@ def build_sklearn_model(algo: str, config: Any = None) -> tuple[Any, bool]:
             max_depth=cfg.max_depth,
             criterion=cfg.criterion,
             min_samples_leaf=cfg.min_samples_leaf,
+            class_weight="balanced",
             random_state=42,
         ), False
 
@@ -235,7 +252,7 @@ def build_sklearn_model(algo: str, config: Any = None) -> tuple[Any, bool]:
 
     elif algo == "ridge":
         cfg = config if isinstance(config, RidgeConfig) else RidgeConfig()
-        return RidgeClassifier(alpha=cfg.alpha, random_state=42), True
+        return RidgeClassifier(alpha=cfg.alpha, class_weight="balanced", random_state=42), True
 
     elif algo == "sgd":
         cfg = config if isinstance(config, SGDConfig) else SGDConfig()
@@ -245,6 +262,7 @@ def build_sklearn_model(algo: str, config: Any = None) -> tuple[Any, bool]:
             max_iter=cfg.max_iter,
             penalty=cfg.penalty,
             l1_ratio=cfg.l1_ratio,
+            class_weight="balanced",
             tol=1e-3,
             random_state=42,
         ), True
@@ -252,10 +270,6 @@ def build_sklearn_model(algo: str, config: Any = None) -> tuple[Any, bool]:
     elif algo == "nearest_centroid":
         cfg = config if isinstance(config, NearestCentroidConfig) else NearestCentroidConfig()
         return NearestCentroid(metric=cfg.metric), True
-
-    elif algo == "qda":
-        cfg = config if isinstance(config, QDAConfig) else QDAConfig()
-        return QuadraticDiscriminantAnalysis(reg_param=cfg.reg_param), False
 
     else:
         raise ValueError(f"Thuật toán không được hỗ trợ: {algo}")
@@ -272,6 +286,7 @@ def train_classic_model(
     config: Any = None,
     search_config: SearchConfig | None = None,
     feature_config: Any | None = None,
+    standby_thresholds: tuple[float, float] = (0.12, 20.0),
 ) -> TrainClassicResult:
     """
     Huấn luyện mô hình trên tập train và đánh giá nghiêm ngặt trên tập val.
@@ -322,11 +337,19 @@ def train_classic_model(
         val_acc = train_acc
         cm = confusion_matrix(y_train, y_train_pred, labels=list(range(len(class_names))))
 
-    # 5. Cross-validation trên tập Train
-    n_splits = min(5, min(np.bincount(y_train)))
+    # 5. Cross-validation trên tập Train (scaler refit trong từng fold -> không rò rỉ)
+    try:
+        min_count = int(np.min(np.bincount(y_train))) if len(y_train) else 0
+    except Exception:
+        min_count = 0
+    n_splits = min(5, min_count)
     if n_splits >= 2:
         skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
-        cv_scores = cross_val_score(model, X_train_proc, y_train, cv=skf, scoring="accuracy")
+        if use_scaler:
+            cv_pipe = Pipeline([("scaler", StandardScaler()), ("model", build_sklearn_model(algo, config)[0])])
+        else:
+            cv_pipe = Pipeline([("model", model)])
+        cv_scores = cross_val_score(cv_pipe, X_train, y_train, cv=skf, scoring="accuracy")
         cv_mean = float(np.mean(cv_scores))
         cv_std = float(np.std(cv_scores))
     else:
@@ -372,7 +395,6 @@ def train_classic_model(
         "ridge": "Ridge Classifier (Tuyến tính L2)",
         "sgd": "SGD Classifier (Tuyến tính học nhanh)",
         "nearest_centroid": "Nearest Centroid (So với tâm lớp)",
-        "qda": "Quadratic Discriminant Analysis (QDA)",
     }
 
     cfg_dict = config.__dict__ if hasattr(config, "__dict__") else {}
@@ -395,6 +417,7 @@ def train_classic_model(
         config_dict=cfg_dict,
         curve_data=curve_res,
         feature_config=feature_config,
+        standby_thresholds=standby_thresholds,
     )
 
 def _estimate_mcu_benchmarks(algo: str, model: Any, n_features: int, n_classes: int) -> dict[str, float]:
@@ -450,14 +473,6 @@ def _estimate_mcu_benchmarks(algo: str, model: Any, n_features: int, n_classes: 
             "mcu_flash_kb": round(ops * 0.004 + 0.8, 2),
             "complexity_score": 1.0,
         }
-    elif algo == "qda":
-        ops = n_features * n_features * n_classes
-        return {
-            "mcu_latency_ms": round(0.05 + ops * 0.0002, 3),
-            "mcu_ram_kb": 0.5,
-            "mcu_flash_kb": round(ops * 0.004 + 2.0, 2),
-            "complexity_score": 4.5,
-        }
     elif algo == "gbdt":
         n_est = model.n_estimators_ if hasattr(model, "n_estimators_") else 5
         return {
@@ -509,7 +524,12 @@ def _estimate_mcu_benchmarks(algo: str, model: Any, n_features: int, n_classes: 
             "complexity_score": 4.5,
         }
     elif algo == "knn":
-        n_samples = model._fit_X.shape[0] if hasattr(model, "_fit_X") else 50
+        if hasattr(model, "n_samples_fit_"):
+            n_samples = int(model.n_samples_fit_)
+        elif hasattr(model, "_fit_X") and getattr(model, "_fit_X") is not None:
+            n_samples = int(model._fit_X.shape[0])
+        else:
+            n_samples = 50
         ops = n_samples * n_features
         return {
             "mcu_latency_ms": round(0.10 + ops * 0.0003, 3),
@@ -533,8 +553,26 @@ def _run_parameter_sweep(
     train_scores: list[float] = []
     val_scores: list[float] = []
 
-    n_splits = min(search_cfg.cv_folds, min(np.bincount(y_train)))
-    skf = StratifiedKFold(n_splits=max(2, n_splits), shuffle=True, random_state=42)
+    try:
+        min_count = int(np.min(np.bincount(y_train))) if len(y_train) else 0
+    except Exception:
+        min_count = 0
+    if min_count < 2:
+        # Không đủ mẫu cho CV: trả đường cong phẳng từ train score duy nhất
+        cfg0 = _create_config_with_param(algo, search_cfg.param_name, search_cfg.param_values[0])
+        m0, use0 = build_sklearn_model(algo, cfg0)
+        p0 = Pipeline([("scaler", StandardScaler()), ("model", m0)]) if use0 else Pipeline([("model", m0)])
+        p0.fit(X_train, y_train)
+        base = float(accuracy_score(y_train, p0.predict(X_train)))
+        return {
+            "param_name": search_cfg.param_name,
+            "param_values": search_cfg.param_values,
+            "train_scores": [base] * len(search_cfg.param_values),
+            "val_scores": [base] * len(search_cfg.param_values),
+        }
+    n_splits = min(search_cfg.cv_folds, min_count)
+    n_splits = max(2, n_splits)
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
 
     for val in search_cfg.param_values:
         # Build config tạm thời
@@ -605,6 +643,4 @@ def _create_config_with_param(algo: str, param_name: str, param_val: Any) -> Any
         return SGDConfig(alpha=alpha)
     elif algo == "nearest_centroid":
         return NearestCentroidConfig()
-    elif algo == "qda":
-        return QDAConfig()
     return None

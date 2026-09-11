@@ -52,5 +52,14 @@
     ],
     "sound": "custom:yeutruong.mp3",
     "volume": 1.0
+  },
+  "LUX": {
+    "color": [
+      255,
+      255,
+      255
+    ],
+    "sound": "custom:heartsteel.mp3",
+    "volume": 1.0
   }
 }

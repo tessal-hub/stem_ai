@@ -36,6 +36,20 @@ from ui.tokens import (
 )
 
 
+def _tint(hex_color: str, alpha: float) -> str:
+    """Hex #RRGGBB → QSS rgba() tint.
+
+    Appending alpha digits to a hex (``#RRGGBBAA``) is parsed by Qt as
+    #AARRGGBB — alpha first — so ``{p.PRIMARY}1F`` would render as a 2%
+    opaque wrong-hue color. Build tints through this helper instead.
+    """
+    h = hex_color.lstrip("#")
+    if len(h) != 6:
+        return hex_color
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r}, {g}, {b}, {alpha})"
+
+
 class BeginnerGuideDialog(QDialog):
     """Hộp thoại hướng dẫn người mới với kích thước rộng và bố cục trực quan đa cột."""
 
@@ -260,12 +274,12 @@ class BeginnerGuideDialog(QDialog):
             header.addStretch()
 
             btn_go = QPushButton(cta_txt)
-            btn_go.setFixedHeight(30)
+            btn_go.setFixedHeight(36)
             btn_go.setCursor(Qt.CursorShape.PointingHandCursor)
             btn_go.setStyleSheet(
-                f"background: rgba(0, 122, 255, 0.1); color: #007AFF; "
-                f"border: 1px solid rgba(0, 122, 255, 0.35); border-radius: 6px; "
-                f"padding: 2px 12px; font-weight: 700; font-size: 12px;"
+                f"background: {_tint(p.PRIMARY, 0.10)}; color: {p.PRIMARY}; "
+                f"border: 1px solid {_tint(p.PRIMARY, 0.33)}; border-radius: 6px; "
+                f"padding: 4px 14px; font-weight: 700; font-size: 12px;"
             )
             btn_go.clicked.connect(lambda _, idx=tab_idx: self._on_cta_clicked(idx))
             header.addWidget(btn_go)
@@ -296,7 +310,7 @@ class BeginnerGuideDialog(QDialog):
         # Header Intro
         intro_card, i_layout = make_card(margins=(18, 14, 18, 14), spacing=6)
         lbl_head = QLabel(tr_ui("guide_fw_header"))
-        lbl_head.setStyleSheet("font-weight: 800; font-size: 16px; color: #007AFF;")
+        lbl_head.setStyleSheet(f"font-weight: 800; font-size: 16px; color: {p.PRIMARY};")
         lbl_sub = QLabel(tr_ui("guide_fw_subtitle"))
         lbl_sub.setWordWrap(True)
         lbl_sub.setStyleSheet(f"font-size: 13px; color: {p.TEXT_SECONDARY}; line-height: 1.4;")
@@ -320,7 +334,7 @@ class BeginnerGuideDialog(QDialog):
         t1 = QLabel(tr_ui("guide_fw_data_title"))
         t1.setStyleSheet(f"font-weight: 700; font-size: 14px; color: {p.TEXT_PRIMARY};")
         b1 = QLabel(tr_ui("btn_flash_data"))
-        b1.setStyleSheet("background: rgba(0, 122, 255, 0.12); color: #007AFF; border: 1px solid rgba(0, 122, 255, 0.35); border-radius: 4px; padding: 3px 8px; font-weight: 700; font-size: 10px;")
+        b1.setStyleSheet(f"background: {_tint(p.PRIMARY, 0.12)}; color: {p.PRIMARY}; border: 1px solid {_tint(p.PRIMARY, 0.33)}; border-radius: 4px; padding: 3px 8px; font-weight: 700; font-size: 11px;")
         h1.addWidget(icon1)
         h1.addWidget(t1, stretch=1)
         h1.addWidget(b1)
@@ -342,12 +356,12 @@ class BeginnerGuideDialog(QDialog):
         f1_layout.addStretch()
 
         btn_fw1_go = QPushButton(tr_ui("guide_btn_go_settings"))
-        btn_fw1_go.setFixedHeight(30)
+        btn_fw1_go.setFixedHeight(36)
         btn_fw1_go.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_fw1_go.setStyleSheet(
-            "background: rgba(0, 122, 255, 0.1); color: #007AFF; "
-            "border: 1px solid rgba(0, 122, 255, 0.35); border-radius: 5px; "
-            "padding: 2px 10px; font-weight: 700; font-size: 11px;"
+            f"background: {_tint(p.PRIMARY, 0.10)}; color: {p.PRIMARY}; "
+            f"border: 1px solid {_tint(p.PRIMARY, 0.33)}; border-radius: 6px; "
+            f"padding: 4px 12px; font-weight: 700; font-size: 12px;"
         )
         btn_fw1_go.clicked.connect(lambda _: self._on_cta_clicked(4))
         f1_layout.addWidget(btn_fw1_go)
@@ -364,7 +378,7 @@ class BeginnerGuideDialog(QDialog):
         t2 = QLabel(tr_ui("guide_fw_ai_title"))
         t2.setStyleSheet(f"font-weight: 700; font-size: 14px; color: {p.TEXT_PRIMARY};")
         b2 = QLabel(tr_ui("wand_upload_model"))
-        b2.setStyleSheet("background: rgba(52, 199, 89, 0.15); color: #28A745; border: 1px solid rgba(52, 199, 89, 0.35); border-radius: 4px; padding: 3px 8px; font-weight: 700; font-size: 10px;")
+        b2.setStyleSheet(f"background: {_tint(p.STATUS_SUCCESS, 0.12)}; color: {p.STATUS_SUCCESS}; border: 1px solid {_tint(p.STATUS_SUCCESS, 0.33)}; border-radius: 4px; padding: 3px 8px; font-weight: 700; font-size: 11px;")
         h2.addWidget(icon2)
         h2.addWidget(t2, stretch=1)
         h2.addWidget(b2)
@@ -386,12 +400,12 @@ class BeginnerGuideDialog(QDialog):
         f2_layout.addStretch()
 
         btn_fw2_go = QPushButton(tr_ui("guide_btn_go_wand"))
-        btn_fw2_go.setFixedHeight(30)
+        btn_fw2_go.setFixedHeight(36)
         btn_fw2_go.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_fw2_go.setStyleSheet(
-            "background: rgba(52, 199, 89, 0.15); color: #28A745; "
-            "border: 1px solid rgba(52, 199, 89, 0.35); border-radius: 5px; "
-            "padding: 2px 10px; font-weight: 700; font-size: 11px;"
+            f"background: {_tint(p.STATUS_SUCCESS, 0.12)}; color: {p.STATUS_SUCCESS}; "
+            f"border: 1px solid {_tint(p.STATUS_SUCCESS, 0.33)}; border-radius: 6px; "
+            f"padding: 4px 12px; font-weight: 700; font-size: 12px;"
         )
         btn_fw2_go.clicked.connect(lambda _: self._on_cta_clicked(3))
         f2_layout.addWidget(btn_fw2_go)
@@ -404,17 +418,17 @@ class BeginnerGuideDialog(QDialog):
         flow_card, fl_layout = make_card(margins=(18, 14, 18, 14), spacing=8)
         fl_header = QHBoxLayout()
         lbl_flow_t = QLabel(f"🔄 {tr_ui('guide_fw_flow_title')}")
-        lbl_flow_t.setStyleSheet("font-weight: 700; font-size: 14px; color: #FF9500;")
+        lbl_flow_t.setStyleSheet(f"font-weight: 700; font-size: 14px; color: {p.STATUS_WARNING};")
         fl_header.addWidget(lbl_flow_t)
         fl_header.addStretch()
 
         btn_go_home = QPushButton(tr_ui("guide_btn_go_home"))
-        btn_go_home.setFixedHeight(30)
+        btn_go_home.setFixedHeight(36)
         btn_go_home.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_go_home.setStyleSheet(
-            "background: rgba(255, 149, 0, 0.12); color: #FF9500; "
-            "border: 1px solid rgba(255, 149, 0, 0.35); border-radius: 6px; "
-            "padding: 2px 12px; font-weight: 700; font-size: 12px;"
+            f"background: {_tint(p.STATUS_WARNING, 0.12)}; color: {p.STATUS_WARNING}; "
+            f"border: 1px solid {_tint(p.STATUS_WARNING, 0.33)}; border-radius: 6px; "
+            f"padding: 4px 14px; font-weight: 700; font-size: 12px;"
         )
         btn_go_home.clicked.connect(lambda _: self._on_cta_clicked(0))
         fl_header.addWidget(btn_go_home)
@@ -481,7 +495,7 @@ class BeginnerGuideDialog(QDialog):
         tips_card, t_layout = make_card(margins=(18, 16, 18, 16), spacing=12)
         t_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         lbl_t_head = QLabel(tr_ui("guide_protips_header"))
-        lbl_t_head.setStyleSheet("font-weight: 700; font-size: 15px; color: #10B981;")
+        lbl_t_head.setStyleSheet(f"font-weight: 700; font-size: 15px; color: {p.STATUS_SUCCESS};")
         t_layout.addWidget(lbl_t_head)
 
         protips = [
@@ -549,12 +563,12 @@ class BeginnerGuideDialog(QDialog):
 
         if target_tab_idx is not None and cta_text:
             btn_cta = QPushButton(cta_text)
-            btn_cta.setFixedHeight(30)
+            btn_cta.setFixedHeight(36)
             btn_cta.setCursor(Qt.CursorShape.PointingHandCursor)
             btn_cta.setStyleSheet(
                 f"background: {badge_color}1A; color: {badge_color}; "
                 f"border: 1px solid {badge_color}44; border-radius: 6px; "
-                f"padding: 2px 12px; font-weight: 700; font-size: 12px;"
+                f"padding: 4px 14px; font-weight: 700; font-size: 12px;"
             )
             btn_cta.clicked.connect(lambda _, idx=target_tab_idx: self._on_cta_clicked(idx))
             header.addWidget(btn_cta)

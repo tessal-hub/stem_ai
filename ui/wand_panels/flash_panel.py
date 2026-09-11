@@ -11,9 +11,8 @@ from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import QLabel, QProgressBar, QVBoxLayout, QWidget
 
 from ui.i18n_bridge import tr_ui
-from ui.modern_layout import (MARGIN_COMFORTABLE, SPACING_MD, SPACING_SM,
-                              SPACING_XS)
-from ui.tokens import BTN_H, PROGRESS_H
+from ui.tokens import (BTN_H, MARGIN_COMFORTABLE, PROGRESS_H, SPACING_MD,
+                       SPACING_SM, SPACING_XS)
 
 from .shared import make_button, make_card, make_section_label
 

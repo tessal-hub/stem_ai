@@ -27,13 +27,25 @@ def _p():
 class IconButton(QToolButton):
     """Nút bấm chỉ chứa icon SVG, tối ưu cho toolbar và các nút điều khiển nhỏ."""
 
-    def __init__(self, icon_path: str, height: int = 36, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        icon_path: str,
+        height: int = 36,
+        tooltip: str = "",
+        accessible_name: str = "",
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self.setFixedSize(height, height)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setIcon(QIcon(resolve_asset_path(icon_path)))
         self.setIconSize(QSize(int(height * 0.6), int(height * 0.6)))
         self.setProperty("type", "icon")
+        if tooltip:
+            self.setToolTip(tooltip)
+        acc_name = accessible_name or tooltip or icon_path.split("/")[-1].replace(".svg", "").replace("_", " ")
+        self.setAccessibleName(acc_name)
+        self.setAccessibleDescription(tooltip or acc_name)
 
 
 # ── Card & Frame Factories ───────────────────────────────────────────────────
@@ -62,24 +74,32 @@ def make_card_frame() -> QFrame:
 
 # ── Button Factories ─────────────────────────────────────────────────────────
 
-def make_button(label: str, type_: str = "", height: int = BTN_H) -> QPushButton:
-    """Tạo một nút bấm cơ bản."""
+def make_button(
+    label: str,
+    type_: str = "",
+    height: int = BTN_H,
+    tooltip: str = "",
+) -> QPushButton:
+    """Tạo một nút bấm cơ bản kèm hỗ trợ Accessibility."""
     btn = QPushButton(label)
     btn.setFixedHeight(height)
     btn.setCursor(Qt.CursorShape.PointingHandCursor)
     if type_:
         btn.setProperty("type", type_)
+    if tooltip:
+        btn.setToolTip(tooltip)
+    btn.setAccessibleName(label)
     return btn
 
 
-def make_primary_button(label: str, height: int = BTN_H) -> QPushButton:
+def make_primary_button(label: str, height: int = BTN_H, tooltip: str = "") -> QPushButton:
     """Tạo nút bấm chính (Primary) với màu chủ đạo."""
-    return make_button(label, "primary", height)
+    return make_button(label, "primary", height, tooltip=tooltip)
 
 
-def make_outline_button(label: str, height: int = BTN_H) -> QPushButton:
+def make_outline_button(label: str, height: int = BTN_H, tooltip: str = "") -> QPushButton:
     """Tạo nút bấm dạng viền (Outline)."""
-    return make_button(label, "outline", height)
+    return make_button(label, "outline", height, tooltip=tooltip)
 
 
 # ── Label & Utility Factories ────────────────────────────────────────────────
@@ -180,7 +200,7 @@ def make_rarity_badge_statistics(label: str, color: str) -> QLabel:
     lbl.setStyleSheet(f"""
         background-color: {color}; color: {text_color};
         border-radius: {BADGE_RADIUS}; padding: 4px 12px;
-        font-weight: 800; font-size: 10px; font-family: {APP_FONT_STACK};
+        font-weight: 800; font-size: 11px; font-family: {APP_FONT_STACK};
     """)
     return lbl
 

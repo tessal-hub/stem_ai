@@ -21,8 +21,8 @@ from logic.theme_manager import theme_manager
 from ui.asset_utils import resolve_asset_path
 from ui.component_factory import make_card, make_section_label
 from ui.i18n_bridge import tr_ui
-from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_SM, SPACING_XS
-from ui.tokens import BTN_H, SETTINGS_ACCENT, SETTINGS_INPUT_H
+from ui.tokens import (BTN_H, MARGIN_COMFORTABLE, SETTINGS_ACCENT,
+                       SETTINGS_INPUT_H, SPACING_SM, SPACING_XS)
 
 
 class WandSettingsPanel(QWidget):
@@ -133,7 +133,9 @@ class WandSettingsPanel(QWidget):
         btn_box = QHBoxLayout()
         btn_box.setSpacing(8)
         self.lbl_status = QLabel("")
-        self.lbl_status.setStyleSheet("color: #10B981; font-size: 11px; font-weight: 500;")
+        self.lbl_status.setStyleSheet(
+            f"color: {theme_manager.get_palette().STATUS_SUCCESS}; font-size: 11px; font-weight: 500;"
+        )
         self.btn_save = QPushButton("LƯU CÀI ĐẶT" if self._lang == "vi" else "SAVE SETTINGS")
         self.btn_save.setProperty("type", "primary")
         self.btn_save.setFixedHeight(32)

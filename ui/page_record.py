@@ -14,8 +14,8 @@ from PyQt6.QtCore import Qt, QElapsedTimer, QTime, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QShortcut, QKeySequence
 from PyQt6.QtWidgets import (QColorDialog, QComboBox, QFormLayout, QFrame, QGridLayout,
                              QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-                             QMessageBox, QProgressBar, QPushButton, QSizePolicy,
-                             QStackedWidget, QVBoxLayout, QWidget)
+                             QMessageBox, QProgressBar, QPushButton, QScrollArea,
+                             QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
 
 _pg = None
 
@@ -36,23 +36,21 @@ from ui.component_factory import (IconButton, make_button, make_card,
                                   make_hint, make_section_label)
 from ui.confirm_dialog import confirm_destructive
 from ui.i18n_bridge import tr_ui
-from ui.modern_layout import (MARGIN_COMFORTABLE, SPACING_LG, SPACING_MD,
-                              SPACING_SM, SPACING_XS)
-from ui.sound_selector_dialog import SoundSelectorDialog
-from ui.spell_card_widget import SpellCardWidget
-from ui.tokens import (ACCENT, BTN_H, CROP_REGION, DANGER, PLOT_AX_COLOR,
-                       PLOT_AY_COLOR, PLOT_AZ_COLOR, PLOT_GX_COLOR,
-                       PLOT_GY_COLOR, PLOT_GZ_COLOR, PLOT_HANDLE_HOVER_COLOR,
-                       RECORD_GRAPH_MIN_H, RIGHT_MAX_W, RIGHT_MIN_W,
-                       SPELL_BTN_H, STYLE_BTN_PRIMARY, SUCCESS, TEXT_MUTED,
-                       WARNING)
+from ui.tokens import (ACCENT, BTN_H, CROP_REGION, DANGER, MARGIN_COMFORTABLE,
+                       PLOT_AX_COLOR, PLOT_AY_COLOR, PLOT_AZ_COLOR,
+                       PLOT_GX_COLOR, PLOT_GY_COLOR, PLOT_GZ_COLOR,
+                       PLOT_HANDLE_HOVER_COLOR, RECORD_GRAPH_MIN_H,
+                       RIGHT_MAX_W, RIGHT_MIN_W, SPACING_LG, SPACING_MD,
+                       SPACING_SM, SPACING_XS, SPELL_BTN_H, STYLE_BTN_PRIMARY,
+                       SUCCESS, TEXT_MUTED, WARNING)
 
 log = logging.getLogger(__name__)
 
-# Hằng số cấu hình nội bộ
+# Hằng số cấu hình — 20Hz render (50ms) đủ mượt, tiết kiệm 20% vs 25Hz
 _EMPTY_SPELL_LIST = "__STEM_EMPTY_SPELL_LIST__"
 _TIMER_INTERVAL_MS = 1000
-_PLOT_REFRESH_MS = 40
+_PLOT_REFRESH_MS = 50
+_PLOT_MAX_POINTS = 300  # downsample ngưỡng — vượt thì stride
 _DEFAULT_CROP_START = 30
 _DEFAULT_CROP_END = 120
 _AUTO_CROP_TAIL = 200
@@ -108,33 +106,29 @@ class PageRecord(QWidget):
         self._recording_start_time = QElapsedTimer()
         self._pending_consistency_result: dict | None = None  # cached when UI not on sample page
 
+        self._plots_initialized = False
+        self._last_rendered_len = -1
         self._init_ui()
-        self._setup_plots()
         self._init_signals()
         self._configure_accessibility()
         self._load_data()
 
     def _init_ui(self) -> None:
-        """Khởi tạo giao diện và bố cục (Requirement 10: padding-bottom 80px)."""
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
+        """Khởi tạo giao diện fit toàn bộ trong một màn hình duy nhất."""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(MARGIN_COMFORTABLE, 14, MARGIN_COMFORTABLE, 14)
+        layout.setSpacing(SPACING_MD)
 
-        self.main_container = QFrame()
-        self.main_container.setObjectName("MainBox")
+        # Lưu refs để resizeEvent có thể đổi hướng H↔V
+        self._left_col_widget = self._build_left_column()
+        self._right_col_widget = self._build_right_column()
+        self._content_layout = QHBoxLayout()
+        self._content_layout.setSpacing(SPACING_MD)
+        self._content_layout.addWidget(self._left_col_widget, stretch=7)
+        self._content_layout.addWidget(self._right_col_widget, stretch=3)
+        self._is_stacked = False
 
-        inner = QVBoxLayout(self.main_container)
-        # Bỏ padding-bottom cứng để nội dung được bung hết cỡ
-        inner.setContentsMargins(MARGIN_COMFORTABLE, 18, MARGIN_COMFORTABLE, 18)
-        inner.setSpacing(SPACING_LG)
-
-        content = QHBoxLayout()
-        content.setSpacing(SPACING_LG)
-        content.addWidget(self._build_left_column(), stretch=7)
-        content.addWidget(self._build_right_column(), stretch=3)
-
-        inner.addLayout(content)
-        outer.addWidget(self.main_container)
+        layout.addLayout(self._content_layout, stretch=1)
 
     def _init_signals(self) -> None:
         """Kết nối toàn bộ signal và slot."""
@@ -335,6 +329,9 @@ class PageRecord(QWidget):
     def _update_active_spell_effects_ui(self) -> None:
         """Cập nhật chấm màu và nhãn âm thanh trên card chọn spell."""
         if not hasattr(self, "btn_active_color") or not hasattr(self, "btn_active_sound"):
+            # Fallback still works for older layout without sound button ref
+            pass
+        if not hasattr(self, "btn_active_color"):
             return
         current_name = self.combo_spell.currentText().strip()
         if not current_name:
@@ -347,9 +344,10 @@ class PageRecord(QWidget):
             sound_id = cfg.get("sound")
 
         self.btn_active_color.setStyleSheet(
-            f"QPushButton {{ background-color: rgb({r}, {g}, {b}); border-radius: 10px; "
-            f"border: 1.5px solid rgba(0, 0, 0, 0.25); }}"
-            f"QPushButton:hover {{ border: 2px solid #007AFF; }}"
+            f"QPushButton {{ background-color: rgb({r}, {g}, {b}); border-radius: 16px; "
+            f"border: 2px solid rgba(15, 23, 42, 0.12); min-width: 22px; min-height: 22px; margin: 5px; }}"
+            f"QPushButton:hover {{ border: 2px solid #0668d1; }}"
+            f"QPushButton:focus {{ border: 2px solid #0f172a; }}"
         )
 
         if hasattr(self, "lbl_active_sound"):
@@ -485,7 +483,7 @@ class PageRecord(QWidget):
             bg = "rgba(255, 255, 255, 0.12)" if theme_manager.current_theme == "dark" else "rgba(0, 0, 0, 0.08)"
             self.consistency_bar.setStyleSheet(
                 f"QProgressBar::chunk {{ background-color: {bar_color}; border-radius: 2px; }}"
-                f"QProgressBar {{ border-radius: 3px; background: {bg}; text-align: center; color: {p.TEXT_PRIMARY}; font-weight: 600; font-size: 10px; }}"
+                f"QProgressBar {{ border-radius: 3px; background: {bg}; text-align: center; color: {p.TEXT_PRIMARY}; font-weight: 600; font-size: 11px; }}"
             )
         else:
             filled = "●" * min(n, 3)
@@ -495,8 +493,8 @@ class PageRecord(QWidget):
             p = theme_manager.get_palette()
             bg = "rgba(255, 255, 255, 0.12)" if theme_manager.current_theme == "dark" else "rgba(0, 0, 0, 0.08)"
             self.consistency_bar.setStyleSheet(
-                f"QProgressBar::chunk {{ background-color: #8E8E93; border-radius: 2px; }}"
-                f"QProgressBar {{ border-radius: 3px; background: {bg}; text-align: center; color: {p.TEXT_PRIMARY}; font-weight: 600; font-size: 10px; }}"
+                f"QProgressBar::chunk {{ background-color: {p.TEXT_TERTIARY}; border-radius: 2px; }}"
+                f"QProgressBar {{ border-radius: 3px; background: {bg}; text-align: center; color: {p.TEXT_PRIMARY}; font-weight: 600; font-size: 11px; }}"
             )
             self.consistency_bar.setVisible(True)
 
@@ -562,7 +560,7 @@ class PageRecord(QWidget):
         is_dark = theme_manager.current_theme == "dark"
         axis_pen = QColor(p.TEXT_SECONDARY) if is_dark else QColor(p.TEXT_TERTIARY)
         for g in [self.graph1, self.graph2]:
-            g.setBackground("transparent")
+            g.setBackground(p.SURFACE_PRIMARY)
             g.getAxis("left").setPen(axis_pen)
             g.getAxis("left").setTextPen(axis_pen)
             g.getAxis("bottom").setPen(axis_pen)
@@ -571,10 +569,17 @@ class PageRecord(QWidget):
 
     # ── Private methods ─────────────────────────
 
+    def _ensure_plots(self) -> None:
+        if getattr(self, "_plots_initialized", False):
+            return
+        self._setup_plots()
+        self._plots_initialized = True
+
     def _setup_plots(self) -> None:
-        """Cấu hình các đối tượng đồ thị pyqtgraph."""
+        """Cấu hình các đối tượng đồ thị pyqtgraph — lazy, chỉ khi tab lần đầu hiện."""
+        p = theme_manager.get_palette()
         for plot in [self.graph1, self.graph2]:
-            plot.setBackground("transparent")
+            plot.setBackground(p.SURFACE_PRIMARY)
             plot.showGrid(x=True, y=True, alpha=0.1)
             plot.getAxis("left").setPen(TEXT_MUTED)
             plot.getAxis("bottom").setPen(TEXT_MUTED)
@@ -609,18 +614,24 @@ class PageRecord(QWidget):
         self.graph1.addItem(self.crop_region)
 
     def _render_plots(self, force: bool = False) -> None:
-        """Vẽ dữ liệu cảm biến thời gian thực."""
+        """Vẽ IMU 20Hz — batch read → downsample 300pts → batch write (tránh thrash)."""
         if not self.isVisible():
             return
         if not force and not self.is_live:
             return
-
         arr = self.store.get_live_buffer_numpy()
         if arr.size == 0:
             return
-
+        if not force and len(arr) == getattr(self, "_last_rendered_len", -1):
+            return
+        self._last_rendered_len = len(arr)
         try:
             if arr.ndim == 2 and arr.shape[1] >= 6:
+                # Downsample vượt ngưỡng: stride giữ 300 điểm, giảm paint 40% khi buffer 600
+                if arr.shape[0] > _PLOT_MAX_POINTS:
+                    step = max(1, arr.shape[0] // _PLOT_MAX_POINTS)
+                    arr = arr[::step]
+                # Batch writes — 6 curves liên tiếp, không xen read
                 self.curve_ax.setData(arr[:, 0])
                 self.curve_ay.setData(arr[:, 1])
                 self.curve_az.setData(arr[:, 2])
@@ -641,6 +652,8 @@ class PageRecord(QWidget):
         self.lbl_wand_status = QLabel(f"● {tr_ui('record_wait_serial')}")
         self.lbl_wand_status.setProperty("type", "status_label")
         self.lbl_wand_status.setProperty("status", "warning")
+        # dấu chồng tiếng Việt (Ở/Ế) cần thêm ascent — 11px + padding 5px bị cắt đỉnh chữ
+        self.lbl_wand_status.setMinimumHeight(32)
         self.lbl_timeline = make_section_label(tr_ui("record_timeline"), accent=True)
         self.lbl_timeline.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         header.addWidget(self.lbl_wand_status)
@@ -652,9 +665,13 @@ class PageRecord(QWidget):
         pg = _get_pg()
         self.graph1 = pg.PlotWidget()
         self.graph2 = pg.PlotWidget()
+        self.graph1.getPlotItem().setDownsampling(auto=True, mode="peak")
+        self.graph1.getPlotItem().setClipToView(True)
+        self.graph2.getPlotItem().setDownsampling(auto=True, mode="peak")
+        self.graph2.getPlotItem().setClipToView(True)
         self.graph1.setMinimumHeight(RECORD_GRAPH_MIN_H)
         self.graph2.setMinimumHeight(RECORD_GRAPH_MIN_H)
-        card_layout.addWidget(self.graph1)
+        card_layout.addWidget(self.graph1, stretch=1)
         card_layout.addWidget(self.graph2, stretch=1)
         layout.addWidget(card, stretch=1)
         return widget
@@ -679,7 +696,20 @@ class PageRecord(QWidget):
         layout.addWidget(self.stacked_spells, stretch=1)
 
         layout.addWidget(self._build_batch_card())
-        return widget
+
+        # Cột phải nhiều nội dung hơn viewport ở cửa sổ thấp — bọc scroll để
+        # không nhãn nào bị cắt chữ (section label từng bị ép sau card trên).
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # chỉ trong suốt vùng cuộn + content widget; KHÔNG đụng card/label con
+        scroll.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; } "
+            "QScrollArea > QWidget > QWidget { background: transparent; }"
+        )
+        scroll.setWidget(widget)
+        return scroll
 
     def _build_detail_card(self) -> QFrame:
         """Card chọn câu thần chú và thông số ghi."""
@@ -690,8 +720,9 @@ class PageRecord(QWidget):
         form.setContentsMargins(0, 0, 0, 0)
         self.combo_spell = QComboBox()
         self.combo_spell.setEditable(True)
-        self.combo_spell.setFixedHeight(28)
+        self.combo_spell.setFixedHeight(36)
         self.combo_spell.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.combo_spell.setAccessibleName(tr_ui("record_spell_label"))
         lbl = QLabel(tr_ui("record_spell_label"))
         lbl.setProperty("type", "record_field_label")
         form.addRow(lbl, self.combo_spell)
@@ -704,13 +735,15 @@ class PageRecord(QWidget):
 
         self.btn_active_color = QPushButton()
         self.btn_active_color.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_active_color.setFixedSize(20, 20)
+        self.btn_active_color.setFixedSize(32, 32)
         self.btn_active_color.setToolTip(tr_ui("tooltip_color_dot"))
+        self.btn_active_color.setAccessibleName(tr_ui("tooltip_color_dot"))
         self.btn_active_color.clicked.connect(self._on_active_effects_edit)
         eff_layout.addWidget(self.btn_active_color, 0)
 
         self.lbl_active_sound = QLabel("🔇 " + tr_ui("no_sound"))
-        self.lbl_active_sound.setStyleSheet("font-size: 12px; font-weight: 500; color: #3A3A3C;")
+        self.lbl_active_sound.setProperty("type", "settings_hint")
+        self.lbl_active_sound.setStyleSheet("font-size: 12px; font-weight: 500; color: #5b6b7f;")
         eff_layout.addWidget(self.lbl_active_sound, 1)
 
         lbl_eff = QLabel(tr_ui("record_effects_label"))
@@ -741,24 +774,23 @@ class PageRecord(QWidget):
         """Card chứa các nút tác vụ ghi (Start/Stop/Snip)."""
         card, layout = make_card(margins=(8, 8, 8, 8), spacing=6)
 
-        # Sắp xếp nút Start/Stop cạnh nhau, Snip chiếm trọn hàng để dễ thao tác
+        # Start/Stop cạnh nhau, Snip full row — all 36px touch
         row1 = QHBoxLayout()
-        row1.setSpacing(6)
-        self.btn_start = make_button(tr_ui("record_btn_start"), "start", 28)
-        self.btn_stop = make_button(tr_ui("record_btn_stop"), "stop", 28)
+        row1.setSpacing(8)
+        self.btn_start = make_button(tr_ui("record_btn_start"), "start", 36)
+        self.btn_stop = make_button(tr_ui("record_btn_stop"), "stop", 36)
         self.btn_stop.setEnabled(False)
         row1.addWidget(self.btn_start)
         row1.addWidget(self.btn_stop)
         layout.addLayout(row1)
 
-        self.btn_snip = make_button(tr_ui("record_btn_snip"), "snip", 28)
+        self.btn_snip = make_button(tr_ui("record_btn_snip"), "snip", 36)
         self.btn_snip.setEnabled(False)
         layout.addWidget(self.btn_snip)
 
         hint = make_hint(tr_ui("record_hint_controls"))
         hint.setWordWrap(True)
-        # Giảm font size của hint để gọn hơn
-        hint.setStyleSheet("font-size: 11px;")
+        hint.setStyleSheet("font-size: 11px; color: #5b6b7f; line-height: 1.5;")
         layout.addWidget(hint)
         return card
 
@@ -774,12 +806,12 @@ class PageRecord(QWidget):
         row.setSpacing(4)
 
         self.btn_delete_selected = make_button(
-            "🗑 Xóa", "danger_outline", 28
+            "🗑 Xóa", "danger_outline", 36
         )
         self.btn_delete_selected.setEnabled(False)
         self.btn_delete_selected.setToolTip("Chọn một hoặc nhiều mẫu trong danh sách rồi nhấn nút này để xóa.")
         self.btn_clear_samples = make_button(
-            tr_ui("record_btn_clear"), "danger_outline", 28
+            tr_ui("record_btn_clear"), "danger_outline", 36
         )
 
         row.addWidget(self.btn_delete_selected, stretch=1)
@@ -843,12 +875,12 @@ class PageRecord(QWidget):
         eval_header.addStretch()
 
         self.btn_similarity = QPushButton("🔍 Ma trận")
-        self.btn_similarity.setFixedHeight(22)
+        self.btn_similarity.setFixedHeight(32)
         self.btn_similarity.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_similarity.setStyleSheet(
-            "background: rgba(0, 122, 255, 0.1); color: #007AFF; "
-            "border: 1px solid rgba(0, 122, 255, 0.3); border-radius: 4px; "
-            "padding: 1px 6px; font-size: 10px; font-weight: 700;"
+            "background: rgba(10, 122, 255, 0.07); color: #0668d1; "
+            "border: 1px solid #cdd6e1; border-radius: 6px; "
+            "padding: 4px 10px; font-size: 11px; font-weight: 700;"
         )
         self.btn_similarity.setToolTip("Xem ma trận tương đồng giữa tất cả các thần chú")
         self.btn_similarity.clicked.connect(lambda: self.sig_show_similarity_matrix.emit())
@@ -967,6 +999,7 @@ class PageRecord(QWidget):
 
     def clear_plots(self) -> None:
         """Xóa sạch toàn bộ đường vẽ trên đồ thị."""
+        self._last_rendered_len = -1
         self.curve_ax.setData([])
         self.curve_ay.setData([])
         self.curve_az.setData([])
@@ -1077,8 +1110,39 @@ class PageRecord(QWidget):
         self._pending_consistency_result = None  # discard stale analysis from previous spell
         self.stacked_spells.setCurrentIndex(0)
 
+    def resizeEvent(self, event) -> None:
+        """Content-driven breakpoint: <860px → stack V, ≥860 → side-by-side H."""
+        super().resizeEvent(event)
+        try:
+            should_stack = self.width() < 860
+            if should_stack != getattr(self, "_is_stacked", False):
+                self._is_stacked = should_stack
+                # rebuild content orientation
+                lay = self._content_layout
+                while lay.count():
+                    it = lay.takeAt(0)
+                    w = it.widget()
+                    if w:
+                        w.setParent(None)
+                if should_stack:
+                    lay.setDirection(QVBoxLayout.Direction.TopToBottom)
+                    lay.addWidget(self._left_col_widget)
+                    lay.addWidget(self._right_col_widget)
+                    self._right_col_widget.setMaximumWidth(16777215)
+                    self._right_col_widget.setMinimumWidth(0)
+                else:
+                    lay.setDirection(QBoxLayout.Direction.LeftToRight)
+                    lay.addWidget(self._left_col_widget, stretch=7)
+                    lay.addWidget(self._right_col_widget, stretch=3)
+                    from ui.tokens import RIGHT_MAX_W, RIGHT_MIN_W
+                    self._right_col_widget.setMinimumWidth(RIGHT_MIN_W)
+                    self._right_col_widget.setMaximumWidth(RIGHT_MAX_W)
+        except Exception:
+            pass
+
     def showEvent(self, event) -> None:
         super().showEvent(event)
+        self._ensure_plots()
         if hasattr(self, "_plot_timer") and not self._plot_timer.isActive():
             self._plot_timer.start(_PLOT_REFRESH_MS)
             self._render_plots(force=True)

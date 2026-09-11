@@ -2,8 +2,9 @@
  * main.cpp — Chương trình thực thi chính (Main Runtime) cho ESP32 Classic ML.
  *
  * Đọc dữ liệu cảm biến MPU6050 qua I2C (50Hz), duy trì cửa sổ trượt 64 mẫu.
- * Tích hợp Motion Gate (Ngưỡng kích hoạt động học) để loại bỏ nhiễu khi đũa đứng yên,
- * trích xuất đặc trưng và gọi suy luận `classic_predict()` khi có chuyển động thực tế.
+ * Peak Trigger (chỉ đoán tại đỉnh chuyển động) + Motion Gate (Ngưỡng kích
+ * hoạt động học) để loại bỏ nhiễu khi đũa đứng yên, trích xuất đặc trưng
+ * từ cửa sổ ĐỈNH và gọi suy luận `classic_predict()` khi có cử chỉ thật.
  * Hiển thị màu LED RGB theo đúng cấu hình của từng phép thuật trong SpellConfigStore.
  * Xuất dữ liệu qua UART tương thích với Tab 7 Serial Monitor của STEM ML Lab.
  */
@@ -42,16 +43,56 @@ static const char* TAG = "STEM_CLASSIC_ML";
 #define MIN_ACC_STD_SUM        0.12f // Tổng độ lệch chuẩn gia tốc 3 trục >= 0.12g
 #define MIN_GYR_STD_SUM        20.0f // Tổng độ lệch chuẩn vận tốc góc 3 trục >= 20 dps
 #define MIN_CONFIDENCE         0.70f // Độ tin cậy tối thiểu của mô hình
+// Peak Trigger — chỉ đoán tại ĐỈNH chuyển động (local max), không đoán mỗi step.
+// Standby M≈0.1, cử chỉ thật peak M≈4–20 → 2.0 cắt spam khi tay barely move.
+// Khớp train (peak-centered) và ml_lab/data/window_config.py PEAK_TRIGGER_MIN_M.
+#define PEAK_TRIGGER_MIN_M     2.0f
 
 // Buffer tĩnh để không gây tràn stack FreeRTOS
 static int16_t s_raw_buffer[WINDOW_SAMPLES * 6];
 static int16_t s_ordered_buffer[WINDOW_SAMPLES * 6];
+// Cửa sổ tại đỉnh chuyển động trước đó — đoán trên cửa sổ này (đủ cả cử chỉ),
+// không đoán trên cửa sổ hiện tại (đã qua đỉnh, toàn đoạn đầu na ná nhau).
+static int16_t s_peak_buffer[WINDOW_SAMPLES * 6];
+static bool s_have_prev_window = false;
+static float s_m_prev2 = 0.0f;
+static float s_m_prev1 = 0.0f;
+// Chống in trùng: cùng 1 thần chú trong cửa sổ này thì bỏ qua (đuôi cử chỉ
+// vừa đoán vẫn còn năng lượng cao, không phải cử chỉ mới).
+static int s_last_spell = -2;
+static int s_last_fire_count = -100000;
+#define SAME_SPELL_SUPPRESS_SAMPLES 100 // ~2s @50Hz — vung lại sau 2s vẫn nhận
 static int s_buffer_head = 0;
 static int s_sample_count = 0;
 static int s_step_counter = 0;
 static int s_cooldown_counter = 0;
 
 static float s_features[CLASSIC_NUM_FEATURES];
+
+// Điểm chuyển động M của 1 cửa sổ (đơn vị vật lý g/dps).
+// M = min(acc_std_sum/0.12, gyr_std_sum/20). Standby ≈ 0.1, cử chỉ thật 4–20.
+static float window_motion_score(const int16_t* buf, int num_samples) {
+    float acc_sum = 0.0f, gyr_sum = 0.0f;
+    for (int ch = 0; ch < 6; ++ch) {
+        float scale = (ch < 3) ? 16384.0f : 131.0f;
+        float mean = 0.0f;
+        for (int i = 0; i < num_samples; ++i) {
+            mean += (float)buf[i * 6 + ch] / scale;
+        }
+        mean /= (float)num_samples;
+        float var = 0.0f;
+        for (int i = 0; i < num_samples; ++i) {
+            float d = (float)buf[i * 6 + ch] / scale - mean;
+            var += d * d;
+        }
+        float stdv = sqrtf(var / (float)num_samples);
+        if (ch < 3) acc_sum += stdv;
+        else gyr_sum += stdv;
+    }
+    float m_acc = acc_sum / MIN_ACC_STD_SUM;
+    float m_gyr = gyr_sum / MIN_GYR_STD_SUM;
+    return (m_acc < m_gyr) ? m_acc : m_gyr;
+}
 
 // ========== Cấu hình LED RGB (LEDC PWM 24-bit Color) ==========
 #define RGB_R_PIN              GPIO_NUM_25
@@ -215,43 +256,57 @@ static void classic_ml_task(void* pvParameters) {
                     memcpy(&s_ordered_buffer[i * 6], &s_raw_buffer[src_idx], sizeof(int16_t) * 6);
                 }
 
-                // 1. Trích xuất đặc trưng
-                int64_t t_start = esp_timer_get_time();
-                memset(s_features, 0, sizeof(s_features));
-                extract_classic_features(s_ordered_buffer, WINDOW_SAMPLES, s_features);
+                // Peak Trigger: m1 là đỉnh khi m1 >= m0 và m1 > m2 và m1 đủ lớn.
+                // Đoán trên s_peak_buffer (cửa sổ tại đỉnh) — khớp train peak-centered.
+                float m0 = window_motion_score(s_ordered_buffer, WINDOW_SAMPLES);
+                bool is_peak = s_have_prev_window
+                    && s_cooldown_counter == 0
+                    && s_m_prev1 >= m0
+                    && s_m_prev1 > s_m_prev2
+                    && s_m_prev1 >= PEAK_TRIGGER_MIN_M;
 
-                // 2. Motion Gate: Kiểm tra độ biến thiên động học thực tế
-                // std_val của từng kênh: ax[1], ay[9], az[17], gx[25], gy[33], gz[41]
-                float acc_std_sum = s_features[0 * 8 + 1] + s_features[1 * 8 + 1] + s_features[2 * 8 + 1];
-                float gyr_std_sum = s_features[3 * 8 + 1] + s_features[4 * 8 + 1] + s_features[5 * 8 + 1];
+                s_m_prev2 = s_m_prev1;
+                s_m_prev1 = m0;
+                if (is_peak) {
+                    // 1. Trích xuất đặc trưng từ cửa sổ ĐỈNH
+                    int64_t t_start = esp_timer_get_time();
+                    memset(s_features, 0, sizeof(s_features));
+                    extract_classic_features(s_peak_buffer, WINDOW_SAMPLES, s_features);
 
-                bool is_moving = (acc_std_sum >= MIN_ACC_STD_SUM) || (gyr_std_sum >= MIN_GYR_STD_SUM);
-
-                // Chỉ chạy suy luận và kích hoạt cử chỉ khi đũa thực sự chuyển động và hết cooldown
-                if (is_moving && s_cooldown_counter == 0) {
                     float confidence = 0.0f;
-                    int pred_class = classic_predict(s_features, &confidence);
+                    int pred_spell = classic_predict(s_features, &confidence);
                     int64_t t_end = esp_timer_get_time();
                     float elapsed_ms = (float)(t_end - t_start) / 1000.0f;
 
-                    if (confidence >= MIN_CONFIDENCE) {
-                        const char* spell_name = classic_get_class_name(pred_class);
-                        printf("[PREDICT] %s (conf=%.1f%%, latency=%.2fms)\n",
-                               spell_name, confidence * 100.0f, elapsed_ms);
-                        ESP_LOGI(TAG, "✨ [CỬ CHỈ] %s (Conf: %.1f%%, Time: %.3f ms)",
-                                 spell_name, confidence * 100.0f, elapsed_ms);
-
-                        // Lấy màu RGB đã cấu hình cho phép thuật này
-                        uint8_t r = 255, g = 255, b = 255;
-                        classic_get_class_rgb(pred_class, &r, &g, &b);
-                        set_rgb_color(r, g, b);
-                        vTaskDelay(pdMS_TO_TICKS(220));
-                        set_rgb_color(0, 0, 0);
-
+                    if (pred_spell >= 0 && confidence >= MIN_CONFIDENCE) {
+                        bool dup = (pred_spell == s_last_spell)
+                            && ((s_sample_count - s_last_fire_count) < SAME_SPELL_SUPPRESS_SAMPLES);
+                        s_last_spell = pred_spell;
+                        s_last_fire_count = s_sample_count;
                         // Kích hoạt cooldown tránh spam liên tiếp trên cùng một cử chỉ
                         s_cooldown_counter = COOLDOWN_SAMPLES;
+                        if (dup) {
+                            // Đuôi của cử chỉ vừa đoán — bỏ qua, không in/RGB
+                        } else {
+                            const char* spell_name = classic_get_class_name(pred_spell);
+                            printf("[PREDICT] %s (conf=%.1f%%, latency=%.2fms)\n",
+                                   spell_name, confidence * 100.0f, elapsed_ms);
+                            ESP_LOGI(TAG, "✨ [CỬ CHỈ] %s (Conf: %.1f%%, Time: %.3f ms)",
+                                     spell_name, confidence * 100.0f, elapsed_ms);
+
+                            // Lấy màu RGB đã cấu hình cho phép thuật này
+                            uint8_t r = 255, g = 255, b = 255;
+                            classic_get_class_rgb(pred_spell, &r, &g, &b);
+                            set_rgb_color(r, g, b);
+                            vTaskDelay(pdMS_TO_TICKS(220));
+                            set_rgb_color(0, 0, 0);
+                        }
                     }
                 }
+
+                // Lưu cửa sổ hiện tại làm ứng viên đỉnh cho step sau
+                memcpy(s_peak_buffer, s_ordered_buffer, sizeof(s_peak_buffer));
+                s_have_prev_window = true;
             }
         }
 

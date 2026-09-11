@@ -93,7 +93,7 @@ class SimilarityMatrixDialog(QDialog):
         alert_card, a_layout = make_card(margins=(16, 12, 16, 12), spacing=6)
         if self._conflicts:
             alert_header = QLabel(f"⚠️ Phát hiện {len(self._conflicts)} cặp thần chú có độ tương đồng cao (>75%):")
-            alert_header.setStyleSheet("font-weight: 700; font-size: 13px; color: #FF3B30;")
+            alert_header.setStyleSheet(f"font-weight: 700; font-size: 13px; color: {self._p.STATUS_ERROR};")
             a_layout.addWidget(alert_header)
 
             for sp_a, sp_b, score in self._conflicts[:3]:

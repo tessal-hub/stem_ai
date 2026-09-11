@@ -13,6 +13,8 @@ from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QBrush, QColor, QFont, QPainter, QPen
 from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
+import ml_lab.ui.lab_style as ls
+
 
 class WeightsBarWidget(QWidget):
     """
@@ -32,8 +34,9 @@ class WeightsBarWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
 
         top_bar = QHBoxLayout()
-        lbl = QLabel("🎯 Chọn Lớp Cử Chỉ Xem Trọng Số (W):")
-        lbl.setStyleSheet("font-weight: 600; font-size: 11px; color: #0668d1;; border: none; background: transparent;")
+        top_bar.setSpacing(ls.SP_2)
+        lbl = QLabel("Chọn lớp để xem trọng số (W):")
+        lbl.setStyleSheet(ls.font(ls.FS_CAPTION, 700) + f"color: {ls.ACCENT}; border: none; background: transparent;")
         self.combo_class = QComboBox()
         self.combo_class.currentIndexChanged.connect(self._on_class_changed)
         top_bar.addWidget(lbl)

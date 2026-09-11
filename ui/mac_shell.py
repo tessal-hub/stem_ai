@@ -138,6 +138,43 @@ class MacShell(QWidget):
 
         self.nav_requested.emit(index)
 
+    def set_compact_mode(self, compact: bool) -> None:
+        """Thu gọn sidebar 220→64px cho màn hẹp — icon-only, ẩn nhãn."""
+        if compact == getattr(self, "_is_compact", False):
+            return
+        self._is_compact = compact
+        target_w = 64 if compact else SHELL_SIDEBAR_W
+        if hasattr(self, "_sidebar"):
+            self._sidebar.setFixedWidth(target_w)
+        # Brand text ẩn hiện
+        for attr in ("_brand_title", "_brand_subtitle", "_nav_label"):
+            w = getattr(self, attr, None)
+            if w:
+                w.setVisible(not compact)
+        if hasattr(self, "_brand_text_box"):
+            # tighten margins khi compact
+            parent = self._brand_frame.layout() if hasattr(self, "_brand_frame") else None
+            if parent:
+                parent.setContentsMargins(12 if compact else 20, 0, 12 if compact else 20, 0)
+        for i, btn in enumerate(self._buttons):
+            if compact:
+                btn.setText("")
+                btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+                btn.setFixedHeight(44)
+            else:
+                from ui.i18n_bridge import tr_ui as _tr
+                # restore label
+                if i < len(NAV_ITEMS):
+                    btn.setText(f"  {_tr(NAV_ITEMS[i].label_key)}")
+                btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+                btn.setFixedHeight(44)
+            # keep tooltip as label in compact
+            if compact and i < len(NAV_ITEMS):
+                from ui.i18n_bridge import tr_ui as _tr2
+                btn.setToolTip(_tr2(NAV_ITEMS[i].label_key))
+            else:
+                btn.setToolTip("")
+
     def set_nav_item_visible(self, index: int, visible: bool) -> None:
         """Hiển thị hoặc ẩn nút menu điều hướng theo chỉ số."""
         if 0 <= index < len(self._buttons):
@@ -191,11 +228,13 @@ class MacShell(QWidget):
     # ── Private methods ─────────────────────────
 
     def _build_sidebar(self) -> QWidget:
-        """Xây dựng thanh điều hướng (Requirement 2: Fixed 320px)."""
-        sidebar = QWidget()
-        sidebar.setObjectName("StemSidebar")
-        sidebar.setFixedWidth(SHELL_SIDEBAR_W)
-        sidebar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        """Thanh điều hướng — 220px desktop, 64px compact khi cửa sổ hẹp."""
+        self._sidebar = QWidget()
+        self._sidebar.setObjectName("StemSidebar")
+        self._sidebar.setFixedWidth(SHELL_SIDEBAR_W)
+        self._sidebar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        self._is_compact = False
+        sidebar = self._sidebar
 
         layout = QVBoxLayout(sidebar)
         layout.setContentsMargins(0, 6, 0, 18)
@@ -223,26 +262,28 @@ class MacShell(QWidget):
         """Tạo cụm logo và tiêu đề ứng dụng."""
         brand = QFrame()
         brand.setFixedHeight(SHELL_BRAND_H)
+        self._brand_frame = brand
         layout = QHBoxLayout(brand)
         layout.setContentsMargins(20, 0, 20, 0)
         layout.setSpacing(12)
 
         # Icon SVG
         icon_lbl = QLabel()
+        self._brand_icon_lbl = icon_lbl
         pixmap = self._render_svg_icon("assets/icon/wand.svg", SHELL_BRAND_ICON)
         icon_lbl.setPixmap(pixmap)
 
-        text_box = QVBoxLayout()
-        text_box.setSpacing(0)
+        self._brand_text_box = QVBoxLayout()
+        self._brand_text_box.setSpacing(0)
         self._brand_title = QLabel(tr_ui("shell_brand_stem"))
         self._brand_title.setObjectName("StemBrandTitle")
         self._brand_subtitle = QLabel(tr_ui("shell_brand_book"))
         self._brand_subtitle.setObjectName("StemBrandSubtitle")
-        text_box.addWidget(self._brand_title)
-        text_box.addWidget(self._brand_subtitle)
+        self._brand_text_box.addWidget(self._brand_title)
+        self._brand_text_box.addWidget(self._brand_subtitle)
 
         layout.addWidget(icon_lbl)
-        layout.addLayout(text_box)
+        layout.addLayout(self._brand_text_box)
         layout.addStretch()
         return brand
 
@@ -250,7 +291,7 @@ class MacShell(QWidget):
         """Tạo một nút bấm điều hướng."""
         from ui.asset_utils import make_tinted_icon
         is_dark = theme_manager.current_theme == "dark"
-        icon_color = "#FFFFFF" if index == self._active_index else ("#F2F2F7" if is_dark else "#4A4A4A")
+        icon_color = "#FFFFFF" if index == self._active_index else ("#F2F2F7" if is_dark else "#334155")
 
         btn = QToolButton()
         btn.setObjectName("StemNavBtn")
@@ -299,13 +340,13 @@ class MacShell(QWidget):
         layout.addStretch()
 
         from ui.component_factory import make_outline_button
-        self.btn_ml_lab = make_outline_button("🔬 ML Lab", height=34)
+        self.btn_ml_lab = make_outline_button("🔬 ML Lab", height=36)
         self.btn_ml_lab.setObjectName("StemMlLabBtn")
         self.btn_ml_lab.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_ml_lab.clicked.connect(self.open_ml_lab_requested.emit)
         layout.addWidget(self.btn_ml_lab, alignment=Qt.AlignmentFlag.AlignVCenter)
 
-        self.btn_guide = make_outline_button(f"💡 {tr_ui('guide_btn_title')}", height=34)
+        self.btn_guide = make_outline_button(f"💡 {tr_ui('guide_btn_title')}", height=36)
         self.btn_guide.setObjectName("StemGuideBtn")
         self.btn_guide.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_guide.clicked.connect(self._open_beginner_guide)

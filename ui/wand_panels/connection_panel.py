@@ -12,8 +12,7 @@ from PyQt6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel,
                              QVBoxLayout, QWidget)
 
 from ui.i18n_bridge import tr_ui
-from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_SM
-from ui.tokens import SETTINGS_INPUT_H
+from ui.tokens import MARGIN_COMFORTABLE, SETTINGS_INPUT_H, SPACING_SM
 
 from .connection_presenter import ConnectionStatusPresenter
 from .shared import make_button, make_card, make_section_label

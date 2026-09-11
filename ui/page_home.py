@@ -11,7 +11,7 @@ from __future__ import annotations
 import time
 
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtWidgets import (QFrame, QGraphicsDropShadowEffect, QHBoxLayout,
+from PyQt6.QtWidgets import (QBoxLayout, QFrame, QHBoxLayout,
                              QLabel, QListWidget, QListWidgetItem,
                              QProgressBar, QVBoxLayout, QWidget)
 
@@ -24,6 +24,7 @@ from logic.tip_rotator import TipRotator
 from logic.theme_manager import theme_manager
 from ui.component_factory import (make_card, make_empty_state_card,
                                   make_rarity_badge_wand, make_section_label)
+from ui.color_utils import contrast_ratio
 from ui.i18n_bridge import tr_ui
 from ui.tokens import (MARGIN_COMFORTABLE, PRIMARY_COLOR, SPACING_LG,
                        SPACING_MD, SPACING_SM, SPACING_XS)
@@ -36,20 +37,9 @@ _STAND_BY_NAMES = frozenset({"STAND BY", "STAND_BY"})
 
 
 def _add_shadow(widget: QWidget, blur: int = 16, alpha: int = 15, y_offset: int = 4) -> None:
-    """Thêm hiệu ứng đổ bóng mượt (Soft drop shadow) không gây nghẽn khởi động."""
-    def _apply() -> None:
-        try:
-            shadow = QGraphicsDropShadowEffect(widget)
-            shadow.setBlurRadius(blur)
-            shadow.setColor(Qt.GlobalColor.black)
-            shadow.setOffset(0, y_offset)
-            effect_color = shadow.color()
-            effect_color.setAlpha(alpha)
-            shadow.setColor(effect_color)
-            widget.setGraphicsEffect(shadow)
-        except Exception:
-            pass
-    QTimer.singleShot(100, _apply)
+    """No-op — flat tonal per DESIGN.md. Depth via BG_APP→SURFACE→SUNK, not blur.
+    Retained for call-site compat; previously ghost-card (border+shadow 16px)."""
+    widget.setGraphicsEffect(None)
 
 
 class PageHome(QWidget):
@@ -84,13 +74,13 @@ class PageHome(QWidget):
         self._load_data()
 
     def _init_ui(self) -> None:
-        """Khởi tạo giao diện dashboard."""
+        """Khởi tạo giao diện dashboard fit toàn bộ trong một màn hình duy nhất."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(
-            MARGIN_COMFORTABLE, MARGIN_COMFORTABLE,
-            MARGIN_COMFORTABLE, MARGIN_COMFORTABLE,
+            MARGIN_COMFORTABLE, 14,
+            MARGIN_COMFORTABLE, 14,
         )
-        layout.setSpacing(SPACING_LG)
+        layout.setSpacing(10)
 
         # 1. System status bar (connection + mode)
         self._build_status_bar(layout)
@@ -179,18 +169,28 @@ class PageHome(QWidget):
             self.lbl_hero_spell.setProperty("pulsing", True)
             try:
                 cfg = self.spell_config_store.get_spell_config(action)
-                color = cfg.get("color") if isinstance(cfg, dict) else [255, 255, 255]
+                color = cfg.get("color") if isinstance(cfg, dict) else None
                 if not (isinstance(color, (list, tuple)) and len(color) >= 3):
-                    color = [255, 255, 255]
-                r, g, b = int(color[0]), int(color[1]), int(color[2])
-                self.lbl_hero_spell.setStyleSheet(f"color: rgb({r}, {g}, {b}); font-weight: 700;")
-                if hasattr(self, "orb_led"):
-                    self.orb_led.setStyleSheet(
-                        f"QLabel {{ background: qradialgradient(cx:0.5, cy:0.5, radius:0.65, fx:0.35, fy:0.35, "
-                        f"stop:0 #FFFFFF, stop:0.45 rgb({r}, {g}, {b}), stop:1 rgba({r}, {g}, {b}, 0.25)); "
-                        f"border-radius: 14px; border: 2px solid rgb({r}, {g}, {b}); }}"
-                    )
-                    self._orb_dim_timer.start(5000)
+                    color = None
+                if color is not None:
+                    r, g, b = int(color[0]), int(color[1]), int(color[2])
+                    # Spell colors are user-chosen; a pale one on the hero card can
+                    # drop below WCAG large-text 3:1 — fall back to ink.
+                    hex_color = f"#{r:02x}{g:02x}{b:02x}"
+                    surface = theme_manager.get_palette().SURFACE_PRIMARY
+                    if contrast_ratio(hex_color, surface) < 3.0:
+                        r, g, b = 15, 23, 42  # TEXT_PRIMARY ink
+                    self.lbl_hero_spell.setStyleSheet(f"color: rgb({r}, {g}, {b}); font-weight: 700;")
+                    if hasattr(self, "orb_led"):
+                        self.orb_led.setStyleSheet(
+                            f"QLabel {{ background: qradialgradient(cx:0.5, cy:0.5, radius:0.65, fx:0.35, fy:0.35, "
+                            f"stop:0 #FFFFFF, stop:0.45 rgb({r}, {g}, {b}), stop:1 rgba({r}, {g}, {b}, 0.25)); "
+                            f"border-radius: 14px; border: 2px solid rgb({r}, {g}, {b}); }}"
+                        )
+                        self._orb_dim_timer.start(5000)
+                else:
+                    self.lbl_hero_spell.setStyleSheet("")
+                    self._set_orb_idle_style()
             except Exception:
                 self.lbl_hero_spell.setStyleSheet("")
                 self._set_orb_idle_style()
@@ -263,9 +263,12 @@ class PageHome(QWidget):
 
         if not self.data_store.spell_history:
             if hasattr(self, "_history_empty_card"):
-                lbl = self._history_empty_card.findChild(QLabel, "")
-                if lbl:
-                    lbl.setText(tr_ui("home_history_empty"))
+                # findChild(QLabel, "") bắt nhãn icon 📊 đầu tiên và ghi đè bằng chữ
+                # tiêu đề ở font 32px — nhãn tiêu đề phải được chọn theo property.
+                for lbl in self._history_empty_card.findChildren(QLabel):
+                    if lbl.property("type") == "state_empty_title":
+                        lbl.setText(tr_ui("home_history_empty"))
+                        break
 
         if hasattr(self, "_last_loaded_spells"):
             self.update_loaded_spells(self._last_loaded_spells)
@@ -322,16 +325,16 @@ class PageHome(QWidget):
         _add_shadow(self.tip_card, blur=14, alpha=12, y_offset=3)
 
         tip_layout = QHBoxLayout(self.tip_card)
-        tip_layout.setContentsMargins(18, 14, 18, 14)
-        tip_layout.setSpacing(14)
+        tip_layout.setContentsMargins(14, 8, 14, 8)
+        tip_layout.setSpacing(10)
 
         # Tip icon
         lbl_icon = QLabel("💡")
-        lbl_icon.setStyleSheet("font-size: 26px;")
+        lbl_icon.setStyleSheet("font-size: 20px;")
         tip_layout.addWidget(lbl_icon, alignment=Qt.AlignmentFlag.AlignTop)
 
         text_box = QVBoxLayout()
-        text_box.setSpacing(4)
+        text_box.setSpacing(2)
 
         self._lbl_tip_eyebrow = QLabel(tr_ui("home_tip_title"))
         self._lbl_tip_eyebrow.setProperty("type", "tip_eyebrow")
@@ -351,17 +354,18 @@ class PageHome(QWidget):
         if hasattr(self, "orb_led"):
             self.orb_led.setStyleSheet(
                 "QLabel { background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.35, fy:0.35, "
-                "stop:0 #E5E5EA, stop:1 #8E8E93); "
-                "border-radius: 14px; border: 2px solid rgba(0, 0, 0, 0.12); }"
+                "stop:0 #e4e9f0, stop:1 #5b6b7f); "
+                "border-radius: 14px; border: 2px solid rgba(15, 23, 42, 0.12); }"
             )
 
     def _build_hero_banner(self, parent_layout: QVBoxLayout) -> None:
         """Xây dựng hero banner hiển thị spell nhận diện với thanh confidence bar và đèn LED ma thuật."""
         hero_card, hero_layout = make_card(
-            margins=(24, 16, 24, 16), spacing=SPACING_XS,
+            margins=(20, 10, 20, 10), spacing=SPACING_XS,
         )
         hero_card.setObjectName("HomeHeroCard")
-        hero_card.setFixedHeight(190)
+        # 150px: đủ cho hero 38px + dấu chồng (SẴN/Ữ) + hàng confidence khi hiện ra
+        hero_card.setFixedHeight(150)
         hero_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         _add_shadow(hero_card, blur=20, alpha=15, y_offset=4)
 
@@ -387,6 +391,7 @@ class PageHome(QWidget):
         self.lbl_hero_spell.setProperty("type", "hero_spell_name")
         self.lbl_hero_spell.setProperty("pulsing", False)
         self.lbl_hero_spell.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_hero_spell.setMinimumHeight(56)
 
         self.lbl_hero_confidence = QLabel("")
         self.lbl_hero_confidence.setProperty("type", "hero_confidence")
@@ -407,9 +412,11 @@ class PageHome(QWidget):
         parent_layout.addWidget(hero_card)
 
     def _build_bottom_grid(self, parent_layout: QVBoxLayout) -> None:
-        """Xây dựng lưới dưới: lịch sử (trái) + spell đã tải (phải)."""
-        grid = QHBoxLayout()
-        grid.setSpacing(SPACING_LG)
+        """Lưới dưới: responsive — H bên rộng, V stack khi hẹp <700px."""
+        self._bottom_grid = QHBoxLayout()
+        self._bottom_grid.setSpacing(SPACING_LG)
+        grid = self._bottom_grid
+        self._bottom_grid_is_stacked = False
 
         # Left: Spell history
         left_card, left_layout = make_card(
@@ -470,7 +477,33 @@ class PageHome(QWidget):
         self._show_loaded_empty(True)
 
         grid.addWidget(right_card, stretch=1)
+        # keep refs for responsive toggle
+        self._bottom_left_card = left_card
+        self._bottom_right_card = right_card
         parent_layout.addLayout(grid, stretch=1)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        try:
+            should_stack = self.width() < 700
+            if should_stack != getattr(self, "_bottom_grid_is_stacked", False):
+                self._bottom_grid_is_stacked = should_stack
+                g = self._bottom_grid
+                while g.count():
+                    it = g.takeAt(0)
+                    w = it.widget()
+                    if w:
+                        w.setParent(None)
+                if should_stack:
+                    g.setDirection(QVBoxLayout.Direction.TopToBottom)
+                    g.addWidget(self._bottom_left_card)
+                    g.addWidget(self._bottom_right_card)
+                else:
+                    g.setDirection(QBoxLayout.Direction.LeftToRight)
+                    g.addWidget(self._bottom_left_card, stretch=1)
+                    g.addWidget(self._bottom_right_card, stretch=1)
+        except Exception:
+            pass
 
     # ── Private methods — helpers ───────────────
 
@@ -602,7 +635,9 @@ class PageHome(QWidget):
         if idx >= 0:
             idx_badge = QLabel(f"#{idx}")
             idx_badge.setProperty("type", "settings_hint")
-            idx_badge.setStyleSheet("font-weight: 700; font-size: 11px; opacity: 0.8;")
+            idx_badge.setStyleSheet(
+                f"font-weight: 700; font-size: 11px; color: {theme_manager.get_palette().TEXT_TERTIARY};"
+            )
             idx_badge.setToolTip(f"ESP-NOW Index: {idx}")
             row_layout.addWidget(idx_badge)
 
@@ -650,6 +685,14 @@ class PageHome(QWidget):
 
     def _configure_accessibility(self) -> None:
         """Thiết lập thông tin hỗ trợ người khiếm thị."""
+        try:
+            self.lbl_hero_spell.setAccessibleName("Recognized spell")
+            self.lbl_hero_confidence.setAccessibleName("Confidence level")
+            self.history_list.setAccessibleName(tr_ui("home_history_title"))
+            self.status_bar.setAccessibleName(tr_ui("home_status_disconnected"))
+        except Exception:
+            pass
+
     def showEvent(self, event: Any) -> None:
         super().showEvent(event)
         if hasattr(self, "_tip_timer") and not self._tip_timer.isActive():

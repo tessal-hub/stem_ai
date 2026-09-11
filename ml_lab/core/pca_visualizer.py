@@ -25,6 +25,12 @@ def compute_pca_decision_boundary(
     """
     if len(X_train) < 2:
         return {}
+    try:
+        n_feat = int(np.asarray(X_train).shape[1])
+    except Exception:
+        return {}
+    if n_feat < 2:
+        return {}
 
     from ml_lab.core.lazy_sklearn import ensure_sklearn
 

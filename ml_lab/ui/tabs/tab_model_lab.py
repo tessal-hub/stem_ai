@@ -36,7 +36,6 @@ from ml_lab.core.hyperparam_schema import (
     DecisionTreeConfig,
     ExtraTreesConfig,
     NearestCentroidConfig,
-    QDAConfig,
     RidgeConfig,
     SGDConfig,
     GradientBoostingConfig,
@@ -71,7 +70,6 @@ _ALGO_BADGES = {
     "ridge": "Mô hình tuyến tính siêu nhẹ, ổn định với dữ liệu nhiễu",
     "sgd": "Tuyến tính học nhanh từng bước nhỏ",
     "nearest_centroid": "So cử chỉ với “khuôn mẫu” trung bình của mỗi thần chú",
-    "qda": "Ranh giới cong dựa trên phân phối thống kê từng lớp",
     "knn": "Phân lớp theo K láng giềng gần nhất",
     "tree": "Cây nhị phân if-else — nhanh, dễ giải thích nhất",
     "forest": "Ensemble nhiều cây quyết định, giảm phương sai",
@@ -89,7 +87,6 @@ _ALGO_TIPS = {
     "ridge": "<b>Ridge</b>: tuyến tính nhẹ kèm phạt giữ trọng số nhỏ — rất ổn định với dữ liệu ít.",
     "sgd": "<b>SGD</b>: cùng họ logistic nhưng học nhanh, hợp dữ liệu nhiều mẫu.",
     "nearest_centroid": "<b>Nearest Centroid</b>: tính điểm trung bình mỗi lớp; cử chỉ mới thuộc lớp có tâm gần nhất.",
-    "qda": "<b>QDA</b>: học cả hình dạng phân phối từng lớp — ranh giới cong tự nhiên.",
     "knn": "<b>KNN</b>: K=1 nhạy với rung lắc nhỏ; K=3-5 khử nhiễu tốt mà không làm mờ ranh giới.",
     "tree": "<b>Cây Quyết Định</b>: độ sâu 3-4 thường là điểm cân bằng. Độ sâu trên 5 dễ học vẹt.",
     "forest": "<b>Random Forest</b>: 5-8 cây rất ổn định trên ESP32, Flash dưới 5KB.",
@@ -113,16 +110,26 @@ class TabModelLab(QWidget):
         self._current_worker: MlLabTrainWorker | None = None
         self._auto_worker: AutoSelectWorker | None = None
         self._last_result: TrainClassicResult | None = None
+        self._flash_ready = False  # True khi primary CTA đã morph thành "Nạp lên wand"
         self._feat_checks: list[QCheckBox] = []
+        self._allowed_spells: set[str] | None = None
 
         self._init_ui()
 
+    def set_allowed_spells(self, allowed: set[str] | None) -> None:
+        self._allowed_spells = set(allowed) if allowed is not None else None
+
+    def _get_allowed(self) -> set[str] | None:
+        return self._allowed_spells
+
     def _init_ui(self) -> None:
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(ls.SP_4, ls.SP_4, ls.SP_4, ls.SP_4)
+        main_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
         main_layout.setSpacing(ls.SP_2)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setHandleWidth(6)
+        splitter.setStyleSheet("QSplitter::handle { background: transparent; }")
 
         left_panel = self._build_left_panel()
         splitter.addWidget(left_panel)
@@ -136,8 +143,34 @@ class TabModelLab(QWidget):
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
+        self.progress_bar.setFixedHeight(4)
+        self.progress_bar.setTextVisible(False)
         self.progress_bar.setStyleSheet(ls.PROGRESS_BAR)
         main_layout.addWidget(self.progress_bar)
+
+        self._configure_accessibility()
+
+    def _configure_accessibility(self) -> None:
+        self.chk_beginner.setAccessibleName("Chế độ người mới bắt đầu")
+        self.combo_algo.setAccessibleName("Chọn thuật toán học máy")
+        self.chk_f_time.setAccessibleName("Đặc trưng độ cao và dao động tín hiệu")
+        self.chk_f_energy.setAccessibleName("Đặc trưng cường độ và năng lượng chuyển động")
+        self.chk_f_temporal.setAccessibleName("Đặc trưng nửa đầu nửa sau cử chỉ")
+        self.chk_f_mag.setAccessibleName("Đặc trưng độ lớn tổng hợp chuyển động")
+        self.chk_f_cross.setAccessibleName("Đặc trưng phối hợp giữa các trục cảm biến")
+        self.btn_auto.setAccessibleName("Tự động chọn thuật toán tối ưu")
+        self.btn_train.setAccessibleName("Bắt đầu huấn luyện và đánh giá mô hình")
+        self.chk_augment.setAccessibleName("Bật nhân bản dữ liệu huấn luyện chống rung tay")
+        self.btn_flash_direct.setAccessibleName("Nạp mô hình lên vi điều khiển ESP32")
+        self.btn_model_card.setAccessibleName("Xem hồ sơ mô hình Model Card")
+        self.progress_bar.setAccessibleName("Tiến trình huấn luyện mô hình")
+        self.canvas.setAccessibleName("Bản đồ ranh giới quyết định 2D không gian PCA")
+        self.cm_widget.setAccessibleName("Ma trận nhầm lẫn kết quả đánh giá")
+        self.advice_card.setAccessibleName("Khối hướng dẫn AI Coach")
+        self.tree_vis.setAccessibleName("Cây quyết định trực quan")
+        self.weights_vis.setAccessibleName("Biểu đồ trọng số đặc trưng")
+        self.class_breakdown.setAccessibleName("Bảng phân tích độ chính xác từng lớp thần chú")
+        self.misclass_widget.setAccessibleName("Dạng sóng các mẫu dự đoán sai")
 
     # ────────────────────────── Left panel ───────────────────────────────
 
@@ -146,6 +179,7 @@ class TabModelLab(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setStyleSheet("QScrollArea { background: transparent; }")
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         container = QWidget()
         container.setStyleSheet("background: transparent;")
@@ -161,7 +195,7 @@ class TabModelLab(QWidget):
             "Ẩn tinh chỉnh nâng cao để tập trung vào luồng chính:\n"
             "chọn thuật toán → huấn luyện → đọc chẩn đoán."
         )
-        self.chk_beginner.setStyleSheet(ls.font(ls.FS_BODY, 600) + f"color: {ls.BODY};; border: none; background: transparent;")
+        self.chk_beginner.setStyleSheet(ls.font(ls.FS_BODY, 600) + f"color: {ls.BODY}; border: none; background: transparent;")
         self.chk_beginner.toggled.connect(self._apply_skill_mode)
         mode_row.addWidget(self.chk_beginner)
         mode_row.addStretch()
@@ -178,7 +212,7 @@ class TabModelLab(QWidget):
         layout.addWidget(self.lbl_beginner_hint)
 
         # 1 · Chọn thuật toán
-        self.box_algo = self._make_group("1 · CHỌN THUẬT TOÁN", layout)
+        self.box_algo = self._make_group("CHỌN THUẬT TOÁN", layout)
 
         self.combo_algo = QComboBox()
         self.combo_algo.setStyleSheet(ls.INPUT_COMBO)
@@ -187,29 +221,32 @@ class TabModelLab(QWidget):
 
         self.lbl_algo_badge = QLabel(_ALGO_BADGES["knn"])
         self.lbl_algo_badge.setWordWrap(True)
-        self.lbl_algo_badge.setStyleSheet(ls.font(ls.FS_CAPTION) + f"color: {ls.MUTED};; border: none; background: transparent;")
+        self.lbl_algo_badge.setStyleSheet(ls.font(ls.FS_CAPTION) + f"color: {ls.MUTED}; border: none; background: transparent;")
+        self.lbl_algo_badge.setContentsMargins(2, 2, 2, 0)
         self.box_algo.layout().addWidget(self.lbl_algo_badge)
 
         # 2 · Feature Engineering (ẩn ở Beginner)
-        self.box_feat = self._make_group("2 · DỮ LIỆU ĐO GÌ", layout)
+        self.box_feat = self._make_group("DỮ LIỆU ĐO GÌ", layout)
         for text in (
             "Độ cao/thấp của tín hiệu (trung bình, dao động, min/max)",
             "Cường độ & năng lượng chuyển động",
+            "Nửa đầu / nửa sau cử chỉ (temporal splits)",
             "Độ lớn tổng hợp của chuyển động",
             "Phối hợp giữa các trục cảm biến",
         ):
             chk = QCheckBox(text)
             chk.setChecked(True)
-            chk.setStyleSheet(ls.font(ls.FS_BODY) + f"color: {ls.BODY};; border: none; background: transparent;")
+            chk.setStyleSheet(ls.font(ls.FS_BODY) + f"color: {ls.BODY}; border: none; background: transparent;")
             self._feat_checks.append(chk)
             self.box_feat.layout().addWidget(chk)
         self.chk_f_time = self._feat_checks[0]
         self.chk_f_energy = self._feat_checks[1]
-        self.chk_f_mag = self._feat_checks[2]
-        self.chk_f_cross = self._feat_checks[3]
+        self.chk_f_temporal = self._feat_checks[2]
+        self.chk_f_mag = self._feat_checks[3]
+        self.chk_f_cross = self._feat_checks[4]
 
         # 3 · Siêu tham số (ẩn ở Beginner)
-        self.box_param = self._make_group("3 · CÀI ĐẶT THUẬT TOÁN", layout)
+        self.box_param = self._make_group("CÀI ĐẶT THUẬT TOÁN", layout)
         self.param_box_layout = self.box_param.layout()
 
         self.param_container_layout = QVBoxLayout()
@@ -246,7 +283,7 @@ class TabModelLab(QWidget):
         self.btn_train = QPushButton("Huấn luyện & đánh giá")
         self.btn_train.setStyleSheet(ls.BTN_PRIMARY)
         self.btn_train.setMinimumHeight(44)
-        self.btn_train.clicked.connect(self.start_training)
+        self.btn_train.clicked.connect(self._on_primary_cta)
         cta_wrap.addWidget(self.btn_train)
 
         self.chk_augment = QCheckBox("Nhân bản dữ liệu ×3 (chống rung tay)")
@@ -254,7 +291,7 @@ class TabModelLab(QWidget):
             "Tạo thêm bản sao có nhiễu nhẹ từ dữ liệu train ×3 — máy học nhiều biến thể hơn nên ít bắt nhầm.\n"
             "Bài kiểm tra (validation) luôn dùng dữ liệu thật, không nhân bản."
         )
-        self.chk_augment.setStyleSheet(ls.font(ls.FS_CAPTION) + f"color: {ls.MUTED};; border: none; background: transparent;")
+        self.chk_augment.setStyleSheet(ls.font(ls.FS_CAPTION) + f"color: {ls.MUTED}; border: none; background: transparent;")
         cta_wrap.addWidget(self.chk_augment)
 
         self.btn_flash_direct = QPushButton("Nạp mô hình lên ESP32")
@@ -283,7 +320,8 @@ class TabModelLab(QWidget):
     def _make_group(self, title: str, parent_layout: QVBoxLayout) -> QFrame:
         """Card nhóm điều khiển chuẩn: tiêu đề nhãn + nội dung."""
         box = QFrame()
-        box.setStyleSheet(ls.card())
+        box.setObjectName("CtlGroup")
+        box.setStyleSheet(ls.card(pad=ls.SP_3))
         v = QVBoxLayout(box)
         v.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
         v.setSpacing(ls.SP_2)
@@ -309,7 +347,6 @@ class TabModelLab(QWidget):
             ("Ridge Classifier — Tuyến tính ổn định", "ridge"),
             ("SGD Classifier — Tuyến tính học nhanh", "sgd"),
             ("Nearest Centroid — So với tâm lớp", "nearest_centroid"),
-            ("QDA — Ranh giới thống kê cong", "qda"),
         ):
             self.combo_algo.addItem(label, key)
 
@@ -403,22 +440,15 @@ class TabModelLab(QWidget):
                     if sub.widget():
                         sub.widget().deleteLater()
 
-    def _param_row(self, name: str, editor: QWidget) -> QHBoxLayout:
-        row = QHBoxLayout()
-        row.setSpacing(ls.SP_2)
-        lbl = QLabel(name)
-        lbl.setStyleSheet(ls.font(ls.FS_BODY) + f"color: {ls.BODY};; border: none; background: transparent;")
-        row.addWidget(lbl)
-        row.addWidget(editor, stretch=1)
-        return row
-
     def _spin_int(self, lo: int, hi: int, val: int, tip: str = "") -> QSpinBox:
         w = QSpinBox()
         w.setRange(lo, hi)
         w.setValue(val)
         w.setStyleSheet(ls.INPUT_SPIN)
-        w.setMaximumWidth(160)
+        # Adapt: co giãn theo layout, không kẹp cứng — chịu text dài + DPI 125%
+        w.setMinimumWidth(120)
         w.setMinimumHeight(30)
+        w.setSizePolicy(w.sizePolicy().Policy.Expanding, w.sizePolicy().Policy.Fixed)
         if tip:
             w.setToolTip(tip)
         return w
@@ -430,8 +460,9 @@ class TabModelLab(QWidget):
         w.setValue(val)
         w.setSingleStep(step)
         w.setStyleSheet(ls.INPUT_SPIN)
-        w.setMaximumWidth(180)
+        w.setMinimumWidth(130)
         w.setMinimumHeight(30)
+        w.setSizePolicy(w.sizePolicy().Policy.Expanding, w.sizePolicy().Policy.Fixed)
         w.setKeyboardTracking(False)
         if tip:
             w.setToolTip(tip)
@@ -497,6 +528,16 @@ class TabModelLab(QWidget):
             self.spin_f_minleaf = self._spin_int(1, 50, 1, "Số mẫu tối thiểu ở một lá. Số lớn = ít học vẹt.")
             self.param_container_layout.addLayout(self._param_row("Số mẫu tối thiểu mỗi lá", self.spin_f_minleaf))
 
+        elif algo == "extra_trees":
+            self.spin_et_n = self._spin_int(1, 300, 5, "Số cây siêu ngẫu nhiên cùng bỏ phiếu.")
+            self.param_container_layout.addLayout(self._param_row("Số cây bỏ phiếu", self.spin_et_n))
+            self.spin_et_depth = self._spin_int(1, 30, 4, "Số câu hỏi tối đa của mỗi cây.")
+            self.param_container_layout.addLayout(self._param_row("Độ sâu mỗi cây", self.spin_et_depth))
+            self.combo_et_crit = self._combo([("Gini", "gini"), ("Entropy", "entropy")])
+            self.param_container_layout.addLayout(self._param_row("Cách chia nhóm", self.combo_et_crit))
+            self.spin_et_minleaf = self._spin_int(1, 50, 1, "Số mẫu tối thiểu ở một lá.")
+            self.param_container_layout.addLayout(self._param_row("Số mẫu tối thiểu mỗi lá", self.spin_et_minleaf))
+
         elif algo == "gbdt":
             self.spin_gbdt = self._spin_int(1, 300, 5, "Số cây sửa sai nối tiếp nhau.")
             self.param_container_layout.addLayout(self._param_row("Số vòng sửa sai", self.spin_gbdt))
@@ -510,8 +551,8 @@ class TabModelLab(QWidget):
             self.param_container_layout.addLayout(self._param_row("Phần trăm dữ liệu mỗi cây nhìn thấy", self.dbl_gbdt_sub))
 
         elif algo == "adaboost":
-            self.spin_ada = self._spin_int(1, 300, 5, "Số cây nhỏ nối tiếp, cây sau tập trung vào chỗ cây trước sai.")
-            self.param_container_layout.addLayout(self._param_row("Số vòng sửa sai", self.spin_ada))
+            self.spin_ada_n = self._spin_int(1, 300, 5, "Số cây nhỏ nối tiếp, cây sau tập trung vào chỗ cây trước sai.")
+            self.param_container_layout.addLayout(self._param_row("Số vòng sửa sai", self.spin_ada_n))
             self.dbl_ada_lr = self._spin_double(0.01, 2.0, 2, 0.5, 0.05,
                 "Mức đóng góp của mỗi cây vào kết quả cuối.")
             self.param_container_layout.addLayout(self._param_row("Tốc độ học", self.dbl_ada_lr))
@@ -598,11 +639,6 @@ class TabModelLab(QWidget):
             ])
             self.param_container_layout.addLayout(self._param_row("Cách đo độ giống", self.combo_nc_m))
 
-        elif algo == "qda":
-            self.dbl_qda_reg = self._spin_double(0.0, 1.0, 3, 0.1, 0.05,
-                "Làm mịn ma trận thống kê — quan trọng khi dữ liệu ít so với số đặc trưng. 0.1 phù hợp hầu hết trường hợp.")
-            self.param_container_layout.addLayout(self._param_row("Làm mịn thống kê (reg_param)", self.dbl_qda_reg))
-
     # ─────────────────────────── Actions ─────────────────────────────────
 
     def _apply_skill_mode(self) -> None:
@@ -680,9 +716,6 @@ class TabModelLab(QWidget):
         elif algo == "nearest_centroid":
             metric = "manhattan" if hasattr(self, "combo_nc_m") and self.combo_nc_m.currentIndex() == 1 else "euclidean"
             return NearestCentroidConfig(metric=metric)
-        elif algo == "qda":
-            reg = self.dbl_qda_reg.value() if hasattr(self, "dbl_qda_reg") else 0.1
-            return QDAConfig(reg_param=reg)
         elif algo == "extra_trees":
             return ExtraTreesConfig(
                 n_estimators=self.spin_et_n.value() if hasattr(self, "spin_et_n") else 5,
@@ -697,14 +730,54 @@ class TabModelLab(QWidget):
             )
         return None
 
+    def apply_sweep_value(self, algo_key: str, param_key: str, value: Any) -> None:
+        """Nhận giá trị tốt nhất từ Tab 3: chọn thuật toán + điền sẵn ô tương ứng."""
+        try:
+            idx = self.combo_algo.findData(algo_key)
+            if idx >= 0:
+                self.combo_algo.setCurrentIndex(idx)
+            else:
+                return
+            targets = {
+                ("knn", "k"): ("spin_k", int),
+                ("tree", "max_depth"): ("spin_depth", int),
+                ("forest", "max_depth"): ("spin_f_depth", int),
+                ("forest", "n_estimators"): ("spin_trees", int),
+                ("extra_trees", "max_depth"): ("spin_et_depth", int),
+                ("extra_trees", "n_estimators"): ("spin_et_n", int),
+                ("gbdt", "n_estimators"): ("spin_gbdt", int),
+                ("adaboost", "n_estimators"): ("spin_ada_n", int),
+                ("svm", "c"): ("dbl_svm_c", float),
+                ("logistic", "c"): ("dbl_log_c", float),
+                ("ridge", "alpha"): ("dbl_ridge_a", float),
+                ("sgd", "alpha"): ("dbl_sgd_a", float),
+                ("mlp", "hidden_units"): ("spin_mlp_h", int),
+                ("nb", "var_smoothing"): ("dbl_nb_smooth", float),
+            }
+            hit = targets.get((algo_key, param_key))
+            if hit is None:
+                return
+            attr, cast = hit
+            widget = getattr(self, attr, None)
+            if widget is None:
+                return
+            widget.setValue(cast(value))
+            self.lbl_tip.setText(
+                f"Đã điền giá trị tốt nhất từ Tab 3 ({algo_key.upper()} = {value}). "
+                "Bấm “Huấn luyện & đánh giá” để chốt!"
+            )
+        except Exception:
+            pass
+
     def start_auto_select(self) -> None:
         """Để máy tự chọn: thử 11 mô hình nhẹ, chọn tốt nhất rồi huấn luyện luôn."""
-        counts = count_user_spell_samples(self.dataset_dir)
+        counts = count_user_spell_samples(self.dataset_dir, allowed_spells=self._get_allowed())
         if len(counts) < 2:
             QMessageBox.warning(
                 self,
-                "Chưa đủ dữ liệu",
-                f"Hiện chỉ có {len(counts)} thần chú.\nCần ít nhất 2 lớp để máy tự chọn được.",
+                "Chưa đủ thần chú",
+                f"Bạn đã chọn {len(counts)} thần chú, cần ít nhất 2 để máy tự chọn.\n"
+                "Hãy mở Tab 0 · Chọn thần chú và tích thêm.",
             )
             return
         if self._auto_worker is not None and self._auto_worker.isRunning():
@@ -712,11 +785,11 @@ class TabModelLab(QWidget):
 
         self.btn_auto.setEnabled(False)
         self.btn_train.setEnabled(False)
-        self.btn_auto.setText("Đang thử từng mô hình để chọn giúp bạn...")
+        self.btn_auto.setText("Đang thử từng mô hình để chọn giúp bạn…")
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(5)
 
-        self._auto_worker = AutoSelectWorker(self.dataset_dir)
+        self._auto_worker = AutoSelectWorker(self.dataset_dir, allowed_spells=self._get_allowed())
         self._auto_worker.sig_progress.connect(
             lambda pct, msg: (self.progress_bar.setValue(pct), self.btn_auto.setText(msg))
         )
@@ -828,8 +901,6 @@ class TabModelLab(QWidget):
                 i = self.combo_nc_m.findData(getattr(config, "metric", "euclidean"))
                 if i >= 0:
                     self.combo_nc_m.setCurrentIndex(i)
-            elif algo_key == "qda":
-                self.dbl_qda_reg.setValue(float(getattr(config, "reg_param", 0.1)))
             elif algo_key == "extra_trees":
                 self.spin_et_n.setValue(int(getattr(config, "n_estimators", 5)))
                 self.spin_et_depth.setValue(int(getattr(config, "max_depth", 4)))
@@ -844,13 +915,13 @@ class TabModelLab(QWidget):
             pass
 
     def start_training(self) -> None:
-        counts = count_user_spell_samples(self.dataset_dir)
+        counts = count_user_spell_samples(self.dataset_dir, allowed_spells=self._get_allowed())
         if len(counts) < 2:
             QMessageBox.warning(
                 self,
-                "Chưa đủ dữ liệu",
-                f"Hiện chỉ có {len(counts)} thần chú trong dataset/spells/.\n\n"
-                "Cần ít nhất 2 lớp cử chỉ (ví dụ Lumos và Nox) để máy học có thể phân loại.",
+                "Chưa đủ thần chú",
+                f"Bạn đã chọn {len(counts)} thần chú, cần ít nhất 2 để huấn luyện.\n"
+                "Hãy mở Tab 0 · Chọn thần chú và tích thêm.",
             )
             return
 
@@ -860,14 +931,16 @@ class TabModelLab(QWidget):
         feat_cfg = FeatureGroupConfig(
             include_basic_stats=self.chk_f_time.isChecked(),
             include_energy_dynamics=self.chk_f_energy.isChecked(),
+            include_temporal_splits=self.chk_f_temporal.isChecked() if hasattr(self, "chk_f_temporal") else True,
             include_magnitudes=self.chk_f_mag.isChecked(),
             include_cross_derivatives=self.chk_f_cross.isChecked(),
         )
 
         self.btn_train.setEnabled(False)
-        self.btn_train.setText("Đang huấn luyện...")
+        self.btn_train.setText("Đang huấn luyện… thường 5–15 giây…")
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(10)
+        self._set_cta_mode("train")
 
         self._current_worker = MlLabTrainWorker(
             dataset_root=self.dataset_dir,
@@ -876,18 +949,42 @@ class TabModelLab(QWidget):
             feature_config=feat_cfg,
             val_fraction=0.2,
             augment_multiplier=3 if self.chk_augment.isChecked() else 1,
+            allowed_spells=self._get_allowed(),
         )
         self._current_worker.sig_progress.connect(lambda pct, msg: self.progress_bar.setValue(pct))
+        self._current_worker.sig_progress.connect(
+            lambda pct, msg: self.progress_bar.setAccessibleDescription(f"Tiến trình huấn luyện {pct}%: {msg}")
+        )
         self._current_worker.sig_finished.connect(self._on_training_finished)
         self._current_worker.sig_error.connect(self._on_training_error)
         self._current_worker.start()
 
+    def _on_primary_cta(self) -> None:
+        """1 nút chính duy nhất: chưa có model thì huấn luyện, xong thì morph thành nạp."""
+        if self._flash_ready and self._last_result is not None:
+            self._open_flash_dialog()
+        else:
+            self.start_training()
+
+    def _set_cta_mode(self, mode: str) -> None:
+        """Morph primary CTA: 'train' (xanh dương) ↔ 'flash' (xanh lá)."""
+        if mode == "flash":
+            self._flash_ready = True
+            self.btn_train.setText("Nạp lên wand")
+            self.btn_train.setStyleSheet(ls.BTN_SUCCESS)
+            self.btn_train.setToolTip("Mô hình đã sẵn sàng — nạp ngay lên ESP32.")
+            self.btn_flash_direct.setVisible(False)  # primary đã gánh, tránh 2 nút xanh competing
+        else:
+            self._flash_ready = False
+            self.btn_train.setText("Huấn luyện & đánh giá")
+            self.btn_train.setStyleSheet(ls.BTN_PRIMARY)
+            self.btn_train.setToolTip("")
+
     def _on_training_finished(self, result: TrainClassicResult) -> None:
         self.btn_train.setEnabled(True)
-        self.btn_train.setText("Huấn luyện & đánh giá")
         self.progress_bar.setVisible(False)
         self._last_result = result
-        self.btn_flash_direct.setVisible(True)
+        self._set_cta_mode("flash")
         self.btn_model_card.setVisible(True)
         self.class_breakdown.set_result(result)
         self.misclass_widget.set_result(result)
@@ -941,24 +1038,6 @@ class TabModelLab(QWidget):
                     [friendly_feature_name(f) for f in result.feature_names],
                     result.class_names,
                 )
-        elif result.algo == "qda":
-            self.tree_vis.setVisible(False)
-            self.weights_vis.setVisible(True)
-            if hasattr(result.model, "means_"):
-                self.weights_vis.set_weights(
-                    result.model.means_,
-                    [friendly_feature_name(f) for f in result.feature_names],
-                    result.class_names,
-                )
-        elif result.algo in ("logistic", "svm", "lda"):
-            self.tree_vis.setVisible(False)
-            self.weights_vis.setVisible(True)
-            if hasattr(result.model, "coef_"):
-                self.weights_vis.set_weights(
-                result.model.coef_,
-                [friendly_feature_name(f) for f in result.feature_names],
-                result.class_names,
-            )
         elif result.algo == "mlp":
             self.tree_vis.setVisible(False)
             self.weights_vis.setVisible(True)
@@ -976,7 +1055,7 @@ class TabModelLab(QWidget):
 
     def _on_training_error(self, msg: str) -> None:
         self.btn_train.setEnabled(True)
-        self.btn_train.setText("Huấn luyện & đánh giá")
+        self._set_cta_mode("train")
         self.progress_bar.setVisible(False)
         QMessageBox.warning(self, "Lỗi huấn luyện", f"Không thể hoàn tất huấn luyện:\n{msg}")
 

@@ -155,12 +155,10 @@ GLOSSARY_TOPICS = [
 <p>Tìm siêu phẳng có khoảng cách xa nhất tới các điểm sát ranh giới (Support Vectors). Với dữ liệu không tách được bằng phẳng, kernel RBF "uốn cong" không gian. C lớn = nghiêm khắc (dễ vẹt); gamma nhỏ = ranh giới mượt.</p>
 """),
 
-    ("Họ thống kê: GNB & QDA", "stat_family", """
-<h2>Họ Thống Kê: Gaussian NB &amp; QDA</h2>
+    ("Họ thống kê: GNB", "stat_family", """
+<h2>Họ Thống Kê: Gaussian NB</h2>
 <h3>Gaussian Naive Bayes (GNB)</h3>
 <p>Với mỗi lớp, học phân phối hình chuông (trung bình + phương sai) của từng đặc trưng, giả định các trục độc lập. Học gần như tức thì, suy luận dưới 0.01ms — hợp dữ liệu ít.</p>
-<h3>QDA (Quadratic Discriminant Analysis)</h3>
-<p>Giống GNB nhưng học cả <b>hình dạng trải</b> (ma trận hiệp phương sai) của từng lớp → ranh giới cong tự nhiên. Cần nhiều dữ liệu hơn GNB; tham số reg_param làm mịn khi dữ liệu ít.</p>
 """),
 
     ("Mạng nơ-ron (MLP)", "mlp", """

@@ -9,6 +9,8 @@ Cung cấp:
 
 from __future__ import annotations
 
+from ml_lab.data.window_config import STEP_SAMPLES, WINDOW_SAMPLES
+
 import logging
 from pathlib import Path
 from typing import Any
@@ -55,13 +57,16 @@ class AugmentCompareWorker(QThread):
     sig_done = pyqtSignal(dict)
     sig_error = pyqtSignal(str)
 
-    def __init__(self, dataset_dir: Path, parent: Any = None) -> None:
+    def __init__(self, dataset_dir: Path, allowed_spells: set[str] | None = None, parent: Any = None) -> None:
         super().__init__(parent)
         self.dataset_dir = dataset_dir
+        self.allowed_spells = set(allowed_spells) if allowed_spells is not None else None
 
     def run(self) -> None:
         try:
-            result = compare_augmentation_effect(self.dataset_dir, val_fraction=0.2, multiplier=3)
+            result = compare_augmentation_effect(
+                self.dataset_dir, val_fraction=0.2, multiplier=3, allowed_spells=self.allowed_spells
+            )
             self.sig_done.emit(result)
         except Exception as exc:
             self.sig_error.emit(str(exc))
@@ -76,14 +81,16 @@ class DatasetAnalysisWorker(QThread):
     sig_done = pyqtSignal(object)  # dict kết quả phân tích
     sig_error = pyqtSignal(str)
 
-    def __init__(self, dataset_dir: Path, parent: Any = None) -> None:
+    def __init__(self, dataset_dir: Path, allowed_spells: set[str] | None = None, parent: Any = None) -> None:
         super().__init__(parent)
         self.dataset_dir = dataset_dir
+        self.allowed_spells = set(allowed_spells) if allowed_spells is not None else None
 
     def run(self) -> None:
         try:
             train_samples, _val_samples, class_names = split_user_dataset_file_level(
-                self.dataset_dir, val_fraction=0.0, window_size=64, step_size=16
+                self.dataset_dir, val_fraction=0.0, window_size=WINDOW_SAMPLES, step_size=STEP_SAMPLES,
+                allowed_spells=self.allowed_spells,
             )
             wins_by_class: dict[str, list[np.ndarray]] = {name: [] for name in class_names}
             for window, cls_idx in train_samples:
@@ -131,21 +138,49 @@ class TabDataStudio(QWidget):
         self._cached_wins_by_class: dict[str, list[np.ndarray]] = {}
         self._total_windows: int = 0
         self._cached_code_index: dict[str, int] = {}
+        self._allowed_spells: set[str] | None = None
+        self._pending_reload: bool = False
 
         self._init_ui()
         self.reload_dataset()
 
+    def set_allowed_spells(self, allowed: set[str] | None) -> None:
+        self._allowed_spells = set(allowed) if allowed is not None else None
+        # Nếu worker đang chạy, đánh dấu reload pending thay vì giết thread
+        if self._analysis_worker is not None and self._analysis_worker.isRunning():
+            self._pending_reload = True
+            # cập nhật bảng lớp ngay (rẻ) để UI phản hồi tức thì
+            counts = count_user_spell_samples(self.dataset_dir, allowed_spells=self._get_allowed())
+            self.table_classes.setRowCount(len(counts))
+            for r_idx, (name, cnt) in enumerate(sorted(counts.items())):
+                self.table_classes.setItem(r_idx, 0, QTableWidgetItem(name))
+                ci = QTableWidgetItem(str(cnt))
+                ci.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.table_classes.setItem(r_idx, 1, ci)
+                bi = QTableWidgetItem("Đủ mẫu" if cnt >= 5 else "Cần thêm")
+                bi.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                bi.setForeground(QColor(ls.SUCCESS_TEXT if cnt >= 5 else ls.WARNING))
+                self.table_classes.setItem(r_idx, 2, bi)
+            return
+        self.reload_dataset()
+
+    def _get_allowed(self) -> set[str] | None:
+        return self._allowed_spells
+
     def _init_ui(self) -> None:
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(12, 12, 12, 12)
-        main_layout.setSpacing(12)
+        main_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
+        main_layout.setSpacing(ls.SP_3)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
         # ── Left Column: Dataset Overview & Class Table ─────
         left_box = QFrame()
-        left_box.setStyleSheet(ls.card())
+        left_box.setObjectName("ClassListCard")
+        left_box.setStyleSheet(ls.card(pad=ls.SP_3))
         l_layout = QVBoxLayout(left_box)
+        l_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
+        l_layout.setSpacing(ls.SP_2)
 
         lbl_l_title = QLabel("DANH SÁCH THẦN CHÚ")
         lbl_l_title.setStyleSheet(ls.section_label())
@@ -156,7 +191,7 @@ class TabDataStudio(QWidget):
         self.table_classes.setHorizontalHeaderLabels(["Thần chú", "Số mẫu", "Đủ để học?"])
         self.table_classes.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.table_classes.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        self.table_classes.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self.table_classes.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.table_classes.verticalHeader().setVisible(False)
         self.table_classes.setStyleSheet(ls.DATA_TABLE)
         l_layout.addWidget(self.table_classes, stretch=1)
@@ -175,7 +210,8 @@ class TabDataStudio(QWidget):
         # Sub-tab 1: Feature Distribution & Separability
         tab_dist = QWidget()
         dist_layout = QVBoxLayout(tab_dist)
-        dist_layout.setContentsMargins(8, 8, 8, 8)
+        dist_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
+        dist_layout.setSpacing(ls.SP_3)
 
         lbl_sel = QLabel("CHỌN ĐẶC TRƯNG ĐỂ XEM PHÂN BỐ")
         lbl_sel.setStyleSheet(ls.section_label())
@@ -186,9 +222,15 @@ class TabDataStudio(QWidget):
         dist_layout.addWidget(self.combo_feat)
 
         self.dist_widget = FeatureDistributionWidget()
+        self.dist_widget.setStyleSheet(
+            f"background: {ls.SURFACE}; border: 1px solid {ls.BORDER}; border-radius: {ls.RADIUS_MD}px;"
+        )
         dist_layout.addWidget(self.dist_widget, stretch=1)
 
         self.import_widget = FeatureImportanceWidget()
+        self.import_widget.setStyleSheet(
+            f"background: {ls.SURFACE}; border: 1px solid {ls.BORDER}; border-radius: {ls.RADIUS_MD}px;"
+        )
         dist_layout.addWidget(self.import_widget, stretch=1)
 
         right_tabs.addTab(tab_dist, "Phân phối")
@@ -196,60 +238,81 @@ class TabDataStudio(QWidget):
         # Sub-tab 3: Data Augmentation Studio
         tab_aug = QWidget()
         aug_layout = QVBoxLayout(tab_aug)
-        aug_layout.setContentsMargins(8, 8, 8, 8)
-        aug_layout.setSpacing(10)
+        aug_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
+        aug_layout.setSpacing(ls.SP_3)
 
         lbl_aug_title = QLabel("TẠO THÊM DỮ LIỆU MẪU TỪ DỮ LIỆU ĐÃ CÓ")
         lbl_aug_title.setStyleSheet(ls.section_label())
         aug_layout.addWidget(lbl_aug_title)
 
         aug_card = QFrame()
-        aug_card.setStyleSheet(f".QFrame {{ background: {ls.SURFACE_SUNK}; border: none; border-radius: {ls.RADIUS_MD}px; padding: {ls.SP_3}px; }}")
+        aug_card.setObjectName("AugCard")
+        aug_card.setStyleSheet(
+            f"#AugCard {{ background: {ls.SURFACE_SUNK}; border: 1px solid {ls.BORDER}; "
+            f"border-radius: {ls.RADIUS_MD}px; padding: {ls.SP_3}px;}}"
+        )
         ac_layout = QVBoxLayout(aug_card)
-        ac_layout.setSpacing(8)
+        ac_layout.setSpacing(ls.SP_2)
 
         # Multiplier
         r1 = QHBoxLayout()
-        r1.addWidget(QLabel("Nhân bản thành bao nhiêu lần:"))
+        r1.setSpacing(ls.SP_2)
+        lbl_mult = QLabel("Nhân bản thành:")
+        lbl_mult.setStyleSheet(ls.font(ls.FS_BODY, 600) + f"color: {ls.BODY}; border:none; background:transparent;")
+        r1.addWidget(lbl_mult)
         self.spin_mult = QSpinBox()
         self.spin_mult.setRange(2, 10)
         self.spin_mult.setValue(3)
+        self.spin_mult.setSuffix("×")
         self.spin_mult.setStyleSheet(ls.INPUT_SPIN)
+        self.spin_mult.setMinimumWidth(90)
         r1.addWidget(self.spin_mult)
+        lbl_mult_hint = QLabel("lần")
+        lbl_mult_hint.setStyleSheet(ls.font(ls.FS_CAPTION) + f"color:{ls.MUTED}; border:none; background:transparent;")
+        r1.addWidget(lbl_mult_hint)
         r1.addStretch()
         ac_layout.addLayout(r1)
 
         # Noise level
         r2 = QHBoxLayout()
-        r2.addWidget(QLabel("Mức nhiễu giả lập rung tay:"))
+        r2.setSpacing(ls.SP_2)
+        lbl_noise = QLabel("Mức nhiễu rung tay:")
+        lbl_noise.setStyleSheet(ls.font(ls.FS_BODY, 600) + f"color: {ls.BODY}; border:none; background:transparent;")
+        r2.addWidget(lbl_noise)
         self.spin_noise = QDoubleSpinBox()
         self.spin_noise.setRange(0.01, 0.10)
         self.spin_noise.setSingleStep(0.01)
         self.spin_noise.setValue(0.03)
+        self.spin_noise.setDecimals(2)
         self.spin_noise.setStyleSheet(ls.INPUT_SPIN)
+        self.spin_noise.setMinimumWidth(110)
         r2.addWidget(self.spin_noise)
         r2.addStretch()
         ac_layout.addLayout(r2)
 
         self.btn_run_aug = QPushButton("Xem số lượng mẫu sau khi nhân bản")
-        self.btn_run_aug.setStyleSheet(ls.BTN_PRIMARY)
+        self.btn_run_aug.setStyleSheet(ls.BTN_SECONDARY)
         self.btn_run_aug.clicked.connect(self._preview_augmentation)
         ac_layout.addWidget(self.btn_run_aug)
 
         self.lbl_aug_result = QLabel("Sẵn sàng tạo thêm dữ liệu mẫu.")
-        self.lbl_aug_result.setStyleSheet("color: #166534; font-weight: 600; font-size: 11px;; border: none; background: transparent;")
+        self.lbl_aug_result.setWordWrap(True)
+        self.lbl_aug_result.setStyleSheet(
+            ls.font(ls.FS_CAPTION, 600) + f"color: {ls.SUCCESS_TEXT}; border: none; background: transparent;"
+        )
         ac_layout.addWidget(self.lbl_aug_result)
 
         aug_layout.addWidget(aug_card)
 
         # ── Thí nghiệm A/B: Train trước vs sau tăng cường ────
         compare_card = QFrame()
-        compare_card.setStyleSheet(ls.card())
+        compare_card.setObjectName("CompareCard")
+        compare_card.setStyleSheet(ls.card(pad=ls.SP_3))
         cmp_layout = QVBoxLayout(compare_card)
-        cmp_layout.setSpacing(8)
+        cmp_layout.setSpacing(ls.SP_2)
 
         lbl_cmp_title = QLabel("THÍ NGHIỆM SO SÁNH: DỮ LIỆU GỐC vs TĂNG CƯỜNG")
-        lbl_cmp_title.setStyleSheet(ls.section_label())
+        lbl_cmp_title.setStyleSheet(ls.chart_title())
         cmp_layout.addWidget(lbl_cmp_title)
 
         lbl_cmp_desc = QLabel(
@@ -258,7 +321,7 @@ class TabDataStudio(QWidget):
             "Bạn đoán thử ai đoán chính xác hơn rồi bấm chạy để kiểm tra!"
         )
         lbl_cmp_desc.setWordWrap(True)
-        lbl_cmp_desc.setStyleSheet("font-size: 11px; color: #475569;; border: none; background: transparent;")
+        lbl_cmp_desc.setStyleSheet(ls.font(ls.FS_CAPTION) + f"color: {ls.BODY}; border: none; background: transparent;")
         cmp_layout.addWidget(lbl_cmp_desc)
 
         self.btn_run_compare = QPushButton("Chạy thử: dữ liệu gốc vs dữ liệu nhân bản")
@@ -267,7 +330,7 @@ class TabDataStudio(QWidget):
         cmp_layout.addWidget(self.btn_run_compare)
 
         self.compare_bars = AbCompareBarWidget()
-        self.compare_bars.setMinimumHeight(190)
+        self.compare_bars.setMinimumHeight(184)
         cmp_layout.addWidget(self.compare_bars)
 
         aug_layout.addWidget(compare_card)
@@ -285,14 +348,29 @@ class TabDataStudio(QWidget):
         right_tabs.addTab(tab_aug, "Tạo dữ liệu")
 
         splitter.addWidget(right_tabs)
-        splitter.setStretchFactor(0, 3)
-        splitter.setStretchFactor(1, 7)
-
+        # Bố cục mặc định: danh sách thần chú hẹp bên trái (~320px), biểu đồ chiếm phần rộng
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+        splitter.setSizes([320, 900])
         main_layout.addWidget(splitter, stretch=1)
+
+        self._configure_accessibility(btn_reload)
+
+    def _configure_accessibility(self, btn_reload: QPushButton) -> None:
+        self.table_classes.setAccessibleName("Bảng danh sách thần chú và số lượng mẫu đã ghi")
+        btn_reload.setAccessibleName("Tải lại danh sách dữ liệu thần chú")
+        self.combo_feat.setAccessibleName("Chọn đặc trưng cảm biến để xem phân phối")
+        self.dist_widget.setAccessibleName("Biểu đồ phân phối đặc trưng theo từng lớp")
+        self.import_widget.setAccessibleName("Biểu đồ xếp hạng mức độ quan trọng đặc trưng")
+        self.spin_mult.setAccessibleName("Hệ số nhân bản dữ liệu mẫu")
+        self.spin_noise.setAccessibleName("Mức độ nhiễu rung tay khi nhân bản")
+        self.btn_run_aug.setAccessibleName("Xem trước số lượng mẫu sau khi nhân bản")
+        self.btn_run_compare.setAccessibleName("Chạy thử nghiệm so sánh dữ liệu gốc và dữ liệu nhân bản")
+        self.compare_bars.setAccessibleName("Biểu đồ so sánh độ chính xác A và B")
 
     def reload_dataset(self) -> None:
         """Làm mới: bảng lớp đổ ngay (rẻ); phân tích đặc trưng chạy nền (nặng)."""
-        counts = count_user_spell_samples(self.dataset_dir)
+        counts = count_user_spell_samples(self.dataset_dir, allowed_spells=self._get_allowed())
         self.table_classes.setRowCount(len(counts))
 
         for r_idx, (name, cnt) in enumerate(sorted(counts.items())):
@@ -317,9 +395,22 @@ class TabDataStudio(QWidget):
 
         # Phân tích nặng chạy nền — không chặn UI khi mở app
         if self._analysis_worker is not None and self._analysis_worker.isRunning():
-            return  # đang chạy, kết quả sẽ tự cập nhật
+            self._pending_reload = True
+            return
+        self._pending_reload = False
         self._analysis_done = False
-        self._analysis_worker = DatasetAnalysisWorker(self.dataset_dir)
+        # Giữ reference cũ để tránh orphan trước khi gán mới
+        old_worker = self._analysis_worker
+        if old_worker is not None:
+            try:
+                old_worker.sig_done.disconnect(self._on_analysis_done)
+            except Exception:
+                pass
+            try:
+                old_worker.sig_error.disconnect(self._on_analysis_error)
+            except Exception:
+                pass
+        self._analysis_worker = DatasetAnalysisWorker(self.dataset_dir, allowed_spells=self._get_allowed())
         self._analysis_worker.sig_done.connect(self._on_analysis_done)
         self._analysis_worker.sig_error.connect(self._on_analysis_error)
         self._analysis_worker.start()
@@ -345,6 +436,9 @@ class TabDataStudio(QWidget):
         self._total_windows = result["total_windows"]
         X, y = result["X"], result["y"]
         if len(X) == 0 or len(np.unique(y)) < 2:
+            if self._pending_reload:
+                self._pending_reload = False
+                self.reload_dataset()
             return
 
         self._cached_X = X
@@ -367,18 +461,37 @@ class TabDataStudio(QWidget):
 
         if self.combo_feat.count() > 0:
             self._on_feature_selected(0)
+        if self._pending_reload:
+            self._pending_reload = False
+            self.reload_dataset()
 
     def _on_analysis_error(self, msg: str) -> None:
         self._analysis_done = True
         log.warning("Không thể phân tích dataset trong Data Studio: %s", msg)
+        if self._pending_reload:
+            self._pending_reload = False
+            self.reload_dataset()
 
     def closeEvent(self, event: Any) -> None:
         # Chờ worker nền kết thúc để tránh crash khi teardown Qt
         for worker in (self._analysis_worker, self._compare_worker):
             if worker is not None and worker.isRunning():
-                worker.disconnect()
-                worker.wait(20000)
+                try:
+                    worker.blockSignals(True)
+                except Exception:
+                    pass
+                worker.wait(4000)
         super().closeEvent(event)
+
+    def wait_for_workers(self, timeout_ms: int = 4000) -> None:
+        """API cho MlLabWindow gọi trước khi destroy — chờ thread an toàn."""
+        for worker in (self._analysis_worker, self._compare_worker):
+            if worker is not None and worker.isRunning():
+                try:
+                    worker.blockSignals(True)
+                except Exception:
+                    pass
+                worker.wait(timeout_ms)
 
     def _on_feature_selected(self, idx: int) -> None:
         if idx < 0 or len(self._cached_X) == 0:
@@ -398,30 +511,6 @@ class TabDataStudio(QWidget):
             if len(vals) > 0:
                 class_data[cls_name] = vals
         self.dist_widget.set_distribution_data(feat_name, class_data)
-
-    def _populate_correlation_table(self, high_pairs: list[dict[str, Any]]) -> None:
-        self.table_corr.setRowCount(len(high_pairs))
-        for r_idx, pair in enumerate(high_pairs):
-            item_a = QTableWidgetItem(friendly_feature_name(pair["feat_a"]))
-            item_a.setToolTip(pair["feat_a"])
-            self.table_corr.setItem(r_idx, 0, item_a)
-            item_b = QTableWidgetItem(friendly_feature_name(pair["feat_b"]))
-            item_b.setToolTip(pair["feat_b"])
-            self.table_corr.setItem(r_idx, 1, item_b)
-
-            r_item = QTableWidgetItem(f"{pair['r']:.4f}")
-            r_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            r_item.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-            if pair["abs_r"] >= 0.95:
-                r_item.setForeground(QColor(ls.DANGER))
-            else:
-                r_item.setForeground(QColor(217, 119, 6))
-            self.table_corr.setItem(r_idx, 2, r_item)
-
-            eval_text = "Giống nhau 95%+ — chỉ cần giữ 1" if pair["abs_r"] >= 0.95 else "Giống nhau mạnh"
-            eval_item = QTableWidgetItem(eval_text)
-            eval_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table_corr.setItem(r_idx, 3, eval_item)
 
     def _preview_augmentation(self) -> None:
         if not self._analysis_done:
@@ -448,16 +537,21 @@ class TabDataStudio(QWidget):
     def _run_augment_compare(self) -> None:
         if self._compare_worker is not None and self._compare_worker.isRunning():
             return
-        counts = count_user_spell_samples(self.dataset_dir)
+        counts = count_user_spell_samples(self.dataset_dir, allowed_spells=self._get_allowed())
         if len(counts) < 2:
-            QMessageBox.warning(self, "Chưa Đủ Dữ Liệu", "Cần ít nhất 2 cử chỉ để chạy thí nghiệm so sánh.")
+            QMessageBox.warning(
+                self,
+                "Chưa đủ thần chú",
+                f"Bạn đã chọn {len(counts)} thần chú, cần ít nhất 2 để so sánh.\n"
+                "Hãy mở Tab 0 · Chọn thần chú và tích thêm.",
+            )
             return
 
         self.btn_run_compare.setEnabled(False)
         self.btn_run_compare.setText("Đang huấn luyện 2 mô hình để so sánh...")
         self.compare_bars.reset()
 
-        self._compare_worker = AugmentCompareWorker(self.dataset_dir)
+        self._compare_worker = AugmentCompareWorker(self.dataset_dir, allowed_spells=self._get_allowed())
         self._compare_worker.sig_done.connect(self._on_compare_done)
         self._compare_worker.sig_error.connect(self._on_compare_error)
         self._compare_worker.start()

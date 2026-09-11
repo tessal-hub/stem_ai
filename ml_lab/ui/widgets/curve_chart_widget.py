@@ -179,6 +179,6 @@ class CurveChartWidget(QWidget):
         painter.setPen(QColor(100, 110, 122))
         painter.drawText(
             QRectF(0, 0, w, h),
-            Qt.AlignmentFlag.AlignCenter,
+            Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
             "Chưa có dữ liệu thử nghiệm.\nChọn thuật toán và tham số ở bên trái rồi bấm 'Chạy thử & vẽ biểu đồ'.",
         )

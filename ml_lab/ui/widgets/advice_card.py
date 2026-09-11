@@ -20,9 +20,9 @@ from ml_lab.core.pipeline import TrainClassicResult
 from ml_lab.core.result_advisor import AdviceItem, generate_advice
 
 _SEVERITY_STYLE = {
-    "good": ("✓", "rgba(47, 158, 87, 0.10)", "#166534"),
-    "warn": ("!", "rgba(217, 119, 6, 0.12)", "#92400e"),
-    "bad": ("×", "rgba(220, 38, 38, 0.09)", "#991b1b"),
+    "good": ("✓", ls.SUCCESS_TINT, ls.SUCCESS_TEXT),
+    "warn": ("!", ls.WARNING_TINT, ls.WARNING_TEXT),
+    "bad": ("×", ls.DANGER_TINT, ls.DANGER_TEXT),
 }
 
 
@@ -31,11 +31,11 @@ class _AdviceRow(QFrame):
 
     def __init__(self, item: AdviceItem, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        icon, bg, fg = _SEVERITY_STYLE.get(item.severity, ("💡", "rgba(0, 122, 255, 0.08)", "#1e3a8a"))
-        self.setStyleSheet(f"background: {bg}; border-radius: 8px;")
+        icon, bg, fg = _SEVERITY_STYLE.get(item.severity, ("•", ls.ACCENT_TINT, ls.ACCENT))
+        self.setStyleSheet(f"background: {bg}; border-radius: {ls.RADIUS_MD}px; border: none;")
         row = QHBoxLayout(self)
-        row.setContentsMargins(10, 7, 10, 7)
-        row.setSpacing(8)
+        row.setContentsMargins(ls.SP_3, ls.SP_2, ls.SP_3, ls.SP_2)
+        row.setSpacing(ls.SP_2)
 
         lbl_icon = QLabel(icon)
         lbl_icon.setFixedWidth(22)
@@ -62,12 +62,14 @@ class AdviceCardWidget(QFrame):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.setObjectName("AdviceCard")
         self.setStyleSheet(
-            ".QFrame { background: white; border: 1px solid #e4e9f0; border-radius: 10px; padding: 10px; }"
+            f"#AdviceCard {{ background: {ls.SURFACE}; border: 1px solid {ls.BORDER}; "
+            f"border-radius: {ls.RADIUS_LG}px; padding: {ls.SP_2}px; }}"
         )
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 4, 4, 6)
-        layout.setSpacing(6)
+        layout.setContentsMargins(ls.SP_2, ls.SP_2, ls.SP_2, ls.SP_2)
+        layout.setSpacing(ls.SP_2)
 
         lbl_title = QLabel("AI COACH — CHẨN ĐOÁN & LỜI KHUYÊN")
         lbl_title.setStyleSheet(f"{ls.font(ls.FS_CAPTION, 800)} color: {ls.ACCENT}; border: none; background: transparent;")
@@ -81,7 +83,9 @@ class AdviceCardWidget(QFrame):
             "Huấn luyện xong, AI Coach sẽ phân tích kết quả và tư vấn bước tiếp theo tại đây."
         )
         self.lbl_empty.setWordWrap(True)
-        self.lbl_empty.setStyleSheet("color: #5b6b7f; font-size: 11px; font-style: italic; border: none;; border: none; background: transparent;")
+        self.lbl_empty.setStyleSheet(
+            ls.font(ls.FS_CAPTION, 500) + f"color: {ls.MUTED}; font-style: italic; border: none; background: transparent;"
+        )
         self._rows_layout.addWidget(self.lbl_empty)
 
     def set_result(self, result: TrainClassicResult) -> None:

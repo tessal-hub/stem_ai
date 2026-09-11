@@ -39,16 +39,19 @@ class TabHistory(QWidget):
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(10)
+        layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
+        layout.setSpacing(ls.SP_3)
 
         # Header Box
         header_box = QFrame()
-        header_box.setStyleSheet(ls.card())
+        header_box.setObjectName("HistHeader")
+        header_box.setStyleSheet(ls.card(pad=ls.SP_3))
         h_layout = QHBoxLayout(header_box)
+        h_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
+        h_layout.setSpacing(ls.SP_2)
 
         lbl = QLabel("CÁC LẦN HUẤN LUYỆN ĐÃ LƯU")
-        lbl.setStyleSheet(ls.font(ls.FS_BODY, 800) + f"color: {ls.INK};; border: none; background: transparent;")
+        lbl.setStyleSheet(ls.font(ls.FS_BODY, 800) + f"color: {ls.INK}; border: none; background: transparent;")
         h_layout.addWidget(lbl)
         h_layout.addStretch()
 
@@ -66,8 +69,11 @@ class TabHistory(QWidget):
 
         # Table Card
         table_box = QFrame()
-        table_box.setStyleSheet(ls.card())
+        table_box.setObjectName("HistTableCard")
+        table_box.setStyleSheet(ls.card(pad=ls.SP_3))
         t_layout = QVBoxLayout(table_box)
+        t_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
+        t_layout.setSpacing(ls.SP_2)
 
         self.table = QTableWidget()
         self.table.setColumnCount(6)
@@ -90,7 +96,8 @@ class TabHistory(QWidget):
         ])
         self.table_leaderboard.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table_leaderboard.verticalHeader().setVisible(False)
-        self.table_leaderboard.setMaximumHeight(170)
+        self.table_leaderboard.setMinimumHeight(140)
+        self.table_leaderboard.setMaximumHeight(220)
         self.table_leaderboard.setStyleSheet(
             ls.DATA_TABLE
             + f"QHeaderView::section {{ background: {ls.SURFACE_GOLD}; color: {ls.WARNING}; }}"
@@ -98,6 +105,14 @@ class TabHistory(QWidget):
         t_layout.addWidget(self.table_leaderboard, stretch=1)
 
         layout.addWidget(table_box, stretch=1)
+
+        self._configure_accessibility(btn_clear, btn_refresh)
+
+    def _configure_accessibility(self, btn_clear: QPushButton, btn_refresh: QPushButton) -> None:
+        btn_clear.setAccessibleName("Xóa sạch toàn bộ lịch sử thử nghiệm đã lưu")
+        btn_refresh.setAccessibleName("Tải lại danh sách lịch sử thử nghiệm")
+        self.table.setAccessibleName("Bảng danh sách lịch sử các lần huấn luyện mô hình")
+        self.table_leaderboard.setAccessibleName("Bảng vàng kỷ lục điểm số các thuật toán")
 
     def reload_history(self) -> None:
         exps = self.experiment_store.list_experiments()

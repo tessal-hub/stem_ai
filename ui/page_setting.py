@@ -23,9 +23,9 @@ from PyQt6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QFormLayout,
 from logic.locale_manager import locale_manager
 from logic.ui_i18n import normalize_ui_language, tr
 from ui.asset_utils import resolve_asset_path
-from ui.modern_layout import MARGIN_COMFORTABLE, SPACING_LG, SPACING_MD, SPACING_SM
-from ui.terminal_widget import TerminalWidget
-from ui.tokens import SETTINGS_ACCENT, SPACE_32
+from ui.tokens import (MARGIN_COMFORTABLE, SETTINGS_ACCENT, SPACE_32,
+                       SPACING_LG, SPACING_MD, SPACING_SM, STATUS_ERROR,
+                       STATUS_SUCCESS)
 
 
 class PageSetting(QWidget):
@@ -58,32 +58,20 @@ class PageSetting(QWidget):
         self._load_data()
 
     def _init_ui(self) -> None:
-        """Khởi tạo bố cục Dashboard 2 Cột với QScrollArea bảo vệ hiển thị."""
+        """Khởi tạo bố cục Dashboard 2 Cột fit toàn bộ trong một màn hình duy nhất."""
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
-
-        # ── Scroll Area bảo đảm giao diện không bị cắt ──
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
-
-        scroll_content = QWidget()
-        scroll_content.setObjectName("MainBox")
-        content_layout = QVBoxLayout(scroll_content)
-        content_layout.setContentsMargins(20, 20, 20, 20)
-        content_layout.setSpacing(16)
+        outer.setContentsMargins(20, 14, 20, 14)
+        outer.setSpacing(12)
 
         # ── Dashboard 2 Cột ──
         columns = QHBoxLayout()
-        columns.setSpacing(18)
+        columns.setSpacing(16)
 
         self._left_col = QVBoxLayout()
-        self._left_col.setSpacing(16)
+        self._left_col.setSpacing(12)
 
         self._right_col = QVBoxLayout()
-        self._right_col.setSpacing(16)
+        self._right_col.setSpacing(12)
 
         # Khởi tạo các khối chức năng
         self._sec_general = self._build_general_settings()
@@ -94,13 +82,10 @@ class PageSetting(QWidget):
 
         self._rebalance_layout(True)
 
-        columns.addLayout(self._left_col, stretch=11)
-        columns.addLayout(self._right_col, stretch=11)
+        columns.addLayout(self._left_col, stretch=1)
+        columns.addLayout(self._right_col, stretch=1)
 
-        content_layout.addLayout(columns, stretch=1)
-        scroll.setWidget(scroll_content)
-
-        outer.addWidget(scroll, stretch=1)
+        outer.addLayout(columns, stretch=1)
         outer.addWidget(self._build_control_bar())
 
     # ── Section Builders ────────────────────────
@@ -143,7 +128,8 @@ class PageSetting(QWidget):
         self.btn_browse_dataset.setIcon(folder_icon)
         self.btn_browse_dataset.setIconSize(QSize(14, 14))
         self.btn_browse_dataset.setProperty("type", "outline")
-        self.btn_browse_dataset.setFixedHeight(34)
+        self.btn_browse_dataset.setFixedHeight(36)
+        self.btn_browse_dataset.setAccessibleName("Browse dataset directory")
 
         dataset_container = QWidget()
         dataset_row = QHBoxLayout(dataset_container)
@@ -162,7 +148,8 @@ class PageSetting(QWidget):
         self.btn_browse_model.setIcon(folder_icon)
         self.btn_browse_model.setIconSize(QSize(14, 14))
         self.btn_browse_model.setProperty("type", "outline")
-        self.btn_browse_model.setFixedHeight(34)
+        self.btn_browse_model.setFixedHeight(36)
+        self.btn_browse_model.setAccessibleName("Browse model file")
 
         model_container = QWidget()
         model_row = QHBoxLayout(model_container)
@@ -296,15 +283,17 @@ class PageSetting(QWidget):
 
         self.btn_scan_quality = QPushButton("🔍 SCAN QUALITY")
         self.btn_scan_quality.setProperty("type", "primary")
-        self.btn_scan_quality.setFixedHeight(34)
+        self.btn_scan_quality.setFixedHeight(36)
         self.btn_scan_quality.setToolTip(
             "Scan all primitive gesture folders and generate a quality report"
         )
+        self.btn_scan_quality.setAccessibleName("Scan primitive dataset quality")
 
         self.btn_stop_scan = QPushButton("■ STOP SCAN")
         self.btn_stop_scan.setEnabled(False)
         self.btn_stop_scan.setProperty("type", "stop")
-        self.btn_stop_scan.setFixedHeight(34)
+        self.btn_stop_scan.setFixedHeight(36)
+        self.btn_stop_scan.setAccessibleName("Stop quality scan")
         self.btn_stop_scan.setToolTip("Stop the running quality scan")
 
         quality_btn_row.addWidget(self.btn_scan_quality, stretch=1)
@@ -381,14 +370,14 @@ class PageSetting(QWidget):
         """Thanh tác vụ lưu/hủy cấu hình đính bên dưới."""
         container = QFrame()
         container.setObjectName("CardFrame")
-        container.setStyleSheet("QFrame#CardFrame { border-top: 1px solid rgba(0,0,0,0.08); border-radius: 0px; }")
+        container.setStyleSheet("QFrame#CardFrame { border-top: 1px solid #e4e9f0; border-radius: 0px; }")
 
         row = QHBoxLayout(container)
         row.setContentsMargins(20, 12, 20, 12)
         row.setSpacing(14)
 
         self.lbl_status_msg = QLabel("")
-        self.lbl_status_msg.setStyleSheet("font-weight: 500; color: #10B981;")
+        self.lbl_status_msg.setStyleSheet("font-weight: 600; color: #1e7a46;")
         self.lbl_status_msg.hide()
 
         self.btn_revert = QPushButton("")
@@ -566,7 +555,7 @@ class PageSetting(QWidget):
 
     def show_status_message(self, text: str, is_error: bool = False, timeout_ms: int = 3000) -> None:
         """Hiển thị thông báo trạng thái tạm thời trên thanh điều khiển."""
-        color = "#EF4444" if is_error else "#10B981"
+        color = STATUS_ERROR if is_error else STATUS_SUCCESS
         self.lbl_status_msg.setStyleSheet(f"font-weight: 600; color: {color};")
         self.lbl_status_msg.setText(text)
         self.lbl_status_msg.show()

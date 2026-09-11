@@ -25,12 +25,12 @@ from PyQt6.QtWidgets import (
 import ml_lab.ui.lab_style as ls
 
 _CHANNELS = [
-    ("ax", "Gia tốc X", QColor("#0668d1")),
-    ("ay", "Gia tốc Y", QColor("#7c3aed")),
-    ("az", "Gia tốc Z", QColor("#0d9488")),
-    ("gx", "Xoay X", QColor("#d97706")),
-    ("gy", "Xoay Y", QColor("#dc2626")),
-    ("gz", "Xoay Z", QColor("#4d7c0f")),
+    ("ax", "Gia tốc X", QColor(ls.PLOT_AX)),
+    ("ay", "Gia tốc Y", QColor(ls.PLOT_AY)),
+    ("az", "Gia tốc Z", QColor(ls.PLOT_AZ)),
+    ("gx", "Xoay X", QColor(ls.PLOT_GX)),
+    ("gy", "Xoay Y", QColor(ls.PLOT_GY)),
+    ("gz", "Xoay Z", QColor(ls.PLOT_GZ)),
 ]
 
 
@@ -51,10 +51,12 @@ class _WaveCanvas(QWidget):
         try:
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             w, h = self.width(), self.height()
-            painter.fillRect(0, 0, w, h, QColor("#16181d"))
+            painter.fillRect(0, 0, w, h, QColor(ls.SURFACE))
+            painter.setPen(QPen(QColor(ls.BORDER), 1))
+            painter.drawRect(0, 0, w - 1, h - 1)
 
             if self._window is None or self._window.size == 0:
-                painter.setPen(QColor("#8494a7"))
+                painter.setPen(QColor(ls.MUTED))
                 painter.drawText(QRectF(0, 0, w, h), Qt.AlignmentFlag.AlignCenter,
                                  "Chọn một mẫu bị sai ở bên trái để xem dạng sóng.")
                 return
@@ -79,7 +81,7 @@ class _WaveCanvas(QWidget):
                 y_mid = y_top + strip_h / 2.0
 
                 # vạch 0
-                painter.setPen(QPen(QColor(255, 255, 255, 30), 1))
+                painter.setPen(QPen(QColor(ls.BORDER), 1, Qt.PenStyle.DashLine))
                 painter.drawLine(int(x0), int(y_mid), int(x0 + plot_w), int(y_mid))
 
                 vals = win[:, ci]
@@ -97,9 +99,9 @@ class _WaveCanvas(QWidget):
                     painter.drawLine(path_pts[i - 1], path_pts[i])
 
             # trục thời gian
-            painter.setPen(QColor(255, 255, 255, 90))
+            painter.setPen(QColor(ls.MUTED))
             painter.setFont(ls.font(ls.FS_MICRO))
-            painter.drawText(QRectF(0, h - margin_b - 14, w, 14),
+            painter.drawText(QRectF(0, h - margin_b - 14, w - 8, 14),
                              Qt.AlignmentFlag.AlignRight, "64 mẫu · ~1.3 giây")
         finally:
             painter.end()

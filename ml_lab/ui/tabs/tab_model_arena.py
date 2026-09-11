@@ -7,6 +7,8 @@ giữa Độ chính xác (Accuracy), Độ trễ thực thi (Latency), RAM, Flas
 
 from __future__ import annotations
 
+from ml_lab.data.window_config import STEP_SAMPLES, WINDOW_SAMPLES
+
 from pathlib import Path
 from typing import Any
 import warnings
@@ -33,7 +35,6 @@ from ml_lab.core.hyperparam_schema import (
     DecisionTreeConfig,
     ExtraTreesConfig,
     NearestCentroidConfig,
-    QDAConfig,
     RandomForestConfig,
     RidgeConfig,
     SGDConfig,
@@ -59,10 +60,14 @@ class ArenaWorker(QThread):
     sig_finished = pyqtSignal(list)  # list[TrainClassicResult]
     sig_error = pyqtSignal(str)
 
-    def __init__(self, dataset_dir: Path, include_standby: bool = False, parent: Any = None) -> None:
+    def __init__(
+        self, dataset_dir: Path, include_standby: bool = False,
+        allowed_spells: set[str] | None = None, parent: Any = None,
+    ) -> None:
         super().__init__(parent)
         self.dataset_dir = dataset_dir
         self.include_standby = include_standby
+        self.allowed_spells = set(allowed_spells) if allowed_spells is not None else None
 
     def run(self) -> None:
         try:
@@ -73,9 +78,10 @@ class ArenaWorker(QThread):
                 train_wins, val_wins, class_names = split_user_dataset_file_level(
                     self.dataset_dir,
                     val_fraction=0.2,
-                    window_size=64,
-                    step_size=16,
+                    window_size=WINDOW_SAMPLES,
+                    step_size=STEP_SAMPLES,
                     include_standby=self.include_standby,
+                    allowed_spells=self.allowed_spells,
                 )
                 if len(class_names) < 2:
                     self.sig_error.emit("Cần ít nhất 2 lớp cử chỉ để so sánh.")
@@ -100,7 +106,6 @@ class ArenaWorker(QThread):
                     ("ridge", RidgeConfig(alpha=1.0)),
                     ("sgd", SGDConfig(alpha=0.0001)),
                     ("nearest_centroid", NearestCentroidConfig()),
-                    ("qda", QDAConfig()),
                 ]
 
                 results: list[TrainClassicResult] = []
@@ -114,11 +119,11 @@ class ArenaWorker(QThread):
                         )
                         results.append(res)
                     except Exception as algo_exc:
-                        # 1 mô hình lỗi không cản trở 14 mô hình còn lại
+                        # 1 mô hình lỗi không cản trở 13 mô hình còn lại
                         failed.append((algo_key, str(algo_exc)))
 
                 if not results:
-                    self.sig_error.emit("Cả 15 mô hình đều lỗi. Chi tiết lỗi đầu tiên:\n" + (failed[0][1] if failed else ""))
+                    self.sig_error.emit("Cả 14 mô hình đều lỗi. Chi tiết lỗi đầu tiên:\n" + (failed[0][1] if failed else ""))
                     return
 
                 self.sig_progress.emit(100, "Hoàn tất đấu trường!")
@@ -140,29 +145,40 @@ class TabModelArena(QWidget):
         self.dataset_dir = Path(dataset_dir)
         self._worker: ArenaWorker | None = None
         self._results: list[TrainClassicResult] = []
+        self._allowed_spells: set[str] | None = None
 
         self._init_ui()
 
+    def set_allowed_spells(self, allowed: set[str] | None) -> None:
+        self._allowed_spells = set(allowed) if allowed is not None else None
+
+    def _get_allowed(self) -> set[str] | None:
+        return self._allowed_spells
+
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(12)
+        layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
+        layout.setSpacing(ls.SP_3)
 
         # Header Box
         header_box = QFrame()
-        header_box.setStyleSheet(ls.card())
+        header_box.setObjectName("ArenaHeader")
+        header_box.setStyleSheet(ls.card(pad=ls.SP_3))
         h_layout = QHBoxLayout(header_box)
+        h_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
+        h_layout.setSpacing(ls.SP_3)
 
         t_vbox = QVBoxLayout()
         lbl_t = QLabel("SO SÁNH 15 THUẬT TOÁN — THUẬT NÀO PHÙ HỢP NHẤT?")
         lbl_t.setStyleSheet(f"{ls.font(ls.FS_SECTION, 700)} color: {ls.ACCENT}; border: none; background: transparent;")
-        lbl_d = QLabel("Huấn luyện thử cả 15 thuật toán trên đúng dữ liệu của bạn, xếp hạng theo độ chính xác và tốc độ.")
-        lbl_d.setStyleSheet("color: #5b6b7f; font-size: 11px;; border: none; background: transparent;")
+        lbl_d = QLabel("Huấn luyện thử cả 14 thuật toán trên đúng dữ liệu của bạn, xếp hạng theo độ chính xác và tốc độ.")
+        lbl_d.setStyleSheet(ls.font(ls.FS_CAPTION) + f"color: {ls.MUTED}; border: none; background: transparent;")
+        lbl_d.setWordWrap(True)
         t_vbox.addWidget(lbl_t)
         t_vbox.addWidget(lbl_d)
         h_layout.addLayout(t_vbox, stretch=1)
 
-        self.btn_run_arena = QPushButton("Huấn luyện thử cả 15 mô hình")
+        self.btn_run_arena = QPushButton("Huấn luyện thử cả 14 mô hình")
         self.btn_run_arena.setStyleSheet(ls.BTN_PRIMARY)
         self.btn_run_arena.clicked.connect(self.run_arena)
         h_layout.addWidget(self.btn_run_arena)
@@ -171,8 +187,11 @@ class TabModelArena(QWidget):
 
         # Comparison Table Card
         table_box = QFrame()
-        table_box.setStyleSheet(ls.card())
+        table_box.setObjectName("ArenaTableCard")
+        table_box.setStyleSheet(ls.card(pad=ls.SP_3))
         tb_layout = QVBoxLayout(table_box)
+        tb_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
+        tb_layout.setSpacing(ls.SP_2)
 
         self.table = QTableWidget()
         self.table.setColumnCount(8)
@@ -193,7 +212,7 @@ class TabModelArena(QWidget):
         p_layout.setSpacing(4)
 
         lbl_p_title = QLabel("<b>Chọn mô hình thế nào cho hợp lý?</b>")
-        lbl_p_title.setStyleSheet("font-size: 12px; color: #1e3a8a;; border: none; background: transparent;")
+        lbl_p_title.setStyleSheet(ls.font(ls.FS_BODY, 700) + f"color: {ls.ACCENT_NOTE_TEXT}; border: none; background: transparent;")
         lbl_p_desc = QLabel(
             "• Cần <b>phản ứng tức thì</b>: Naive Bayes, Cây quyết định, Hồi quy logistic, LDA.<br>"
             "• Cần <b>chính xác cao, ít bắt nhầm</b>: Random Forest, Gradient Boosting.<br>"
@@ -201,7 +220,7 @@ class TabModelArena(QWidget):
             "• Cử chỉ <b>khó phân tách, cần ranh giới cong</b>: SVM (RBF)."
         )
         lbl_p_desc.setWordWrap(True)
-        lbl_p_desc.setStyleSheet("font-size: 11px; color: #1e3a8a; line-height: 1.4;; border: none; background: transparent;")
+        lbl_p_desc.setStyleSheet(ls.font(ls.FS_CAPTION) + f"color: {ls.ACCENT_NOTE_TEXT}; border: none; background: transparent;")
         p_layout.addWidget(lbl_p_title)
         p_layout.addWidget(lbl_p_desc)
         tb_layout.addWidget(pedagogy_box)
@@ -211,11 +230,20 @@ class TabModelArena(QWidget):
         # Progress
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
-        self.progress_bar.setFixedHeight(5)
+        self.progress_bar.setFixedHeight(4)
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setStyleSheet(ls.PROGRESS_BAR)
         layout.addWidget(self.progress_bar)
 
+        self._configure_accessibility()
+
+    def _configure_accessibility(self) -> None:
+        self.btn_run_arena.setAccessibleName("Bắt đầu huấn luyện thử cả 14 mô hình để so sánh")
+        self.table.setAccessibleName("Bảng xếp hạng hiệu năng và độ chính xác 14 thuật toán")
+        self.progress_bar.setAccessibleName("Tiến trình huấn luyện so sánh đấu trường mô hình")
+
     def run_arena(self) -> None:
-        counts = count_user_spell_samples(self.dataset_dir)
+        counts = count_user_spell_samples(self.dataset_dir, allowed_spells=self._get_allowed())
         if len(counts) < 2:
             QMessageBox.warning(
                 self,
@@ -229,8 +257,11 @@ class TabModelArena(QWidget):
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(10)
 
-        self._worker = ArenaWorker(self.dataset_dir)
+        self._worker = ArenaWorker(self.dataset_dir, allowed_spells=self._get_allowed())
         self._worker.sig_progress.connect(lambda pct, msg: self.progress_bar.setValue(pct))
+        self._worker.sig_progress.connect(
+            lambda pct, msg: self.progress_bar.setAccessibleDescription(f"Tiến trình đấu trường {pct}%: {msg}")
+        )
         self._worker.sig_finished.connect(self._on_arena_finished)
         self._worker.sig_warning.connect(lambda msg: QMessageBox.warning(
             self, "Một số mô hình bỏ qua", msg + "\n\nCác mô hình còn lại vẫn được xếp hạng bình thường."

@@ -11,6 +11,8 @@ tổng quát hóa tốt hơn không? (Tập validation luôn giữ nguyên — �
 
 from __future__ import annotations
 
+from ml_lab.data.window_config import STEP_SAMPLES, WINDOW_SAMPLES
+
 import warnings
 from pathlib import Path
 from typing import Any
@@ -29,6 +31,7 @@ def compare_augmentation_effect(
     multiplier: int = 3,
     noise_std: float = 0.03,
     max_depth: int = 4,
+    allowed_spells: set[str] | None = None,
 ) -> dict[str, Any]:
     """
     Chạy thí nghiệm A/B trên dataset spell.
@@ -44,12 +47,13 @@ def compare_augmentation_effect(
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
 
-        counts = list_user_spell_classes(dataset_root)
+        counts = list_user_spell_classes(dataset_root, allowed_spells=allowed_spells)
         if len(counts) < 2:
             raise ValueError("Cần ít nhất 2 lớp thần chú để chạy thí nghiệm so sánh.")
 
         train_samples, val_samples, class_names = split_user_dataset_file_level(
-            Path(dataset_root), val_fraction=val_fraction, window_size=64, step_size=16
+            Path(dataset_root), val_fraction=val_fraction, window_size=WINDOW_SAMPLES, step_size=STEP_SAMPLES,
+            allowed_spells=allowed_spells,
         )
         if len(train_samples) == 0 or len(val_samples) == 0:
             raise ValueError("Không đủ mẫu để chia tập train/validation. Ghi thêm dữ liệu.")
@@ -68,7 +72,8 @@ def compare_augmentation_effect(
             wins_by_class.setdefault(cls_idx, []).append(window)
         aug_samples: list[tuple[Any, int]] = list(train_samples)
         n_orig = len(train_samples)
-        for i in range(n_orig * max(1, multiplier - 1)):
+        n_to_gen = n_orig * max(0, multiplier - 1)
+        for i in range(n_to_gen):
             window, cls_idx = train_samples[i % n_orig]
             try:
                 aug_win = augment_sample_window(

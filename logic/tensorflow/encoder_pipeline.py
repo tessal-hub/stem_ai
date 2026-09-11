@@ -210,26 +210,14 @@ def _time_warp(sample: np.ndarray, factor: float) -> np.ndarray:
     warped_t = np.linspace(0.0, 1.0, num=warped_size, dtype=np.float32)
     target_t = np.linspace(0.0, 1.0, num=window_size, dtype=np.float32)
 
-    try:
-        from scipy.interpolate import interp1d
-
-        to_warp = interp1d(source_t, sample, axis=0, kind="linear", fill_value="extrapolate")
-        warped = to_warp(warped_t)
-        to_target = interp1d(
-            warped_t, warped, axis=0, kind="linear", fill_value="extrapolate"
-        )
-        return np.asarray(to_target(target_t), dtype=np.float32)
-    except ModuleNotFoundError:
-        warped_channels = [
-            np.interp(warped_t, source_t, sample[:, ch]).astype(np.float32)
-            for ch in range(sample.shape[1])
-        ]
-        warped = np.stack(warped_channels, axis=1)
-        restored_channels = [
-            np.interp(target_t, warped_t, warped[:, ch]).astype(np.float32)
-            for ch in range(warped.shape[1])
-        ]
-        return np.stack(restored_channels, axis=1).astype(np.float32)
+    warped = np.column_stack([
+        np.interp(warped_t, source_t, sample[:, ch])
+        for ch in range(sample.shape[1])
+    ])
+    return np.column_stack([
+        np.interp(target_t, warped_t, warped[:, ch])
+        for ch in range(warped.shape[1])
+    ]).astype(np.float32)
 
 
 def augment_imu_sample(sample: np.ndarray, n_augments: int = 5) -> list[np.ndarray]:

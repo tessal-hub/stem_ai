@@ -56,32 +56,37 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
     digitalWrite(PIN_STATUS_LED, HIGH);
 
     // =========================================================================
-    // CONTROL YOUR HARDWARE HERE BASED ON spell_index (0, 1, 2, 3, ...)
+    // CONTROL YOUR HARDWARE HERE BASED ON spell_index (1 to 5)
     // =========================================================================
     switch (packet.spell_index) {
-        case 0:
-            // Spell 0 (e.g. LUMOS -> Turn ON light/relay)
-            Serial.println("Action: [Spell 0] -> Turn ON Relay 1");
+        case 1:
+            // Spell 1 (e.g. BOOST -> Turn ON light/relay)
+            Serial.println("Action: [Spell 1] -> Turn ON Relay 1");
             digitalWrite(PIN_RELAY_1, HIGH);
             break;
 
-        case 1:
-            // Spell 1 (e.g. NOX -> Turn OFF light/relay)
-            Serial.println("Action: [Spell 1] -> Turn OFF Relay 1");
+        case 2:
+            // Spell 2 (e.g. COPY -> Turn OFF light/relay)
+            Serial.println("Action: [Spell 2] -> Turn OFF Relay 1");
             digitalWrite(PIN_RELAY_1, LOW);
             break;
 
-        case 2:
-            // Spell 2 (e.g. ALOHOMORA -> Toggle Relay 2 or open door)
-            Serial.println("Action: [Spell 2] -> Trigger Relay 2");
+        case 3:
+            // Spell 3 (e.g. FIREBALL -> Toggle Relay 2 or open door)
+            Serial.println("Action: [Spell 3] -> Trigger Relay 2");
             digitalWrite(PIN_RELAY_2, HIGH);
             delay(1000);
             digitalWrite(PIN_RELAY_2, LOW);
             break;
 
-        case 3:
-            // Spell 3 (e.g. AGUAMENTI)
-            Serial.println("Action: [Spell 3] -> Custom action");
+        case 4:
+            // Spell 4 (e.g. REFLECT)
+            Serial.println("Action: [Spell 4] -> Custom action");
+            break;
+
+        case 5:
+            // Spell 5 (e.g. STOP)
+            Serial.println("Action: [Spell 5] -> Custom action");
             break;
 
         default:

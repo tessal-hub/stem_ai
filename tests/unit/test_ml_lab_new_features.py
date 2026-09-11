@@ -80,19 +80,43 @@ def _make_result_with_model(model, scaler=None):
 
 # ── 1. LiveGesturePredictor ───────────────────────────────────────────
 
+def _motion_stream(n_standby=64, n_burst=64, amp=60.0, seed=0):
+    """Còn standby, burst sin, còn standby — như vung 1 cái."""
+    rng = np.random.RandomState(seed)
+    stream = [[0.0] * 6] * n_standby
+    t = np.linspace(0, 2 * np.pi, n_burst)
+    for v in (np.sin(t) * amp):
+        stream.append([
+            0.02 + v * 0.01 + rng.normal(0, 0.005),
+            -0.01 - v * 0.008 + rng.normal(0, 0.005),
+            1.0 + v * 0.012 + rng.normal(0, 0.005),
+            v + rng.normal(0, 0.5), v * 0.5, -v * 0.3,
+        ])
+    stream += [[0.0] * 6] * n_standby
+    return stream
+
+
 def test_live_predictor_returns_prediction_after_window(trained_result):
-    predictor = LiveGesturePredictor(trained_result)
-    rng = np.random.RandomState(0)
+    predictor = LiveGesturePredictor(
+        trained_result, min_confidence=0.0, min_margin=0.0,
+    )
     out = None
-    for _ in range(WINDOW_SIZE + 10):
-        sample = rng.randn(6).astype(np.float32)
+    for sample in _motion_stream():
         out = predictor.feed(sample)
         if out is not None:
             break
-    assert out is not None, "phải ra dự đoán sau khi gom đủ 64 mẫu"
+    assert out is not None, "phải ra dự đoán tại đỉnh chuyển động"
     spell, conf = out
     assert spell in ("lumos", "nox")
     assert 0.0 <= conf <= 100.0
+
+
+def test_live_predictor_ignores_standby(trained_result):
+    predictor = LiveGesturePredictor(
+        trained_result, min_confidence=0.0, min_margin=0.0,
+    )
+    for _ in range(WINDOW_SIZE + 10):
+        assert predictor.feed([0.0] * 6) is None
 
 
 def test_live_predictor_respects_cooldown(trained_result):

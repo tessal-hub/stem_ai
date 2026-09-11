@@ -36,6 +36,16 @@ from .prototypical_recognizer import PrototypicalRecognizer
 from .recorder import DataRecorder
 from .serial_worker import SerialWorker
 from .tensorflow.pipeline import GestureModelBuildWorker
+from ml_lab.core.serial_coordinator import (
+    ML_LAB_FLASH,
+    ML_LAB_SERIAL,
+    STEM_FLASH,
+    STEM_SERIAL,
+    acquire as coord_acquire,
+    owner_of as coord_owner_of,
+    register_owner as coord_register,
+    release as coord_release,
+)
 from .primitive_quality_worker import PrimitiveQualityWorker
 from logic.dataset_layout import (
     discover_class_directories,
@@ -235,8 +245,8 @@ log = logging.getLogger(__name__)
 class _EncoderLoadWorker(QThread):
     sig_done = pyqtSignal(object, object, str)
 
-    def __init__(self, app_data_dir):
-        super().__init__()
+    def __init__(self, app_data_dir, parent=None):
+        super().__init__(parent)
         self.app_data_dir = Path(app_data_dir)
 
     def run(self):
@@ -469,20 +479,37 @@ class Handler(QObject):
     def __init__(
         self,
         ui_page_wand,
-        ui_page_record,
-        ui_page_home,
-        data_store: DataStore,
+        ui_page_record=None,
+        ui_page_home=None,
+        data_store: DataStore = None,
         ui_page_setting=None,
         ui_primitive_collect=None,
         spell_config: SpellConfigStore | None = None,
         sound_player: SoundPlayer | None = None,
+        ui_main_window=None,
     ) -> None:
         super().__init__()
         self.ui_wand = ui_page_wand
-        self.ui_record = ui_page_record
         self.ui_home = ui_page_home
         self.ui_setting = ui_page_setting
-        self.ui_primitive_collect = ui_primitive_collect
+        self._page_registry = ui_main_window
+        self._ui_record = None
+        self._ui_primitive_collect = None
+        self._pending_firmware_status = None
+        if ui_main_window is not None:
+            # Trang nặng (Record ~0.6s, PrimitiveCollect ~2.4s camera) được dựng trễ
+            # bởi preload idle — wire signal lúc attach, không chặn main thread sau show.
+            ui_main_window.add_page_created_hook("record", self._attach_record)
+            ui_main_window.add_page_created_hook("primitive_collect", self._attach_primitive_collect)
+            for key, attach in (("record", self._attach_record),
+                                ("primitive_collect", self._attach_primitive_collect)):
+                cached = ui_main_window.cached_page(key)
+                if cached is not None:
+                    attach(cached)
+        else:
+            # API cũ (test): nhận trang dựng sẵn
+            self._ui_record = ui_page_record
+            self._ui_primitive_collect = ui_primitive_collect
         self.store = data_store
         if isinstance(spell_config, SpellConfigStore):
             self.spell_config = spell_config
@@ -501,9 +528,79 @@ class Handler(QObject):
         self._connect_signals()
         self._load_initial_state()
 
+    @property
+    def ui_record(self):
+        """Trang Ghi Mẫu — None cho tới khi preload/menu dựng xong (attach qua hook).
+
+        Truy cập khi trang chưa dựng sẽ yêu cầu registry dựng luôn (auto-resolve),
+        nên 40+ tham chiếu runtime cũ vẫn chạy đúng không cần sửa.
+        """
+        if self._ui_record is None and self._page_registry is not None:
+            try:
+                _ = self._page_registry.page_record
+            except Exception:
+                return None
+        return self._ui_record
+
+    @ui_record.setter
+    def ui_record(self, page) -> None:
+        self._ui_record = page
+
+    @property
+    def ui_primitive_collect(self):
+        if self._ui_primitive_collect is None and self._page_registry is not None:
+            try:
+                _ = self._page_registry.page_primitive_collect
+            except Exception:
+                return None
+        return self._ui_primitive_collect
+
+    @ui_primitive_collect.setter
+    def ui_primitive_collect(self, page) -> None:
+        self._ui_primitive_collect = page
+
+    def _attach_record(self, page) -> None:
+        """Wire signal cho trang Ghi Mẫu — chạy đúng một lần khi trang lần đầu dựng."""
+        if self._ui_record is page:
+            return
+        self._ui_record = page
+        page.sig_data_cropped.connect(self.on_data_cropped)
+        page.sig_start_record.connect(self.on_record_start)
+        page.sig_stop_record.connect(self.on_record_stop)
+        page.sig_spell_selected.connect(self.on_spell_selected)
+        page.sig_spell_deleted.connect(self.on_spell_deleted)
+        if hasattr(page, 'sig_show_similarity_matrix'):
+            page.sig_show_similarity_matrix.connect(self.on_show_similarity_matrix)
+        page.sig_clear_buffer.connect(self.on_clear_buffer)
+        if self._pending_firmware_status is not None:
+            try:
+                page.update_firmware_status(*self._pending_firmware_status)
+            except Exception:
+                pass
+            self._pending_firmware_status = None
+
+    def _attach_primitive_collect(self, page) -> None:
+        """Wire signal cho trang Nguyên Mẫu — chạy đúng một lần khi trang lần đầu dựng."""
+        if self._ui_primitive_collect is page:
+            return
+        self._ui_primitive_collect = page
+        page.sig_start_collection.connect(self.on_start_collection)
+        page.sig_stop_collection.connect(self.on_stop_collection)
+        page.sig_capture_collection.connect(self.on_capture_collection)
+        page.sig_train_encoder_requested.connect(self.on_train_encoder_requested)
+
+    def _route_firmware_to_record(self, *args) -> None:
+        """Firmware status tới trang Ghi Mẫu — đệm nếu trang chưa dựng."""
+        if self._ui_record is not None:
+            self._ui_record.update_firmware_status(*args)
+        else:
+            self._pending_firmware_status = args
+
     def _init_workers(self) -> None:
         """Khởi tạo các luồng xử lý nền (Workers)."""
         self.serial_worker = SerialWorker()
+        # Đăng ký để ML Lab xin cổng thì coordinator tự gọi disconnect này
+        coord_register(STEM_SERIAL, self._coordinator_release_serial)
         self.uploader = ModelUploader()
         self.recorder = DataRecorder(dataset_dir=self.store.dataset_dir)
         self.flash_worker = FlashWorker()
@@ -580,24 +677,18 @@ class Handler(QObject):
         self._connect_store_signals()
 
     def _connect_ui_signals(self) -> None:
-        """Kết nối tín hiệu từ giao diện."""
+        """Kết nối tín hiệu từ giao diện.
+
+        Trang nhẹ (Wand/Setting/Home) wire ngay — rẻ. Trang nặng (Record,
+        PrimitiveCollect) wire trong `_attach_record` / `_attach_primitive_collect`
+        khi preload dựng xong, để không dựng trang nào ngay sau showMaximized.
+        """
         self.ui_wand.sig_serial_scan.connect(self.on_serial_scan)
         self.ui_wand.sig_serial_connect.connect(self.on_serial_connect)
         self.ui_wand.sig_serial_disconnect.connect(self.on_serial_disconnect)
         self.ui_wand.sig_flash_upload.connect(self.on_flash_upload)
         if hasattr(self.ui_wand, 'sig_show_similarity_matrix'):
             self.ui_wand.sig_show_similarity_matrix.connect(self.on_show_similarity_matrix)
-
-        self.ui_record.sig_data_cropped.connect(self.on_data_cropped)
-        self.ui_record.sig_start_record.connect(self.on_record_start)
-        self.ui_record.sig_stop_record.connect(self.on_record_stop)
-        self.ui_record.sig_spell_selected.connect(self.on_spell_selected)
-        self.ui_record.sig_spell_deleted.connect(self.on_spell_deleted)
-        if hasattr(self.ui_record, 'sig_show_similarity_matrix'):
-            self.ui_record.sig_show_similarity_matrix.connect(self.on_show_similarity_matrix)
-
-        self.ui_record.sig_clear_buffer.connect(self.on_clear_buffer)
-
         self.ui_wand.sig_train_build_firmware_requested.connect(self.on_build_firmware)
 
         self.ui_setting.sig_settings_saved.connect(self.on_settings_saved)
@@ -607,12 +698,6 @@ class Handler(QObject):
         self.ui_setting.sig_flash_inference_firmware.connect(self.on_flash_inference_firmware)
         self.ui_setting.sig_scan_primitive_quality.connect(self.on_primitive_quality_scan_requested)
         self.ui_setting.sig_stop_primitive_scan.connect(self.on_primitive_quality_scan_stop)
-
-        if self.ui_primitive_collect:
-            self.ui_primitive_collect.sig_start_collection.connect(self.on_start_collection)
-            self.ui_primitive_collect.sig_stop_collection.connect(self.on_stop_collection)
-            self.ui_primitive_collect.sig_capture_collection.connect(self.on_capture_collection)
-            self.ui_primitive_collect.sig_train_encoder_requested.connect(self.on_train_encoder_requested)
 
     def _connect_worker_signals(self) -> None:
         """Kết nối tín hiệu từ các worker nền."""
@@ -659,7 +744,7 @@ class Handler(QObject):
         self.store.sig_firmware_detected.connect(self.ui_wand.set_firmware_status, type=Qt.ConnectionType.QueuedConnection)
         self.store.sig_firmware_detected.connect(self.ui_home._on_firmware_updated, type=Qt.ConnectionType.QueuedConnection)
         self.store.sig_firmware_detected.connect(self.ui_setting.update_firmware_status, type=Qt.ConnectionType.QueuedConnection)
-        self.store.sig_firmware_detected.connect(self.ui_record.update_firmware_status, type=Qt.ConnectionType.QueuedConnection)
+        self.store.sig_firmware_detected.connect(self._route_firmware_to_record, type=Qt.ConnectionType.QueuedConnection)
 
     def _on_prediction_for_sound(self, action: str, confidence: float) -> None:
         """Phát hiệu ứng âm thanh khi hệ thống nhận diện thành công một spell."""
@@ -683,6 +768,9 @@ class Handler(QObject):
         """Bắt đầu kết nối Serial tới cổng đã chọn."""
         if not port:
             return
+        # Claim toàn cục trước: nếu ML Lab đang giữ cổng này thì nó tự
+        # disconnect rồi mình mới mở — hết xung đột COM.
+        coord_acquire(STEM_SERIAL, port)
         with self._port_lock:
             if self._port_owner and self._port_owner != "serial":
                 return
@@ -696,9 +784,28 @@ class Handler(QObject):
 
     def on_serial_disconnect(self) -> None:
         """Ngắt kết nối Serial (non-blocking)."""
+        try:
+            coord_release(STEM_SERIAL, getattr(self.serial_worker, "port", None))
+        except Exception:
+            pass
         if self.serial_worker.isRunning():
             self.serial_worker.finished.connect(self._on_serial_stopped)
             self.serial_worker.stop()
+
+    def _coordinator_release_serial(self) -> None:
+        """Callback cho coordinator: ML Lab/flash xin cổng → tự nhả."""
+        try:
+            if self.serial_worker.isRunning():
+                self.ui_wand.append_terminal_text(
+                    ">> [PORT] ML Lab cần cổng — đã tự ngắt kết nối STEM để tránh xung đột."
+                )
+                self.serial_worker.finished.connect(self._on_serial_stopped)
+                self.serial_worker.stop()
+            else:
+                with self._port_lock:
+                    self._port_owner = None
+        except Exception as exc:
+            log.warning("Handler: coordinator auto-release failed: %s", exc)
 
     def _init_usb_hotplug(self) -> None:
         """Khởi động bộ giám sát cắm/rút USB đũa phép tự động."""
@@ -726,12 +833,16 @@ class Handler(QObject):
                 self.ui_wand.update_serial_port_list(sorted(list(curr_ports)))
 
                 # 1. Phát hiện cắm đũa phép mới -> Tự động kết nối
+                # (bỏ qua cổng ML Lab đang giữ — tránh giật lại gây xung đột)
                 if new_ports and not self.serial_worker.isRunning():
                     target_port = sorted(new_ports)[0]
-                    self.ui_wand.append_terminal_text(
-                        f">> [AUTO USB] Đã phát hiện đũa phép tại {target_port}. Tự động kết nối..."
-                    )
-                    self.on_serial_connect(target_port)
+                    if coord_owner_of(target_port) in (ML_LAB_SERIAL, ML_LAB_FLASH, STEM_FLASH):
+                        pass
+                    else:
+                        self.ui_wand.append_terminal_text(
+                            f">> [AUTO USB] Đã phát hiện đũa phép tại {target_port}. Tự động kết nối..."
+                        )
+                        self.on_serial_connect(target_port)
 
                 # 2. Phát hiện rút đũa phép -> Tự động ngắt kết nối an toàn
                 if removed_ports and self.serial_worker.isRunning():
@@ -973,6 +1084,10 @@ class Handler(QObject):
             self.serial_worker.finished.disconnect(self._on_serial_stopped)
         except (TypeError, RuntimeError):
             pass
+        try:
+            coord_release(STEM_SERIAL)
+        except Exception:
+            pass
         with self._port_lock:
             self._port_owner = None
 
@@ -996,7 +1111,7 @@ class Handler(QObject):
             self.ui_home.set_mode(mode)
 
     def _start_async_encoder_load(self) -> None:
-        self._encoder_worker = _EncoderLoadWorker(APP_DATA_DIR)
+        self._encoder_worker = _EncoderLoadWorker(APP_DATA_DIR, parent=self)
         self._encoder_worker.sig_done.connect(self._on_encoder_loaded)
         if not self._encoder_worker.isRunning():
             self._encoder_worker.start()
@@ -1835,6 +1950,8 @@ class Handler(QObject):
             self.ui_setting.update_flash_progress(0)
             self.ui_setting.set_flash_buttons_enabled(False)
 
+        # Claim toàn cục: ML Lab đang giữ cổng này thì tự nhả trước khi esptool mở
+        coord_acquire(STEM_FLASH, port)
         self.flash_worker.flash_firmware(port, str(bin_path))
 
     def _flash_log_to_console(self, text: str) -> None:
@@ -1847,6 +1964,10 @@ class Handler(QObject):
         flashed_bin_type = self._pending_flash_bin_type
         self._clear_pending_flash_context()
         self._set_port_owner(None)
+        try:
+            coord_release(STEM_FLASH)
+        except Exception:
+            pass
         self._set_mode(self._MODE_IDLE)
 
         if self.ui_setting:
@@ -1941,6 +2062,11 @@ class Handler(QObject):
         if getattr(self, '_shutdown_done', False):
             return
         self._shutdown_done = True
+        try:
+            coord_release(STEM_SERIAL)
+            coord_release(STEM_FLASH)
+        except Exception:
+            pass
         if hasattr(self, '_feature_timer') and self._feature_timer:
             self._feature_timer.stop()
         if hasattr(self, '_consistency_debounce_timer') and self._consistency_debounce_timer:
@@ -1970,7 +2096,12 @@ class Handler(QObject):
                         w.wait(300)
                     except Exception:
                         pass
-                try:
-                    w.disconnect()
-                except (TypeError, RuntimeError):
-                    pass
+                # Chỉ ngắt signal custom — disconnect() trống sẽ chạm cả finished/
+                # destroyed của QThread và phát warning "wildcard call disconnects".
+                for sig_name in ("sig_done", "sig_status", "sig_progress", "sig_finished"):
+                    sig = getattr(w, sig_name, None)
+                    if sig is not None:
+                        try:
+                            sig.disconnect()
+                        except (TypeError, RuntimeError):
+                            pass

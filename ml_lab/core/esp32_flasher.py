@@ -205,12 +205,23 @@ class Esp32FlashWorker(QThread):
 
     def _flash_payload(self) -> tuple[bool, str]:
         """Thực thi lệnh nạp mã nguồn vào ESP32 qua esptool Python API."""
-        bin_target = PROJECT_ROOT / "esp32_classic_ml" / "build" / "esp32_classic_ml.bin"
-        if not bin_target.exists():
-            bin_target = PROJECT_ROOT / "assets" / "firmware" / "classic_inference.bin"
+        build_bin = PROJECT_ROOT / "esp32_classic_ml" / "build" / "esp32_classic_ml.bin"
+        asset_bin = PROJECT_ROOT / "assets" / "firmware" / "classic_inference.bin"
+        bin_target = build_bin if build_bin.exists() else asset_bin
 
         if not bin_target.exists():
             return True, "Đã đồng bộ mã C++ thành công vào esp32_classic_ml/main/ (Sẵn sàng biên dịch)"
+
+        # Cảnh báo bin cũ: vừa đồng bộ .h/.cc mới nhưng chưa build -> bin có thể lỗi thời
+        try:
+            main_h = PROJECT_ROOT / "esp32_classic_ml" / "main" / "model_classic.h"
+            if main_h.exists() and bin_target.stat().st_mtime < main_h.stat().st_mtime:
+                self.log_msg.emit(
+                    "[WARN] File .bin cũ hơn model_classic.h vừa sinh — đang nạp firmware CŨ. "
+                    "Chạy 'idf.py build' trong esp32_classic_ml/ rồi nạp lại để có mô hình mới."
+                )
+        except Exception:
+            pass
 
         # Tham số tương thích esptool v5 (dùng dấu gạch ngang chuẩn)
         esptool_args = [

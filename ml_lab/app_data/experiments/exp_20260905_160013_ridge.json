@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-09-05T16:00:13.482708",
+  "algo": "ridge",
+  "algo_name": "Ridge Classifier (Tuyến tính L2)",
+  "train_accuracy": 0.9940119760479041,
+  "val_accuracy": 1.0,
+  "cv_mean": 0.982089552238806,
+  "cv_std": 0.011169126527683391,
+  "class_names": [
+    "BOOST",
+    "P",
+    "REFLECT",
+    "STOP"
+  ],
+  "num_features": 75,
+  "hyperparams": {
+    "alpha": 1.0
+  },
+  "benchmark": {
+    "mcu_latency_ms": 0.04,
+    "mcu_ram_kb": 0.1,
+    "mcu_flash_kb": 2.2,
+    "complexity_score": 1.5
+  }
+}

@@ -17,6 +17,7 @@ class FeatureGroupConfig:
     """Cấu hình bật/tắt các nhóm đặc trưng."""
     include_basic_stats: bool = True       # Mean, Std, Min, Max, Range (5 feats * 6 channels = 30)
     include_energy_dynamics: bool = True   # RMS, Energy, Zero-Crossing Rate (3 feats * 6 channels = 18)
+    include_temporal_splits: bool = True   # First-Half Mean, Second-Half Mean (2 feats * 6 channels = 12)
     include_magnitudes: bool = True        # |a| và |g| magnitudes (6 feats * 2 = 12)
     include_cross_derivatives: bool = True # az*gx, az*gy, max_jerk (3 feats)
 
@@ -47,6 +48,8 @@ class ClassicFeatureExtractor:
                 names.extend([f"{ch}_mean", f"{ch}_std", f"{ch}_min", f"{ch}_max", f"{ch}_range"])
             if self.config.include_energy_dynamics:
                 names.extend([f"{ch}_rms", f"{ch}_energy", f"{ch}_zcr"])
+            if self.config.include_temporal_splits:
+                names.extend([f"{ch}_mean_h1", f"{ch}_mean_h2"])
 
         if self.config.include_magnitudes:
             for mag_name in ("acc_mag", "gyro_mag"):
@@ -91,6 +94,12 @@ class ClassicFeatureExtractor:
                 centered = col - mean_val
                 zcr = float(np.sum(centered[:-1] * centered[1:] < 0) / (N - 1))
                 features.extend([rms_val, energy_val, zcr])
+
+            if self.config.include_temporal_splits:
+                half = N // 2
+                mean_h1 = float(np.mean(col[:half])) if half > 0 else mean_val
+                mean_h2 = float(np.mean(col[half:])) if half < N else mean_val
+                features.extend([mean_h1, mean_h2])
 
         # 2. Magnitudes
         if self.config.include_magnitudes:

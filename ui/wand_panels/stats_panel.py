@@ -24,7 +24,7 @@ def _get_pg():
 from logic.theme_manager import theme_manager
 from ui.i18n_bridge import tr_ui
 from ui.layout_utils import clear_layout
-from ui.modern_layout import SPACING_LG, SPACING_SM, SPACING_XS
+from ui.tokens import SPACING_LG, SPACING_SM, SPACING_XS
 
 from .shared import make_card, make_section_label
 
@@ -57,11 +57,10 @@ class WandStatsPanel(QWidget):
         card_layout.addLayout(self.layout_stats)
 
         # Biểu đồ dataset
-        # Requirement 6: Height 300px
-        pg = _get_pg()
+        palette = theme_manager.get_palette()
         self.stats_plot = pg.PlotWidget()
         self.stats_plot.setFixedHeight(300)
-        self.stats_plot.setBackground("transparent")
+        self.stats_plot.setBackground(palette.SURFACE_PRIMARY)
         self.stats_plot.setMouseEnabled(x=False, y=False)
         self.stats_plot.hideButtons()
         self.stats_plot.showGrid(x=False, y=True, alpha=0.3)
@@ -124,7 +123,7 @@ class WandStatsPanel(QWidget):
     def refresh_styles(self) -> None:
         """Làm mới style cho đồ thị và nhãn theo theme."""
         palette = theme_manager.get_palette()
-        self.stats_plot.setBackground("transparent")
+        self.stats_plot.setBackground(palette.SURFACE_PRIMARY)
         ax_bottom = self.stats_plot.getAxis("bottom")
         ax_left = self.stats_plot.getAxis("left")
         ax_bottom.setPen(palette.TEXT_SECONDARY)

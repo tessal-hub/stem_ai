@@ -45,21 +45,27 @@ static void OnEspNowRecv(const esp_now_recv_info_t *recv_info, const uint8_t *da
 
     gpio_set_level(PIN_STATUS_LED, 1);
 
-    // Control hardware based on spell_index
+    // Control hardware based on spell_index (1 to 5)
     switch (packet.spell_index) {
-        case 0:
-            ESP_LOGI(TAG, "Action: [Spell 0] -> Turn ON Relay 1");
+        case 1:
+            ESP_LOGI(TAG, "Action: [Spell 1] -> Turn ON Relay 1");
             gpio_set_level(PIN_RELAY_1, 1);
             break;
-        case 1:
-            ESP_LOGI(TAG, "Action: [Spell 1] -> Turn OFF Relay 1");
+        case 2:
+            ESP_LOGI(TAG, "Action: [Spell 2] -> Turn OFF Relay 1");
             gpio_set_level(PIN_RELAY_1, 0);
             break;
-        case 2:
-            ESP_LOGI(TAG, "Action: [Spell 2] -> Toggle Relay 2");
+        case 3:
+            ESP_LOGI(TAG, "Action: [Spell 3] -> Toggle Relay 2");
             gpio_set_level(PIN_RELAY_2, 1);
             vTaskDelay(pdMS_TO_TICKS(1000));
             gpio_set_level(PIN_RELAY_2, 0);
+            break;
+        case 4:
+            ESP_LOGI(TAG, "Action: [Spell 4] -> Custom action");
+            break;
+        case 5:
+            ESP_LOGI(TAG, "Action: [Spell 5] -> Custom action");
             break;
         default:
             ESP_LOGI(TAG, "Action: [Spell %d] -> Custom action", packet.spell_index);

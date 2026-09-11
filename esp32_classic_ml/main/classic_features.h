@@ -17,7 +17,7 @@ extern "C" {
 #endif
 
 #ifndef CLASSIC_NUM_FEATURES
-#define CLASSIC_NUM_FEATURES 63
+#define CLASSIC_NUM_FEATURES 75
 #endif
 
 #define CLASSIC_ACCEL_SCALE  16384.0f  // MPU6050 +-2g (1g = 16384 LSB)
@@ -42,27 +42,34 @@ static inline int extract_classic_features(
 
     int feat_idx = 0;
     const float inv_N = 1.0f / (float)num_samples;
+    int half = num_samples / 2;
 
-    // 1. Trích xuất đặc trưng cơ bản trên 6 kênh (6 * 8 = 48 đặc trưng)
+    // 1. Trích xuất đặc trưng cơ bản + phân đoạn thời gian trên 6 kênh (6 * 10 = 60 đặc trưng)
     for (int ch = 0; ch < 6; ++ch) {
         float scale = (ch < 3) ? CLASSIC_ACCEL_SCALE : CLASSIC_GYRO_SCALE;
         float inv_scale = 1.0f / scale;
 
         float sum = 0.0f;
+        float sum_h1 = 0.0f;
+        float sum_h2 = 0.0f;
         float min_val = 1e9f;
         float max_val = -1e9f;
         float sum_sq = 0.0f;
 
-        // Pass 1: Sum, Min, Max, Energy (SumSq)
+        // Pass 1: Sum, Sum H1/H2, Min, Max, Energy (SumSq)
         for (int i = 0; i < num_samples; ++i) {
             float val = (float)raw_buffer[i * 6 + ch] * inv_scale;
             sum += val;
             sum_sq += val * val;
+            if (i < half) sum_h1 += val;
+            else sum_h2 += val;
             if (val < min_val) min_val = val;
             if (val > max_val) max_val = val;
         }
 
         float mean = sum * inv_N;
+        float mean_h1 = (half > 0) ? (sum_h1 / (float)half) : mean;
+        float mean_h2 = ((num_samples - half) > 0) ? (sum_h2 / (float)(num_samples - half)) : mean;
         float range_val = max_val - min_val;
         float rms = sqrtf(sum_sq * inv_N);
         float energy = sum_sq * inv_N;
@@ -88,7 +95,7 @@ static inline int extract_classic_features(
         float std_val = sqrtf(var_sum * inv_N);
         float zcr = (float)zcr_count / (float)(num_samples - 1);
 
-        // Ghi tuần tự 8 đặc trưng cho mỗi kênh
+        // Ghi tuần tự 10 đặc trưng cho mỗi kênh
         out_features[feat_idx++] = mean;
         out_features[feat_idx++] = std_val;
         out_features[feat_idx++] = min_val;
@@ -97,6 +104,8 @@ static inline int extract_classic_features(
         out_features[feat_idx++] = rms;
         out_features[feat_idx++] = energy;
         out_features[feat_idx++] = zcr;
+        out_features[feat_idx++] = mean_h1;
+        out_features[feat_idx++] = mean_h2;
     }
 
     // 2. Độ lớn tổng hợp (Magnitudes: acc_mag, gyro_mag -> 12 đặc trưng)

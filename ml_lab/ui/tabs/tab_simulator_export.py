@@ -13,7 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 import numpy as np
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QApplication,
@@ -30,6 +30,7 @@ from PyQt6.QtWidgets import (
     QSplitter,
     QTableWidget,
     QTableWidgetItem,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -55,23 +56,33 @@ class TabSimulatorExport(QWidget):
         self._current_result: TrainClassicResult | None = None
         self._sim_sliders: list[QSlider] = []
         self._sim_labels: list[QLabel] = []
+        self._cached_h_code: str = ""
+        self._cached_cc_code: str = ""
+        self._sim_timer = QTimer(self)
+        self._sim_timer.setSingleShot(True)
+        self._sim_timer.setInterval(120)
+        self._sim_timer.timeout.connect(self._run_live_simulation)
 
         self._init_ui()
 
     def _init_ui(self) -> None:
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(12, 12, 12, 12)
-        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
+        main_layout.setSpacing(ls.SP_3)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setHandleWidth(6)
 
         # ── Left: What-If Interactive Simulator & SHAP ──────
         left_box = QFrame()
-        left_box.setStyleSheet(ls.card())
+        left_box.setObjectName("SimLeft")
+        left_box.setStyleSheet(ls.card(pad=ls.SP_3))
         l_layout = QVBoxLayout(left_box)
+        l_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
+        l_layout.setSpacing(ls.SP_2)
 
-        lbl_sim_t = QLabel("THỬ NGHIỆM NHANH: MÁY SẼ ĐOÁN GÌ?")
-        lbl_sim_t.setStyleSheet(ls.section_label())
+        lbl_sim_t = QLabel("Thử nghiệm nhanh: máy sẽ đoán gì?")
+        lbl_sim_t.setStyleSheet(ls.chart_title())
         l_layout.addWidget(lbl_sim_t)
 
         # Live Outcome Card
@@ -81,11 +92,11 @@ class TabSimulatorExport(QWidget):
         oc_layout.setSpacing(2)
 
         lbl_o_tag = QLabel("KẾT LUẬN CỦA MÁY:")
-        lbl_o_tag.setStyleSheet("font-size: 11px; font-weight: 700; color: #5b6b7f;; border: none; background: transparent;")
+        lbl_o_tag.setStyleSheet(ls.font(ls.FS_CAPTION, 700) + f"color: {ls.MUTED}; border: none; background: transparent;")
         self.lbl_pred_class = QLabel("CHƯA CÓ MÔ HÌNH")
-        self.lbl_pred_class.setStyleSheet(ls.font(20, 800) + f"color: {ls.ACCENT};; border: none; background: transparent;")
+        self.lbl_pred_class.setStyleSheet(ls.font(20, 800) + f"color: {ls.ACCENT}; border: none; background: transparent;")
         self.lbl_pred_conf = QLabel("Mức chắc chắn: --%")
-        self.lbl_pred_conf.setStyleSheet("font-size: 11px; font-weight: 600; color: #166534;; border: none; background: transparent;")
+        self.lbl_pred_conf.setStyleSheet(ls.font(ls.FS_CAPTION, 700) + f"color: {ls.SUCCESS_TEXT}; border: none; background: transparent;")
 
         oc_layout.addWidget(lbl_o_tag)
         oc_layout.addWidget(self.lbl_pred_class)
@@ -93,8 +104,8 @@ class TabSimulatorExport(QWidget):
         l_layout.addWidget(self.outcome_card)
 
         # Sliders Area
-        lbl_adj = QLabel("Kéo các thanh để giả lập giá trị đo được — máy sẽ đoán lại ngay:")
-        lbl_adj.setStyleSheet("font-size: 11px; color: #5b6b7f; font-weight: 500;; border: none; background: transparent;")
+        lbl_adj = QLabel("Kéo các thanh để giả lập giá trị đo (GIẢ LẬP — kẹp trong phạm vi train, không phải cử chỉ thật):")
+        lbl_adj.setStyleSheet(ls.font(ls.FS_CAPTION, 500) + f"color: {ls.MUTED}; border: none; background: transparent;")
         l_layout.addWidget(lbl_adj)
 
         scroll = QScrollArea()
@@ -107,8 +118,8 @@ class TabSimulatorExport(QWidget):
         l_layout.addWidget(scroll, stretch=1)
 
         # SHAP Attribution Table
-        lbl_shap = QLabel("VÌ SAO MÁY QUYẾT ĐỊNH NHƯ VẬY?")
-        lbl_shap.setStyleSheet(ls.section_label())
+        lbl_shap = QLabel("Vì sao máy quyết định như vậy?")
+        lbl_shap.setStyleSheet(ls.chart_title())
         l_layout.addWidget(lbl_shap)
 
         self.table_shap = QTableWidget()
@@ -123,12 +134,15 @@ class TabSimulatorExport(QWidget):
 
         # ── Right: C++ Exporter & 1-Click Flasher ────────────
         right_box = QFrame()
-        right_box.setStyleSheet(ls.card())
+        right_box.setObjectName("SimRight")
+        right_box.setStyleSheet(ls.card(pad=ls.SP_3))
         r_layout = QVBoxLayout(right_box)
+        r_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
+        r_layout.setSpacing(ls.SP_2)
 
         top_r_row = QHBoxLayout()
-        lbl_code_t = QLabel("XUẤT MÃ C++ & NẠP LÊN WAND")
-        lbl_code_t.setStyleSheet(ls.section_label())
+        lbl_code_t = QLabel("Xuất mã C++ & nạp lên wand")
+        lbl_code_t.setStyleSheet(ls.chart_title())
         top_r_row.addWidget(lbl_code_t)
         top_r_row.addStretch()
 
@@ -193,12 +207,21 @@ class TabSimulatorExport(QWidget):
 
         main_layout.addWidget(splitter)
 
+        self._configure_accessibility(btn_copy, btn_save)
+
+    def _configure_accessibility(self, btn_copy: QPushButton, btn_save: QPushButton) -> None:
+        self.table_shap.setAccessibleName("Bảng giải thích mức độ đóng góp của từng đặc trưng SHAP")
+        btn_copy.setAccessibleName("Sao chép mã nguồn C++ vào clipboard")
+        btn_save.setAccessibleName("Lưu các file mã nguồn C++ ra đĩa")
+        self.btn_flash.setAccessibleName("Nạp mô hình vừa huấn luyện lên đũa thần ESP32")
+        self.code_file_combo.setAccessibleName("Chọn xem file header hoặc file implementation C++")
+        self.code_view.setAccessibleName("Khung xem mã nguồn C++ được sinh tự động")
+
     def set_trained_model(self, result: TrainClassicResult) -> None:
         self._current_result = result
         self._rebuild_simulator_sliders()
         self._update_code_views()
         self._run_live_simulation()
-        self.lbl_empty_code.setVisible(False)
 
     def _rebuild_simulator_sliders(self) -> None:
         while self.slider_layout.count():
@@ -218,21 +241,36 @@ class TabSimulatorExport(QWidget):
             return
 
         features = self._current_result.feature_names[:8]
+        ranges = self._feature_ranges(len(features))
         for f_idx, feat_name in enumerate(features):
+            lo, hi = ranges[f_idx]
             row = QHBoxLayout()
-            lbl = QLabel(friendly_feature_name(feat_name))
-            lbl.setToolTip(f"Mã kỹ thuật: {feat_name}")
-            lbl.setStyleSheet("font-size: 11px; font-weight: 500;; border: none; background: transparent;")
-            
-            val_lbl = QLabel("0.00")
+            friendly = friendly_feature_name(feat_name)
+            # Harden: elide tên dài, giữ tooltip mã gốc + phạm vi train
+            lbl = QLabel(friendly[:28] + "…" if len(friendly) > 28 else friendly)
+            lbl.setToolTip(f"{friendly}\nMã kỹ thuật: {feat_name}\nPhạm vi train: [{lo:.2f}, {hi:.2f}]")
+            lbl.setStyleSheet(ls.font(ls.FS_CAPTION, 500) + "border: none; background: transparent;")
+            lbl.setWordWrap(True)
+
+            val_lbl = QLabel(f"{(lo + hi) / 2:.2f}")
             val_lbl.setStyleSheet(ls.slider_value_label())
-            val_lbl.setFixedWidth(40)
+            val_lbl.setMinimumWidth(48)
 
             slider = QSlider(Qt.Orientation.Horizontal)
-            slider.setRange(-300, 300)
-            slider.setValue(0)
-            slider.valueChanged.connect(lambda v, l=val_lbl: l.setText(f"{v/100.0:.2f}"))
-            slider.valueChanged.connect(self._run_live_simulation)
+            # P0: kẹp thanh trong phạm vi quan sát lúc train (mean ± 3σ),
+            # thang int 0..1000 ánh xạ sang [lo, hi] — hết đoán bừa ngoài phân phối
+            slider.setRange(0, 1000)
+            mid = 500
+            slider.setValue(mid)
+            slider.setMinimumHeight(28)
+            slider.setAccessibleName(f"Thử giá trị {friendly}")
+            slider.setProperty("feat_lo", float(lo))
+            slider.setProperty("feat_hi", float(hi))
+            slider.valueChanged.connect(
+                lambda v, l=val_lbl, s=slider: l.setText(f"{s.property('feat_lo') + (s.property('feat_hi') - s.property('feat_lo')) * v / 1000:.2f}")
+            )
+            # Debounce 120ms: kéo slider không spam predict + SHAP
+            slider.valueChanged.connect(self._schedule_live_simulation)
 
             row.addWidget(lbl, stretch=1)
             row.addWidget(slider, stretch=2)
@@ -242,59 +280,105 @@ class TabSimulatorExport(QWidget):
             self._sim_sliders.append(slider)
             self._sim_labels.append(val_lbl)
 
+    def _feature_ranges(self, n: int) -> list[tuple[float, float]]:
+        """Phạm vi train từng đặc trưng (mean ± 3σ từ scaler) để kẹp slider."""
+        try:
+            scaler = self._current_result.scaler if self._current_result else None
+            means = getattr(scaler, "mean_", None)
+            scales = getattr(scaler, "scale_", None)
+            if means is not None and scales is not None:
+                out = []
+                for i in range(n):
+                    m, s = float(means[i]), float(scales[i]) or 1.0
+                    out.append((m - 3.0 * s, m + 3.0 * s))
+                return out
+        except Exception:
+            pass
+        return [(-3.0, 3.0)] * n
+
+    def _schedule_live_simulation(self) -> None:
+        if not self._sim_timer.isActive():
+            self._sim_timer.start()
+
+    def _slider_to_value(self, slider: QSlider) -> float:
+        lo = float(slider.property("feat_lo") or 0.0)
+        hi = float(slider.property("feat_hi") or 0.0)
+        if hi <= lo:
+            return slider.value() / 100.0  # fallback thang cũ
+        return lo + (hi - lo) * slider.value() / 1000.0
+
     def _run_live_simulation(self) -> None:
         if not self._current_result or not self._sim_sliders:
             return
 
-        n_feats = len(self._current_result.feature_names)
-        feat_vector = np.zeros(n_feats, dtype=np.float32)
+        try:
+            n_feats = len(self._current_result.feature_names)
+            feat_vector = np.zeros(n_feats, dtype=np.float32)
 
-        for i, slider in enumerate(self._sim_sliders):
-            if i < n_feats:
-                feat_vector[i] = slider.value() / 100.0
+            for i, slider in enumerate(self._sim_sliders):
+                if i < n_feats:
+                    feat_vector[i] = self._slider_to_value(slider)
 
-        model = self._current_result.model
-        scaler = self._current_result.scaler
+            model = self._current_result.model
+            scaler = self._current_result.scaler
+            if model is None:
+                return
 
-        X_in = scaler.transform(feat_vector.reshape(1, -1)) if scaler else feat_vector.reshape(1, -1)
-        pred = model.predict(X_in)[0]
+            try:
+                X_in = scaler.transform(feat_vector.reshape(1, -1)) if scaler is not None else feat_vector.reshape(1, -1)
+            except Exception:
+                self.lbl_pred_class.setText("Đặc trưng chưa khớp mô hình")
+                return
+            try:
+                pred = int(model.predict(X_in)[0])
+            except Exception:
+                self.lbl_pred_class.setText("Không dự đoán được (sai shape)")
+                return
 
-        cls_names = self._current_result.class_names
-        pred_name = cls_names[pred] if pred < len(cls_names) else f"Class {pred}"
+            cls_names = self._current_result.class_names
+            pred_name = cls_names[pred] if 0 <= pred < len(cls_names) else f"Class {pred}"
 
-        conf = 100.0
-        if hasattr(model, "predict_proba"):
-            probs = model.predict_proba(X_in)[0]
-            conf = float(np.max(probs)) * 100.0
+            conf = 100.0
+            try:
+                if hasattr(model, "predict_proba"):
+                    probs = model.predict_proba(X_in)[0]
+                    conf = float(np.max(probs)) * 100.0
+            except Exception:
+                pass
 
-        self.lbl_pred_class.setText(pred_name)
-        self.lbl_pred_conf.setText(f"Độ tin cậy: {conf:.1f}%")
+            self.lbl_pred_class.setText(pred_name)
+            self.lbl_pred_conf.setText(f"Độ tin cậy: {conf:.1f}% · GIẢ LẬP")
 
-        # Cập nhật SHAP waterfall table
-        attribs = compute_local_feature_contributions(
-            model=model,
-            scaler=scaler,
-            raw_sample=feat_vector,
-            feature_names=self._current_result.feature_names,
-            algo=self._current_result.algo,
-            top_k=5,
-        )
-        self.table_shap.setRowCount(len(attribs))
-        for r_idx, at in enumerate(attribs):
-            item_feat = QTableWidgetItem(friendly_feature_name(at["name"]))
-            item_feat.setToolTip(at["name"])
-            self.table_shap.setItem(r_idx, 0, item_feat)
-            
-            c_item = QTableWidgetItem(f"{at['contribution']:+.3f}")
-            c_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            c_item.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-            if at["contribution"] >= 0:
-                c_item.setForeground(QColor(ls.SUCCESS_TEXT))
-            else:
-                c_item.setForeground(QColor(ls.DANGER))
-            self.table_shap.setItem(r_idx, 1, c_item)
+            # Cập nhật SHAP waterfall table
+            try:
+                attribs = compute_local_feature_contributions(
+                    model=model,
+                    scaler=scaler,
+                    raw_sample=feat_vector,
+                    feature_names=self._current_result.feature_names,
+                    algo=self._current_result.algo,
+                    top_k=5,
+                )
+            except Exception:
+                return
+            self.table_shap.setRowCount(len(attribs))
+            for r_idx, at in enumerate(attribs):
+                item_feat = QTableWidgetItem(friendly_feature_name(at["name"]))
+                item_feat.setToolTip(at["name"])
+                self.table_shap.setItem(r_idx, 0, item_feat)
 
-            self.table_shap.setItem(r_idx, 2, QTableWidgetItem(at["impact"]))
+                c_item = QTableWidgetItem(f"{at['contribution']:+.3f}")
+                c_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                c_item.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+                if at["contribution"] >= 0:
+                    c_item.setForeground(QColor(ls.SUCCESS_TEXT))
+                else:
+                    c_item.setForeground(QColor(ls.DANGER))
+                self.table_shap.setItem(r_idx, 1, c_item)
+
+                self.table_shap.setItem(r_idx, 2, QTableWidgetItem(at["impact"]))
+        except Exception:
+            return
 
     def _update_code_views(self) -> None:
         if not self._current_result:
@@ -312,7 +396,7 @@ class TabSimulatorExport(QWidget):
 
     def _refresh_code_view(self) -> None:
         want_h = self.code_file_combo.currentData() == "h"
-        code = self._cached_h_code if want_h else self._cached_cc_code
+        code = getattr(self, "_cached_h_code", "") if want_h else getattr(self, "_cached_cc_code", "")
         self.code_view.setPlainText(code or "// Chưa có mã — huấn luyện ở tab 2 trước.")
 
     def _copy_current_code(self) -> None:

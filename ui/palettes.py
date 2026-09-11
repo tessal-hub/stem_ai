@@ -45,73 +45,42 @@ class Palette:
     SHADOW_COLOR: str      # Màu đổ bóng
 
 
-# ── Bảng màu Claude Aesthetic (Light) ───────────────────────────────────────
+# ── Bảng màu Bench Restrained (Light) — aligned to DESIGN.md / ml_lab lab_style ─────
 LIGHT_PALETTE = Palette(
-    PRIMARY="#9BB8D7",           # Soft Pastel Blue (Muted)
-    PRIMARY_LIGHT="#C9DDF0",     # Very Light Blue
-    PRIMARY_DARK="#7395B8",      # Deeper Muted Blue
+    PRIMARY="#0668d1",           # Calibrated Blue 5.37:1 on white (DESIGN.md)
+    PRIMARY_LIGHT="rgba(10, 122, 255, 0.07)",  # ACCENT_TINT
+    PRIMARY_DARK="#0557b0",      # Hover — 7.01:1
 
-    SURFACE_PRIMARY="#FFFFFF",   # Nền thẻ (Raised)
-    SURFACE_SECONDARY="#FBF9F6",  # Nền chính của ứng dụng
-    SURFACE_TERTIARY="#F3F0E9",  # Nền lớp ngoài/Input
+    SURFACE_PRIMARY="#FFFFFF",   # Card / pane
+    SURFACE_SECONDARY="#f6f7f9",  # App canvas BG_APP
+    SURFACE_TERTIARY="#f1f5f9",  # Sunk / input track
 
-    TEXT_PRIMARY="#1D1D1D",      # Darker grey for readability
-    TEXT_SECONDARY="#6B6B6B",
-    TEXT_TERTIARY="#9C9C9C",
+    TEXT_PRIMARY="#0f172a",      # Ink
+    TEXT_SECONDARY="#334155",    # Body 10.35:1 — readable
+    TEXT_TERTIARY="#5b6b7f",     # Muted 5.45:1 — meets AA for hints
 
-    BORDER="rgba(0, 0, 0, 0.08)",
-    BORDER_LIGHT="rgba(0, 0, 0, 0.04)",
+    BORDER="rgba(15, 23, 42, 0.08)",   # BORDER derived from ink
+    BORDER_LIGHT="rgba(15, 23, 42, 0.05)",
 
-    STATUS_SUCCESS="#10B981",
-    STATUS_WARNING="#F59E0B",
-    STATUS_ERROR="#EF4444",
+    STATUS_SUCCESS="#1e7a46",
+    STATUS_WARNING="#b45309",
+    STATUS_ERROR="#dc2626",
     STATUS_SUCCESS_TEXT="#FFFFFF",
     STATUS_ERROR_TEXT="#FFFFFF",
     STATUS_WARNING_TEXT="#FFFFFF",
 
-    HOVER_BG="rgba(115, 149, 184, 0.08)",  # Subtle blue tint for hover
-    TERM_BG="#FFFFFF",
-    TERM_FG="#1D1D1D",
+    HOVER_BG="rgba(10, 122, 255, 0.07)",
+    TERM_BG="#16181d",
+    TERM_FG="#d7dde6",
 
     GLASS_BG="rgba(255, 255, 255, 0.8)",
     GLASS_BG_STRONG="rgba(255, 255, 255, 0.95)",
-    GLASS_EDGE="rgba(0, 0, 0, 0.08)",
+    GLASS_EDGE="rgba(15, 23, 42, 0.08)",
 
-    SHADOW_COLOR="rgba(0, 0, 0, 0.04)"
+    SHADOW_COLOR="transparent"
 )
 
 
-# ── Bảng màu Obsidian Dark Palette (Apple Dark Theme) ──────────────────────
-DARK_PALETTE = Palette(
-    PRIMARY="#0A84FF",           # Apple System Blue (Dark)
-    PRIMARY_LIGHT="rgba(10, 132, 255, 0.25)",
-    PRIMARY_DARK="#0066CC",
+# Dark mode intentionally disabled per project spec: alias to LIGHT_PALETTE
+DARK_PALETTE = LIGHT_PALETTE
 
-    SURFACE_PRIMARY="#242426",   # Brighter raised card
-    SURFACE_SECONDARY="#0A0A0C", # Nền chính ứng dụng
-    SURFACE_TERTIARY="#333336",  # Nền input / inner frame
-
-    TEXT_PRIMARY="#FFFFFF",      
-    TEXT_SECONDARY="#E0E0E6",    # Brighter secondary text
-    TEXT_TERTIARY="#A1A1A6",     # Brighter tertiary text
-
-    BORDER="rgba(255, 255, 255, 0.22)",
-    BORDER_LIGHT="rgba(255, 255, 255, 0.15)",
-
-    STATUS_SUCCESS="#30D158",
-    STATUS_WARNING="#FF9F0A",
-    STATUS_ERROR="#FF453A",
-    STATUS_SUCCESS_TEXT="#FFFFFF",
-    STATUS_ERROR_TEXT="#FFFFFF",
-    STATUS_WARNING_TEXT="#FFFFFF",
-
-    HOVER_BG="rgba(10, 132, 255, 0.22)",
-    TERM_BG="#0B0B0C",
-    TERM_FG="#F2F2F7",
-
-    GLASS_BG="rgba(28, 28, 30, 0.85)",
-    GLASS_BG_STRONG="rgba(28, 28, 30, 0.95)",
-    GLASS_EDGE="rgba(255, 255, 255, 0.16)",
-
-    SHADOW_COLOR="rgba(0, 0, 0, 0.60)"
-)

@@ -1,0 +1,31 @@
+{
+  "timestamp": "2026-09-10T14:18:07.981985",
+  "algo": "svm",
+  "algo_name": "Support Vector Machine (SVM)",
+  "train_accuracy": 1.0,
+  "val_accuracy": 0.954954954954955,
+  "cv_mean": 0.9954022988505746,
+  "cv_std": 0.005631010902949827,
+  "class_names": [
+    "BOOST",
+    "COPY",
+    "FIREBALL",
+    "P",
+    "REFLECT",
+    "STAND BY",
+    "STOP"
+  ],
+  "num_features": 75,
+  "hyperparams": {
+    "c": 1.0,
+    "kernel": "rbf",
+    "gamma": "scale",
+    "degree": 3
+  },
+  "benchmark": {
+    "mcu_latency_ms": 3.905,
+    "mcu_ram_kb": 0.4,
+    "mcu_flash_kb": 80.1,
+    "complexity_score": 4.5
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "timestamp": "2026-09-05T15:48:19.094374",
+  "algo": "mlp",
+  "algo_name": "Mạng Nơ-ron (Shallow MLP)",
+  "train_accuracy": 1.0,
+  "val_accuracy": 0.967391304347826,
+  "cv_mean": 0.9921052631578947,
+  "cv_std": 0.013674085322912184,
+  "class_names": [
+    "BOOST",
+    "FIREBALL",
+    "LUX",
+    "P",
+    "REFLECT",
+    "STOP"
+  ],
+  "num_features": 75,
+  "hyperparams": {
+    "hidden_units": 16,
+    "learning_rate_init": 0.01,
+    "alpha": 0.0001,
+    "max_iter": 200,
+    "activation": "relu"
+  },
+  "benchmark": {
+    "mcu_latency_ms": 0.16,
+    "mcu_ram_kb": 0.3,
+    "mcu_flash_kb": 7.68,
+    "complexity_score": 4.0
+  }
+}

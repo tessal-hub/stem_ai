@@ -7,6 +7,8 @@ Cho phép học viên quét một dải siêu tham số (Hyperparameter Sweep) �
 
 from __future__ import annotations
 
+from ml_lab.data.window_config import STEP_SAMPLES, WINDOW_SAMPLES
+
 from pathlib import Path
 from typing import Any
 import warnings
@@ -53,6 +55,7 @@ class SweepWorker(QThread):
         param_values: list[Any],
         cv_folds: int = 5,
         include_standby: bool = False,
+        allowed_spells: set[str] | None = None,
         parent: Any = None,
     ) -> None:
         super().__init__(parent)
@@ -62,6 +65,7 @@ class SweepWorker(QThread):
         self.param_values = param_values
         self.cv_folds = cv_folds
         self.include_standby = include_standby
+        self.allowed_spells = set(allowed_spells) if allowed_spells is not None else None
 
     def run(self) -> None:
         try:
@@ -78,9 +82,10 @@ class SweepWorker(QThread):
                 train_wins, val_wins, class_names = split_user_dataset_file_level(
                     self.dataset_dir,
                     val_fraction=0.01,
-                    window_size=64,
-                    step_size=16,
+                    window_size=WINDOW_SAMPLES,
+                    step_size=STEP_SAMPLES,
                     include_standby=self.include_standby,
+                    allowed_spells=self.allowed_spells,
                 )
                 all_wins = train_wins + val_wins
                 if len(all_wins) == 0 or len(class_names) < 2:
@@ -93,7 +98,14 @@ class SweepWorker(QThread):
                 train_scores: list[float] = []
                 val_scores: list[float] = []
 
-                n_splits = min(self.cv_folds, len(y) // max(1, len(np.unique(y))))
+                try:
+                    min_count = int(np.min(np.bincount(y))) if len(y) else 0
+                except Exception:
+                    min_count = 0
+                if min_count < 2:
+                    self.sig_error.emit("Mỗi lớp cần ít nhất 2 mẫu để chạy CV.")
+                    return
+                n_splits = min(self.cv_folds, min_count)
                 cv = StratifiedKFold(n_splits=max(2, n_splits), shuffle=True, random_state=42)
 
                 for i, val in enumerate(self.param_values):
@@ -127,7 +139,6 @@ class SweepWorker(QThread):
             GradientBoostingConfig,
             MLPConfig,
             NaiveBayesConfig,
-            QDAConfig,
             RidgeConfig,
             SGDConfig,
         )
@@ -154,8 +165,6 @@ class SweepWorker(QThread):
             return SGDConfig(alpha=float(val))
         elif self.algo == "mlp":
             return MLPConfig(hidden_units=int(val), max_iter=100)
-        elif self.algo == "qda":
-            return QDAConfig(reg_param=float(val))
         elif self.algo == "nb":
             return NaiveBayesConfig(var_smoothing=float(val))
         return None
@@ -174,10 +183,14 @@ class DataSizeWorker(QThread):
 
     FRACTIONS = [0.25, 0.5, 0.75, 1.0]
 
-    def __init__(self, dataset_dir: Path, include_standby: bool = False, parent: Any = None) -> None:
+    def __init__(
+        self, dataset_dir: Path, include_standby: bool = False,
+        allowed_spells: set[str] | None = None, parent: Any = None,
+    ) -> None:
         super().__init__(parent)
         self.dataset_dir = dataset_dir
         self.include_standby = include_standby
+        self.allowed_spells = set(allowed_spells) if allowed_spells is not None else None
 
     def run(self) -> None:
         try:
@@ -192,9 +205,10 @@ class DataSizeWorker(QThread):
                 train_samples, val_samples, class_names = split_user_dataset_file_level(
                     self.dataset_dir,
                     val_fraction=0.2,
-                    window_size=64,
-                    step_size=16,
+                    window_size=WINDOW_SAMPLES,
+                    step_size=STEP_SAMPLES,
                     include_standby=self.include_standby,
+                    allowed_spells=self.allowed_spells,
                 )
                 if len(class_names) < 2 or len(train_samples) < 4 or len(val_samples) == 0:
                     self.sig_error.emit("Cần ít nhất 2 lớp và vài mẫu cho mỗi lớp để chạy thử.")
@@ -244,26 +258,39 @@ class TabCurvesStudio(QWidget):
     Tab Phân Tích Đường Cong Học & Bias-Variance.
     """
 
+    sig_apply_best = pyqtSignal(str, str, object)  # (algo_key, param_key, best_value)
+
     def __init__(self, dataset_dir: Path | str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.dataset_dir = Path(dataset_dir)
         self._worker: SweepWorker | None = None
         self._datasize_worker: DataSizeWorker | None = None
+        self._allowed_spells: set[str] | None = None
+        self._last_sweep: tuple[str, str, list, list] | None = None  # (algo, param_key, x, val)
 
         self._init_ui()
 
+    def set_allowed_spells(self, allowed: set[str] | None) -> None:
+        self._allowed_spells = set(allowed) if allowed is not None else None
+
+    def _get_allowed(self) -> set[str] | None:
+        return self._allowed_spells
+
     def _init_ui(self) -> None:
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(12, 12, 12, 12)
-        main_layout.setSpacing(12)
+        main_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
+        main_layout.setSpacing(ls.SP_3)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setHandleWidth(6)
 
         # ── Left Panel: Controls ────────────────────────────
         left_box = QFrame()
-        left_box.setStyleSheet(ls.card())
+        left_box.setObjectName("CurvesLeft")
+        left_box.setStyleSheet(ls.card(pad=ls.SP_3))
         l_layout = QVBoxLayout(left_box)
-        l_layout.setSpacing(10)
+        l_layout.setSpacing(ls.SP_3)
+        l_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
 
         lbl_title = QLabel("THỬ NGHIỆM: CÀI ĐẶT NÀO TỐT NHẤT?")
         lbl_title.setStyleSheet(ls.section_label())
@@ -287,7 +314,6 @@ class TabCurvesStudio(QWidget):
         self.combo_algo.addItem("Ridge Classifier (Tuyến tính)", "ridge")
         self.combo_algo.addItem("SGD Classifier (Tuyến tính nhanh)", "sgd")
         self.combo_algo.addItem("Gaussian Naive Bayes (GNB)", "nb")
-        self.combo_algo.addItem("QDA (Ranh giới thống kê)", "qda")
         self.combo_algo.addItem("LDA (Tuyến tính Fisher)", "lda")
         self.combo_algo.addItem("Nearest Centroid (So với tâm lớp)", "nearest_centroid")
         self.combo_algo.currentIndexChanged.connect(self._on_algo_changed)
@@ -307,6 +333,13 @@ class TabCurvesStudio(QWidget):
         self.btn_run_sweep.setStyleSheet(ls.BTN_PRIMARY)
         self.btn_run_sweep.clicked.connect(self.run_sweep)
         l_layout.addWidget(self.btn_run_sweep)
+
+        self.btn_apply_best = QPushButton("Áp dụng giá trị tốt nhất vào Tab 2")
+        self.btn_apply_best.setToolTip("Lấy giá trị có cột xanh lá cao nhất, điền sẵn vào tab Huấn luyện.")
+        self.btn_apply_best.setStyleSheet(ls.BTN_SUCCESS)
+        self.btn_apply_best.setVisible(False)
+        self.btn_apply_best.clicked.connect(self._on_apply_best)
+        l_layout.addWidget(self.btn_apply_best)
 
         # ── Thử nghiệm thứ hai: cần bao nhiêu dữ liệu? ──────
         lbl_data_t = QLabel("THỬ NGHIỆM: CẦN BAO NHIÊU DỮ LIỆU?")
@@ -328,7 +361,8 @@ class TabCurvesStudio(QWidget):
             "<b>Cách đọc biểu đồ</b> — chọn giá trị có cột xanh lá cao nhất:<br>"
             "• <b>Đường xám</b> — điểm số trên dữ liệu cũ (máy đã học): luôn tăng khi máy phức tạp lên.<br>"
             "• <b>Đường xanh dương</b> — điểm số trên dữ liệu mới: cái này mới quyết định mô hình tốt hay kém.<br>"
-            "• <b>Cột xanh lá</b> — nơi dữ liệu mới đạt điểm cao nhất. Hãy quay lại tab 2 và chọn đúng giá trị đó!"
+            "• <b>Cột xanh lá</b> — nơi dữ liệu mới đạt điểm cao nhất. "
+            "Bấm nút “Áp dụng … vào Tab 2” để máy tự điền, khỏi nhớ số!"
         )
         lbl_guide.setWordWrap(True)
         lbl_guide.setStyleSheet(ls.note_box(ls.ACCENT))
@@ -339,12 +373,14 @@ class TabCurvesStudio(QWidget):
 
         # ── Right Panel: Curve Chart ────────────────────────
         right_box = QFrame()
-        right_box.setStyleSheet(ls.card())
+        right_box.setObjectName("CurvesChartCard")
+        right_box.setStyleSheet(ls.card(pad=ls.SP_3))
         r_layout = QVBoxLayout(right_box)
-        r_layout.setSpacing(8)
+        r_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
+        r_layout.setSpacing(ls.SP_2)
 
         lbl_chart_title = QLabel("CÀI ĐẶT NÀO VỪA HỌC TỐT VỪA KHÔNG HỌC VỆT?")
-        lbl_chart_title.setStyleSheet(ls.section_label())
+        lbl_chart_title.setStyleSheet(ls.chart_title())
         r_layout.addWidget(lbl_chart_title)
 
         self.lbl_chart_caption = QLabel("")
@@ -356,14 +392,24 @@ class TabCurvesStudio(QWidget):
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
-        self.progress_bar.setFixedHeight(5)
+        self.progress_bar.setFixedHeight(4)
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setStyleSheet(ls.PROGRESS_BAR)
         r_layout.addWidget(self.progress_bar)
 
         splitter.addWidget(right_box)
         splitter.setStretchFactor(0, 3)
-        splitter.setStretchFactor(1, 7)
-
         main_layout.addWidget(splitter)
+
+        self._configure_accessibility()
+
+    def _configure_accessibility(self) -> None:
+        self.combo_algo.setAccessibleName("Chọn thuật toán cần quét tham số")
+        self.combo_param.setAccessibleName("Chọn siêu tham số để thử nghiệm")
+        self.btn_run_sweep.setAccessibleName("Bắt đầu chạy quét tham số và vẽ biểu đồ")
+        self.btn_run_datasize.setAccessibleName("Chạy thử nghiệm hiệu quả với lượng dữ liệu tăng dần")
+        self.chart_widget.setAccessibleName("Biểu đồ phân tích đường cong học tập Bias-Variance")
+        self.progress_bar.setAccessibleName("Tiến trình quét tham số")
 
     def _on_algo_changed(self) -> None:
         algo = self.combo_algo.currentData()
@@ -388,8 +434,6 @@ class TabCurvesStudio(QWidget):
             self.combo_param.addItem("Độ phẳng hóa alpha (0.00001 → 0.01)", "alpha")
         elif algo == "mlp":
             self.combo_param.addItem("Số ô tính trung gian (4 → 64)", "hidden_units")
-        elif algo == "qda":
-            self.combo_param.addItem("Làm mịn thống kê (0.001 → 1)", "reg_param")
         elif algo == "nb":
             self.combo_param.addItem("Làm mịn dữ liệu (rất nhỏ → lớn)", "var_smoothing")
         else:
@@ -397,13 +441,13 @@ class TabCurvesStudio(QWidget):
             self.combo_param.addItem("Mô hình này không có tham số — dùng mặc định", "")
 
     def run_sweep(self) -> None:
-        counts = count_user_spell_samples(self.dataset_dir)
+        counts = count_user_spell_samples(self.dataset_dir, allowed_spells=self._get_allowed())
         if len(counts) < 2:
             QMessageBox.warning(
                 self,
-                "Chưa Đủ Dữ Liệu",
-                f"Hiện tại chỉ có {len(counts)} phép thuật trong dataset/spells/.\n\n"
-                "Cần ít nhất 2 lớp cử chỉ khác nhau để thực hiện phân tích đường cong.",
+                "Chưa đủ thần chú",
+                f"Bạn đã chọn {len(counts)} thần chú, cần ít nhất 2 để quét tham số.\n"
+                "Hãy mở Tab 0 · Chọn thần chú và tích thêm.",
             )
             return
 
@@ -437,9 +481,6 @@ class TabCurvesStudio(QWidget):
         elif param_name == "hidden_units":
             param_vals = [4, 8, 16, 24, 32, 48, 64]
             display_name = "Số ô tính trung gian"
-        elif param_name == "reg_param":
-            param_vals = [0.001, 0.01, 0.05, 0.1, 0.3, 0.5, 1.0]
-            display_name = "Làm mịn thống kê"
         elif param_name == "var_smoothing":
             param_vals = [1e-9, 1e-7, 1e-5, 1e-3, 1e-1]
             display_name = "Làm mịn dữ liệu"
@@ -459,8 +500,12 @@ class TabCurvesStudio(QWidget):
             param_name=display_name,
             param_values=param_vals,
             cv_folds=5,
+            allowed_spells=self._get_allowed(),
         )
         self._worker.sig_progress.connect(self.progress_bar.setValue)
+        self._worker.sig_progress.connect(
+            lambda pct: self.progress_bar.setAccessibleDescription(f"Tiến trình quét tham số {pct}%")
+        )
         self._worker.sig_finished.connect(self._on_sweep_finished)
         self._worker.sig_error.connect(self._on_sweep_error)
         self._worker.start()
@@ -470,14 +515,43 @@ class TabCurvesStudio(QWidget):
         self.progress_bar.setVisible(False)
         param_name = self.combo_param.currentText()
         self.chart_widget.set_curve_data(param_name, x_vals, train_scores, val_scores)
+        # Giữ kết quả để nút "Áp dụng" khỏi bắt nhớ số
+        try:
+            best_i = int(np.argmax(val_scores)) if len(val_scores) else -1
+        except Exception:
+            best_i = -1
+        if best_i >= 0:
+            self._last_sweep = (
+                self.combo_algo.currentData(),
+                self.combo_param.currentData(),
+                list(x_vals),
+                list(val_scores),
+            )
+            best_v = x_vals[best_i]
+            self.btn_apply_best.setVisible(True)
+            self.btn_apply_best.setText(f"Áp dụng {best_v} vào Tab 2")
+        else:
+            self._last_sweep = None
+            self.btn_apply_best.setVisible(False)
+
+    def _on_apply_best(self) -> None:
+        if not self._last_sweep:
+            return
+        algo, param_key, x_vals, val_scores = self._last_sweep
+        try:
+            best_v = x_vals[int(np.argmax(val_scores))]
+        except Exception:
+            return
+        self.sig_apply_best.emit(algo, param_key, best_v)
 
     def run_datasize(self) -> None:
-        counts = count_user_spell_samples(self.dataset_dir)
+        counts = count_user_spell_samples(self.dataset_dir, allowed_spells=self._get_allowed())
         if len(counts) < 2:
             QMessageBox.warning(
                 self,
-                "Chưa Đủ Dữ Liệu",
-                "Cần ít nhất 2 lớp cử chỉ để chạy thử theo lượng dữ liệu.",
+                "Chưa đủ thần chú",
+                f"Bạn đã chọn {len(counts)} thần chú, cần ít nhất 2 để thử lượng dữ liệu.\n"
+                "Hãy mở Tab 0 · Chọn thần chú và tích thêm.",
             )
             return
         if self._datasize_worker is not None and self._datasize_worker.isRunning():
@@ -489,7 +563,7 @@ class TabCurvesStudio(QWidget):
         self.progress_bar.setValue(10)
         self.lbl_chart_caption.setText("Đang thử: cùng một mô hình, lượng dữ liệu tăng dần...")
 
-        self._datasize_worker = DataSizeWorker(self.dataset_dir)
+        self._datasize_worker = DataSizeWorker(self.dataset_dir, allowed_spells=self._get_allowed())
         self._datasize_worker.sig_progress.connect(self.progress_bar.setValue)
         self._datasize_worker.sig_finished.connect(self._on_datasize_finished)
         self._datasize_worker.sig_error.connect(self._on_datasize_error)

@@ -17,3 +17,22 @@ def ensure_sklearn() -> None:
     """Import sklearn an toàn đa luồng — gọi TRƯỚC khi import submodule sklearn."""
     with _LOCK:
         import sklearn  # noqa: F401  # khởi tạo DLL runtime một lần, có khóa
+        # Giữ khóa khi import các submodule nặng để tránh đua OpenMP DLL
+        # (caller vẫn nên import submodule ngay sau ensure_sklearn trong cùng tick,
+        # nhưng pre-warm ở đây giảm cửa sổ đua khi 2 thread cùng train lần đầu)
+        try:
+            import sklearn.discriminant_analysis  # noqa: F401
+            import sklearn.ensemble  # noqa: F401
+            import sklearn.linear_model  # noqa: F401
+            import sklearn.metrics  # noqa: F401
+            import sklearn.model_selection  # noqa: F401
+            import sklearn.naive_bayes  # noqa: F401
+            import sklearn.neighbors  # noqa: F401
+            import sklearn.neural_network  # noqa: F401
+            import sklearn.pipeline  # noqa: F401
+            import sklearn.preprocessing  # noqa: F401
+            import sklearn.svm  # noqa: F401
+            import sklearn.tree  # noqa: F401
+            import sklearn.decomposition  # noqa: F401
+        except Exception:
+            pass

@@ -282,7 +282,22 @@ static void SendSpellEspNow(int class_index, float confidence) {
     SpellEspNowPacket packet = {};
     packet.magic[0] = 'S';
     packet.magic[1] = 'P';
-    packet.spell_index = static_cast<uint8_t>(class_index);
+    // Map gesture class_index to 1-based spell index (1..5) among recognized spells
+    uint8_t spell_id = 0;
+    for (int i = 0; i <= class_index; ++i) {
+        if (g_preloaded_spells[i].is_spell) {
+            spell_id++;
+        }
+    }
+    // Explicit fallback: if is_spell absent or all gestures counted, map 23..27 to 1..5
+    if (spell_id == 0 || spell_id > 10) {
+        if (class_index >= 23) {
+            spell_id = static_cast<uint8_t>(class_index - 22);
+        } else {
+            spell_id = static_cast<uint8_t>(class_index + 1);
+        }
+    }
+    packet.spell_index = spell_id;
     strncpy(packet.spell_name, spell.name, sizeof(packet.spell_name) - 1);
     float conf_clamped = confidence > 1.0f ? 1.0f : (confidence < 0.0f ? 0.0f : confidence);
     packet.confidence = static_cast<uint8_t>(std::roundf(conf_clamped * 100.0f));
@@ -612,9 +627,11 @@ static void InferenceTask(void* /*arg*/) {
             if (motion_energy < 0.02f) {
                 s_is_moving = false;
                 int predicted_class = -1;
+                float predicted_prob = 0.0f;
                 if (s_best_spell_class >= 0) {
                     printf("FINAL PREDICT:%s:%.2f\n", SpellNameFromClassIndex(s_best_spell_class), s_best_spell_prob);
                     predicted_class = s_best_spell_class;
+                    predicted_prob = s_best_spell_prob;
                 } else if (s_best_primitive_class >= 0) {
 #if STEM_DEBUG_VERBOSE
                     printf("DEBUG_BLACKHOLE:%s (prob: %.2f)\n", SpellNameFromClassIndex(s_best_primitive_class), s_best_primitive_prob);
@@ -645,7 +662,7 @@ static void InferenceTask(void* /*arg*/) {
                 }
                 if (predicted_class != -1) {
                     OnSpellDetected(predicted_class);
-                    SendSpellEspNow(predicted_class, s_best_spell_prob);
+                    SendSpellEspNow(predicted_class, predicted_prob);
                 }
                 continue;
             }
