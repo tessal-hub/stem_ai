@@ -1,7 +1,7 @@
 """
 ui/component_factory.py — Factory tạo widget UI thống nhất.
 
-Cung cấp các hàm khởi tạo widget tuân thủ bảng màu Vanguard Palette,
+Cung cấp các hàm khởi tạo widget tuân thủ bảng màu Material You (M3),
 giúp duy trì tính nhất quán của giao diện và hỗ trợ chuyển đổi theme động.
 """
 
@@ -64,14 +64,6 @@ def make_card(
     return card, layout
 
 
-def make_card_frame() -> QFrame:
-    """Tạo khung viền Card đơn giản."""
-    _p()
-    frame = QFrame()
-    frame.setObjectName("CardFrame")  # Cho phép theme.py style
-    return frame
-
-
 # ── Button Factories ─────────────────────────────────────────────────────────
 
 def make_button(
@@ -104,8 +96,8 @@ def make_outline_button(label: str, height: int = BTN_H, tooltip: str = "") -> Q
 
 # ── Label & Utility Factories ────────────────────────────────────────────────
 
-def make_section_label(text: str, accent: bool = True) -> QLabel:
-    """Tạo nhãn tiêu đề cho một phân đoạn UI."""
+def make_section_label(text: str, accent: bool = False) -> QLabel:
+    """Tạo nhãn tiêu đề cho một phân đoạn UI (M3 On-Surface INK theo chuẩn, accent=True khi cần)."""
     lbl = QLabel(text)
     lbl.setProperty("type", "section_title")
     if accent:
@@ -134,22 +126,52 @@ def make_checkbox(label: str, checked: bool = False) -> QCheckBox:
 def make_empty_state_card(
     title: str = "No data to evaluate yet",
     body: str = "",
+    flat: bool = False,
+    icon_path: str = "assets/icon/statistic.svg",
 ) -> tuple[QFrame, QVBoxLayout]:
-    """Tạo một thẻ hiển thị trạng thái trống (Empty State)."""
-    card, layout = make_card()
-    card.setMinimumHeight(220)
+    """Tạo một thẻ hiển thị trạng thái trống (Empty State) theo Material You."""
+    if flat:
+        card = QFrame()
+        card.setObjectName("EmptyStateFlat")
+        card.setStyleSheet("QFrame#EmptyStateFlat { background: transparent; border: none; }")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(12, 12, 12, 12)
+    else:
+        card, layout = make_card()
+    card.setMinimumHeight(160)
     layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
     layout.setSpacing(10)
 
-    icon = QLabel("📊")
-    icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    icon.setProperty("type", "empty_state_icon")
+    # Material You M3 tonal icon squircle
+    palette = _p()
+    icon_container = QLabel()
+    icon_container.setFixedSize(44, 44)
+    icon_container.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    icon_container.setStyleSheet(f"""
+        background-color: {palette.SURFACE_TERTIARY};
+        border: 1px solid {palette.BORDER};
+        border-radius: 14px;
+    """)
+
+    from PyQt6.QtSvg import QSvgRenderer
+    from PyQt6.QtGui import QPixmap, QPainter, QColor
+    renderer = QSvgRenderer(resolve_asset_path(icon_path))
+    pix = QPixmap(48, 48)
+    pix.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pix)
+    renderer.render(painter)
+    painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+    painter.fillRect(pix.rect(), QColor(palette.TEXT_SECONDARY))
+    painter.end()
+
+    scaled_pix = pix.scaled(22, 22, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+    icon_container.setPixmap(scaled_pix)
 
     lbl_title = QLabel(title)
     lbl_title.setProperty("type", "state_empty_title")
     lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-    layout.addWidget(icon)
+    layout.addWidget(icon_container, alignment=Qt.AlignmentFlag.AlignCenter)
     layout.addWidget(lbl_title)
 
     if body:
@@ -161,51 +183,22 @@ def make_empty_state_card(
     return card, layout
 
 
-def make_error_state_card(title: str, body: str) -> tuple[QFrame, QVBoxLayout]:
-    """Tạo một thẻ hiển thị trạng thái lỗi (Error State)."""
-    card, layout = make_card()
-    layout.setSpacing(8)
-    lbl_title = QLabel(title)
-    lbl_title.setProperty("type", "state_empty_title")
-    lbl_title.setProperty("status", "error")
-
-    lbl_body = QLabel(body)
-    lbl_body.setWordWrap(True)
-    lbl_body.setProperty("type", "state_empty_body")
-
-    layout.addWidget(lbl_title)
-    layout.addWidget(lbl_body)
-    return card, layout
-
-
-def make_card_name_label(name: str) -> QLabel:
-    """Tạo nhãn tên cho thẻ danh sách."""
-    lbl = QLabel(name)
-    lbl.setProperty("type", "record_current_spell")
-    return lbl
-
-
-def make_card_count_label(count: int) -> QLabel:
-    """Tạo nhãn số lượng cho thẻ danh sách."""
-    lbl = QLabel(f"{count} samples")
-    lbl.setProperty("type", "statistics_meta_label")
-    return lbl
-
-
-def make_rarity_badge_statistics(label: str, color: str) -> QLabel:
-    """Tạo huy hiệu (Badge) độ hiếm cho trang thống kê."""
+def make_rarity_badge_statistics(label: str, color: str, text_color: str | None = None) -> QLabel:
+    """Tạo huy hiệu (Badge) độ hiếm theo chuẩn Material You M3."""
     lbl = QLabel(label)
+    lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
     palette = _p()
-    text_color = readable_text_on(color, dark_text=palette.TEXT_PRIMARY, light_text="#FFFFFF")
+    if not text_color:
+        text_color = readable_text_on(color, dark_text=palette.TEXT_PRIMARY, light_text="#FFFFFF")
     lbl.setStyleSheet(f"""
         background-color: {color}; color: {text_color};
-        border-radius: {BADGE_RADIUS}; padding: 4px 12px;
-        font-weight: 800; font-size: 11px; font-family: {APP_FONT_STACK};
+        border-radius: 11px; padding: 3px 10px;
+        min-width: 68px;
+        font-weight: 700; font-size: 11px; font-family: {APP_FONT_STACK};
     """)
     return lbl
 
 
-def make_rarity_badge_wand(label: str, color: str) -> QLabel:
+def make_rarity_badge_wand(label: str, color: str, text_color: str | None = None) -> QLabel:
     """Tạo huy hiệu (Badge) độ hiếm cho trang Wand."""
-    # Tương tự như statistics nhưng có thể tinh chỉnh kích thước nếu cần
-    return make_rarity_badge_statistics(label, color)
+    return make_rarity_badge_statistics(label, color, text_color=text_color)

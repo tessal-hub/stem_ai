@@ -53,20 +53,26 @@ class ConnectionStatusPresenter:
         """Hiển thị trạng thái đã kết nối."""
         port = str(device).strip().upper()
         text = tr_ui("wand_status_connected_port", port=port) if port else tr_ui("wand_status_connected")
-        lbl.setText(text)
+        lbl.setText(f"● {text}")
         lbl.setProperty("type", "status_label")
         lbl.setProperty("status", self.connected_color)
         lbl.style().unpolish(lbl)
         lbl.style().polish(lbl)
         btn_c.setText(tr_ui("wand_disconnect"))
+        btn_c.setProperty("type", "danger_outline")
+        btn_c.style().unpolish(btn_c)
+        btn_c.style().polish(btn_c)
         btn_s.setEnabled(False)
 
     def _apply_disconnected(self, lbl: QLabel, btn_c: QPushButton, btn_s: QPushButton) -> None:
         """Hiển thị trạng thái chưa kết nối."""
-        lbl.setText(tr_ui("wand_status_disconnected"))
+        lbl.setText(f"○ {tr_ui('wand_status_disconnected')}")
         lbl.setProperty("type", "status_label")
         lbl.setProperty("status", self.disconnected_color)
         lbl.style().unpolish(lbl)
         lbl.style().polish(lbl)
         btn_c.setText(tr_ui("wand_connect"))
+        btn_c.setProperty("type", "primary")
+        btn_c.style().unpolish(btn_c)
+        btn_c.style().polish(btn_c)
         btn_s.setEnabled(True)

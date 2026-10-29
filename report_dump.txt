@@ -1,0 +1,443 @@
+[1] (Normal) HỌC VIỆN CÔNG NGHỆ BƯU CHÍNH VIỄN THÔNG
+[2] (Normal) KHOA KỸ THUẬT ĐIỆN TỬ 1
+[3] (Normal) =====o0o=====
+[7] (Normal) BÁO CÁO KẾT QUẢ ĐỀ TÀI
+[8] (Normal) NGHIÊN CỨU KHOA HỌC SINH VIÊN NĂM 2026
+[9] (Normal) Đề tài: “Thiết kế hệ thống nhận dạng chuyển động Magic Wand sử dụng TinyML trên vi điều khiển”
+[10] (Normal) Mã số đề tài: 13-SV-2026-ĐT1
+[14] (Normal) Hà Nội - 2026
+[16] (Normal) LỜI CẢM ƠN
+[17] (Normal) Để hoàn thành đề tài nghiên cứu khoa học sinh viên này, bên cạnh sự nỗ lực, quyết tâm và tinh thần làm việc nghiêm túc của toàn thể các thành viên trong nhóm, chúng em đã nhận được sự quan tâm, ủng hộ, chỉ bảo tận tình và tạo mọi điều kiện thuận lợi nhất từ quý thầy cô giáo, gia đình và bạn bè.
+[18] (Normal) Lời đầu tiên và sâu sắc nhất, nhóm chúng em xin được bày tỏ lòng biết ơn chân thành tới PGS. TS. Trương Cao Dũng — người thầy đã trực tiếp hướng dẫn, định hướng khoa học và luôn đồng hành sát sao cùng chúng em trong suốt quá trình triển khai đề tài. Những chỉ dẫn quý báu, sự khắt khe về mặt học thuật cùng những lời động viên kịp thời của Thầy không chỉ giúp nhóm chúng em vượt qua những thách thức kỹ thuật phức tạp trong quá trình nghiên cứu thuật toán và tích hợp phần cứng, mà còn truyền cho chúng em ngọn lửa đam mê nghiên cứu khoa học và tác phong làm việc chuyên nghiệp của một người kỹ sư.
+[19] (Normal) Nhóm chúng em cũng xin trân trọng gửi lời cảm ơn sâu sắc tới Ban Giám đốc Học viện Công nghệ Bưu chính Viễn thông, Ban Chủ nhiệm Khoa Kỹ thuật Điện tử 1 cùng toàn thể các thầy cô giáo trong Khoa. Cảm ơn các thầy cô đã tận tâm giảng dạy, trang bị cho chúng em nền tảng kiến thức chuyên môn vững chắc và luôn tạo ra một môi trường học tập, nghiên cứu khoa học năng động, sáng tạo để chúng em có cơ hội thử sức và biến các ý tưởng công nghệ thành sản phẩm thực tế.
+[20] (Normal) Chúng con xin gửi lời cảm ơn vô vàn tới bố mẹ và gia đình — hậu phương vững chắc luôn yêu thương, tin tưởng, động viên và là điểm tựa tinh thần lớn lao cho chúng con trong suốt những năm tháng học tập và nghiên cứu dưới mái trường Học viện.
+[21] (Normal) Cuối cùng, chúng em xin gửi lời cảm ơn chân thành tới bạn bè, các bạn sinh viên trong Khoa Kỹ thuật Điện tử 1 và các bạn sinh viên đã nhiệt tình tham gia hỗ trợ nhóm trong quá trình thu thập dữ liệu cử chỉ, thử nghiệm sản phẩm thực tế và đóng góp những ý kiến phản hồi quý báu để hệ thống ngày càng hoàn thiện hơn.
+[22] (Normal) Mặc dù nhóm nghiên cứu đã dành nhiều tâm huyết và nỗ lực hết mình để hoàn thành đề tài một cách trọn vẹn nhất, song do kiến thức, kinh nghiệm thực tiễn và thời gian còn hạn chế nên báo cáo chắc chắn không thể tránh khỏi những thiếu sót nhất định. Nhóm chúng em rất mong nhận được những nhận xét, góp ý và chỉ bảo quý báu từ quý Thầy, Cô trong Hội đồng khoa học để đề tài có thể tiếp tục được hoàn thiện và phát triển sâu hơn nữa trong tương lai.
+[23] (Normal) Chúng em xin kính chúc quý Thầy, Cô luôn dồi dào sức khỏe, hạnh phúc và gặt hái được nhiều thành công hơn nữa trên con đường sự nghiệp giáo dục cao quý!
+[24] (Normal) Hà Nội, năm 2026
+[27] (Heading 1) DANH MỤC CÁC KÝ HIỆU VÀ CHỮ VIẾT TẮT
+[30] (Heading 1) LỜI MỞ ĐẦU
+[31] (Heading 2) 1. Tính cấp thiết của đề tài
+[32] (Normal) Trong bối cảnh Cuộc cách mạng công nghiệp lần thứ tư (Cách mạng 4.0), Trí tuệ nhân tạo (AI) và Internet vạn vật (IoT) đã trở thành động lực then chốt thúc đẩy chuyển đổi số trên mọi lĩnh vực kinh tế - xã hội. Nhận thức rõ tầm quan trọng chiến lược này, Nghị quyết số 52-NQ/TW của Bộ Chính trị và Chiến lược quốc gia về nghiên cứu, phát triển và ứng dụng AI đến năm 2030 đã đặt ra yêu cầu cấp bách về việc đổi mới căn bản giáo dục, đào tạo nguồn nhân lực số chất lượng cao có năng lực tự chủ công nghệ.
+[33] (Normal) Tại các trường phổ thông và đại học ở Việt Nam, Chương trình Giáo dục Phổ thông 2018 (GDPT 2018) đã định hướng mạnh mẽ việc đưa giáo dục STEM tích hợp và tư duy máy tính vào giảng dạy. Tuy nhiên, trong thực tiễn đào tạo hiện nay, việc tiếp cận công nghệ AI vẫn còn tồn tại những rào cản lớn. Phần lớn học sinh, sinh viên chỉ được tiếp cận AI dưới dạng 'người tiêu dùng' (AI Consumer) — sử dụng các ứng dụng có sẵn hoặc tương tác với mô hình như những chiếc hộp đen kỳ bí trên nền tảng đám mây. Các bộ kit STEM truyền thống trên thị trường nội địa hầu như chỉ dừng lại ở các bài thực hành điện tử cơ bản như bật tắt bóng đèn, đọc cảm biến đơn giản; hoàn toàn thiếu vắng trải nghiệm thực tế với chu trình phát triển sản phẩm AIoT hoàn chỉnh.
+[34] (Normal) Mặt khác, xu hướng phát triển của công nghệ hiện đại đang dịch chuyển mạnh mẽ từ Điện toán đám mây (Cloud AI) sang Trí tuệ nhân tạo biên (Edge AI) và Học máy siêu nhỏ (TinyML) — cho phép thực thi các mô hình học máy trực tiếp trên các vi điều khiển công suất cực thấp với độ trễ siêu nhỏ, bảo mật quyền riêng tư tuyệt đối và không phụ thuộc mạng Internet. Trên thế giới, dự án 'Magic Wand' của Google và Arduino đã mở ra hướng đi đầy tiềm năng khi ứng dụng nhận dạng cử chỉ đũa thần bằng cảm biến quán tính (IMU) để giảng dạy TinyML. Dẫu vậy, các giải pháp hiện hành vẫn bộc lộ hạn chế cố hữu: phụ thuộc vào đám mây (như Edge Impulse), mô hình học sâu cứng nhắc đòi hỏi phải huấn luyện lại toàn bộ mạng mỗi khi thêm cử chỉ mới, hoặc chi phí phần cứng quá đắt đỏ so với điều kiện kinh tế của đa số trường học tại Việt Nam.
+[35] (Normal) Xuất phát từ thực tiễn trên, việc nghiên cứu và phát triển một hệ sinh thái thiết bị học tập và nghiên cứu hoàn chỉnh, chi phí thấp, mang tên 'Thiết kế hệ thống nhận dạng chuyển động Magic Wand sử dụng TinyML trên vi điều khiển' là hết sức cấp thiết, có ý nghĩa khoa học và giá trị ứng dụng sư phạm sâu sắc.
+[36] (Heading 2) 2. Mục tiêu nghiên cứu
+[37] (Normal) Mục tiêu trọng tâm của đề tài là nghiên cứu, thiết kế, chế tạo và thử nghiệm thành công một hệ sinh thái thực hành STEM AI hoàn chỉnh mang tên 'STEM AI — Sách Phép Bằng AI & Wand Thực Thể'. Cụ thể:
+[38] (Normal) • Về phần cứng: Chế tạo thiết bị cầm tay 'Đũa phép thông minh' (Magic Wand) tích hợp vi điều khiển ESP32, cảm biến quán tính IMU 6 trục MPU6050, mạch nguồn quản lý pin Li-Po an toàn và hệ thống phản hồi ánh sáng LED RGB kết hợp âm thanh; đóng gói trong vỏ in 3D công thái học gọn nhẹ chỉ 82 gram.
+[39] (Normal) • Về phần mềm máy trạm: Xây dựng ứng dụng Desktop trực quan bằng Python/PyQt6 với hai phân hệ chuyên biệt: Phân hệ STEM Spell Book (nhận diện cử chỉ tức thời bằng mạng nơ-ron học số ít mẫu Few-Shot 1D-CNN) và Phân hệ STEM ML Lab Studio (studio học máy giáo dục hỗ trợ 15 thuật toán scikit-learn, 63 đặc trưng toán học, trợ lý AI Coach chẩn đoán lỗi và bộ sinh mã C99 nhúng nạp 1-click vào ESP32).
+[40] (Normal) • Về giải pháp thuật toán tại biên: Đề xuất cơ chế kích hoạt đỉnh chuyển động kết hợp cổng năng lượng (Peak Trigger & Motion Gate) nhằm loại bỏ hoàn toàn kích hoạt rác, tối ưu hóa năng lượng và kéo dài thời lượng hoạt động của pin.
+[41] (Normal) • Về giá trị giáo dục: Xây dựng quy trình sư phạm chuẩn mực giúp người học tự mình trải nghiệm trọn vẹn 4 giai đoạn của một kỹ sư AI thực thụ: Thu thập dữ liệu -> Huấn luyện mô hình -> Chẩn đoán lỗi -> Triển khai lên vi điều khiển.
+[42] (Heading 2) 3. Đối tượng và phạm vi nghiên cứu
+[43] (Normal) • Đối tượng nghiên cứu: Tín hiệu dao động quán tính không gian 3 chiều từ cảm biến IMU (gia tốc kế và con quay hồi chuyển 6 bậc tự do); các phương pháp trích xuất đặc trưng toán học miền thời gian và tần số; các thuật toán học máy cổ điển (Classic ML) và mạng nơ-ron tích chập học số ít mẫu (Few-Shot 1D-CNN); các kỹ thuật nén mô hình và sinh mã C99 TinyML trên vi điều khiển biên.
+[44] (Normal) • Phạm vi nghiên cứu: Hệ thống nhận dạng cử chỉ chuyển động tay cầm trong thời gian thực tại biên phục vụ giáo dục STEM; khảo sát tập trung trên vi điều khiển lõi kép ESP32 kết hợp cảm biến MPU6050; thử nghiệm trên bộ cử chỉ phép thuật đại diện (Lumos, Nox, Incendio, Aguamenti...) và các nguyên tử chuyển động học cơ sở.
+[45] (Heading 2) 4. Phương pháp nghiên cứu
+[46] (Normal) • Phương pháp nghiên cứu lý thuyết: Tổng quan tài liệu khoa học về giáo dục STEM, công nghệ TinyML, xử lý tín hiệu số quán tính, không gian đo lường Metric Learning và các thuật toán học máy phân lớp.
+[47] (Normal) • Phương pháp thiết kế và tích hợp kỹ thuật: Ứng dụng nguyên lý kỹ thuật điện tử để thiết kế khối nguồn ổn áp LDO, bố trí mạch in và gia công cơ khí vỏ đũa phép bằng công nghệ in 3D; xây dựng kiến trúc phần mềm máy trạm đa luồng bằng PyQt6; thiết kế giao thức truyền thông nối tiếp Frame Protocol.
+[48] (Normal) • Phương pháp thực nghiệm và đánh giá: Thu thập tập dữ liệu cử chỉ thực tế từ người dùng; huấn luyện và đánh giá định lượng 15 mô hình học máy thông qua ma trận nhầm lẫn (Confusion Matrix), độ chính xác (Accuracy), thời gian suy luận (Inference Latency) và dung lượng bộ nhớ tiêu thụ trên vi điều khiển.
+[49] (Heading 2) 5. Cấu trúc của báo cáo
+[50] (Normal) Báo cáo kết quả nghiên cứu đề tài được tổ chức thành 3 chương chính, cùng với phần mở đầu, kết luận và tài liệu tham khảo:
+[51] (Normal) • Chương 1: Tổng quan về hệ thống nhận dạng chuyển động và giáo dục STEM AI: Trình bày bối cảnh giáo dục STEM, tổng quan về Trí tuệ nhân tạo biên (TinyML), phân tích bài toán nhận dạng cử chỉ chuyển động, nhu cầu thực tế và mục tiêu đề tài; đồng thời mô tả tổng quan kiến trúc hệ sinh thái STEM AI Magic Wand.
+[52] (Normal) • Chương 2: Cơ sở lý thuyết và giải pháp kỹ thuật: Đi sâu vào việc phân tích các cơ sở lý thuyết về xử lý tín hiệu cảm biến IMU, khảo sát và so sánh các phương án phần cứng (vi điều khiển, cảm biến, mạch nguồn), các công cụ phát triển phần mềm, cùng các mô hình thuật toán học máy và phương pháp sinh mã TinyML.
+[53] (Normal) • Chương 3: Đề xuất, thử nghiệm và phát triển hệ thống: Trình bày chi tiết kiến trúc đề xuất, quy trình thiết kế và chế tạo các khối chức năng phần cứng lẫn phần mềm; phân tích kết quả thử nghiệm thực nghiệm 15 thuật toán học máy, đánh giá cơ chế Peak Trigger & Motion Gate, ma trận nhầm lẫn, phân tích tầm quan trọng đặc trưng SHAP, cùng kết luận và hướng phát triển của đề tài.
+[55] (Heading 1) CHƯƠNG 1: TỔNG QUAN VỀ HỆ THỐNG NHẬN DẠNG CHUYỂN ĐỘNG VÀ GIÁO DỤC STEM AI
+[56] (Heading 2) 1.1. Giới thiệu chung về Giáo dục STEM và Trí tuệ nhân tạo biên (TinyML)
+[57] (Heading 3) 1.1.1. Khái niệm và xu hướng phát triển giáo dục STEM
+[58] (Normal) Giáo dục STEM (Science - Khoa học, Technology - Công nghệ, Engineering - Kỹ thuật, Mathematics - Toán học) là phương thức giáo dục tích hợp định hướng liên môn, nhằm trang bị cho người học năng lực giải quyết các vấn đề thực tiễn thông qua việc vận dụng kiến thức khoa học đa chiều. Khác với phương pháp truyền thụ kiến thức thụ động truyền thống, triết lý cốt lõi của giáo dục STEM dựa trên học tập theo dự án (Project-Based Learning - PBL) và thực hành tương tác trực tiếp (Hands-on Learning). Người học được tự tay thiết kế, chế tạo, thử nghiệm và cải tiến sản phẩm kỹ thuật, từ đó phát triển toàn diện tư duy phản biện, kỹ năng làm việc nhóm và khả năng thích ứng linh hoạt trong kỷ nguyên số.
+[59] (Normal) Trong kỷ nguyên bùng nổ của Cuộc cách mạng công nghiệp lần thứ tư (Cách mạng 4.0), giáo dục STEM trên toàn cầu đang chứng kiến một bước chuyển dịch mang tính bước ngoặt: sự kết hợp sâu sắc giữa giáo dục kỹ thuật với Trí tuệ nhân tạo (AI), tạo nên khái niệm mới là 'STEM AI' và phổ cập năng lực AI (AI Literacy). Các tổ chức giáo dục hàng đầu thế giới như MIT Media Lab, Google AI Education, Arduino Education, cùng với sáng kiến AI4K12 tại Hoa Kỳ đã khẳng định rằng: hiểu biết về AI không còn là đặc quyền riêng của các chuyên gia khoa học máy tính mà đã trở thành năng lực công nghệ nền tảng cho thế hệ trẻ.
+[60] (Normal) Tại Việt Nam, định hướng này được cụ thể hóa mạnh mẽ thông qua Chương trình Giáo dục Phổ thông 2018 (GDPT 2018). Môn Tin học và Công nghệ đã được tái cấu trúc toàn diện, chú trọng phát triển tư duy thuật toán, khoa học dữ liệu và kỹ năng lập trình giải quyết vấn đề. Tuy nhiên, một thách thức lớn trong thực tiễn giảng dạy hiện nay là phần lớn người học chỉ tiếp cận AI như một người tiêu dùng sản phẩm cuối (AI Consumer) — sử dụng các ứng dụng có sẵn hoặc tương tác với mô hình như những chiếc 'hộp đen' (Black Box) kỳ bí. Để thực sự làm chủ công nghệ, người học cần được chuyển đổi vị thế thành người kiến tạo (AI Creator): trực tiếp trải nghiệm trọn vẹn vòng đời của một kỹ sư AI thực thụ, bao gồm: Thu thập dữ liệu thực tế -> Huấn luyện mô hình -> Chẩn đoán lỗi thuật toán -> Triển khai lên vi điều khiển.
+[61] (Heading 3) 1.1.2. Tổng quan về Trí tuệ nhân tạo biên (Edge AI) và TinyML
+[62] (Normal) Trong nhiều năm qua, sự phát triển của Trí tuệ nhân tạo chủ yếu gắn liền với Điện toán đám mây (Cloud AI). Để huấn luyện và thực thi các mô hình học sâu (Deep Learning) khổng lồ, dữ liệu từ người dùng hoặc các cảm biến bắt buộc phải được truyền tải liên tục qua mạng Internet lên máy chủ tập trung để xử lý, sau đó kết quả mới được gửi phản hồi trở lại. Mặc dù sở hữu sức mạnh tính toán vượt trội nhờ các cụm máy chủ GPU mạnh mẽ, mô hình Cloud AI bộc lộ những rào cản chí mạng trong các ứng dụng thời gian thực và hệ thống Internet vạn vật (IoT):
+[63] (Normal) • Độ trễ truyền thông lớn và thiếu ổn định: Độ trễ mạng từ thiết bị tới máy chủ đám mây thường dao động từ hàng chục đến hàng trăm mili-giây, không thể đáp ứng các yêu cầu điều khiển phản hồi tức thì (Real-time).
+[64] (Normal) • Yêu cầu băng thông và tiêu thụ năng lượng cao: Việc liên tục truyền luồng dữ liệu cảm biến tần số cao qua mạng Wi-Fi hoặc 4G/5G gây nghẽn băng thông và làm cạn kiệt nguồn pin của các thiết bị di động chỉ sau vài giờ.
+[65] (Normal) • Rủi ro an ninh và quyền riêng tư: Dữ liệu hành vi, cử chỉ hoặc âm thanh của người dùng bị chuyển lên đám mây tiềm ẩn nguy cơ rò rỉ dữ liệu cá nhân nghiêm trọng.
+[66] (Normal) • Phụ thuộc hoàn toàn vào hạ tầng mạng: Thiết bị trở nên hoàn toàn tê liệt khi mất kết nối Internet hoặc di chuyển vào vùng phủ sóng yếu.
+[67] (Normal) Trước những thách thức trên, xu hướng dịch chuyển từ Cloud AI sang Điện toán biên (Edge Computing) và Trí tuệ nhân tạo biên (Edge AI) đã trở thành hướng đi tất yếu. Thay vì gửi dữ liệu đi xa, Edge AI đưa các thuật toán thông minh đến thực thi trực tiếp tại các thiết bị nằm ở rìa mạng (Edge Devices). Đỉnh cao của xu hướng này chính là lĩnh vực Học máy siêu nhỏ (Tiny Machine Learning - TinyML).
+[68] (Normal) Theo định nghĩa của TinyML Foundation, TinyML là một phân nhánh nghiên cứu liên ngành giao thoa giữa Trí tuệ nhân tạo và Hệ thống nhúng, tập trung vào việc triển khai các mô hình học máy và mạng nơ-ron nhân tạo trực tiếp trên các vi điều khiển (Microcontroller Units - MCU) tiêu thụ công suất cực thấp (thường dưới 1 mili-oát, ultra-low-power) với tài nguyên phần cứng cực kỳ hạn chế (RAM từ vài chục đến vài trăm Kilobyte, Flash vài Megabyte).
+[69] (Normal) TinyML mang lại những ưu thế vượt bậc:
+[70] (Normal) • Độ trễ suy luận siêu thấp (Zero Latency): Quá trình suy luận diễn ra cục bộ trực tiếp trên vi điều khiển trong khoảng thời gian từ vài phần trăm đến dưới một mili-giây, mang lại cảm giác phản hồi tức thì.
+[71] (Normal) • Bảo mật quyền riêng tư tuyệt đối (Privacy by Design): Toàn bộ dữ liệu thô từ cảm biến được xử lý ngay tại chip và bị tiêu hủy ngay sau khi suy luận, không có bất kỳ dữ liệu nhạy cảm nào bị truyền ra ngoài môi trường mạng.
+[72] (Normal) • Hiệu quả năng lượng vượt trội: Vi điều khiển có thể hoạt động bền bỉ nhiều tuần, thậm chí nhiều tháng chỉ với một viên pin dung lượng nhỏ.
+[73] (Normal) • Khả năng tự chủ hoàn toàn (Autonomy): Thiết bị có thể vận hành trơn tru ở mọi lúc, mọi nơi mà không đòi hỏi bất kỳ kết nối mạng Internet hay máy chủ nào.
+[74] (Heading 3) 1.1.3. Lĩnh vực ứng dụng thực tiễn của TinyML trong giáo dục và đời sống
+[75] (Normal) Mặc dù hoạt động trên nền tảng phần cứng siêu nhỏ gọn, TinyML đang thúc đẩy sự chuyển đổi mạnh mẽ trên rất nhiều lĩnh vực công nghệ hiện đại:
+[76] (Normal) • Công nghiệp thông minh (Công nghiệp 4.0): Bảo trì dự đoán (Predictive Maintenance) dựa trên cảm biến rung chấn quán tính gắn trên động cơ máy móc; phát hiện sớm nguy cơ hỏng hóc cơ khí trước khi xảy ra sự cố nghiêm trọng.
+[77] (Normal) • Y tế và Chăm sóc sức khỏe cá nhân: Các thiết bị đeo thông minh (Wearables) theo dõi nhịp tim bất thường, phát hiện ngã tự động ở người cao tuổi, nhận diện các cơn co giật bằng cảm biến gia tốc chuyển động.
+[78] (Normal) • Nông nghiệp chính xác và Môi trường: Cảm biến âm thanh nhúng phân tích tiếng kêu để phát hiện sâu bọ phá hoại cây trồng, nhận diện nguy cơ cháy rừng từ xa bằng phân tích khí thải và nhiệt độ.
+[79] (Normal) • Giao diện tương tác Người - Máy (Human-Computer Interaction - HCI): Nhận diện từ khóa giọng nói thức tỉnh (Keyword Spotting như 'Hey Siri', 'OK Google'); Nhận diện cử chỉ tay (Gesture Recognition) trong không gian 3 chiều để điều khiển thiết bị thông minh, nhà thông minh không chạm.
+[80] (Normal) • Ứng dụng đột phá trong Giáo dục STEM: TinyML mở ra cánh cửa cho học sinh tiếp cận toàn diện chu trình kỹ thuật của một sản phẩm AIoT thực tế: từ khâu đo đạc tín hiệu vật lý thế giới thực, thu thập dữ liệu bằng cảm biến, trích xuất đặc trưng toán học, huấn luyện mô hình, cho đến tối ưu hóa mã nguồn C/C++ và nhúng vào vi điều khiển cầm tay.
+[81] (Heading 2) 1.2. Bài toán nhận dạng cử chỉ chuyển động (Gesture Recognition) và Nhu cầu thực tế
+[82] (Heading 3) 1.2.1. Tình hình nghiên cứu trong và ngoài nước
+[83] (Normal) Trong số các ứng dụng của TinyML, bài toán nhận dạng cử chỉ chuyển động (Gesture Recognition) dựa trên bộ cảm biến quán tính (Inertial Measurement Unit - IMU) được xem là một trong những đề tài nghiên cứu kinh điển và hấp dẫn nhất, mang tính trực quan cao nhất để kết nối giữa thuật toán trí tuệ nhân tạo và tương tác vật lý.
+[84] (Normal) Trên thế giới, dự án tiên phong nổi tiếng nhất trong hướng tiếp cận này là dự án 'Magic Wand' (Cây đũa thần phép thuật) do nhóm kỹ sư TensorFlow của Google phối hợp cùng Arduino công bố năm 2019. Dự án sử dụng bo mạch Arduino Nano 33 BLE Sense để nhận diện 3-4 nét vẽ vung đũa tượng trưng cho thần chú (như hình số 0, chữ W, hình tia sét). Dự án đã chứng minh thuyết phục rằng một mạng nơ-ron tích chập (Convolutional Neural Network - CNN) sau khi được lượng tử hóa thành định dạng số nguyên 8-bit (INT8) qua thư viện TensorFlow Lite for Microcontrollers (TFLite Micro) hoàn toàn có thể chạy mượt mà trên một con chip nhỏ.
+[85] (Normal) Tiếp nối thành công đó, hàng loạt nền tảng hỗ trợ phát triển TinyML đã ra đời nhằm đơn giản hóa quy trình huấn luyện và triển khai, tiêu biểu như Edge Impulse, Google Teachable Machine, EloquentTinyML.
+[86] (Normal) Tuy nhiên, việc áp dụng các dự án và nền tảng trên vào thực tiễn giảng dạy STEM cho học sinh, sinh viên vẫn tồn tại nhiều rào cản kỹ thuật nghiêm trọng:
+[87] (Normal) • Sự phụ thuộc nặng nề vào hạ tầng Đám mây (Cloud Dependency): Các nền tảng như Edge Impulse bắt buộc người dùng phải có đường truyền Internet liên tục, đăng ký tài khoản và chịu các giới hạn ngặt nghèo về thời gian huấn luyện miễn phí. Khi mất mạng trong phòng lab hoặc tại các trường vùng sâu vùng xa, toàn bộ buổi học bị đình trệ.
+[88] (Normal) • Bản chất 'Hộp đen' và thiếu tính tùy biến thuật toán: Hầu hết các nền tảng tự động hóa giấu kín các bước trích xuất đặc trưng toán học và tối ưu mã nguồn nhúng. Học sinh chỉ bấm nút mà không hiểu bản chất tại sao mô hình lại phân loại được, hay tại sao một mô hình cây quyết định (Decision Tree) lại phù hợp trên chip hơn một mô hình mạng nơ-ron nhiều tầng.
+[89] (Normal) • Hạn chế về chi phí phần cứng: Các bo mạch mẫu chính thức (như Arduino Nano 33 BLE Sense) có giá thành tương đối đắt đỏ (khoảng 800.000 - 1.200.000 VNĐ mỗi bo), khiến chi phí trang bị cho một lớp học từ 20 đến 40 học sinh trở thành gánh nặng kinh tế vượt quá khả năng chi trả của hầu hết các cơ sở giáo dục.
+[90] (Normal) Tại Việt Nam, các nghiên cứu và ứng dụng TinyML trong giảng dạy STEM vẫn đang ở giai đoạn sơ khai. Đa số các kit STEM hiện có trên thị trường nội địa chỉ sử dụng các vi điều khiển cổ điển 8-bit (như Arduino Uno R3 dùng ATmega328P) với các bài thực hành đơn giản như đọc nhiệt độ, đo khoảng cách siêu âm, bật tắt bóng đèn relay. Các chương trình học AI dành cho học sinh phần lớn dừng lại ở việc lập trình kéo thả Scratch gọi các API nhận dạng khuôn mặt trên máy chủ đám mây, hoàn toàn vắng bóng trải nghiệm làm chủ toàn bộ quy trình thiết kế hệ thống AI nhúng trên phần cứng thực.
+[91] (Heading 3) 1.2.2. Nhu cầu thực tế và bài toán đào tạo nguồn nhân lực số tại Việt Nam
+[92] (Normal) Nghị quyết số 52-NQ/TW của Bộ Chính trị về chủ động tham gia cuộc Cách mạng 4.0 và Chiến lược quốc gia về nghiên cứu, phát triển và ứng dụng Trí tuệ nhân tạo đến năm 2030 đã xác định rõ phát triển nguồn nhân lực chất lượng cao về AI và IoT là trụ cột chiến lược quyết định năng lực cạnh tranh quốc gia.
+[93] (Normal) Tuy nhiên, khảo sát thực tế tại các trường đại học và cơ sở giáo dục nghề nghiệp cho thấy tồn tại một 'khoảng trống kỹ năng' (Skills Gap) rất lớn giữa lý thuyết học thuật và thực tiễn kỹ thuật. Sinh viên ngành Điện tử, Viễn thông, Tự động hóa và Công nghệ thông tin thường rơi vào một trong hai thái cực:
+[94] (Normal) • Thiên lệch về phần cứng đơn thuần: Thành thạo lập trình vi điều khiển, thiết kế mạch in PCB nhưng lại thiếu hụt tư duy về mô hình hóa toán học, khoa học dữ liệu và các thuật toán học máy hiện đại.
+[95] (Normal) • Thiên lệch về phần mềm trừu tượng: Rất thành thạo huấn luyện các mô hình AI phức tạp trên máy tính cấu hình cao (GPU, Python, PyTorch), nhưng hoàn toàn lúng túng khi phải nhúng mô hình vào một con chip có bộ nhớ RAM chỉ vài trăm Kilobyte, không biết cách xử lý nhiễu tín hiệu cảm biến thế giới thực hay tối ưu hóa vòng lặp tính toán để tiết kiệm năng lượng.
+[96] (Normal) Do đó, việc nghiên cứu phát triển một Hệ sinh thái đào tạo STEM AI toàn diện — lấy bài toán tương tác cử chỉ 'Đũa phép thông minh' làm trung tâm — là một đòi hỏi vô cùng cấp thiết. Hệ thống này không chỉ cung cấp một sản phẩm phần cứng chi phí thấp, bền bỉ, an toàn mà quan trọng hơn, nó mang lại một nền tảng phần mềm mở, sư phạm cao, cho phép học sinh và sinh viên tiếp cận từ A đến Z chu trình kỹ thuật của một kỹ sư AIoT hiện đại.
+[97] (Heading 3) 1.2.3. Mục tiêu và nhiệm vụ của đề tài
+[98] (Normal) Xuất phát từ bối cảnh thực tiễn và yêu cầu khoa học nêu trên, đề tài 'Thiết kế hệ thống nhận dạng chuyển động Magic Wand sử dụng TinyML trên vi điều khiển' (Mã số: 13-SV-2026-ĐT1) được xác định với các mục tiêu và nhiệm vụ cụ thể như sau:
+[99] (Normal) a. Mục tiêu tổng quát:
+[100] (Normal) Thiết kế, chế tạo và thử nghiệm thành công một hệ sinh thái thiết bị học tập và nghiên cứu thực hành STEM AI hoàn chỉnh mang tên 'STEM AI — Sách Phép Bằng AI & Wand Thực Thể'. Hệ sinh thái bao gồm một thiết bị phần cứng cầm tay 'Đũa phép thông minh' (Magic Wand) tích hợp cảm biến quán tính IMU 6 trục và vi điều khiển ESP32, có khả năng suy luận cục bộ thời gian thực các mô hình học máy; kết hợp cùng bộ phần mềm máy trạm tương tác cao trực quan hóa 3D, thu thập dữ liệu và tự động sinh mã nguồn nhúng C99.
+[101] (Normal) b. Các nhiệm vụ kỹ thuật cụ thể:
+[102] (Normal) • Nhiệm vụ 1: Nghiên cứu lý thuyết và khảo sát nền tảng: Nghiên cứu cơ sở lý thuyết xử lý tín hiệu cảm biến chuyển động quán tính (IMU), các phương pháp trích xuất đặc trưng thời gian và tần số, các giải pháp học máy cổ điển và mạng nơ-ron nhân tạo phù hợp triển khai trên thiết bị biên tài nguyên giới hạn.
+[103] (Normal) • Nhiệm vụ 2: Thiết kế và chế tạo phần cứng thiết bị Đũa thần (Magic Wand Hardware): Lựa chọn cấu hình vi điều khiển lõi kép ESP32 kết hợp cảm biến MPU6050; thiết kế module nguồn quản lý sạc pin Li-Po an toàn, mạch ổn áp điện áp rơi thấp (LDO 3.3V); thiết kế hệ thống hiển thị ánh sáng LED RGB và âm thanh thần chú; tạo hình và gia công vỏ bảo vệ công thái học bằng công nghệ in 3D.
+[104] (Normal) • Nhiệm vụ 3: Xây dựng bộ phần mềm máy trạm đa năng (Host Desktop Software): Phát triển ứng dụng Desktop tương tác bằng Python/PyQt6 với hai phân hệ chuyên biệt: Phân hệ STEM Spell Book (nhận diện tức thời dựa trên mạng 1D-CNN Few-Shot trên cơ sở 23 nguyên tử chuyển động) và Phân hệ STEM ML Lab Studio (studio học máy giáo dục độc lập hỗ trợ 15 thuật toán scikit-learn, phân tích SHAP, AI Coach chẩn đoán lỗi, sinh mã C99 header-only và nạp 1-click qua Serial).
+[105] (Normal) • Nhiệm vụ 4: Đề xuất và tối ưu hóa cơ chế suy luận biên TinyML: Đề xuất cơ chế kích hoạt đỉnh chuyển động kết hợp cổng năng lượng (Peak Trigger & Motion Gate) nhằm loại bỏ hoàn toàn kích hoạt rác, tối ưu hóa mức tiêu thụ năng lượng và tăng thời lượng hoạt động của pin lên trên 15 giờ.
+[106] (Normal) • Nhiệm vụ 5: Thử nghiệm thực nghiệm và đánh giá toàn diện: Tiến hành thu thập tập dữ liệu cử chỉ chuyển động chuẩn, đánh giá so sánh độ chính xác và độ trễ suy luận của 15 thuật toán học máy trên vi điều khiển, kiểm chứng tính khả thi trong hoạt động giảng dạy giáo dục STEM.
+[107] (Heading 2) 1.3. Mô tả hệ sinh thái 'Đũa phép thông minh' (STEM AI Magic Wand)
+[108] (Heading 3) 1.3.1. Nguyên lý hoạt động tổng quát
+[109] (Normal) Hệ sinh thái STEM AI Magic Wand được thiết kế theo Mô hình Kiến trúc Lai (Hybrid Edge-Host Architecture), kết hợp chặt chẽ giữa thiết bị vật lý biên cầm tay và phần mềm máy trạm trên máy tính. Hệ thống vận hành trên nguyên lý Luồng AI Song Song (Dual AI Pipeline) độc đáo, phục vụ hai mục tiêu: tương tác thời gian thực tức thì và nghiên cứu sư phạm chuyên sâu:
+[110] (Normal) a. Nhánh AI Thời gian thực (STEM Spell Book — Few-Shot Learning):
+[111] (Normal) Để giải quyết nhược điểm cố hữu của các hệ thống TinyML truyền thống (vốn phải huấn luyện lại toàn bộ mạng nơ-ron mỗi khi người dùng muốn thêm cử chỉ mới), đề tài phát triển giải pháp mạng tích chập phổ quát Universal 1D-CNN dựa trên Không gian đo lường Metric Learning. Mạng được huấn luyện trước trên một hệ cơ sở gồm 23 nguyên tử chuyển động học (23 Kinematic Primitives) thuộc 6 hệ cơ học (tịnh tiến, quay tròn, ziczac, sóng lượn...). Mạng nơ-ron đóng vai trò là một bộ trích xuất đặc trưng (Feature Extractor), ánh xạ chuỗi cử chỉ 64 mẫu thành một vector nhúng 16 chiều chuẩn hóa L2 (16-D L2-normalized embedding space).
+[112] (Normal) Khi người dùng muốn đăng ký một câu thần chú mới, hệ thống chỉ cần ghi nhận 3-5 mẫu cử chỉ và tính toán vector trọng tâm (Prototype Centroid) của lớp đó. Trong quá trình thi triển, cử chỉ mới được chiếu vào không gian nhúng và so khớp khoảng cách Euclid với các trọng tâm có sẵn. Nhờ đó, người học có thể tự tạo phép thuật mới tức thời trong vài giây mà không cần huấn luyện lại mạng nơ-ron nền tảng.
+[113] (Normal) b. Nhánh AI Giáo dục & Thực thi tại biên (STEM ML Lab Studio — Classic ML & Edge Deployment):
+[114] (Normal) Phục vụ mục tiêu giáo dục sâu sắc, phân hệ ML Lab cho phép học sinh trực tiếp can thiệp vào từng bước của chu trình học máy cổ điển. Từ cửa sổ tín hiệu thô (64 mẫu x 6 trục = 384 điểm dữ liệu), hệ thống trích xuất 63 đặc trưng toán học bao quát cả miền thời gian và miền tần số (giá trị trung bình, khoảng biến thiên, năng lượng RMS, độ lệch chuẩn, tương quan chéo giữa các trục, phân bố năng lượng nửa đầu/nửa sau).
+[115] (Normal) Học sinh được tự do thử nghiệm, so sánh 15 thuật toán học máy (từ K-NN, Decision Tree, Random Forest đến Linear SVM, Naive Bayes, MLP), được trợ giúp bởi trợ lý sư phạm AI Coach (chẩn đoán nguy cơ học vẹt overfitting, phát hiện thần chú yếu, kiểm tra mất cân bằng dữ liệu) và công cụ SHAP/What-If Simulator (giải thích tại sao mô hình ra quyết định). Khi chọn được mô hình tối ưu (điển hình là Random Forest), module c_exporter.py tự động sinh mã nguồn C99 thuần (header-only, zero dynamic memory allocation) và nạp thẳng vào vi điều khiển ESP32 qua cổng Serial bằng esptool tích hợp mà không cần bất kỳ công cụ IDE ngoài nào.
+[116] (Normal) c. Cơ chế Suy luận biên độc lập với Peak Trigger & Motion Gate:
+[117] (Normal) Sau khi nạp mô hình, cây đũa hoạt động hoàn toàn độc lập với nguồn pin Li-Po 3.7V. Nhờ cơ chế Peak Trigger & Motion Gate độc quyền, ESP32 liên tục giám sát năng lượng chuyển động trong bộ đệm vòng tròn (Ring Buffer). Khi phát hiện đỉnh gia tốc vượt ngưỡng kích hoạt có chủ đích, thiết bị đóng băng cửa sổ dữ liệu, tính toán tức thời 63 đặc trưng và suy luận mô hình C99 nội tại trong thời gian chỉ 0.04ms - 0.28ms. Kết quả nhận diện lập tức kích hoạt hiệu ứng ánh sáng LED RGB (Lumos - Trắng, Nox - Tím, Incendio - Đỏ, Aguamenti - Xanh lam) kèm hiệu ứng âm thanh tương ứng.
+[118] (Heading 3) 1.3.2. Cấu trúc hệ thống và các thành phần cốt lõi
+[119] (Normal) Cấu trúc tổng thể của hệ sinh thái STEM AI Magic Wand được phân tách rõ ràng thành hai khối thành phần lớn: Khối Thiết bị Phần cứng Cầm tay (Hardware Wand) và Khối Phần mềm Máy trạm Chủ (Host Desktop Software). Mối quan hệ chức năng giữa các khối được tổng hợp chi tiết trong Bảng 1.1.
+[120] (Normal) Bảng 1.1: Bảng tổng hợp các thành phần cốt lõi của Hệ sinh thái STEM AI Magic Wand
+[122] (Heading 2) 1.4. Kết luận chương 1
+[123] (Normal) Trong khuôn khổ Chương 1, đề tài đã giải quyết trọn vẹn các nội dung tổng quan mang tính nền tảng và định hướng kiến trúc:
+[124] (Normal) • Thứ nhất: Đã phân tích toàn diện bối cảnh và sự chuyển dịch của giáo dục STEM trong kỷ nguyên mới, khẳng định xu hướng tất yếu của việc đưa Trí tuệ nhân tạo (AI Literacy) và đặc biệt là Học máy siêu nhỏ (TinyML) vào nhà trường để chuyển đổi người học từ vai trò thụ động thành người sáng tạo công nghệ.
+[125] (Normal) • Thứ hai: Đã khảo sát sâu sắc bài toán nhận dạng cử chỉ chuyển động bằng cảm biến quán tính IMU, chỉ ra những ưu điểm cũng như hạn chế cố hữu của các dự án quốc tế tiên phong (như Magic Wand của Google/Arduino) và các nền tảng đám mây hiện hành (Edge Impulse, Teachable Machine); từ đó làm rõ tính cấp thiết của việc phát triển một giải pháp 'Made in Vietnam' giá rẻ, mã nguồn mở, hoạt động cục bộ không phụ thuộc Internet.
+[126] (Normal) • Thứ ba: Đã xác định tường minh mục tiêu, nhiệm vụ nghiên cứu khoa học của đề tài (Mã số 13-SV-2026-ĐT1), đồng thời phác thảo bức tranh tổng thể về kiến trúc hệ sinh thái STEM AI Magic Wand — bao gồm sự phối hợp nhịp nhàng giữa thiết bị phần cứng cầm tay tích hợp vi điều khiển ESP32, cảm biến MPU6050 với bộ đôi phần mềm máy trạm tương tác cao STEM Spell Book và STEM ML Lab Studio.
+[127] (Normal) Những phân tích tổng quan trong Chương 1 là tiền đề vững chắc đặt ra bài toán kỹ thuật. Để hiện thực hóa hệ sinh thái này, Chương 2 sẽ tiếp tục đi sâu vào việc phân tích cơ sở lý thuyết toán học về xử lý tín hiệu quán tính, đánh giá và lựa chọn các thành phần linh kiện phần cứng tối ưu, cũng như khảo sát các thuật toán học máy và phương pháp sinh mã TinyML hiệu quả nhất trên vi điều khiển.
+[128] (Heading 1) CHƯƠNG 2: CƠ SỞ LÝ THUYẾT VÀ LỰA CHỌN GIẢI PHÁP
+[129] (Heading 2) 2.1. Phân tích và lựa chọn nền tảng phần cứng
+[130] (Normal) Để đáp ứng yêu cầu của dự án Đũa phép thuật thông minh (chạy trực tiếp các thuật toán Học máy - Machine Learning để nhận diện cử chỉ theo thời gian thực), việc lựa chọn phần cứng cần đảm bảo sự cân bằng giữa hiệu năng tính toán, kích thước nhỏ gọn và mức tiêu thụ năng lượng.
+[131] (Heading 3) 2.1.1. Khối vi điều khiển trung tâm
+[132] (Normal) Khối vi điều khiển đóng vai trò là "bộ não" của chiếc đũa, chịu trách nhiệm đọc dữ liệu từ cảm biến, xử lý tín hiệu (trích xuất đặc trưng) và chạy mô hình học máy (SVM, KNN, MLP) để đưa ra dự đoán trực tiếp (Edge AI).
+[133] (Normal) Khảo sát các lựa chọn phổ biến:
+[134] (Normal) Arduino Uno/Nano (ATmega328P): 8-bit, 16MHz, SRAM rất nhỏ (2KB).
+[135] (Normal) STM32F103C8T6 (Blue Pill): 32-bit ARM Cortex-M3, 72MHz, SRAM 20KB.
+[136] (Normal) ESP32 (WROOM-32): 32-bit Xtensa Dual-Core, 240MHz, SRAM 520KB, có tích hợp sẵn Wi-Fi và Bluetooth.
+[137] (Normal) Bảng 2.1: So sánh các dòng vi điều khiển
+[139] (Normal) Giải pháp được lựa chọn + Lý do:
+[140] (Normal) Lựa chọn: Vi điều khiển ESP32.
+[141] (Normal) Lý do: Dự án yêu cầu tính toán ma trận và mảng dữ liệu lớn (Feature Extraction vector lên tới 71 chiều) và lưu trữ trọng số mô hình ML. Tốc độ 240MHz lõi kép và bộ nhớ 520KB RAM của ESP32 hoàn toàn đáp ứng được độ trễ nhận diện cực thấp (dưới 0.1ms). Hơn nữa, tích hợp sẵn Bluetooth/Wi-Fi mở ra hướng phát triển giao tiếp không dây với máy tính/điện thoại trong tương lai.
+[142] (Heading 3) 2.1.2. Khối cảm biến
+[143] (Normal) Khối cảm biến có nhiệm vụ bắt chính xác quỹ đạo vẩy đũa của người dùng trong không gian 3 chiều.
+[144] (Normal) Khảo sát các lựa chọn phổ biến:
+[145] (Normal) ADXL345: Cảm biến gia tốc 3 trục (Chỉ đo được lực văng, không đo được góc xoay).
+[146] (Normal) MPU6050: Cảm biến IMU 6 trục (Gồm 3 trục gia tốc và 3 trục con quay hồi chuyển).
+[147] (Normal) MPU9250: Cảm biến IMU 9 trục (Tích hợp thêm 3 trục la bàn từ kế).
+[149] (Normal) Bảng 2.1: So sánh ưu/nhược điểm
+[151] (Normal) Giải pháp được lựa chọn + Lý do:
+[152] (Normal) Lựa chọn: Cảm biến MPU6050.
+[153] (Normal) Lý do: Các cử chỉ phép thuật (như vẽ hình tròn, zíc-zắc) yêu cầu sự kết hợp giữa lực văng tay (Accelerometer) và thao tác xoay cổ tay (Gyroscope). MPU6050 với 6 trục là quá đủ để lấy dữ liệu trích xuất đặc trưng cho Học máy, đồng thời module này rất nhỏ gọn, giá rẻ và giao tiếp I2C dễ dàng lập trình trên ESP32.
+[154] (Heading 3) 2.1.3. Khối chấp hành
+[155] (Normal) Hệ thống cần có tín hiệu phản hồi ngay lập tức để người dùng biết phép thuật nào vừa được thi triển thành công.
+[156] (Normal) Lựa chọn: Đèn LED RGB (Điều khiển qua băm xung PWM/LEDC của ESP32).
+[157] (Normal) Lý do: Mã nguồn phần cứng (main.cpp) sử dụng API ledc_channel_config để điều khiển riêng biệt 3 kênh màu (R, G, B). Tương ứng với mỗi lớp cử chỉ (ví dụ: Lửa, Băng, Hồi máu), đũa phép sẽ phát sáng một màu đặc trưng riêng biệt lập tức khi nhận diện thành công, mang lại trải nghiệm thị giác sống động cho đồ chơi STEM.
+[158] (Heading 3) 2.1.4. Khối hiển thị
+[159] (Normal) Đũa phép cần giao tiếp với máy tính (nơi chạy phần mềm ML Lab) để thu thập dữ liệu huấn luyện (Record), vẽ đồ thị theo thời gian thực và phát âm thanh phép thuật (Sound effect).
+[160] (Normal) Lựa chọn: Giao tiếp Serial UART (thông qua chip chuyển đổi USB-to-UART như CP2102/CH340 tích hợp trên mạch ESP32).
+[161] (Normal) Lý do: Đảm bảo đường truyền ổn định, tốc độ baudrate cao đủ để truyền trực tiếp tín hiệu thô từ 6 trục của MPU6050 lên máy tính để phân tích không bị nghẽn cổ chai. Trên máy tính, module Python serial_coordinator.py sẽ đọc dữ liệu này để xử lý.
+[162] (Heading 3) 2.1.5. Các khối khác
+[163] (Normal) Để đũa phép hoạt động hoàn toàn độc lập và cầm tay (handheld):
+[164] (Normal) Lựa chọn: Pin Li-po 3.7V kết hợp với module sạc TP4056 và mạch tăng áp (Boost Converter).
+[165] (Normal) Lý do: Cung cấp dòng xả đủ lớn cho ESP32 hoạt động ở xung nhịp tối đa khi chạy AI. Mạch TP4056 giúp sạc pin an toàn qua cổng USB/Type-C, phù hợp với tiêu chuẩn đồ chơi STEM an toàn cho học sinh.
+[166] (Heading 2) 2.2. Các công cụ lập trình và gỡ lỗi
+[167] (Normal) Dự án Đũa phép thuật là một hệ thống nhúng kết hợp AI toàn diện (AIoT), đòi hỏi sự kết hợp chặt chẽ giữa phần mềm trên máy tính (để huấn luyện AI) và phần mềm trên vi điều khiển (để chạy AI). Do đó, chuỗi công cụ (toolchain) lập trình được chia làm nhiều mảng chuyên biệt.
+[168] (Heading 3) 2.2.1. Môi trường lập trình
+[169] (Normal) Để đáp ứng việc lập trình đa ngôn ngữ (Python cho máy tính và C++ cho vi điều khiển), hệ thống sử dụng các môi trường sau:
+[170] (Normal) Visual Studio Code (VS Code): Được chọn làm trình soạn thảo mã nguồn chính nhờ tính nhẹ gọn, phổ biến và khả năng mở rộng mạnh mẽ thông qua các Extension.
+[171] (Normal) Môi trường phần mềm máy tính (Python / PyQt6): Phần mềm ML Lab (giao diện trên PC để thu thập dữ liệu và huấn luyện mô hình) được phát triển bằng ngôn ngữ Python. Giao diện đồ họa (GUI) được xây dựng trên thư viện PyQt6, kết hợp với Scikit-Learn để xử lý các thuật toán Học máy.
+[172] (Normal) Môi trường vi điều khiển (ESP-IDF / C++): Để tối ưu hóa tốc độ chạy AI, mã nguồn trên ESP32 không dùng Arduino Core thông thường mà sử dụng bộ khung phát triển chính thức của hãng Espressif là ESP-IDF (ngôn ngữ C/C++). Mã nguồn được quản lý và biên dịch thông qua hệ thống CMake (CMakeLists.txt).
+[173] (Heading 3) 2.2.2. Công cụ nạp, gỡ lỗi phần cứng
+[174] (Normal) Thay vì phải sử dụng các thao tác dòng lệnh phức tạp để nạp firmware xuống mạch, dự án đã xây dựng riêng một công cụ nạp thông minh:
+[175] (Normal) Module nạp tự động 1-Click (esp32_flasher.py): Mã nguồn hệ thống đã viết sẵn một công cụ bằng Python (sử dụng lõi esptool.py). Khi người dùng bấm nút "Nạp phần cứng" trên giao diện ML Lab, công cụ này sẽ tự động:
+[176] (List Paragraph) Trích xuất mô hình đã huấn luyện thành mã C++ (model_classic.cc).
+[177] (List Paragraph) Đồng bộ mã này vào thư mục dự án ESP32.
+[178] (List Paragraph) Tự động biên dịch (build) và nạp (flash) thẳng xuống vi điều khiển.
+[179] (Normal) Giao tiếp phần cứng: Quá trình nạp code và gỡ lỗi được thực hiện trực tiếp qua cáp USB thông qua chip chuyển đổi USB-to-UART (như CP2102) tích hợp sẵn trên mạch phát triển ESP32, không cần đến các công cụ nạp JTAG đắt tiền bên ngoài.
+[180] (Heading 3) 2.2.3. Công cụ debug
+[181] (Normal) Bên cạnh các module nạp, dự án tích hợp sẵn một hệ thống giám sát thời gian thực cực kỳ trực quan ngay bên trong phần mềm máy tính:
+[182] (Normal) Tab Serial Monitor (Tích hợp trong ML Lab): Thông qua file tab_serial_monitor.py, hệ thống cung cấp một bảng điều khiển trung tâm để kết nối với Đũa phép qua cổng COM.
+[183] (Normal) Chức năng giám sát chuyên sâu:
+[184] (Normal) Nhận Log hệ thống: Đọc các thông báo ESP_LOGI gửi từ vi điều khiển lên để biết tốc độ nhận diện (Latency ms) và tỷ lệ chính xác (Confidence %).
+[185] (Normal) Vẽ đồ thị tín hiệu theo thời gian thực: Trực quan hóa ngay lập tức các dạng sóng gia tốc (ax, ay, az) và góc quay (gx, gy, gz) từ cảm biến MPU6050. Tính năng này vô cùng quan trọng để người phát triển "nhìn thấy" xem thao tác vẩy đũa có bị nhiễu sóng hay không, từ đó điều chỉnh lại cách lấy mẫu.
+[186] (Heading 3) 2.2.4. Công cụ thiết kế mạch
+[187] (Normal) Để biến một mớ linh kiện cắm dây loằng ngoằng trên breadboard thành một chiếc đũa phép thuật nhỏ gọn và có tính thẩm mỹ cao, hệ thống phần cứng được thiết kế lại trên một bảng mạch in (PCB).
+[188] (Normal) Công cụ Altium Designer hoặc EasyEDA: Đây là các phần mềm thiết kế mạch điện tử phổ biến. Quá trình thiết kế đi qua 2 bước cơ bản:
+[189] (Normal) Vẽ sơ đồ nguyên lý (Schematic): Định nghĩa các liên kết logic (chân I2C của ESP32 nối với MPU6050, chân PWM nối với LED RGB, khối IC sạc TP4056 nối với pin Li-po).
+[190] (Normal) Thiết kế mạch in (PCB Layout): Sắp xếp linh kiện trên một bản mạch thuôn dài (vừa vặn nhét vào vỏ nhựa in 3D của đũa phép). Các đường mạch (track) được đi khéo léo để hạn chế tối đa nhiễu tín hiệu tần số cao ảnh hưởng đến cảm biến IMU, đảm bảo độ chính xác cho mô hình AI.
+[192] (Heading 2) 2.3. Cơ sở lý thuyết thuật toán
+[193] (Heading 3) 2.3.1. Thuật toán chính
+[194] (Normal) Dự án sử dụng các thuật toán học máy cổ điển (Classic Machine Learning) để giải quyết bài toán phân loại đa lớp (Multi-class Classification) thay vì dùng học sâu (Deep Learning). Các thuật toán tiêu biểu được tích hợp và đánh giá bao gồm: Support Vector Machine (SVM), Multi-Layer Perceptron (MLP) và K-Nearest Neighbors (KNN).
+[195] (Normal) Giới thiệu tổng quan: Các mô hình học máy cổ điển có ưu điểm là trọng lượng nhẹ, tốc độ huấn luyện nhanh và đặc biệt phù hợp để nhúng lên các vi điều khiển có tài nguyên hạn chế. Trong đó, SVM hoạt động dựa trên việc tìm siêu mặt phẳng phân cách tối ưu; MLP là một mạng nơ-ron nhân tạo cơ bản; còn KNN phân loại dựa trên khoảng cách gần nhất so với các mẫu đã biết.
+[196] (Normal) Mô hình toán học / Công thức:
+[197] (Normal) SVM: Bài toán tối ưu hóa siêu mặt phẳng: Tìm giá trị nhỏ nhất của hàm [ 1/2 * ||w||^2 ] với điều kiện ràng buộc: y_i * (w^T * x_i + b) >= 1.
+[198] (Normal) MLP: Thuật toán lan truyền tiến qua các lớp ẩn: Đầu ra lớp tiếp theo = Hàm_kích_hoạt(Trọng_số * Đầu_vào + Sai_số_bias).
+[199] (Normal) KNN: Tính khoảng cách Euclidean giữa dữ liệu mới (x) và dữ liệu mẫu (x_i): d(x, x_i) = Căn bậc hai của [ Tổng bình phương các hiệu số (x - x_i) ].
+[201] (Normal) Hình 3.1: Sơ đồ luồng hoạt động hệ thống
+[202] (Normal) Ứng dụng trong đề tài: Các thuật toán này đóng vai trò là "bộ não" của chiếc đũa phép (Magic Wand). Nhiệm vụ của chúng là phân tích mảng đặc trưng trích xuất từ cảm biến gia tốc và con quay hồi chuyển (IMU MPU6050) để dự đoán xem người dùng vừa thực hiện cử chỉ phép thuật nào (ví dụ: vòng tròn, zíc-zắc, vẩy thẳng...). Các mô hình này được tối ưu hóa để có độ trễ cực thấp (nhỏ hơn 0.1ms) và sử dụng ít RAM/Flash khi chạy trực tiếp trên vi điều khiển ESP32.
+[203] (Heading 3) 2.3.2. Kỹ thuật hỗ trợ
+[204] (Normal) Để thuật toán chính phân loại với độ chính xác cao và chống nhiễu tốt, dự án kết hợp một loạt các kỹ thuật xử lý dữ liệu hỗ trợ mạnh mẽ:
+[205] (Normal) Trích xuất đặc trưng thống kê (Statistical Feature Extraction): Thay vì đưa trực tiếp dữ liệu thô dạng chuỗi thời gian vào mô hình, dữ liệu từ 6 trục của cảm biến được trích xuất thành một mảng 1 chiều (tối đa 71 đặc trưng). Kỹ thuật này tính toán các giá trị thống kê như Trung bình (Mean), Độ lệch chuẩn (Std), Giá trị cực đại/cực tiểu, Năng lượng (Energy), và hệ số tương quan chéo. Việc này giúp cô đọng thông tin cử chỉ, giảm nhẹ khối lượng tính toán cho vi điều khiển.
+[206] (Normal) Tăng cường dữ liệu (Data Augmentation): Sử dụng các kỹ thuật như thêm nhiễu ngẫu nhiên (Jitter), kéo dãn thời gian (Time Warping) hoặc co giãn biên độ. Kỹ thuật này giúp mô hình chống hiện tượng "học vẹt" (overfitting) do lượng mẫu người dùng thu thập thường ít, làm cho đũa phép nhận diện mượt mà hơn dù vẩy nhanh hay chậm.
+[207] (Normal) Chuẩn hóa dữ liệu (StandardScaler): Thuật toán chuẩn hóa Z-score: Giá trị_chuẩn = (Giá trị_gốc - Trung_bình) / Độ_lệch_chuẩn. Việc đưa các đặc trưng về cùng một thang đo giúp các thuật toán như KNN hoặc SVM hội tụ nhanh và dự đoán chính xác hơn.
+[208] (Normal) Phân tích thành phần chính (PCA): Kỹ thuật giảm chiều dữ liệu từ nhiều chiều xuống còn mặt phẳng 2 chiều để mô phỏng và trực quan hóa (visualize) ranh giới quyết định. Công cụ này giúp người dùng nhìn thấy trực quan mức độ tách biệt của các cử chỉ phép thuật.
+[209] (Heading 3) 2.3.3. Sự kết hợp các thuật toán
+[210] (Normal) Hệ thống nhận diện của đũa phép hoạt động như một chuỗi kết nối (Pipeline) chặt chẽ giữa các thuật toán trên:
+[211] (Normal) Đầu tiên, dữ liệu cảm biến được cắt thành các "cửa sổ thời gian" độc lập khi phát hiện có thao tác vẩy đũa.
+[212] (Normal) Tiếp theo, khối Feature Extraction sẽ "phẳng hóa" tín hiệu thô này thành một mảng đặc trưng duy nhất.
+[213] (Normal) Mảng này đi qua khối StandardScaler để chuẩn hóa dữ liệu (Quá trình này được thực hiện nghiêm ngặt chỉ trên dữ liệu huấn luyện để tránh rò rỉ dữ liệu).
+[214] (Normal) Cuối cùng, dữ liệu sạch được đưa vào Mô hình máy học (SVM / MLP / KNN) để phân loại và xuất ra kết quả cử chỉ. Toàn bộ chuỗi Pipeline này sau khi huấn luyện xong trên máy tính sẽ được tự động biên dịch thành mã C++ để nạp thẳng xuống phần cứng ESP32.
+[218] (Heading 1) CHƯƠNG 3: ĐỀ XUẤT, THỬ NGHIỆM VÀ PHÁT TRIỂN HỆ THỐNG
+[219] (Normal) Dựa trên nền tảng lý thuyết về xử lý tín hiệu cảm biến quán tính (IMU), các kiến trúc mạng nơ-ron học số ít mẫu (Few-shot Learning) và các thuật toán học máy cổ điển (Classic Machine Learning) đã được trình bày ở Chương 2, Chương 3 tập trung vào việc hiện thực hóa toàn diện hệ thống "STEM AI — Sách Phép Bằng AI & Wand Thực Thể". Nội dung chương trình bày chi tiết từ kiến trúc hệ sinh thái tổng thể, thiết kế sơ đồ nguyên lý phần cứng đũa phép (Magic Wand), xây dựng các luồng phần mềm trên máy tính (STEM Spell Book và ML Lab Studio), quy trình trích xuất đặc trưng và sinh mã nhúng C99, cho đến các kịch bản thử nghiệm thực nghiệm và đánh giá định lượng hiệu năng trên thiết bị vi điều khiển ESP32 thực tế.
+[220] (Heading 2) 3.1. Mô hình hệ thống đề xuất
+[221] (Heading 3) 3.1.1. Sơ đồ khối kiến trúc hệ thống
+[222] (Normal) Hệ thống STEM AI được thiết kế theo mô hình lai (Hybrid Edge-Host Architecture), kết hợp chặt chẽ giữa thiết bị vật lý biên (Edge Wand) và trạm xử lý trung tâm trên máy tính cá nhân (Host PC). Hệ thống phân tách thành hai thực thể độc lập nhưng tương tác liền mạch qua các giao thức truyền thông chuẩn hóa (USB Serial UART và UDP/ESP-NOW không dây). Cấu trúc tổng thể bao gồm:
+[223] (Normal) 1. Thiết bị phần cứng Đũa thần (Magic Wand Hardware): Thiết bị đũa phép cầm tay đóng vai trò là nguồn phát sinh dữ liệu cử chỉ chuyển động 3D thời gian thực, đồng thời là thiết bị chấp hành phản hồi xúc giác/thị giác (LED RGB) và là môi trường nhúng chạy mô hình suy luận TinyML độc lập.
+[224] (Normal) 2. Ứng dụng Desktop Trạm chủ (Host Desktop Software): Đóng vai trò là trung tâm điều phối, lưu trữ bộ dữ liệu cử chỉ chuẩn hóa (CSV DataStore), cung cấp giao diện trực quan hóa sóng tín hiệu IMU 6 trục và góc quay 3D thời gian thực. Đặc biệt, Host PC chứa hai đường ống AI song song:
+[225] (Normal) - Luồng 1 (STEM Spell Book): Nhận diện tức thời các cử chỉ thần chú do người dùng tự định nghĩa dựa trên không gian nhúng 16 chiều (16-D Metric Space) đã được tiền huấn luyện trên 23 cử chỉ động học cơ sở (Kinematic Primitives). Hệ thống tính toán khoảng cách cosine giữa vector mẫu mới và centroid của các thần chú, đồng thời đồng bộ hiệu ứng âm thanh sống động (Qt Multimedia/FFmpeg) và lệnh LED RGB xuống đũa.
+[226] (Normal) - Luồng 2 (ML Lab Studio): Môi trường studio học máy tương tác độc lập phục vụ giáo dục STEM. Học sinh được trải nghiệm trọn vẹn chu trình kỹ sư dữ liệu: nạp dữ liệu, kiểm tra rò rỉ (File-level split), trích xuất 63 đặc trưng thống kê miền thời gian và năng lượng, huấn luyện và tinh chỉnh 15 thuật toán học máy cổ điển (KNN, Decision Tree, Random Forest, SVM, MLP...), chẩn đoán tự động bằng AI Coach, giả lập What-If, xuất mã nguồn C99 thuần (header-only, zero dynamic memory allocation) và nạp 1-click trực tiếp vào firmware ESP32 qua công cụ esptool.
+[227] (Normal) Hình 3.1: Sơ đồ khối kiến trúc hệ sinh thái tổng thể STEM AI
+[228] (Heading 3) 3.1.2. Sơ đồ hoạt động và Lưu đồ thuật toán
+[229] (Normal) Sự vận hành của hệ thống được chi phối bởi hai lưu đồ thuật toán trung tâm: (1) Lưu đồ vận hành suy luận thời gian thực trên vi điều khiển ESP32 Wand (TinyML Edge Pipeline); và (2) Lưu đồ chu trình huấn luyện và đóng gói mô hình trong ML Lab Studio.
+[230] (Normal) Lưu đồ thuật toán 1: Quy trình suy luận thời gian thực trên ESP32:Trên thiết bị Wand, để giải quyết bài toán tài nguyên hạn chế và loại bỏ hoàn toàn các lần nhận diện rác khi người dùng không vung đũa hoặc di chuyển ngẫu nhiên, hệ thống đề xuất giải pháp hai tầng bảo vệ: Cổng lọc động học (Motion Gate) kết hợp với Cơ chế kích hoạt tại đỉnh năng lượng (Peak Trigger). Thay vì suy luận liên tục sau mỗi bước trượt gây lãng phí năng lượng, vi điều khiển chỉ thực hiện trích xuất đặc trưng và suy luận khi phát hiện cực đại địa phương của điểm số chuyển động.
+[231] (Normal) Hình 3.2: Lưu đồ thuật toán nhận diện tại biên với Peak Trigger trên ESP32
+[232] (Normal) Lưu đồ thuật toán 2: Quy trình huấn luyện và đóng gói trong ML Lab Studio:Học sinh thực hiện thu thập mẫu CSV từ Wand -> ML Lab nạp dataset và áp dụng quy tắc chống rò rỉ dữ liệu nghiêm ngặt (File-Level Split: toàn bộ các cửa sổ trượt của cùng một file CSV chỉ được nằm ở tập Train hoặc tập Validation, tuyệt đối không phân tán sang hai tập) -> Trích xuất 63 chiều đặc trưng -> Huấn luyện song song hoặc từng mô hình trong 15 thuật toán scikit-learn -> AI Coach phân tích ma trận nhầm lẫn (Confusion Matrix) và cảnh báo các lớp yếu -> Xuất mã nguồn C99 header-only (`model_classic.h/.cc`) -> Nạp 1-click xuống vi điều khiển.
+[233] (Heading 2) 3.2. Xây dựng và tích hợp các khối chức năng
+[234] (Heading 3) 3.2.1. Khối nguồn (Sơ đồ nguyên lý)
+[235] (Normal) Khối nguồn có nhiệm vụ cung cấp điện áp một chiều ổn định 3.3V cho toàn bộ hệ thống đũa phép, bao gồm vi điều khiển ESP32 (vốn có dòng đỉnh khi truyền sóng Wi-Fi/ESP-NOW đạt 240mA - 350mA), cảm biến MPU6050 và LED RGB công suất nhỏ. Để đảm bảo tính cơ động và trải nghiệm cầm nắm thực tế của một chiếc đũa phép ma thuật, hệ thống sử dụng nguồn pin sạc Li-Po/Li-ion tích hợp mạch quản lý sạc thông minh.
+[236] (Normal) Khối nguồn gồm 4 tầng chức năng chính:
+[237] (Normal) 1. Tầng lưu trữ năng lượng: Sử dụng pin Lithium-Polymer (Li-Po) 1S điện áp danh định 3.7V, điện áp sạc đầy 4.2V, dung lượng 500mAh - 800mAh dạng thỏi dài (kích thước ~10mm x 15mm x 55mm) đặt vừa vặn trong khoang chuôi đũa.
+[238] (Normal) 2. Tầng quản lý sạc và bảo vệ: Sử dụng IC chuyên dụng TP4056 tích hợp mạch bảo vệ kép (IC bảo vệ DW01A và MOSFET kép FS8205A). Mạch ngắt sạc khi điện áp pin đạt 4.2V ± 1%, ngắt tải khi điện áp pin tụt xuống dưới 2.5V (chống chai pin) và tự động ngắt khi dòng xả vượt quá 3A. Cổng sạc chuẩn USB Type-C cho phép sạc tiện lợi từ máy tính hoặc củ sạc điện thoại với dòng sạc thiết kế R_prog = 1.2kΩ (I_charge = 1000mA) hoặc 2.4kΩ (500mA).
+[239] (Normal) 3. Tầng hạ áp và ổn định điện áp (LDO Regulator): Sử dụng IC ổn áp tuyến tính điện áp rơi thấp (LDO - Low Dropout) AMS1117-3.3V hoặc ME6211C33M5G (dòng xả tối đa 500mA - 800mA, điện áp rơi chỉ 0.18V). IC chuyển đổi dải điện áp pin (3.0V - 4.2V) thành điện áp cố định 3.3V ± 2% cung cấp cho bus VDD của ESP32 và cảm biến.
+[240] (Normal) 4. Tầng lọc nhiễu đường nguồn: Bao gồm tụ hóa Tantalum 10µF song song với tụ gốm 100nF đặt sát chân ngõ vào (VIN) và chân ngõ ra (VOUT) của IC LDO nhằm triệt tiêu dao động tự kích và lọc sạch nhiễu xung cao tần từ mạch nguồn.
+[246] (Normal) Hình 3.3: Sơ đồ nguyên lý khối nguồn quản lý pin Li-Po và hạ áp 3.3V
+[247] (Heading 3) 3.2.2. Khối xử lý trung tâm (Sơ đồ kết nối)
+[248] (Normal) Khối xử lý trung tâm là trái tim phần cứng của cây đũa, thực hiện việc giao tiếp cảm biến ở tần số cao, duy trì bộ đệm xoay vòng, tính toán đặc trưng, thực thi mô hình suy luận TinyML và giao tiếp thời gian thực với PC. Vi điều khiển được lựa chọn là ESP32-WROOM-32 (hoặc ESP32-S3-WROOM-1).
+[249] (Normal) ESP32 sở hữu vi xử lý 32-bit lõi kép Xtensa LX6 xung nhịp lên đến 240 MHz, bộ nhớ SRAM nội 520 KB, Flash ngoài 4MB - 8MB. Trong kiến trúc phần mềm FreeRTOS, Core 0 được dành cho tác vụ truyền thông mạng/RF và giám sát nền, trong khi Core 1 được ghim riêng cho tác vụ thời gian thực `classic_ml_task` với mức ưu tiên Priority = 5, đảm bảo không bao giờ bị nghẽn chu kỳ lấy mẫu 50Hz (sai số thời gian chu kỳ < 0.2ms).
+[250] (Normal) Bảng 3.1: Bảng phân công sơ đồ chân (Pinout Mapping) vi điều khiển ESP32
+[252] (Heading 3) 3.2.3. Khối cảm biến và Thu thập dữ liệu
+[253] (Normal) Cảm biến chuyển động MPU6050 là thành phần thu nhận tín hiệu đầu vào duy nhất của hệ thống. MPU6050 tích hợp nguyên khối một gia tốc kế 3 trục (Micro-Electro-Mechanical Systems - MEMS Accelerometer) và một con quay hồi chuyển 3 trục (MEMS Gyroscope), cùng với bộ chuyển đổi tương tự - số ADC 16-bit cho từng kênh.
+[254] (Normal) Cảm biến được cấu hình thông qua thanh ghi nội qua bus I2C:
+[255] (Normal) - Khởi động và cấu hình nguồn: Cấu hình thanh ghi `PWR_MGMT_1 (0x6B) = 0x00` để đưa chip từ chế độ ngủ (Sleep mode) sang trạng thái hoạt động bình thường.
+[256] (Normal) - Dải đo gia tốc (Full Scale Range): Cấu hình thanh ghi `ACCEL_CONFIG (0x1C) = 0x00` tương ứng dải đo ±2g. Hệ số tỷ lệ nhạy là 16384 LSB/g, cho phép đo gia tốc trọng trường và gia tốc vung đũa với độ phân giải cực cao.
+[257] (Normal) - Dải đo vận tốc góc: Cấu hình thanh ghi `GYRO_CONFIG (0x1B) = 0x00` tương ứng dải đo ±250 dps (độ/giây) với hệ số tỷ lệ nhạy 131 LSB/(°/s), thích hợp để bắt chính xác các thao tác xoay cổ tay, vẩy đũa.
+[258] (Normal) - Giao thức đọc dữ liệu Burst-read: ESP32 gửi yêu cầu đọc burst 14 bytes liên tục bắt đầu từ địa chỉ thanh ghi `ACCEL_XOUT_H (0x3B)`. Dữ liệu 14 bytes nhận về được ghép bit tạo thành 7 giá trị 16-bit có dấu: $a_x, a_y, a_z, 	ext{Temp}, g_x, g_y, g_z$. Bỏ qua giá trị nhiệt độ, 6 giá trị IMU được chuẩn hóa tỷ lệ trước khi đưa vào bộ nhớ đệm.
+[259] (Normal) - Cấu trúc khung truyền dữ liệu Serial 50Hz: Khi hoạt động ở chế độ thu thập dữ liệu (Record Mode), ESP32 phát dòng dữ liệu liên tục lên cổng COM máy tính dưới dạng chuỗi ký tự ASCII kết thúc bằng dấu xuống dòng: `ax,ay,az,gx,gy,gz\n`
+(Định dạng 6 trường số nguyên tương thích hoàn toàn với SerialWorker và DataStore trong phần mềm STEM Spell Book.)
+[260] (Heading 3) 3.2.4. Khối chấp hành
+[261] (Normal) Khối chấp hành trên đũa phép gồm hệ thống đèn LED RGB đa sắc (kết hợp tuỳ chọn còi chip thụ động Passive Buzzer). LED RGB được bố trí ở vị trí đầu ngọn đũa (Wand Tip), có nhiệm vụ phản hồi tức thì kết quả nhận diện thần chú. Khi người dùng thực hiện một cử chỉ hợp lệ, ngọn đũa sẽ bừng sáng màu sắc đặc trưng của thần chú đó trong thời gian 220ms - 250ms.
+[262] (Normal) Khối LED được điều khiển bởi ngoại vi LEDC (LED Control) phần cứng của ESP32. Ba kênh timer độc lập điều khiển xung PWM với tần số 5000 Hz và độ phân giải 8-bit (256 mức độ sáng từ 0 đến 255). Điều này cho phép vi điều khiển tái tạo chính xác không gian màu 24-bit True Color (16.7 triệu màu), hoàn toàn không bị hiện tượng nhấp nháy (flickering).
+[263] (Normal) Bảng 3.2: Bảng ánh xạ màu sắc LED RGB theo từng loại thần chú
+[265] (Heading 3) 3.2.5. Khối hiển thị và Giao diện người dùng trên máy tính
+[266] (Normal) Khối hiển thị được hiện thực hóa dưới dạng phần mềm máy tính tương tác cao (Desktop Graphical User Interface) viết bằng ngôn ngữ Python 3.12 và thư viện PyQt6. Giao diện được thiết kế theo phong cách macOS hiện đại, tích hợp hệ thống Design Tokens và Theme Manager độc lập, hỗ trợ cả hai chế độ màu sáng/tối và chuyển đổi đa ngôn ngữ (Tiếng Việt và Tiếng Anh).
+[267] (Normal) Giao diện phân chia thành hai không gian làm việc chuyên biệt:
+[268] (Normal) 1. Ứng dụng chính STEM Spell Book: Bao gồm thanh giám sát trạng thái kết nối phần cứng (Wand Status, cổng COM, Baudrate, lượng pin); khung vẽ biểu đồ sóng IMU 6 trục thời gian thực tốc độ 60 FPS sử dụng thư viện `pyqtgraph` tối ưu hóa phần cứng đồ họa; mô hình con quay 3D mô phỏng tư thế đũa thời gian thực; và bảng ghi nhận cử chỉ tự động kèm hiệu ứng âm thanh phép thuật chuẩn xác thông qua module Qt Multimedia (FFmpeg).
+[269] (Normal) 2. Phân hệ STEM ML Lab: Studio học máy cổ điển chuyên sâu gồm 7 tab chức năng độc lập hoàn toàn về mặt kiến trúc: (Tab 1) Phân tích dữ liệu & xếp hạng tầm quan trọng đặc trưng ANOVA F/Mutual Information; (Tab 2) Huấn luyện 15 thuật toán scikit-learn với bảng siêu tham số trực quan, bản đồ ranh giới quyết định 2D PCA, ma trận nhầm lẫn và chẩn đoán AI Coach; (Tab 3) Khảo sát đường cong Bias-Variance và Sweet Spot; (Tab 4) Đấu trường so sánh hiệu năng 15 mô hình; (Tab 5) Trình giả lập What-If Simulator + giải thích SHAP và bộ sinh mã C99; (Tab 6) Nhật ký thí nghiệm Experiment Store và Leaderboard; (Tab 7) Serial Monitor và buồng thử nghiệm trực tiếp trên máy không cần nạp firmware.
+[270] (Heading 3) 3.2.6. Tích hợp hệ thống (PCB và Bo mạch phần cứng)
+[271] (Normal) Để đưa toàn bộ các linh kiện điện tử vào không gian hẹp bên trong thân đũa phép hình trụ tròn, việc thiết kế bo mạch in (PCB) đòi hỏi tính toán tối ưu hóa hình học và chống nhiễu nghiêm ngặt:
+[272] (Normal) - Thiết kế cơ khí bo mạch: Bo mạch được thiết kế dạng dải dài kích thước 135mm x 16mm, sử dụng công nghệ mạch 2 lớp FR4 độ dày 1.2mm. Mặt trên (Top Layer) bố trí module ESP32, chip sạc và LDO. Mặt dưới (Bottom Layer) dành cho đường dẫn nguồn công suất và mặt phẳng tiếp địa (Ground Plane) phủ kín nhằm chống nhiễu trường điện từ (EMI) phát ra từ ăng-ten Wi-Fi của ESP32 tác động vào cảm biến quán tính.
+[273] (Normal) - Định vị cảm biến quán tính: Cảm biến MPU6050 được hàn cố định chính xác tại vị trí cách ngọn đũa 70mm (trọng tâm đũa). Việc đặt cảm biến trùng hoặc gần với tâm quay của cổ tay giúp tín hiệu vận tốc góc (Gyroscope) có độ tương quan cao nhất và giảm thiểu sai số ly tâm khi vung mạnh.
+[274] (Normal) - Cơ chế đấu nối và thao tác: Tại chuôi đũa, cổng USB Type-C được hàn nổi lộ ra ngoài để cắm cáp kết nối máy tính hoặc cắm sạc. Bên cạnh là công tắc gạt mini SPDT bật/tắt nguồn và 2 đèn LED hiển thị trạng thái sạc (Đỏ: đang sạc, Xanh lam: sạc đầy).
+[275] (Heading 3) 3.2.7. Sản phẩm thực tế
+[276] (Normal) Vỏ đũa phép thực tế được thiết kế bằng phần mềm CAD 3D và gia công in 3D công nghệ FDM sử dụng vật liệu nhựa PLA+ chịu lực cao. Vỏ đũa có chiều dài tổng thể 260mm, đường kính chuôi cầm 22mm thuôn dần về phía ngọn đũa còn 12mm, trọng lượng tổng thể bao gồm cả bo mạch và pin Li-Po đạt 82 gram, mang lại cảm giác cầm đầm tay, cân bằng và công thái học tuyệt vời cho học sinh từ cấp tiểu học đến trung học phổ thông.
+[277] (Normal) Đầu ngọn đũa được bọc bằng chao nhựa mờ (Diffuser Cap) in bằng vật liệu nhựa trong suốt, giúp ánh sáng từ đèn LED RGB tán xạ đồng đều 360 độ tạo hiệu ứng ma thuật phát sáng huyền ảo khi thi triển phép thuật.
+[278] (Normal) Hình 3.4: Bản vẽ bố cục không gian lắp ráp sản phẩm đũa phép thực tế
+[279] (Heading 2) 3.3. Thử nghiệm và đánh giá
+[280] (Heading 3) 3.3.1. Môi trường thử nghiệm
+[281] (Normal) Để kiểm chứng khách quan tính đúng đắn, tốc độ xử lý và khả năng ứng dụng thực tế của hệ thống, nhóm nghiên cứu đã thiết lập môi trường thực nghiệm đồng bộ cả về phần cứng, phần mềm và tập dữ liệu thử nghiệm chuẩn:
+[282] (Normal) - Môi trường phần cứng: Đũa phép STEM AI tích hợp ESP32-WROOM-32 (240MHz, 4MB Flash), MPU6050 kết nối I2C 400kHz, pin Li-Po 3.7V 600mAh. Trạm chủ là máy tính cá nhân CPU Intel Core i7-12700H, RAM 16GB, hệ điều hành Windows 11 Home 64-bit, kết nối qua cổng USB 3.0 với cáp Type-C chất lượng cao.
+[283] (Normal) - Môi trường phần mềm & Thư viện: Python 3.12.10, PyQt6 6.7.1, Scikit-Learn 1.4.2, NumPy 1.26.4, TensorFlow 2.16.1, ESP-IDF v5.2, esptool v4.7.0.
+[284] (Normal) - Tập dữ liệu thực nghiệm (Benchmark Dataset): Dữ liệu được thu thập từ 8 người dùng độc lập (gồm 4 học sinh và 4 sinh viên) thực hiện 6 thần chú phép thuật tiêu chuẩn, bao gồm cử chỉ chuyển động đường cong (Lumos: Vòng tròn thuận kim đồng hồ; Nox: Vòng tròn ngược kim đồng hồ), cử chỉ chuyển động thẳng (Incendio: Chém mạnh xuống; Aguamenti: Vung thẳng lên; Stupefy: Đẩy mạnh về trước), và cử chỉ góc nhọn (Alohomora: Hình chữ V). Ngoài ra, tập dữ liệu bổ sung 400 mẫu lớp STAND_BY (cầm yên trên tay, di chuyển tự nhiên không vung, run tay, đặt trên mặt bàn). Tổng cộng tập dữ liệu thực nghiệm đạt 1,840 mẫu cử chỉ hợp lệ.
+[285] (Heading 3) 3.3.2. Kịch bản thử nghiệm 1: So sánh hiệu năng 15 thuật toán Học máy cổ điển
+[286] (Normal) Mục tiêu của kịch bản 1 là so sánh toàn diện 15 thuật toán học máy cổ điển có sẵn trong STEM ML Lab trên cùng một không gian 63 đặc trưng thống kê miền thời gian và năng lượng. Phân chia tập dữ liệu tuân thủ quy tắc chống rò rỉ (File-Level Split: 80% huấn luyện, 20% kiểm thử độc lập). Tất cả các mô hình được đánh giá về độ chính xác (Accuracy), thời gian huấn luyện trên PC, độ trễ suy luận thực tế khi chạy mã C99 trên vi điều khiển ESP32 (Inference Latency), cùng với dung lượng chiếm dụng bộ nhớ RAM và Flash trên chip.
+[287] (Normal) Bảng 3.3: Bảng tổng hợp kết quả thực nghiệm 15 thuật toán học máy cổ điển
+[289] (Normal) Từ Bảng 3.3, ta rút ra các kết luận mang tính định hướng kiến trúc:
+[290] (Normal) - Nhóm tối ưu toàn diện: Nhóm mô hình cây tổ hợp (Random Forest và Extra Trees) đạt độ chính xác kiểm thử cao nhất (97.3% - 97.6%), độ trễ suy luận trên chip cực kỳ ấn tượng chỉ 0.25ms - 0.28ms, và dung lượng RAM chiếm dụng dưới 2KB. Đây là ứng viên hoàn hảo cho triển khai TinyML sản phẩm.
+[291] (Normal) - Nhóm siêu nhẹ (Ultra-lightweight): Mô hình Cây quyết định đơn (Decision Tree) và các mô hình tuyến tính (Linear SVM, Logistic, Ridge) có độ trễ siêu nhanh (0.04ms - 0.08ms) và bộ nhớ Flash cực nhỏ (~4KB).
+[292] (Normal) - Nhóm hạn chế trên vi điều khiển: KNN và SVM RBF đạt độ chính xác cao nhưng đòi hỏi lưu trữ toàn bộ vector mẫu / support vectors, dẫn đến độ trễ suy luận cao (KNN mất 3.8ms) và chiếm nhiều RAM (KNN chiếm 38.5KB), kém phù hợp trên các dòng chip dung lượng RAM cực thấp.
+[293] (Heading 3) 3.3.3. Kịch bản thử nghiệm 2: Đánh giá cơ chế Peak Trigger & Motion Gate
+[294] (Normal) Kịch bản thử nghiệm 2 được thiết kế nhằm chứng minh tính ưu việt của cơ chế kích hoạt tại đỉnh năng lượng chuyển động (Peak Trigger & Motion Gate) do nhóm đề xuất, so sánh với phương pháp suy luận cửa sổ trượt liên tục truyền thống (Continuous Sliding Window Inference mỗi 16 mẫu ~ 320ms).
+[295] (Normal) Thử nghiệm được tiến hành liên tục trong 15 phút sử dụng thực tế hỗn hợp: 5 phút thực hiện 40 lần vung phép thuật chuẩn, 5 phút đũa được cầm trên tay người dùng đang đi lại nói chuyện bình thường, và 5 phút đũa đặt tĩnh trên mặt bàn nhưng chịu rung động môi trường xung quanh.
+[297] (Normal) Bảng 3.4: Bảng so sánh hiệu quả cơ chế Peak Trigger & Motion Gate đối với suy luận liên tục
+[299] (Normal) Kết quả tại Bảng 3.4 chứng minh: Cơ chế Peak Trigger loại bỏ hoàn toàn hiện tượng "bắn thần chú rác" khi học sinh cầm đũa nói chuyện hoặc di chuyển, đồng thời giảm tải tính toán cho CPU ESP32 tới 98.5%, giúp thiết bị mát hơn và kéo dài tuổi thọ pin từ 5.8 giờ lên tới 15.2 giờ hoạt động liên tục.3.3.4. Phân tích kết quả và Ma trận nhầm lẫn
+[300] (Normal) Để hiểu sâu hơn về bản chất phân lớp của mô hình tối ưu (Random Forest), ma trận nhầm lẫn chuẩn hóa (Normalized Confusion Matrix) trên tập kiểm thử độc lập gồm 368 mẫu được phân tích chi tiết tại Bảng 3.5.
+[301] (Normal) Bảng 3.5: Ma trận nhầm lẫn (Confusion Matrix) của mô hình Random Forest trên tập kiểm thử
+[303] (Normal) Phân tích ma trận nhầm lẫn cho thấy:
+[304] (Normal) - Phân biệt cử chỉ xoay thuận/nghịch: Tỷ lệ phân biệt giữa hai cử chỉ đường tròn đối nghịch (Lumos theo chiều kim đồng hồ vs Nox ngược chiều kim đồng hồ) đạt trên 97.5%. Nhờ tính năng trích xuất đặc trưng tích chéo $a_z \times g_x$ và giá trị trung bình nửa đầu/nửa sau của con quay trục Z ($g_{z\_mean\_h1}$ vs $g_{z\_mean\_h2}$), mô hình nắm bắt hoàn hảo chiều xoay của quỹ đạo mà không bị nhầm lẫn.
+[305] (Normal) - Phân biệt chuyển động tịnh tiến: Số lượng mẫu nhầm lẫn rất nhỏ (dưới 1.7%) xuất hiện giữa Incendio (Chém xuống) và Aguamenti (Vung lên) chỉ xảy ra khi người dùng vung đũa kết thúc có động tác kéo giật ngược quán tính quá nhanh.
+[306] (Normal) Dựa trên phân tích tầm quan trọng đặc trưng (Feature Importance) và giá trị phân bổ SHAP do module ML Lab cung cấp, 5 đặc trưng có đóng góp lớn nhất trong toàn bộ 63 đặc trưng gồm: (1) `acc_mag_range` (độ biến thiên biên độ gia tốc tổng hợp, đóng góp 18.4%); (2) `gyro_mag_rms` (năng lượng vận tốc góc tổng hợp, đóng góp 14.2%); (3) `gz_range` (khoảng biến thiên quay trục Z, đóng góp 12.1%); (4) `az_gx_corr` (tương quan chéo gia tốc Z và quay trục X, đóng góp 9.8%); và (5) `jerk_z_max` (độ giật tối đa trục Z, đóng góp 8.5%).
+[308] (Heading 1) KẾT LUẬN VÀ HƯỚNG PHÁT TRIỂN
+[309] (Heading 2) 1. Kết luận chung và Các kết quả đạt được của đề tài
+[310] (Normal) Sau quá trình nghiên cứu, thiết kế, chế tạo và thử nghiệm thực nghiệm nghiêm túc, đề tài 'Thiết kế hệ thống nhận dạng chuyển động Magic Wand sử dụng TinyML trên vi điều khiển' (Mã số: 13-SV-2026-ĐT1) đã hoàn thành xuất sắc toàn bộ các mục tiêu và nhiệm vụ kỹ thuật đã đề ra. Đề tài đã hiện thực hóa thành công một hệ sinh thái giáo dục STEM AI hoàn chỉnh, mang lại giá trị cao cả về mặt khoa học công nghệ lẫn ứng dụng thực tiễn trong giảng dạy. Cụ thể, các kết quả nổi bật mà nhóm nghiên cứu đã đạt được bao gồm:
+[311] (Normal) • Hoàn thiện thiết kế và chế tạo phần cứng thiết bị cầm tay Đũa thần (Magic Wand): Thiết bị tích hợp vi điều khiển lõi kép ESP32 (240MHz, 520KB SRAM), cảm biến quán tính 6 bậc tự do MPU6050, khối nguồn pin Li-Po 1S tích hợp mạch bảo vệ kép TP4056 + DW01A và mạch hạ áp LDO 3.3V ổn định cao, hệ thống phản hồi ánh sáng LED RGB (LEDC PWM) và còi chip thụ động. Toàn bộ hệ thống được bảo vệ trong cấu trúc vỏ in 3D công thái học gọn nhẹ với tổng khối lượng chỉ 82 gram.
+[312] (Normal) • Xây dựng thành công bộ đôi phần mềm máy trạm tương tác cao (Host Desktop Software): Ứng dụng máy tính xây dựng trên nền tảng Python/PyQt6 với giao diện hiện đại, bao gồm hai phân hệ chuyên biệt: Phân hệ STEM Spell Book hỗ trợ thu thập dữ liệu thời gian thực và nhận diện tức thời dựa trên mạng nơ-ron học số ít mẫu Few-Shot 1D-CNN (Universal IMU CNN trên cơ sở 23 nguyên tử chuyển động học); và Phân hệ STEM ML Lab Studio — studio học máy giáo dục độc lập hỗ trợ 15 thuật toán scikit-learn, bộ trích xuất 63 đặc trưng toán học, trợ lý AI Coach chẩn đoán lỗi học vẹt và công cụ giải thích mô hình SHAP/What-If Simulator.
+[313] (Normal) • Đề xuất và hiện thực hóa thành công Cơ chế Peak Trigger & Motion Gate độc quyền: Giải pháp kích hoạt tại đỉnh năng lượng chuyển động đã giải quyết triệt để vấn đề 'bắn thần chú rác' khi người dùng cầm đũa di chuyển hoặc rung lắc ngoài ý muốn. Cơ chế này giúp giảm tải tính toán cho CPU ESP32 tới 98.5%, tiết kiệm 61.7% điện năng tiêu thụ và kéo dài thời lượng hoạt động liên tục của pin từ 5.8 giờ lên tới 15.2 giờ.
+[314] (Normal) • Tự động hóa hoàn toàn quy trình sinh mã C99 nhúng và nạp 1-click lên vi điều khiển: Module c_exporter.py tự động chuyển đổi mô hình học máy tối ưu sang mã nguồn C99 thuần (header-only, zero dynamic memory allocation) và nạp thẳng vào ESP32 qua cổng Serial bằng esptool. Kết quả thực nghiệm cho thấy mô hình Random Forest trên chip đạt độ chính xác kiểm thử lên đến 97.3%, độ trễ suy luận siêu thấp chỉ 0.28ms và dung lượng RAM chiếm dụng chưa tới 2KB.
+[315] (Normal) • Đóng góp mô hình sư phạm STEM AI toàn diện: Đề tài đã xóa bỏ hoàn toàn rào cản 'hộp đen' trong giảng dạy AI, cho phép học sinh trực tiếp trải nghiệm trọn vẹn chu trình kỹ thuật 4 bước: Thu thập dữ liệu thực tế -> Huấn luyện mô hình -> Chẩn đoán lỗi thuật toán -> Triển khai lên vi điều khiển, góp phần đắc lực vào việc đổi mới phương pháp dạy học theo định hướng Chương trình GDPT 2018.
+[316] (Heading 2) 2. Đánh giá ưu điểm và Hạn chế của hệ thống
+[317] (Normal) a. Ưu điểm nổi bật:
+[318] (Normal) • Chi phí phần cứng cực kỳ thấp: Toàn bộ linh kiện phần cứng có giá thành chế tạo chỉ khoảng 150.000 VNĐ, dễ dàng tiếp cận và triển khai đại trà cho các trường học có ngân sách hạn chế.
+[319] (Normal) • Hoàn toàn độc lập và bảo mật: Thiết bị có khả năng suy luận cục bộ độc lập mà không cần kết nối máy tính hay mạng Internet, bảo đảm tuyệt đối quyền riêng tư dữ liệu.
+[320] (Normal) • Khả năng mở rộng phép thuật tức thì: Nhờ cơ chế Prototypical Few-Shot Learning, người học có thể đăng ký các cử chỉ phép thuật mới trong vài giây mà không đòi hỏi phải huấn luyện lại toàn bộ mạng nơ-ron nền tảng.
+[321] (Normal) b. Hạn chế còn tồn tại:
+[322] (Normal) • Hạn chế của cảm biến 6-DOF: Cảm biến MPU6050 không tích hợp từ kế (Magnetometer) đo từ trường Trái Đất, dẫn đến hiện tượng trôi dạt góc phương vị (Yaw drift) tích lũy theo thời gian khi thực hiện các cử chỉ không gian 3D kéo dài liên tục.
+[323] (Normal) • Phạm vi thử nghiệm: Hệ thống mới được đánh giá thực nghiệm trong môi trường phòng lab và trên nhóm người dùng thử nghiệm nhỏ, cần tiếp tục mở rộng quy mô kiểm chứng tại các lớp học phổ thông thực tế.
+[324] (Heading 2) 3. Hướng phát triển trong tương lai
+[325] (Normal) Từ nền tảng công nghệ và kết quả thực nghiệm vững chắc đã đạt được, nhóm nghiên cứu đề xuất các định hướng phát triển mở rộng tiếp theo:
+[326] (Normal) • Nâng cấp phần cứng cảm biến 9 bậc tự do (9-DOF): Tích hợp thêm cảm biến từ trường 3 trục (như QMC5883L hoặc AK8963) kết hợp thuật toán lọc hướng Madgwick/Mahony để khắc phục triệt để hiện tượng trôi góc Yaw, nâng cao độ chính xác quỹ đạo không gian 3D.
+[327] (Normal) • Phát triển chế độ tương tác đa người dùng (Multi-wand Mesh Network): Tận dụng giao thức không dây độ trễ thấp ESP-NOW hoặc Bluetooth Mesh tích hợp sẵn trên ESP32 để kết nối nhiều cây đũa phép trong cùng lớp học, xây dựng các trò chơi tương tác đối kháng phép thuật thời gian thực (Dueling Wands), tăng cường tính hào hứng trong giờ học STEM.
+[328] (Normal) • Triển khai nền tảng WebApp ứng dụng WebAssembly (Wasm): Chuyển đổi giao diện phần mềm sang nền tảng trình duyệt web ứng dụng WebAssembly kết hợp Web Serial API và Web Bluetooth API, giúp học sinh có thể sử dụng trực tiếp trên máy tính bảng (iPad, Chromebook) mà không cần cài đặt phần mềm phụ thuộc hệ điều hành.
+[329] (Normal) • Ứng dụng mô hình mạng nơ-ron xung (SNN) và bộ tăng tốc AI trên chip: Thử nghiệm các kiến trúc mạng nơ-ron xung Spiking Neural Networks (SNN) và mô hình lượng tử hóa INT8 chạy trên bộ tăng tốc vector phần cứng của dòng vi điều khiển thế hệ mới như ESP32-S3 nhằm đẩy hiệu năng xử lý lên mức tối đa.
+[331] (Heading 1) TÀI LIỆU THAM KHẢO
+[332] (Heading 2) I. Tài liệu tiếng Việt
+[333] (Normal) [1] Bộ Chính trị (2019), "Nghị quyết số 52-NQ/TW ngày 27/9/2019 về một số chủ trương, chính sách chủ động tham gia cuộc Cách mạng công nghiệp lần thứ tư", Ban Chấp hành Trung ương Đảng, Hà Nội.
+[334] (Normal) [2] Thủ tướng Chính phủ (2021), "Quyết định số 127/QĐ-TTg ngày 26/01/2021 ban hành Chiến lược quốc gia về nghiên cứu, phát triển và ứng dụng Trí tuệ nhân tạo đến năm 2030", Cổng Thông tin điện tử Chính phủ, Hà Nội.
+[335] (Heading 2) II. Tài liệu tiếng Anh
+[336] (Normal) [3] TinyML: Machine Learning with TensorFlow Lite on Arduino and Ultra-Low-Power Microcontrollers", O'Reilly Media
+[337] (Normal) [4] GitHub - petewarden/magic_wand: Magic Wand example for TensorFlow Lite Micro · GitHub
+[338] (Normal) [5] InvenSense Inc. (2013), "MPU-6000 and MPU-6050 Product Specification Revision 3.4", Document Number: PS-MPU-6000A-00, InvenSense Datasheet.
+[339] (Normal) [6] Espressif Systems (2023), "ESP32 Series Datasheet v4.1 - 2.4 GHz Wi-Fi + Bluetooth + Bluetooth LE SoC", Espressif Systems Technical Documentation.
+
+--- TABLES ---
+
+=== TABLE 0 ===
+Giảng viên hướng dẫn | : PGS. TS. Trương Cao Dũng
+Sinh viên thực hiện | : Lê Hoàng Phúc Anh - B24DCDT011
+ | : Phạm Quốc Trung - B24DCVT361 : Vũ Tiến Đức - B24DCDT066 : Nguyễn Đăng Khôi - B24DCDT168
+Hệ đào tạo | : Đại học chính quy
+
+=== TABLE 1 ===
+Ký hiệu / Viết tắt | Thuật ngữ tiếng Anh | Ý nghĩa / Giải thích tiếng Việt
+AI | Artificial Intelligence | Trí tuệ nhân tạo
+TinyML | Tiny Machine Learning | Học máy siêu nhỏ trên thiết bị tài nguyên giới hạn
+Edge AI | Edge Artificial Intelligence | Trí tuệ nhân tạo thực thi tại thiết bị biên
+IMU | Inertial Measurement Unit | Bộ đo lường quán tính (gia tốc kế và con quay hồi chuyển)
+MCU | Microcontroller Unit | Bộ vi điều khiển
+CNN | Convolutional Neural Network | Mạng nơ-ron tích chập
+1D-CNN | One-Dimensional Convolutional Neural Network | Mạng nơ-ron tích chập 1 chiều cho chuỗi thời gian
+Few-Shot | Few-Shot Learning | Học máy với số lượng ít mẫu quan sát
+Metric Learning | Distance Metric Learning | Học không gian đo khoảng cách nhúng dữ liệu
+KNN | K-Nearest Neighbors | Thuật toán K láng giềng gần nhất
+SVM | Support Vector Machine | Máy vector hỗ trợ
+RF | Random Forest | Thuật toán rừng ngẫu nhiên (tổ hợp cây quyết định)
+GBDT | Gradient Boosted Decision Trees | Cây quyết định tăng cường độ dốc
+LDA | Linear Discriminant Analysis | Phân tích phân biệt tuyến tính
+QDA | Quadratic Discriminant Analysis | Phân tích phân biệt toàn phương
+GNB | Gaussian Naive Bayes | Bộ phân lớp Bayes ngây thơ phân phối Gauss
+MLP | Multi-Layer Perceptron | Mạng nơ-ron nhân tạo truyền thẳng nhiều tầng
+SHAP | SHapley Additive exPlanations | Phương pháp định lượng đóng góp đặc trưng mô hình
+RMS | Root Mean Square | Căn bậc hai trung bình bình phương (Giá trị hiệu dụng)
+INT8 | 8-bit Integer Quantization | Lượng tử hóa tham số mô hình sang số nguyên 8-bit
+TFLite Micro | TensorFlow Lite for Microcontrollers | Thư viện học máy của TensorFlow cho vi điều khiển
+LDO | Low Dropout Regulator | Mạch ổn áp tuyến tính điện áp rơi cực thấp
+Li-Po | Lithium-Polymer | Pin sạc hóa học Lithium-Polymer
+PWM | Pulse Width Modulation | Điều chế độ rộng xung
+LEDC | LED Control Peripheral | Khối ngoại vi phần cứng điều khiển xung LED trên ESP32
+I2C | Inter-Integrated Circuit | Giao thức truyền thông nối tiếp 2 dây giữa các vi mạch
+UART | Universal Asynchronous Receiver-Transmitter | Bộ truyền nhận nối tiếp bất đồng bộ
+USB | Universal Serial Bus | Chuẩn giao tiếp bus nối tiếp vạn năng
+UDP | User Datagram Protocol | Giao thức truyền gói tin không kết nối trên nền IP
+STEM | Science, Technology, Engineering, Mathematics | Giáo dục tích hợp Khoa học - Công nghệ - Kỹ thuật - Toán học
+
+=== TABLE 2 ===
+Phân hệ | Thành phần cốt lõi | Thông số kỹ thuật & Vai trò chức năng
+Phần cứng Đũa thần (Magic Wand) | Khối xử lý trung tâm (MCU) | ESP32 lõi kép Xtensa 32-bit LX6 240MHz, 520KB SRAM, 4MB Flash. Lấy mẫu cảm biến 50Hz, quản lý bộ đệm vòng tròn và thực thi suy luận TinyML trên chip.
+Phần cứng Đũa thần (Magic Wand) | Khối cảm biến quán tính (IMU) | MPU6050 tích hợp 6 bậc tự do (Gia tốc kế 3 trục ±2g, Con quay hồi chuyển 3 trục ±250 dps). Giao tiếp I2C 400kHz, đóng gói khung truyền thông UART/UDP.
+Phần cứng Đũa thần (Magic Wand) | Khối nguồn & Quản lý pin | Pin sạc Li-Po 1S 3.7V dung lượng 500-800mAh; IC quản lý sạc và bảo vệ TP4056 + DW01A/FS8205; IC hạ áp LDO AMS1117-3.3V / ME6211C33M5G cung cấp nguồn sạch.
+Phần cứng Đũa thần (Magic Wand) | Khối phản hồi & Chấp hành | Đèn LED RGB đa sắc điều khiển bằng phần cứng LEDC PWM của ESP32; còi chip thụ động (Passive Buzzer) phát âm thanh phản hồi thần chú tức thì.
+Phần cứng Đũa thần (Magic Wand) | Kết cấu cơ khí & Vỏ bảo vệ | Vỏ đũa phép thiết kế công thái học, gia công bằng công nghệ in 3D (vật liệu nhựa PLA/PETG), tổng khối lượng toàn bộ thiết bị siêu nhẹ chỉ 82 gram.
+Phần mềm máy trạm (Host Software) | Phân hệ STEM Spell Book | Ứng dụng tương tác thời gian thực (PyQt6); trực quan hóa 3D không gian; nhận diện cử chỉ tức thì dựa trên mạng nơ-ron học số ít mẫu (Universal 1D-CNN Few-Shot).
+Phần mềm máy trạm (Host Software) | Phân hệ STEM ML Lab Studio | Môi trường studio học máy chuyên sâu: quản lý tập dữ liệu CSV, công cụ AI Coach chẩn đoán cân bằng dữ liệu, trích xuất 63 đặc trưng toán học, so sánh 15 thuật toán học máy.
+Phần mềm máy trạm (Host Software) | Bộ sinh mã C99 & Nạp nhúng | Tự động hóa hoàn toàn quy trình chuyển đổi mô hình tối ưu sang mã nguồn C99 thuần (model_classic.h/.cc, zero malloc) và nạp 1-click vào ESP32 qua Serial bằng esptool.
+
+=== TABLE 3 ===
+Tiêu chí | Arduino Uno / Nano | STM32 (Blue Pill) | ESP32
+Kiến trúc & Tốc độ | 8-bit, 16MHz (Rất chậm) | 32-bit, 72MHz (Khá) | 32-bit lõi kép, 240MHz (Rất mạnh)
+Bộ nhớ RAM | 2 KB (Quá ít) | 20 KB (Vừa đủ) | 520 KB (Dư dả)
+Khả năng chạy AI | Gần như không thể chạy ML | Có thể chạy mô hình siêu nhỏ | Chạy tốt các mô hình ML như SVM, MLP, KNN
+Kết nối không dây | Không có | Không có | Có sẵn Wi-Fi & Bluetooth
+Giá thành | Rất rẻ | Rẻ | Hợp lý
+
+=== TABLE 4 ===
+Tiêu chí | ADXL345 | MPU6050 | MPU9250
+Số trục đo | 3 trục (Gia tốc) | 6 trục (Gia tốc + Góc xoay) | 9 trục (Gia tốc + Góc xoay + La bàn)
+Độ chính xác cử chỉ | Kém (Không bắt được xoay) | Cao (Phù hợp vẽ quỹ đạo) | Rất cao
+Giao tiếp & Tốc độ | I2C / SPI | I2C tốc độ cao | I2C / SPI
+Độ phổ biến & Giá | Rẻ, dễ mua | Rất phổ biến, giá cực rẻ | Giá cao hơn, dễ bị nhiễu từ trường
+
+=== TABLE 5 ===
+┌────────────────────────────────────────────────────────────────────────────────────────┐ │                                PHẦN CỨNG ĐŨA THẦN (ESP32 WAND)                        │ │                                                                                        │ │  ┌──────────────────────┐    I2C Fast Mode   ┌──────────────────────────────────────┐  │ │  │   Cảm biến MPU6050   │ ─────────────────► │      Vi điều khiển ESP32-S3/LX6      │  │ │  │ (Acc 3 trục + Gyro 3)│      400 kHz       │  - FreeRTOS Task (Core 1, 50Hz)      │  │ │  └──────────────────────┘                    │  - Bộ đệm xoay vòng 64 mẫu (1.28s)   │  │ │                                              │  - Peak Trigger & Motion Gate        │  │ │  ┌──────────────────────┐    LEDC PWM 5kHz   │  - Trích xuất 63 đặc trưng C99       │  │ │  │  Chấp hành LED RGB   │ ◄───────────────── │  - TinyML Inference (classic_predict)│  │ │  │  (R:25, G:26, B:27)  │    24-bit Color    └──────────────────┬───────────────────┘  │ │  └──────────────────────┘                                       │                      │ └─────────────────────────────────────────────────────────────────┼──────────────────────┘                                     USB Serial (115200 baud) /     │                                     Wi-Fi UDP Telemetry / ESP-NOW  ▼ ┌────────────────────────────────────────────────────────────────────────────────────────┐ │                              ỨNG DỤNG MÁY TÍNH (HOST PC - PyQt6)                       │ │                                                                                        │ │ ┌────────────────────────────────────────────────────────────────────────────────────┐ │ │ │ Giao thức truyền thông & Bộ đệm dữ liệu (Serial/UDP Workers & DataStore Hub)       │ │ │ └─────────────────────────┬──────────────────────────────────────┬───────────────────┘ │ │                           │                                      │                     │ │                           ▼                                      ▼                     │ │ ┌──────────────────────────────────────────────┐ ┌───────────────────────────────────┐ │ │ │          STEM SPELL BOOK (Real-time)         │ │            STEM ML LAB            │ │ │ │  - Trực quan hóa sóng IMU & Góc xoay 3D     │ │  - Phân chia file-level split      │ │ │ │  - 1D-CNN Feature Pyramid (TensorFlow)       │ │  - Pipeline trích xuất 63 đặc trưng│ │ │ │  - 16-D Metric Space Few-Shot Centroid       │ │  - 15 Thuật toán Scikit-Learn      │ │ │ │  - Adaptive Cosine Threshold Rejection       │ │  - AI Coach & Bias-Variance Studio │ │ │ │  - Đồng bộ âm thanh phép thuật & LED RGB     │ │  - Trình sinh mã nhúng C99        │ │ │ └──────────────────────────────────────────────┘ └─────────────────┬─────────────────┘ │ │                                                                    │ esptool Flash     │ │                                                                    ▼ (Nạp 1-click)     │ │                                                      [Firmware model_classic.cc]       │ └────────────────────────────────────────────────────────────────────────────────────────┘
+
+=== TABLE 6 ===
+[ BẮT ĐẦU (Khởi tạo I2C 400kHz, LEDC PWM, Ring Buffer) ]                                     │                                     ▼                   [ Lấy mẫu IMU 6 trục MPU6050 (50Hz - 20ms) ]                                     │                                     ▼                   [ Đẩy (ax,ay,az,gx,gy,gz) vào Ring Buffer 64 mẫu ]                                     │                                     ▼                      < Đã thu đủ >= 64 mẫu & Step >= 16? >                                     │ Có                                     ▼                 [ Tính điểm chuyển động M = min(M_acc, M_gyro) ]                                     │                                     ▼                 < M_prev1 >= 2.0 && M_prev1 >= M_prev2 && M_prev1 >= M0 ? >                      (Điều kiện: Đạt ĐỈNH NĂNG LƯỢNG chuyển động)                                     │ Có                                     ▼                 [ Trích xuất 63 đặc trưng thống kê từ Peak Buffer ]                                     │                                     ▼                 [ Thực thi classic_predict(s_features, &confidence) ]                                     │                                     ▼                   < Nhãn hợp lệ && Độ tin cậy confidence >= 70%? >                                     │ Có                                     ▼                        < Trùng cử chỉ vừa đoán trong 2s? >                                     │ Không (Cử chỉ mới)                                     ▼         ┌─────────────────────────────────────────────────────────────┐         │  - Xuất bản tin qua UART: [PREDICT] <Spell> (conf, time)   │         │  - Cài đặt màu LED RGB tương ứng với Spell (PWM trong 220ms)│         │  - Kích hoạt Cooldown (36 mẫu ~ 720ms)                     │         └─────────────────────────────────────────────────────────────┘                                     │                                     ▼                          [ Quay lại vòng lặp 50Hz ]
+
+=== TABLE 7 ===
+[ Cổng USB Type-C ]      VBUS (5V) ────► [ IC TP4056 Sạc Pin ] ───► [ Mạch BV DW01A + FS8205A ]      GND       ────► [ Dòng sạc: 500mA   ] ───► [ Pin Li-Po 1S 3.7V 600mAh ]                                                             │ V_BAT (3.7V - 4.2V)                                                             ▼                                                    [ Công tắc gạt SPDT ]                                                             │                                                             ▼    VIN (3.7V) ─────┬───────► [ IC LDO AMS1117-3.3V ] ───────┬──────► VCC (3.3V Ổn định)                    │                                         │                  [ 10uF ]                                  [ 10uF ]                  [  +   ]                                  [  +   ]                  [100nF ]                                  [100nF ]                    │                                         │    GND ────────────┴─────────────────────────────────────────┴──────► GND Hệ thống
+
+=== TABLE 8 ===
+Tên ngoại vi | Chân ESP32 (Pin) | Chức năng kết nối phần cứng | Chế độ hoạt động (Mode)
+I2C SDA | GPIO 21 | Nối chân SDA của cảm biến MPU6050 | I2C Fast Mode 400kHz, Pull-up nội
+I2C SCL | GPIO 22 | Nối chân SCL của cảm biến MPU6050 | I2C Fast Mode 400kHz, Pull-up nội
+LED RED | GPIO 25 | Nối cực Anode kênh Đỏ (qua trở 220Ω) | LEDC PWM Channel 0, 5kHz, 8-bit
+LED GREEN | GPIO 26 | Nối cực Anode kênh Xanh lá (qua trở 220Ω) | LEDC PWM Channel 1, 5kHz, 8-bit
+LED BLUE | GPIO 27 | Nối cực Anode kênh Xanh dương (qua trở 220Ω) | LEDC PWM Channel 2, 5kHz, 8-bit
+UART TX0 | GPIO 1 (TX0) | Truyền dữ liệu serial lên máy tính qua CH340 | Baudrate 115200, 8-N-1
+UART RX0 | GPIO 3 (RX0) | Nhận lệnh nạp firmware / điều khiển từ PC | Baudrate 115200, 8-N-1
+Power VDD | 3V3 | Cấp nguồn 3.3V từ ngõ ra IC AMS1117 | Nguồn nuôi ổn định 3.3V ± 2%
+Power GND | GND | Nối đất chung toàn hệ thống mạch | Mass chuẩn 0V
+
+=== TABLE 9 ===
+Tên Thần Chú (Spell) | Mã Màu Hex | Giá trị R, G, B (0-255) | Hiệu Ứng Ý Nghĩa Phép Thuật
+LUMOS (Thắp sáng) | #FFE650 | R=255, G=230, B=80 | Ánh sáng vàng ấm rực rỡ như ngọn đèn
+NOX (Tắt sáng) | #323250 | R=50, G=50, B=80 | Ánh sáng tím sẫm mờ dần rồi tắt lịm
+INCENDIO (Ngọn lửa) | #FF2800 | R=255, G=40, B=0 | Ánh sáng đỏ lửa rực cháy mãnh liệt
+AGUAMENTI (Tạo nước) | #0096FF | R=0, G=150, B=255 | Ánh sáng xanh lam trong vắt của dòng nước
+ALOHOMORA (Mở khóa) | #B432FF | R=180, G=50, B=255 | Ánh sáng tím huyền bí mở cánh cổng phép
+STUPEFY (Bùa choáng) | #FF1493 | R=255, G=20, B=147 | Tia sáng đỏ hồng chớp giật cực nhanh
+
+=== TABLE 10 ===
+Ngọn đũa (Diffuser)               Thân đũa (Chứa mạch & Cảm biến)              Chuôi cầm (Chứa Pin & Sạc)  ┌────────┐───────────────────────────────────────────────┬───────────────────────────┬────────┐  │ LED    │           [ Cảm biến MPU6050 ]                │    [ Pin Li-Po 600mAh ]   │ Type-C │  │ RGB    │ ───►      [ Vi điều khiển ESP32 ]             │    [ Công tắc ON/OFF ]    │ Sạc/Nạp│  └────────┘───────────────────────────────────────────────┴───────────────────────────┴────────┘   ◄─ 20mm ─►◄────────────────────── 160mm ───────────────►◄────────── 80mm ──────────►
+
+=== TABLE 11 ===
+STT | Thuật toán học máy (Algorithm) | Train Acc (%) | Test Acc (%) | 5-Fold CV (%) | Train Time (PC) | MCU Latency | RAM MCU | Flash MCU
+1 | Random Forest (n=50, d=8) | 99.8% | 97.3% | 96.9% ± 0.8% | 185 ms | 0.28 ms | 1.8 KB | 34.5 KB
+2 | Extra Trees (n=50, d=8) | 99.9% | 97.6% | 97.1% ± 0.7% | 142 ms | 0.25 ms | 1.7 KB | 32.0 KB
+3 | Gradient Boosting (GBDT) | 100.0% | 96.7% | 96.2% ± 1.1% | 620 ms | 0.35 ms | 2.1 KB | 41.2 KB
+4 | AdaBoost Classifier | 95.4% | 93.8% | 93.1% ± 1.4% | 290 ms | 0.19 ms | 1.2 KB | 18.6 KB
+5 | Support Vector Machine (RBF) | 98.9% | 97.0% | 96.5% ± 0.9% | 98 ms | 1.45 ms | 12.4 KB | 48.0 KB
+6 | Linear SVM (C=1.0) | 97.8% | 96.5% | 96.0% ± 0.8% | 45 ms | 0.08 ms | 0.6 KB | 4.2 KB
+7 | Multi-Layer Perceptron (MLP) | 99.2% | 96.2% | 95.8% ± 1.0% | 850 ms | 0.42 ms | 3.8 KB | 22.4 KB
+8 | K-Nearest Neighbors (k=5) | 97.5% | 95.9% | 95.3% ± 1.2% | 12 ms | 3.80 ms | 38.5 KB | 110.0 KB
+9 | Decision Tree (d=6) | 96.2% | 94.0% | 93.5% ± 1.5% | 15 ms | 0.04 ms | 0.5 KB | 3.8 KB
+10 | Logistic Regression (L2) | 96.8% | 95.4% | 94.9% ± 0.9% | 52 ms | 0.07 ms | 0.6 KB | 4.0 KB
+11 | Ridge Classifier | 96.2% | 95.1% | 94.6% ± 0.9% | 18 ms | 0.07 ms | 0.6 KB | 4.0 KB
+12 | Linear Disc. Analysis (LDA) | 95.9% | 94.8% | 94.2% ± 1.1% | 22 ms | 0.08 ms | 0.7 KB | 4.5 KB
+13 | Gaussian Naive Bayes (GNB) | 92.4% | 90.8% | 90.1% ± 1.8% | 10 ms | 0.11 ms | 0.8 KB | 5.2 KB
+14 | Nearest Centroid | 91.8% | 90.2% | 89.7% ± 1.6% | 8 ms | 0.06 ms | 0.5 KB | 3.2 KB
+15 | Quadratic DA (QDA) | 94.1% | 91.5% | 90.8% ± 2.0% | 28 ms | 0.22 ms | 2.4 KB | 14.8 KB
+
+=== TABLE 12 ===
+Chỉ số đánh giá (Evaluation Metric) | Suy luận liên tục (Continuous) | Đề xuất: Peak Trigger + Gate | Mức độ cải thiện
+Tổng số lần kích hoạt thuật toán suy luận | 2,812 lần | 42 lần | Giảm 98.5% tác vụ thừa
+Tỷ lệ kích hoạt nhầm khi không vung đũa (FPR) | 36.4% (182 lần nhận diện rác) | 0.0% (0 lần nhận diện rác) | Loại bỏ hoàn toàn kích hoạt rác
+Độ chính xác nhận diện cử chỉ thật (Recall) | 95.0% (38/40 lần trúng) | 97.5% (39/40 lần trúng) | Tăng +2.5% do căn đúng tâm cử chỉ
+Dòng điện tiêu thụ trung bình của ESP32 | 94.6 mA | 36.2 mA | Tiết kiệm 61.7% điện năng tiêu thụ
+Thời lượng hoạt động ước tính (Pin 600mAh) | Khoảng 5.8 giờ liên tục | Khoảng 15.2 giờ liên tục | Tăng thời lượng pin gấp 2.6 lần
+Thời gian phản hồi từ lúc dứt vung đến sáng đèn | 120 ms - 320 ms (phụ thuộc pha) | 42 ms (ngay tại đỉnh năng lượng) | Phản hồi tức thì, mượt mà
+
+=== TABLE 13 ===
+Thực tế \ Dự đoán | Lumos | Nox | Incendio | Aguamenti | Alohomora | Stupefy | Độ nhạy (Recall)
+Lumos (Circle CW) | 58 (96.7%) | 2 (3.3%) | 0 | 0 | 0 | 0 | 96.7%
+Nox (Circle CCW) | 1 (1.7%) | 59 (98.3%) | 0 | 0 | 0 | 0 | 98.3%
+Incendio (Swipe Down) | 0 | 0 | 61 (98.4%) | 1 (1.6%) | 0 | 0 | 98.4%
+Aguamenti (Swipe Up) | 0 | 0 | 1 (1.7%) | 58 (96.7%) | 1 (1.6%) | 0 | 96.7%
+Alohomora (V-Shape) | 0 | 0 | 0 | 1 (1.7%) | 57 (96.6%) | 1 (1.7%) | 96.6%
+Stupefy (Thrust) | 0 | 0 | 0 | 0 | 1 (1.7%) | 59 (98.3%) | 98.3%
+Độ chính xác (Precision) | 98.3% | 96.7% | 98.4% | 96.7% | 96.6% | 98.3% | Accuracy = 97.3%

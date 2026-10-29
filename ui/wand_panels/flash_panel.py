@@ -8,13 +8,13 @@ và nạp dữ liệu/mô hình vào đũa phép Magic Wand.
 from __future__ import annotations
 
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import QLabel, QProgressBar, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QProgressBar, QVBoxLayout, QWidget
 
 from ui.i18n_bridge import tr_ui
+from ui.component_factory import make_card, make_outline_button, make_primary_button, make_section_label
 from ui.tokens import (BTN_H, MARGIN_COMFORTABLE, PROGRESS_H, SPACING_MD,
                        SPACING_SM, SPACING_XS)
 
-from .shared import make_button, make_card, make_section_label
 
 
 class WandFlashPanel(QWidget):
@@ -26,6 +26,8 @@ class WandFlashPanel(QWidget):
     sig_build_firmware_clicked = pyqtSignal()
     sig_upload_clicked = pyqtSignal()
     sig_similarity_clicked = pyqtSignal()
+    sig_flash_data_firmware = pyqtSignal()
+    sig_flash_inference_firmware = pyqtSignal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -49,9 +51,21 @@ class WandFlashPanel(QWidget):
 
         btn_layout = QVBoxLayout()
         btn_layout.setSpacing(SPACING_SM)
-        self.btn_similarity = make_button("🔍 " + tr_ui("wand_btn_similarity", default="MA TRẬN TƯƠNG ĐỒNG"), "outline", height=BTN_H)
-        self.btn_build_firmware = make_button(tr_ui("wand_build_firmware"), "outline", height=BTN_H)
-        self.btn_upload = make_button(tr_ui("wand_upload_model"), "primary", height=BTN_H)
+
+        # Firmware install buttons (Data collection & Base AI)
+        fw_btn_layout = QHBoxLayout()
+        fw_btn_layout.setSpacing(8)
+        self.btn_flash_collect = make_outline_button(tr_ui("btn_flash_data", default="Cài đặt FW thu thập"), height=BTN_H)
+        self.btn_flash_collect.setToolTip(tr_ui("fw_desc_data", default="Nạp firmware thu thập dữ liệu cảm biến"))
+        self.btn_flash_ai = make_outline_button(tr_ui("btn_flash_ai", default="Cài đặt FW AI"), height=BTN_H)
+        self.btn_flash_ai.setToolTip(tr_ui("fw_desc_inference", default="Nạp firmware động cơ nhận diện AI"))
+        fw_btn_layout.addWidget(self.btn_flash_collect, stretch=1)
+        fw_btn_layout.addWidget(self.btn_flash_ai, stretch=1)
+        btn_layout.addLayout(fw_btn_layout)
+
+        self.btn_similarity = make_outline_button(tr_ui("wand_btn_similarity", default="Ma trận tương đồng"), height=BTN_H)
+        self.btn_build_firmware = make_outline_button(tr_ui("wand_build_firmware"), height=BTN_H)
+        self.btn_upload = make_primary_button(tr_ui("wand_upload_model"), height=BTN_H)
 
         btn_layout.addWidget(self.btn_similarity)
         btn_layout.addWidget(self.btn_build_firmware)
@@ -72,6 +86,8 @@ class WandFlashPanel(QWidget):
 
     def _init_signals(self) -> None:
         """Kết nối signal/slot nội bộ."""
+        self.btn_flash_collect.clicked.connect(lambda _: self.sig_flash_data_firmware.emit())
+        self.btn_flash_ai.clicked.connect(lambda _: self.sig_flash_inference_firmware.emit())
         self.btn_similarity.clicked.connect(lambda _: self.sig_similarity_clicked.emit())
         self.btn_build_firmware.clicked.connect(lambda _: self.sig_build_firmware_clicked.emit())
         self.btn_upload.clicked.connect(lambda _: self.sig_upload_clicked.emit())
@@ -81,7 +97,11 @@ class WandFlashPanel(QWidget):
     def apply_ui_language(self) -> None:
         """Làm mới văn bản khi ngôn ngữ ứng dụng thay đổi."""
         self._title_lbl.setText(tr_ui("wand_section_model"))
-        self.btn_similarity.setText("🔍 " + tr_ui("wand_btn_similarity", default="MA TRẬN TƯƠNG ĐỒNG"))
+        self.btn_flash_collect.setText(tr_ui("btn_flash_data", default="Cài đặt FW thu thập"))
+        self.btn_flash_collect.setToolTip(tr_ui("fw_desc_data", default="Nạp firmware thu thập dữ liệu cảm biến"))
+        self.btn_flash_ai.setText(tr_ui("btn_flash_ai", default="Cài đặt FW AI"))
+        self.btn_flash_ai.setToolTip(tr_ui("fw_desc_inference", default="Nạp firmware động cơ nhận diện AI"))
+        self.btn_similarity.setText(tr_ui("wand_btn_similarity", default="Ma trận tương đồng"))
         self.btn_build_firmware.setText(tr_ui("wand_build_firmware"))
         self.btn_upload.setText(tr_ui("wand_upload_model"))
 

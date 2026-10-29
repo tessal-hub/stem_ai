@@ -75,6 +75,7 @@ class SerialWorker(QThread):
 
     def stop(self) -> None:
         """Request the event loop to exit and unblock serial read immediately."""
+        self.requestInterruption()
         self._running = False
         if hasattr(self, "_serial") and self._serial and getattr(self._serial, "is_open", False):
             try:
@@ -153,7 +154,7 @@ class SerialWorker(QThread):
         """Inner loop: read one line per iteration, dispatch by frame type."""
         assert self._serial is not None
 
-        while self._running:
+        while self._running and not self.isInterruptionRequested():
             self._drain_outbound_commands()
 
             try:

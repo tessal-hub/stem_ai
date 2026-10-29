@@ -7,6 +7,8 @@ cắt (snip) và lưu trữ các mẫu cử chỉ vào dataset.
 
 from __future__ import annotations
 
+from ui.layout_utils import scroll_panel
+
 import logging
 
 import numpy as np
@@ -33,9 +35,11 @@ from logic.spell_config_store import SpellConfigStore
 from logic.theme_manager import theme_manager
 from ui.component_factory import (IconButton, make_button, make_card,
                                   make_checkbox, make_empty_state_card,
-                                  make_hint, make_section_label)
+                                  make_hint, make_outline_button,
+                                  make_primary_button, make_section_label)
 from ui.confirm_dialog import confirm_destructive
 from ui.i18n_bridge import tr_ui
+from ui.spell_card_widget import SpellCardWidget
 from ui.tokens import (ACCENT, BTN_H, CROP_REGION, DANGER, MARGIN_COMFORTABLE,
                        PLOT_AX_COLOR, PLOT_AY_COLOR, PLOT_AZ_COLOR,
                        PLOT_GX_COLOR, PLOT_GY_COLOR, PLOT_GZ_COLOR,
@@ -107,7 +111,6 @@ class PageRecord(QWidget):
         self._pending_consistency_result: dict | None = None  # cached when UI not on sample page
 
         self._plots_initialized = False
-        self._last_rendered_len = -1
         self._init_ui()
         self._init_signals()
         self._configure_accessibility()
@@ -122,13 +125,15 @@ class PageRecord(QWidget):
         # Lưu refs để resizeEvent có thể đổi hướng H↔V
         self._left_col_widget = self._build_left_column()
         self._right_col_widget = self._build_right_column()
-        self._content_layout = QHBoxLayout()
+        content = QWidget()
+        self._content_layout = QHBoxLayout(content)
+        self._content_layout.setContentsMargins(0, 0, 0, 0)
         self._content_layout.setSpacing(SPACING_MD)
         self._content_layout.addWidget(self._left_col_widget, stretch=7)
         self._content_layout.addWidget(self._right_col_widget, stretch=3)
         self._is_stacked = False
 
-        layout.addLayout(self._content_layout, stretch=1)
+        layout.addWidget(scroll_panel(content), stretch=1)
 
     def _init_signals(self) -> None:
         """Kết nối toàn bộ signal và slot."""
@@ -183,11 +188,11 @@ class PageRecord(QWidget):
         self._is_wand_ready = is_ready
         fw_type = getattr(self.store, "get_detected_firmware", lambda: "disconnected")()
         if not is_ready or fw_type == "disconnected":
-            self.lbl_wand_status.setText(tr_ui('record_not_ready'))
+            self.lbl_wand_status.setText(f"○ {tr_ui('record_not_ready')}")
             self.lbl_wand_status.setProperty("status", "error")
             self.lbl_wand_status.setToolTip("")
         elif fw_type in ("inference", "inference_no_nvs"):
-            self.lbl_wand_status.setText(f"⚠ {tr_ui('record_wand_ai_fw_warning')}")
+            self.lbl_wand_status.setText(f"● {tr_ui('record_wand_ai_fw_warning')}")
             self.lbl_wand_status.setProperty("status", "warning")
             self.lbl_wand_status.setToolTip(tr_ui("record_wand_wrong_fw_warning"))
         elif fw_type == "data":
@@ -195,15 +200,68 @@ class PageRecord(QWidget):
             self.lbl_wand_status.setProperty("status", "success")
             self.lbl_wand_status.setToolTip(tr_ui("fw_desc_data"))
         elif fw_type == "detecting":
-            self.lbl_wand_status.setText(f"🔍 {tr_ui('fw_status_detecting')}")
+            self.lbl_wand_status.setText(f"● {tr_ui('fw_status_detecting')}")
             self.lbl_wand_status.setProperty("status", "warning")
             self.lbl_wand_status.setToolTip(tr_ui("fw_desc_detecting"))
         else:
-            self.lbl_wand_status.setText(tr_ui('record_ready'))
+            self.lbl_wand_status.setText(f"● {tr_ui('record_ready')}")
             self.lbl_wand_status.setProperty("status", "success")
             self.lbl_wand_status.setToolTip("")
         self.lbl_wand_status.style().unpolish(self.lbl_wand_status)
         self.lbl_wand_status.style().polish(self.lbl_wand_status)
+
+    def apply_ui_language(self) -> None:
+        """Làm mới toàn bộ văn bản giao diện khi đổi ngôn ngữ."""
+        if hasattr(self, "lbl_wand_status"):
+            self.set_wand_ready(getattr(self, "_is_wand_ready", False))
+        if hasattr(self, "lbl_timeline"):
+            self.lbl_timeline.setText(tr_ui("record_timeline", default="Dạng sóng cảm biến"))
+        if hasattr(self, "btn_new_spell"):
+            self.btn_new_spell.setText("+ " + tr_ui("btn_new_spell", default="Thần chú mới"))
+        if hasattr(self, "btn_start"):
+            self.btn_start.setText(tr_ui("record_btn_start"))
+        if hasattr(self, "btn_stop"):
+            self.btn_stop.setText(tr_ui("record_btn_stop"))
+        if hasattr(self, "btn_snip"):
+            self.btn_snip.setText(tr_ui("record_btn_snip"))
+        if hasattr(self, "btn_clear_samples"):
+            self.btn_clear_samples.setText(tr_ui("record_btn_clear"))
+        if hasattr(self, "btn_delete_spell"):
+            self.btn_delete_spell.setText(tr_ui("record_delete_spell_btn"))
+        if hasattr(self, "btn_back_spells"):
+            self.btn_back_spells.setText(tr_ui("record_btn_back"))
+        if hasattr(self, "btn_similarity"):
+            self.btn_similarity.setText(tr_ui("wand_btn_similarity", default="Ma trận"))
+        if hasattr(self, "_eval_title"):
+            self._eval_title.setText(tr_ui("record_eval_title", default="Đánh giá cử chỉ"))
+        if hasattr(self, "_lbl_spell_field"):
+            self._lbl_spell_field.setText(tr_ui("record_spell_label"))
+        if hasattr(self, "_lbl_eff"):
+            self._lbl_eff.setText(tr_ui("record_effects_label"))
+        if hasattr(self, "_lbl_recorded"):
+            self._lbl_recorded.setText(tr_ui("record_hint_recorded"))
+        if hasattr(self, "_lbl_duration"):
+            self._lbl_duration.setText(tr_ui("record_hint_duration"))
+        if hasattr(self, "_lbl_batch"):
+            self._lbl_batch.setText(tr_ui("record_batch"))
+        if hasattr(self, "_lbl_spell_list_title"):
+            self._lbl_spell_list_title.setText(tr_ui("record_spell_list"))
+        if hasattr(self, "_btn_create_first"):
+            self._btn_create_first.setText("+ " + tr_ui("btn_create_first_spell", default="Tạo thần chú đầu tiên"))
+        if hasattr(self, "_btn_record_first"):
+            self._btn_record_first.setText(tr_ui("record_btn_start", default="Bắt đầu ghi mẫu (Ctrl+S)"))
+        if hasattr(self, "_hint_controls"):
+            self._hint_controls.setText(tr_ui("record_hint_controls"))
+        if hasattr(self, "_spell_empty_card"):
+            for lbl in self._spell_empty_card.findChildren(QLabel):
+                if lbl.property("type") == "state_empty_title":
+                    lbl.setText(tr_ui("record_no_spells_title", default="Chưa có câu thần chú nào"))
+        if hasattr(self, "_sample_empty_card"):
+            for lbl in self._sample_empty_card.findChildren(QLabel):
+                if lbl.property("type") == "state_empty_title":
+                    lbl.setText(tr_ui("record_no_samples_title", default="Chưa có mẫu nào cho thần chú này"))
+        self._refresh_spell_list()
+        self._update_active_spell_effects_ui()
 
     def update_firmware_status(self, _fw_type: str = "") -> None:
         """Cập nhật trạng thái firmware hiển thị trên trang Record."""
@@ -211,14 +269,24 @@ class PageRecord(QWidget):
 
     def set_recording_state(self, recording: bool) -> None:
         """Thiết lập trạng thái UI khi đang ghi dữ liệu."""
+        self.is_live = recording
         self.btn_start.setEnabled(not recording)
         self.btn_stop.setEnabled(recording)
         self.combo_spell.setEnabled(not recording)
-        self.btn_delete_selected.setEnabled(not recording)
+        self.btn_delete_selected.setEnabled(not recording and bool(self.sample_list.selectedItems()))
 
-        status = tr_ui('record_recording_short') if recording else tr_ui('record_ready')
-        self.lbl_wand_status.setText(status)
-        self.lbl_wand_status.setProperty("status", "accent" if recording else "success")
+        if recording:
+            self.btn_snip.setEnabled(False)
+            self.crop_region.hide()
+            self._recording_start_time.start()
+            self._recording_timer.start(_TIMER_INTERVAL_MS)
+        else:
+            self._recording_timer.stop()
+            self.set_wand_ready(self.store.get_connection_state()[0])
+            return
+
+        self.lbl_wand_status.setText(tr_ui('record_recording_short'))
+        self.lbl_wand_status.setProperty("status", "accent")
         self.lbl_wand_status.style().unpolish(self.lbl_wand_status)
         self.lbl_wand_status.style().polish(self.lbl_wand_status)
 
@@ -343,11 +411,13 @@ class PageRecord(QWidget):
             r, g, b = (color[0], color[1], color[2]) if len(color) >= 3 else (255, 255, 255)
             sound_id = cfg.get("sound")
 
+        _p = theme_manager.get_palette()
         self.btn_active_color.setStyleSheet(
-            f"QPushButton {{ background-color: rgb({r}, {g}, {b}); border-radius: 16px; "
-            f"border: 2px solid rgba(15, 23, 42, 0.12); min-width: 22px; min-height: 22px; margin: 5px; }}"
-            f"QPushButton:hover {{ border: 2px solid #0668d1; }}"
-            f"QPushButton:focus {{ border: 2px solid #0f172a; }}"
+            f"QPushButton {{ background-color: rgb({r}, {g}, {b}); border-radius: 13px; "
+            f"border: 2px solid {_p.BORDER_LIGHT}; min-width: 26px; max-width: 26px; "
+            f"min-height: 26px; max-height: 26px; padding: 0px; margin: 0px; }}"
+            f"QPushButton:hover {{ border: 2px solid {_p.PRIMARY}; }}"
+            f"QPushButton:focus {{ border: 2px solid {_p.PRIMARY_DARK}; }}"
         )
 
         if hasattr(self, "lbl_active_sound"):
@@ -357,9 +427,9 @@ class PageRecord(QWidget):
                     trans = tr_ui(f"preset_{disp_sound}")
                     if trans and trans != f"preset_{disp_sound}":
                         disp_sound = trans.split("(")[0].strip()
-                self.lbl_active_sound.setText(f"🔊 {disp_sound}")
+                self.lbl_active_sound.setText(disp_sound)
             else:
-                self.lbl_active_sound.setText("🔇 " + tr_ui("no_sound"))
+                self.lbl_active_sound.setText(tr_ui("no_sound"))
 
     def _on_spell_config_changed(self, spell_name: str) -> None:
         """Cập nhật lại widget hiển thị khi cấu hình của spell thay đổi."""
@@ -420,7 +490,7 @@ class PageRecord(QWidget):
             if self.sample_stack.currentIndex() != 1:
                 self.sample_stack.setCurrentIndex(1)
             self.btn_delete_selected.setEnabled(False)
-            self.btn_delete_selected.setText("🗑 Xóa đã chọn")
+            self.btn_delete_selected.setText("Xóa đã chọn")
             self._per_sample_scores.clear()
             self.lbl_consistency.setText("")
             self.consistency_bar.setValue(0)
@@ -454,7 +524,7 @@ class PageRecord(QWidget):
             if self.sample_stack.currentIndex() != 1:
                 self.sample_stack.setCurrentIndex(1)
             self.btn_delete_selected.setEnabled(False)
-            self.btn_delete_selected.setText("🗑 Xóa đã chọn")
+            self.btn_delete_selected.setText("Xóa đã chọn")
             self._per_sample_scores.clear()
             self.lbl_consistency.setVisible(True)
             self.lbl_consistency.setText(rec or "")
@@ -480,7 +550,7 @@ class PageRecord(QWidget):
             else:
                 bar_color = DANGER
             p = theme_manager.get_palette()
-            bg = "rgba(255, 255, 255, 0.12)" if theme_manager.current_theme == "dark" else "rgba(0, 0, 0, 0.08)"
+            bg = p.SURFACE_TERTIARY
             self.consistency_bar.setStyleSheet(
                 f"QProgressBar::chunk {{ background-color: {bar_color}; border-radius: 2px; }}"
                 f"QProgressBar {{ border-radius: 3px; background: {bg}; text-align: center; color: {p.TEXT_PRIMARY}; font-weight: 600; font-size: 11px; }}"
@@ -491,7 +561,7 @@ class PageRecord(QWidget):
             self.consistency_bar.setValue(0)
             self.consistency_bar.setFormat(tr_ui("record_consistency_progress", filled=filled, empty=empty, n=n))
             p = theme_manager.get_palette()
-            bg = "rgba(255, 255, 255, 0.12)" if theme_manager.current_theme == "dark" else "rgba(0, 0, 0, 0.08)"
+            bg = p.SURFACE_TERTIARY
             self.consistency_bar.setStyleSheet(
                 f"QProgressBar::chunk {{ background-color: {p.TEXT_TERTIARY}; border-radius: 2px; }}"
                 f"QProgressBar {{ border-radius: 3px; background: {bg}; text-align: center; color: {p.TEXT_PRIMARY}; font-weight: 600; font-size: 11px; }}"
@@ -515,7 +585,7 @@ class PageRecord(QWidget):
                 err = per_status.get(fname)
                 score = self._per_sample_scores.get(fname)
                 if err:
-                    target_items.append((f"{fname}  [⚠️ {err}]", -1.0, fname))
+                    target_items.append((f"{fname}  [LỖI: {err}]", -1.0, fname))
                 elif score is None:
                     target_items.append((fname, None, fname))
                 else:
@@ -543,11 +613,11 @@ class PageRecord(QWidget):
         if worst_idx is not None and worst_idx < self.sample_list.count():
             item = self.sample_list.item(worst_idx)
             if item:
-                item.setToolTip("⚠️ Mẫu có vấn đề hoặc điểm thấp nhất trong tập — cân nhắc xóa để nâng cao độ đồng nhất.")
+                item.setToolTip("Mẫu có vấn đề hoặc điểm thấp nhất trong tập — cân nhắc xóa để nâng cao độ đồng nhất.")
 
     def on_spell_registered(self, spell_name: str) -> None:
         """Được gọi sau khi nạp/đăng ký thành công."""
-        self.lbl_consistency.setText(f"✅ '{spell_name}' đã được xác nhận.")
+        self.lbl_consistency.setText(f"'{spell_name}' đã được xác nhận.")
 
     def set_consistency_score(self, score: float | str | None) -> None:
         """Legacy fallback — vẫn giữ để tương thích ngược."""
@@ -555,7 +625,7 @@ class PageRecord(QWidget):
         pass
 
     def refresh_styles(self, theme_name: str | None = None) -> None:
-        """Làm mới giao diện đồ thị theo theme hiện tại."""
+        """Làm mới giao diện đồ thị + spell card theo theme hiện tại."""
         p = theme_manager.get_palette()
         is_dark = theme_manager.current_theme == "dark"
         axis_pen = QColor(p.TEXT_SECONDARY) if is_dark else QColor(p.TEXT_TERTIARY)
@@ -566,6 +636,12 @@ class PageRecord(QWidget):
             g.getAxis("bottom").setPen(axis_pen)
             g.getAxis("bottom").setTextPen(axis_pen)
             g.showGrid(x=True, y=True, alpha=0.15 if is_dark else 0.1)
+        # Spell card giữ style palette lúc tạo — áp lại theo theme mới
+        if hasattr(self, "spell_list"):
+            for i in range(self.spell_list.count()):
+                card = self.spell_list.itemWidget(self.spell_list.item(i))
+                if isinstance(card, SpellCardWidget):
+                    card.refresh_styles()
 
     # ── Private methods ─────────────────────────
 
@@ -622,9 +698,6 @@ class PageRecord(QWidget):
         arr = self.store.get_live_buffer_numpy()
         if arr.size == 0:
             return
-        if not force and len(arr) == getattr(self, "_last_rendered_len", -1):
-            return
-        self._last_rendered_len = len(arr)
         try:
             if arr.ndim == 2 and arr.shape[1] >= 6:
                 # Downsample vượt ngưỡng: stride giữ 300 điểm, giảm paint 40% khi buffer 600
@@ -649,15 +722,15 @@ class PageRecord(QWidget):
         layout.setSpacing(SPACING_LG)
 
         header = QHBoxLayout()
+        self.lbl_timeline = make_section_label(tr_ui("record_timeline", default="Dạng sóng cảm biến"), accent=False)
         self.lbl_wand_status = QLabel(f"● {tr_ui('record_wait_serial')}")
         self.lbl_wand_status.setProperty("type", "status_label")
         self.lbl_wand_status.setProperty("status", "warning")
         # dấu chồng tiếng Việt (Ở/Ế) cần thêm ascent — 11px + padding 5px bị cắt đỉnh chữ
         self.lbl_wand_status.setMinimumHeight(32)
-        self.lbl_timeline = make_section_label(tr_ui("record_timeline"), accent=True)
-        self.lbl_timeline.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        header.addWidget(self.lbl_wand_status)
         header.addWidget(self.lbl_timeline)
+        header.addStretch()
+        header.addWidget(self.lbl_wand_status)
         layout.addLayout(header)
 
         card, card_layout = make_card(margins=(20, 20, 20, 20), spacing=SPACING_MD)
@@ -686,7 +759,7 @@ class PageRecord(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_MD)
 
-        layout.addWidget(make_section_label(tr_ui("record_toolbar"), accent=True))
+        layout.addWidget(make_section_label(tr_ui("record_toolbar", default="Điều khiển ghi mẫu"), accent=False))
         layout.addWidget(self._build_detail_card())
         layout.addWidget(self._build_controls_card())
 
@@ -718,14 +791,27 @@ class PageRecord(QWidget):
         form = QFormLayout()
         form.setSpacing(6)
         form.setContentsMargins(0, 0, 0, 0)
+
+        spell_row = QHBoxLayout()
+        spell_row.setContentsMargins(0, 0, 0, 0)
+        spell_row.setSpacing(6)
         self.combo_spell = QComboBox()
         self.combo_spell.setEditable(True)
         self.combo_spell.setFixedHeight(36)
         self.combo_spell.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.combo_spell.setAccessibleName(tr_ui("record_spell_label"))
-        lbl = QLabel(tr_ui("record_spell_label"))
-        lbl.setProperty("type", "record_field_label")
-        form.addRow(lbl, self.combo_spell)
+
+        self.btn_new_spell = make_outline_button("+ " + tr_ui("btn_new_spell", default="Thần chú mới"), height=36)
+        self.btn_new_spell.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_new_spell.setToolTip("Tạo thêm một câu thần chú mới để thu thập mẫu")
+        self.btn_new_spell.clicked.connect(self._on_btn_new_spell_clicked)
+
+        spell_row.addWidget(self.combo_spell, stretch=1)
+        spell_row.addWidget(self.btn_new_spell)
+
+        self._lbl_spell_field = QLabel(tr_ui("record_spell_label"))
+        self._lbl_spell_field.setProperty("type", "record_field_label")
+        form.addRow(self._lbl_spell_field, spell_row)
 
         # Row cấu hình hiệu ứng: Chỉ 1 nút tròn màu ở đầu kiêm chức năng mở menu config
         eff_container = QWidget()
@@ -735,20 +821,20 @@ class PageRecord(QWidget):
 
         self.btn_active_color = QPushButton()
         self.btn_active_color.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_active_color.setFixedSize(32, 32)
+        self.btn_active_color.setFixedSize(26, 26)
         self.btn_active_color.setToolTip(tr_ui("tooltip_color_dot"))
         self.btn_active_color.setAccessibleName(tr_ui("tooltip_color_dot"))
         self.btn_active_color.clicked.connect(self._on_active_effects_edit)
         eff_layout.addWidget(self.btn_active_color, 0)
 
-        self.lbl_active_sound = QLabel("🔇 " + tr_ui("no_sound"))
+        self.lbl_active_sound = QLabel(tr_ui("no_sound"))
         self.lbl_active_sound.setProperty("type", "settings_hint")
-        self.lbl_active_sound.setStyleSheet("font-size: 12px; font-weight: 500; color: #5b6b7f;")
+        self.lbl_active_sound.setStyleSheet(f"font-size: 12px; font-weight: 500; color: {TEXT_MUTED};")
         eff_layout.addWidget(self.lbl_active_sound, 1)
 
-        lbl_eff = QLabel(tr_ui("record_effects_label"))
-        lbl_eff.setProperty("type", "record_field_label")
-        form.addRow(lbl_eff, eff_container)
+        self._lbl_eff = QLabel(tr_ui("record_effects_label"))
+        self._lbl_eff.setProperty("type", "record_field_label")
+        form.addRow(self._lbl_eff, eff_container)
         layout.addLayout(form)
 
         stats = QGridLayout()
@@ -758,11 +844,11 @@ class PageRecord(QWidget):
         self.lbl_record_duration = QLabel("00:00")
         self.lbl_record_duration.setProperty("type", "record_metric_value")
         
-        lbl_recorded = make_hint(tr_ui("record_hint_recorded"))
-        lbl_duration = make_hint(tr_ui("record_hint_duration"))
+        self._lbl_recorded = make_hint(tr_ui("record_hint_recorded"))
+        self._lbl_duration = make_hint(tr_ui("record_hint_duration"))
         
-        stats.addWidget(lbl_recorded, 0, 0)
-        stats.addWidget(lbl_duration, 0, 1)
+        stats.addWidget(self._lbl_recorded, 0, 0)
+        stats.addWidget(self._lbl_duration, 0, 1)
         stats.addWidget(self.lbl_record_count, 1, 0)
         stats.addWidget(self.lbl_record_duration, 1, 1)
         layout.addLayout(stats)
@@ -788,25 +874,25 @@ class PageRecord(QWidget):
         self.btn_snip.setEnabled(False)
         layout.addWidget(self.btn_snip)
 
-        hint = make_hint(tr_ui("record_hint_controls"))
-        hint.setWordWrap(True)
-        hint.setStyleSheet("font-size: 11px; color: #5b6b7f; line-height: 1.5;")
-        layout.addWidget(hint)
+        self._hint_controls = make_hint(tr_ui("record_hint_controls"))
+        self._hint_controls.setWordWrap(True)
+        self._hint_controls.setStyleSheet(f"font-size: 11px; color: {TEXT_MUTED}; line-height: 1.5;")
+        layout.addWidget(self._hint_controls)
         return card
 
     def _build_batch_card(self) -> QFrame:
         """Card tác vụ hàng loạt — 3 nút xếp ngang."""
         card, layout = make_card(margins=(6, 6, 6, 6), spacing=4)
         
-        lbl_batch = make_section_label(tr_ui("record_batch"), accent=False)
-        lbl_batch.setStyleSheet("font-size: 11px; font-weight: bold;")
-        layout.addWidget(lbl_batch)
+        self._lbl_batch = make_section_label(tr_ui("record_batch"), accent=False)
+        self._lbl_batch.setStyleSheet("font-size: 11px; font-weight: bold;")
+        layout.addWidget(self._lbl_batch)
 
         row = QHBoxLayout()
         row.setSpacing(4)
 
         self.btn_delete_selected = make_button(
-            "🗑 Xóa", "danger_outline", 36
+            tr_ui("record_delete_selected", default="Xóa đã chọn"), "danger_outline", 36
         )
         self.btn_delete_selected.setEnabled(False)
         self.btn_delete_selected.setToolTip("Chọn một hoặc nhiều mẫu trong danh sách rồi nhấn nút này để xóa.")
@@ -825,7 +911,8 @@ class PageRecord(QWidget):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_SM)
-        layout.addWidget(make_section_label(tr_ui("record_spell_list"), accent=False))
+        self._lbl_spell_list_title = make_section_label(tr_ui("record_spell_list"), accent=False)
+        layout.addWidget(self._lbl_spell_list_title)
 
         self.spell_stack = QStackedWidget()
 
@@ -844,8 +931,12 @@ class PageRecord(QWidget):
         self.spell_stack.addWidget(lib_page)
 
         # Requirement 3: Empty state
-        empty_card, _ = self._make_empty_state()
-        self.spell_stack.addWidget(empty_card)
+        self._spell_empty_card, empty_lay = self._make_empty_state()
+        self._btn_create_first = make_primary_button("+ " + tr_ui("btn_create_first_spell", default="Tạo thần chú đầu tiên"), height=36)
+        self._btn_create_first.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_create_first.clicked.connect(self._on_btn_new_spell_clicked)
+        empty_lay.addWidget(self._btn_create_first, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.spell_stack.addWidget(self._spell_empty_card)
 
         layout.addWidget(self.spell_stack)
         return page
@@ -869,19 +960,12 @@ class PageRecord(QWidget):
         eval_card, eval_layout = make_card(margins=(10, 8, 10, 8), spacing=SPACING_XS)
 
         eval_header = QHBoxLayout()
-        eval_title = make_section_label("ĐÁNH GIÁ CỬ CHỈ", accent=True)
-        eval_title.setStyleSheet("font-size: 11px; font-weight: 700;")
-        eval_header.addWidget(eval_title)
+        self._eval_title = make_section_label(tr_ui("record_eval_title", default="Đánh giá cử chỉ"), accent=False)
+        self._eval_title.setStyleSheet("font-size: 11px; font-weight: 700;")
+        eval_header.addWidget(self._eval_title)
         eval_header.addStretch()
 
-        self.btn_similarity = QPushButton("🔍 Ma trận")
-        self.btn_similarity.setFixedHeight(32)
-        self.btn_similarity.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_similarity.setStyleSheet(
-            "background: rgba(10, 122, 255, 0.07); color: #0668d1; "
-            "border: 1px solid #cdd6e1; border-radius: 6px; "
-            "padding: 4px 10px; font-size: 11px; font-weight: 700;"
-        )
+        self.btn_similarity = make_outline_button(tr_ui("wand_btn_similarity", default="Ma trận"), height=32)
         self.btn_similarity.setToolTip("Xem ma trận tương đồng giữa tất cả các thần chú")
         self.btn_similarity.clicked.connect(lambda: self.sig_show_similarity_matrix.emit())
         eval_header.addWidget(self.btn_similarity)
@@ -908,15 +992,42 @@ class PageRecord(QWidget):
         self.sample_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         self.sample_stack = QStackedWidget()
         self.sample_stack.addWidget(self.sample_list)
-        empty_card, _ = make_empty_state_card()
-        self.sample_stack.addWidget(empty_card)
+        self._sample_empty_card, sample_empty_lay = make_empty_state_card(
+            title=tr_ui("record_no_samples_title", default="Chưa có mẫu nào cho thần chú này")
+        )
+        self._btn_record_first = make_primary_button(tr_ui("record_btn_start", default="Bắt đầu ghi mẫu (Ctrl+S)"), height=36)
+        self._btn_record_first.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_record_first.clicked.connect(self._trigger_start)
+        sample_empty_lay.addWidget(self._btn_record_first, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.sample_stack.addWidget(self._sample_empty_card)
         layout.addWidget(self.sample_stack, stretch=1)
 
         return page
 
+    def _on_btn_new_spell_clicked(self) -> None:
+        """Mở dialog cho phép nhập tên thần chú mới một cách trực quan."""
+        from PyQt6.QtWidgets import QInputDialog
+        name, ok = QInputDialog.getText(
+            self,
+            tr_ui("dialog_new_spell_title", default="Tạo thần chú mới"),
+            tr_ui("dialog_new_spell_prompt", default="Nhập tên câu thần chú mới (ví dụ: LUMOS, ALOHOMORA):")
+        )
+        if ok and name.strip():
+            clean_name = name.strip().upper()
+            idx = self.combo_spell.findText(clean_name)
+            if idx < 0:
+                self.combo_spell.addItem(clean_name)
+                self.combo_spell.setCurrentText(clean_name)
+            else:
+                self.combo_spell.setCurrentIndex(idx)
+            self.combo_spell.setFocus()
+            self.lbl_wand_status.setText(f"● Đã chọn: {clean_name}")
+
     def _make_empty_state(self) -> tuple[QFrame, QVBoxLayout]:
         """Requirement 3: Centered empty state with icon."""
-        return make_empty_state_card()
+        return make_empty_state_card(
+            title=tr_ui("record_no_spells_title", default="Chưa có câu thần chú nào")
+        )
 
     def _update_combo_box(self, names: list[str]) -> None:
         """Cập nhật dữ liệu cho combo box chọn spell."""
@@ -945,15 +1056,22 @@ class PageRecord(QWidget):
         if not spell:
             self.lbl_wand_status.setText(f"⚠ {tr_ui('record_select_spell')}")
             return
-        self.is_live = True
         self.current_spell_name = spell
         self.sig_spell_selected.emit(spell)
-        self.btn_snip.setEnabled(False)
-        self.crop_region.hide()
-        self.set_recording_state(True)
-        self._recording_start_time.start()
-        self._recording_timer.start(_TIMER_INTERVAL_MS)
         self.sig_start_record.emit(spell)
+
+    def show_recording_error(self, message: str) -> None:
+        self.set_recording_state(False)
+        self.lbl_wand_status.setText(message)
+        self.lbl_wand_status.setProperty("status", "error")
+        self.lbl_wand_status.style().unpolish(self.lbl_wand_status)
+        self.lbl_wand_status.style().polish(self.lbl_wand_status)
+
+    def set_save_status(self, spell: str) -> None:
+        self.lbl_wand_status.setText(f"Đã lưu mẫu: {spell}")
+        self.lbl_wand_status.setProperty("status", "success")
+        self.lbl_wand_status.style().unpolish(self.lbl_wand_status)
+        self.lbl_wand_status.style().polish(self.lbl_wand_status)
 
     def _on_btn_stop_clicked(self) -> None:
         """Dừng quá trình ghi và hiển thị vùng chọn snip."""
@@ -979,8 +1097,8 @@ class PageRecord(QWidget):
         buf = self.store.get_live_buffer_snapshot()
         idx_min, idx_max = max(0, int(region[0])), min(len(buf), int(region[1]))
         if idx_min < idx_max:
+            self.lbl_wand_status.setText("Đang lưu mẫu đã cắt...")
             self.sig_data_cropped.emit(buf[idx_min:idx_max], spell)
-            self.lbl_wand_status.setText(tr_ui("record_snipped", n=idx_max-idx_min, name=spell))
         self.sig_snip_record.emit()
 
     def _on_crop_region_changed(self) -> None:
@@ -999,7 +1117,6 @@ class PageRecord(QWidget):
 
     def clear_plots(self) -> None:
         """Xóa sạch toàn bộ đường vẽ trên đồ thị."""
-        self._last_rendered_len = -1
         self.curve_ax.setData([])
         self.curve_ay.setData([])
         self.curve_az.setData([])
@@ -1031,11 +1148,11 @@ class PageRecord(QWidget):
         n = len(self.sample_list.selectedItems())
         self.btn_delete_selected.setEnabled(n > 0)
         if n == 0:
-            self.btn_delete_selected.setText("🗑 Xóa đã chọn")
+            self.btn_delete_selected.setText(tr_ui("record_delete_selected", default="Xóa đã chọn"))
         elif n == 1:
-            self.btn_delete_selected.setText("🗑 Xóa 1 mẫu")
+            self.btn_delete_selected.setText(tr_ui("record_delete_1", default="Xóa 1 mẫu"))
         else:
-            self.btn_delete_selected.setText(f"🗑 Xóa {n} mẫu")
+            self.btn_delete_selected.setText(tr_ui("record_delete_n", default=f"Xóa {n} mẫu", n=n))
 
     def _on_btn_delete_selected_clicked(self) -> None:
         """Xóa các mẫu đang được chọn trong sample_list."""
@@ -1068,7 +1185,7 @@ class PageRecord(QWidget):
         deleted = self.store.delete_samples(spell, fnames)
 
         if deleted > 0:
-            self.btn_delete_selected.setText("🗑 Xóa đã chọn")
+            self.btn_delete_selected.setText(tr_ui("record_delete_selected", default="Xóa đã chọn"))
             self.btn_delete_selected.setEnabled(False)
             remaining_samples = self.store.get_samples_for_spell(spell)
             self.load_samples_for_spell(spell, remaining_samples)
@@ -1125,18 +1242,24 @@ class PageRecord(QWidget):
                     if w:
                         w.setParent(None)
                 if should_stack:
+                    self._right_col_widget.setMinimumHeight(380)
                     lay.setDirection(QVBoxLayout.Direction.TopToBottom)
-                    lay.addWidget(self._left_col_widget)
                     lay.addWidget(self._right_col_widget)
+                    lay.addWidget(self._left_col_widget)
                     self._right_col_widget.setMaximumWidth(16777215)
                     self._right_col_widget.setMinimumWidth(0)
+                    self._right_col_widget.widget().setMinimumWidth(0)
+                    self._right_col_widget.widget().setMaximumWidth(16777215)
                 else:
+                    self._right_col_widget.setMinimumHeight(0)
                     lay.setDirection(QBoxLayout.Direction.LeftToRight)
                     lay.addWidget(self._left_col_widget, stretch=7)
                     lay.addWidget(self._right_col_widget, stretch=3)
                     from ui.tokens import RIGHT_MAX_W, RIGHT_MIN_W
                     self._right_col_widget.setMinimumWidth(RIGHT_MIN_W)
                     self._right_col_widget.setMaximumWidth(RIGHT_MAX_W)
+                    self._right_col_widget.widget().setMinimumWidth(RIGHT_MIN_W)
+                    self._right_col_widget.widget().setMaximumWidth(RIGHT_MAX_W)
         except Exception:
             pass
 

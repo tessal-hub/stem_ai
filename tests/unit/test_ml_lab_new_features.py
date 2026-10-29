@@ -8,6 +8,8 @@ tests/unit/test_ml_lab_new_features.py — Test 3 tính năng mới:
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -23,10 +25,12 @@ from ml_lab.core.hyperparam_schema import (
     RidgeConfig,
     SGDConfig,
 )
-from ml_lab.core.live_inference import WINDOW_SIZE, LiveGesturePredictor
+from ml_lab.core.live_inference import LiveGesturePredictor
+from ml_lab.data.window_config import WINDOW_SAMPLES
 from ml_lab.core.pipeline import TrainClassicResult, train_classic_model
 from ml_lab.ui.ml_lab_worker import _SHORTLIST, AutoSelectWorker
 from ml_lab.ui.tabs.tab_curves_studio import DataSizeWorker
+from ml_lab.ui.tabs.tab_simulator_export import TabSimulatorExport
 
 
 # ── fixtures ──────────────────────────────────────────────────────────
@@ -78,6 +82,48 @@ def _make_result_with_model(model, scaler=None):
     )
 
 
+def test_simulator_uses_recorded_train_ranges_and_feature_means(monkeypatch):
+    result = SimpleNamespace(
+        feature_means=[4.0, 25.0, 900.0],
+        feature_ranges=[(0.0, 10.0), (10.0, 40.0), (800.0, 1000.0)],
+        feature_names=["a", "b", "c"],
+        scaler=None,
+        class_names=["lumos"],
+        algo="tree",
+    )
+    assert TabSimulatorExport._feature_ranges(SimpleNamespace(_current_result=result), 3) == result.feature_ranges
+
+    class Slider:
+        def property(self, name):
+            return {"feat_lo": 0.0, "feat_hi": 10.0}[name]
+
+        def value(self):
+            return 400
+
+    class Model:
+        seen = None
+
+        def predict(self, values):
+            self.seen = values.copy()
+            return [0]
+
+    monkeypatch.setattr("ml_lab.ui.tabs.tab_simulator_export.compute_local_feature_contributions", lambda **_: [])
+    model = Model()
+    result.model = model
+    labels = SimpleNamespace(setText=lambda _: None)
+    simulator = SimpleNamespace(
+        _current_result=result,
+        _sim_sliders=[Slider()],
+        _slider_to_value=lambda slider: TabSimulatorExport._slider_to_value(None, slider),
+        lbl_pred_class=labels,
+        lbl_pred_conf=labels,
+        table_shap=SimpleNamespace(setRowCount=lambda _: None),
+    )
+
+    TabSimulatorExport._run_live_simulation(simulator)
+    assert model.seen.tolist() == [[4.0, 25.0, 900.0]]
+
+
 # ── 1. LiveGesturePredictor ───────────────────────────────────────────
 
 def _motion_stream(n_standby=64, n_burst=64, amp=60.0, seed=0):
@@ -115,7 +161,7 @@ def test_live_predictor_ignores_standby(trained_result):
     predictor = LiveGesturePredictor(
         trained_result, min_confidence=0.0, min_margin=0.0,
     )
-    for _ in range(WINDOW_SIZE + 10):
+    for _ in range(WINDOW_SAMPLES + 10):
         assert predictor.feed([0.0] * 6) is None
 
 
@@ -123,7 +169,7 @@ def test_live_predictor_respects_cooldown(trained_result):
     predictor = LiveGesturePredictor(trained_result, cooldown_samples=50)
     rng = np.random.RandomState(1)
     predictions = 0
-    for _ in range(WINDOW_SIZE * 3):
+    for _ in range(WINDOW_SAMPLES * 3):
         out = predictor.feed(rng.randn(6).astype(np.float32))
         if out is not None:
             predictions += 1

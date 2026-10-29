@@ -5,7 +5,7 @@ Cho phép:
 1. Thử nghiệm trực quan các đặc trưng ảo bằng thanh trượt What-If.
 2. Giải thích đóng góp từng đặc trưng (SHAP / Feature Attribution Waterfall).
 3. Xuất và xem trước mã nguồn C++ thuần zero-malloc tương thích ESP32.
-4. Nạp code trực tiếp 1-click vào ESP32.
+4. Nạp firmware ESP32 đã build sau khi đồng bộ model.
 """
 
 from __future__ import annotations
@@ -36,6 +36,7 @@ from PyQt6.QtWidgets import (
 )
 
 import ml_lab.ui.lab_style as ls
+from ui.layout_utils import scroll_panel
 from ml_lab.core.c_exporter import CCodeExporter
 from ml_lab.core.experiment_store import ExperimentStore
 from ml_lab.core.pipeline import TrainClassicResult
@@ -105,6 +106,7 @@ class TabSimulatorExport(QWidget):
 
         # Sliders Area
         lbl_adj = QLabel("Kéo các thanh để giả lập giá trị đo (GIẢ LẬP — kẹp trong phạm vi train, không phải cử chỉ thật):")
+        lbl_adj.setWordWrap(True)
         lbl_adj.setStyleSheet(ls.font(ls.FS_CAPTION, 500) + f"color: {ls.MUTED}; border: none; background: transparent;")
         l_layout.addWidget(lbl_adj)
 
@@ -130,9 +132,9 @@ class TabSimulatorExport(QWidget):
         self.table_shap.setStyleSheet(ls.DATA_TABLE)
         l_layout.addWidget(self.table_shap, stretch=1)
 
-        splitter.addWidget(left_box)
+        splitter.addWidget(scroll_panel(left_box))
 
-        # ── Right: C++ Exporter & 1-Click Flasher ────────────
+        # ── Right: C++ Exporter & ESP32 Flasher ─────────────
         right_box = QFrame()
         right_box.setObjectName("SimRight")
         right_box.setStyleSheet(ls.card(pad=ls.SP_3))
@@ -143,7 +145,7 @@ class TabSimulatorExport(QWidget):
         top_r_row = QHBoxLayout()
         lbl_code_t = QLabel("Xuất mã C++ & nạp lên wand")
         lbl_code_t.setStyleSheet(ls.chart_title())
-        top_r_row.addWidget(lbl_code_t)
+        r_layout.addWidget(lbl_code_t)
         top_r_row.addStretch()
 
         btn_copy = QPushButton("Copy mã")
@@ -158,6 +160,7 @@ class TabSimulatorExport(QWidget):
         top_r_row.addWidget(btn_save)
 
         self.btn_flash = QPushButton("Nạp lên wand")
+        self.btn_flash.setToolTip("Sau khi xuất model, chạy idf.py build trong esp32_classic_ml rồi mới nạp.")
         self.btn_flash.setStyleSheet(ls.BTN_SUCCESS)
         self.btn_flash.clicked.connect(self._open_flash_dialog)
         top_r_row.addWidget(self.btn_flash)
@@ -201,7 +204,7 @@ class TabSimulatorExport(QWidget):
         )
         r_layout.addWidget(self.code_view, stretch=1)
 
-        splitter.addWidget(right_box)
+        splitter.addWidget(scroll_panel(right_box))
         splitter.setStretchFactor(0, 4)
         splitter.setStretchFactor(1, 6)
 
@@ -240,10 +243,13 @@ class TabSimulatorExport(QWidget):
         if not self._current_result:
             return
 
+        means = self._current_result.feature_means
         features = self._current_result.feature_names[:8]
         ranges = self._feature_ranges(len(features))
         for f_idx, feat_name in enumerate(features):
             lo, hi = ranges[f_idx]
+            baseline = means[f_idx] if len(means) == len(self._current_result.feature_names) else (lo + hi) / 2
+            baseline = min(hi, max(lo, baseline))
             row = QHBoxLayout()
             friendly = friendly_feature_name(feat_name)
             # Harden: elide tên dài, giữ tooltip mã gốc + phạm vi train
@@ -252,16 +258,14 @@ class TabSimulatorExport(QWidget):
             lbl.setStyleSheet(ls.font(ls.FS_CAPTION, 500) + "border: none; background: transparent;")
             lbl.setWordWrap(True)
 
-            val_lbl = QLabel(f"{(lo + hi) / 2:.2f}")
+            val_lbl = QLabel(f"{baseline:.2f}")
             val_lbl.setStyleSheet(ls.slider_value_label())
             val_lbl.setMinimumWidth(48)
 
             slider = QSlider(Qt.Orientation.Horizontal)
-            # P0: kẹp thanh trong phạm vi quan sát lúc train (mean ± 3σ),
-            # thang int 0..1000 ánh xạ sang [lo, hi] — hết đoán bừa ngoài phân phối
             slider.setRange(0, 1000)
-            mid = 500
-            slider.setValue(mid)
+            slider.setValue(round((baseline - lo) * 1000 / (hi - lo)) if hi > lo else 0)
+            slider.setEnabled(hi > lo)
             slider.setMinimumHeight(28)
             slider.setAccessibleName(f"Thử giá trị {friendly}")
             slider.setProperty("feat_lo", float(lo))
@@ -281,19 +285,19 @@ class TabSimulatorExport(QWidget):
             self._sim_labels.append(val_lbl)
 
     def _feature_ranges(self, n: int) -> list[tuple[float, float]]:
-        """Phạm vi train từng đặc trưng (mean ± 3σ từ scaler) để kẹp slider."""
-        try:
-            scaler = self._current_result.scaler if self._current_result else None
-            means = getattr(scaler, "mean_", None)
-            scales = getattr(scaler, "scale_", None)
-            if means is not None and scales is not None:
-                out = []
-                for i in range(n):
-                    m, s = float(means[i]), float(scales[i]) or 1.0
-                    out.append((m - 3.0 * s, m + 3.0 * s))
-                return out
-        except Exception:
-            pass
+        """Phạm vi từng đặc trưng quan sát trong tập train."""
+        result = self._current_result
+        ranges = getattr(result, "feature_ranges", ())
+        if len(ranges) >= n:
+            return ranges[:n]
+        scaler = getattr(result, "scaler", None)
+        means = getattr(scaler, "mean_", None)
+        scales = getattr(scaler, "scale_", None)
+        if means is not None and scales is not None:
+            return [
+                (float(means[i]) - 3 * float(scales[i]), float(means[i]) + 3 * float(scales[i]))
+                for i in range(n)
+            ]
         return [(-3.0, 3.0)] * n
 
     def _schedule_live_simulation(self) -> None:
@@ -304,7 +308,7 @@ class TabSimulatorExport(QWidget):
         lo = float(slider.property("feat_lo") or 0.0)
         hi = float(slider.property("feat_hi") or 0.0)
         if hi <= lo:
-            return slider.value() / 100.0  # fallback thang cũ
+            return lo
         return lo + (hi - lo) * slider.value() / 1000.0
 
     def _run_live_simulation(self) -> None:
@@ -313,7 +317,16 @@ class TabSimulatorExport(QWidget):
 
         try:
             n_feats = len(self._current_result.feature_names)
-            feat_vector = np.zeros(n_feats, dtype=np.float32)
+            means = self._current_result.feature_means
+            if len(means) == n_feats:
+                feat_vector = np.asarray(means, dtype=np.float32)
+            else:
+                scaler_mean = getattr(self._current_result.scaler, "mean_", None)
+                feat_vector = (
+                    np.asarray(scaler_mean, dtype=np.float32)
+                    if scaler_mean is not None and len(scaler_mean) == n_feats
+                    else np.zeros(n_feats, dtype=np.float32)
+                )
 
             for i, slider in enumerate(self._sim_sliders):
                 if i < n_feats:

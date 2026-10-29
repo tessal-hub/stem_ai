@@ -37,6 +37,7 @@ from PyQt6.QtWidgets import (
 )
 
 import ml_lab.ui.lab_style as ls
+from ui.layout_utils import scroll_panel
 from ml_lab.ui.friendly_terms import friendly_feature_name
 from ml_lab.core.augment_experiment import compare_augmentation_effect
 from ml_lab.data.augmentation import augment_dataset_windows
@@ -63,10 +64,16 @@ class AugmentCompareWorker(QThread):
         self.allowed_spells = set(allowed_spells) if allowed_spells is not None else None
 
     def run(self) -> None:
+        if self.isInterruptionRequested():
+            return
         try:
+            if self.isInterruptionRequested():
+                return
             result = compare_augmentation_effect(
                 self.dataset_dir, val_fraction=0.2, multiplier=3, allowed_spells=self.allowed_spells
             )
+            if self.isInterruptionRequested():
+                return
             self.sig_done.emit(result)
         except Exception as exc:
             self.sig_error.emit(str(exc))
@@ -87,6 +94,8 @@ class DatasetAnalysisWorker(QThread):
         self.allowed_spells = set(allowed_spells) if allowed_spells is not None else None
 
     def run(self) -> None:
+        if self.isInterruptionRequested():
+            return
         try:
             train_samples, _val_samples, class_names = split_user_dataset_file_level(
                 self.dataset_dir, val_fraction=0.0, window_size=WINDOW_SAMPLES, step_size=STEP_SAMPLES,
@@ -94,16 +103,22 @@ class DatasetAnalysisWorker(QThread):
             )
             wins_by_class: dict[str, list[np.ndarray]] = {name: [] for name in class_names}
             for window, cls_idx in train_samples:
+                if self.isInterruptionRequested():
+                    return
                 if 0 <= cls_idx < len(class_names):
                     wins_by_class[class_names[cls_idx]].append(window)
 
             extractor = ClassicFeatureExtractor()
+            if self.isInterruptionRequested():
+                return
             X, y = extractor.extract_from_samples(train_samples)
 
             rankings: list[dict[str, Any]] = []
             if len(X) > 0 and len(np.unique(y)) >= 2:
                 rankings = compute_feature_rankings(X, y, extractor.feature_names)
 
+            if self.isInterruptionRequested():
+                return
             self.sig_done.emit({
                 "X": X,
                 "y": y,
@@ -171,6 +186,11 @@ class TabDataStudio(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
         main_layout.setSpacing(ls.SP_3)
+        self.lbl_analysis_status = QLabel()
+        self.lbl_analysis_status.setWordWrap(True)
+        self.lbl_analysis_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.lbl_analysis_status.setStyleSheet(ls.note_box(ls.ACCENT))
+        main_layout.addWidget(self.lbl_analysis_status)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
@@ -182,8 +202,8 @@ class TabDataStudio(QWidget):
         l_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
         l_layout.setSpacing(ls.SP_2)
 
-        lbl_l_title = QLabel("DANH SÁCH THẦN CHÚ")
-        lbl_l_title.setStyleSheet(ls.section_label())
+        lbl_l_title = QLabel("Danh sách thần chú")
+        lbl_l_title.setStyleSheet(ls.chart_title())
         l_layout.addWidget(lbl_l_title)
 
         self.table_classes = QTableWidget()
@@ -223,17 +243,17 @@ class TabDataStudio(QWidget):
 
         self.dist_widget = FeatureDistributionWidget()
         self.dist_widget.setStyleSheet(
-            f"background: {ls.SURFACE}; border: 1px solid {ls.BORDER}; border-radius: {ls.RADIUS_MD}px;"
+            f"background: transparent; border: none;"
         )
         dist_layout.addWidget(self.dist_widget, stretch=1)
 
         self.import_widget = FeatureImportanceWidget()
         self.import_widget.setStyleSheet(
-            f"background: {ls.SURFACE}; border: 1px solid {ls.BORDER}; border-radius: {ls.RADIUS_MD}px;"
+            f"background: transparent; border: none;"
         )
         dist_layout.addWidget(self.import_widget, stretch=1)
 
-        right_tabs.addTab(tab_dist, "Phân phối")
+        right_tabs.addTab(scroll_panel(tab_dist), "Phân phối")
 
         # Sub-tab 3: Data Augmentation Studio
         tab_aug = QWidget()
@@ -241,14 +261,14 @@ class TabDataStudio(QWidget):
         aug_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
         aug_layout.setSpacing(ls.SP_3)
 
-        lbl_aug_title = QLabel("TẠO THÊM DỮ LIỆU MẪU TỪ DỮ LIỆU ĐÃ CÓ")
-        lbl_aug_title.setStyleSheet(ls.section_label())
+        lbl_aug_title = QLabel("Tạo thêm dữ liệu mẫu từ dữ liệu đã có")
+        lbl_aug_title.setStyleSheet(ls.chart_title())
         aug_layout.addWidget(lbl_aug_title)
 
         aug_card = QFrame()
         aug_card.setObjectName("AugCard")
         aug_card.setStyleSheet(
-            f"#AugCard {{ background: {ls.SURFACE_SUNK}; border: 1px solid {ls.BORDER}; "
+            f"#AugCard {{ background: {ls.SURFACE_SUNK}; border: none; "
             f"border-radius: {ls.RADIUS_MD}px; padding: {ls.SP_3}px;}}"
         )
         ac_layout = QVBoxLayout(aug_card)
@@ -345,7 +365,7 @@ class TabDataStudio(QWidget):
         aug_layout.addWidget(lbl_aug_guide)
         aug_layout.addStretch()
 
-        right_tabs.addTab(tab_aug, "Tạo dữ liệu")
+        right_tabs.addTab(scroll_panel(tab_aug), "Tạo dữ liệu")
 
         splitter.addWidget(right_tabs)
         # Bố cục mặc định: danh sách thần chú hẹp bên trái (~320px), biểu đồ chiếm phần rộng
@@ -391,6 +411,9 @@ class TabDataStudio(QWidget):
 
         if len(counts) < 2:
             self._reset_analysis_cache()
+            self.lbl_analysis_status.setText("Chọn ít nhất 2 thần chú có dữ liệu ở tab 0 để phân tích.")
+            if self._analysis_worker is not None and self._analysis_worker.isRunning():
+                self._pending_reload = True
             return
 
         # Phân tích nặng chạy nền — không chặn UI khi mở app
@@ -398,7 +421,10 @@ class TabDataStudio(QWidget):
             self._pending_reload = True
             return
         self._pending_reload = False
+        self._reset_analysis_cache()
         self._analysis_done = False
+        self.lbl_analysis_status.setText("Đang đọc dữ liệu và phân tích đặc trưng…")
+        self.lbl_analysis_status.setStyleSheet(ls.note_box(ls.ACCENT))
         # Giữ reference cũ để tránh orphan trước khi gán mới
         old_worker = self._analysis_worker
         if old_worker is not None:
@@ -413,10 +439,19 @@ class TabDataStudio(QWidget):
         self._analysis_worker = DatasetAnalysisWorker(self.dataset_dir, allowed_spells=self._get_allowed())
         self._analysis_worker.sig_done.connect(self._on_analysis_done)
         self._analysis_worker.sig_error.connect(self._on_analysis_error)
+        self._analysis_worker.finished.connect(self._analysis_stopped)
         self._analysis_worker.start()
+
+    def _analysis_stopped(self) -> None:
+        if getattr(self.window(), "_closing", False):
+            return
+        if self._pending_reload:
+            self._pending_reload = False
+            self.reload_dataset()
 
     def _reset_analysis_cache(self) -> None:
         self._analysis_done = True
+        self.btn_run_aug.setEnabled(False)
         self._cached_X = np.empty((0, 0))
         self._cached_y = np.empty((0,), dtype=np.int64)
         self._cached_class_names = []
@@ -430,15 +465,20 @@ class TabDataStudio(QWidget):
         self.dist_widget.set_distribution_data("", {})
 
     def _on_analysis_done(self, result: dict[str, Any]) -> None:
+        if getattr(self.window(), "_closing", False):
+            return
+        if self._pending_reload:
+            return
         self._analysis_done = True
+        self.lbl_analysis_status.setText(f"Đã phân tích {result['total_windows']} cửa sổ dữ liệu.")
+        self.btn_run_aug.setEnabled(True)
         self._cached_class_names = result["class_names"]
         self._cached_wins_by_class = result["wins_by_class"]
         self._total_windows = result["total_windows"]
         X, y = result["X"], result["y"]
         if len(X) == 0 or len(np.unique(y)) < 2:
-            if self._pending_reload:
-                self._pending_reload = False
-                self.reload_dataset()
+            self._reset_analysis_cache()
+            self.lbl_analysis_status.setText("Chưa đủ cửa sổ hợp lệ ở 2 lớp. Kiểm tra file CSV rồi bấm Tải lại dữ liệu.")
             return
 
         self._cached_X = X
@@ -461,37 +501,17 @@ class TabDataStudio(QWidget):
 
         if self.combo_feat.count() > 0:
             self._on_feature_selected(0)
-        if self._pending_reload:
-            self._pending_reload = False
-            self.reload_dataset()
 
     def _on_analysis_error(self, msg: str) -> None:
-        self._analysis_done = True
+        if getattr(self.window(), "_closing", False):
+            return
+        self._reset_analysis_cache()
+        self._analysis_done = False
+        self.lbl_analysis_status.setText(
+            f"Không phân tích được dữ liệu: {msg}\nKhắc phục lỗi rồi bấm Tải lại dữ liệu để thử lại."
+        )
+        self.lbl_analysis_status.setStyleSheet(ls.note_box(ls.DANGER))
         log.warning("Không thể phân tích dataset trong Data Studio: %s", msg)
-        if self._pending_reload:
-            self._pending_reload = False
-            self.reload_dataset()
-
-    def closeEvent(self, event: Any) -> None:
-        # Chờ worker nền kết thúc để tránh crash khi teardown Qt
-        for worker in (self._analysis_worker, self._compare_worker):
-            if worker is not None and worker.isRunning():
-                try:
-                    worker.blockSignals(True)
-                except Exception:
-                    pass
-                worker.wait(4000)
-        super().closeEvent(event)
-
-    def wait_for_workers(self, timeout_ms: int = 4000) -> None:
-        """API cho MlLabWindow gọi trước khi destroy — chờ thread an toàn."""
-        for worker in (self._analysis_worker, self._compare_worker):
-            if worker is not None and worker.isRunning():
-                try:
-                    worker.blockSignals(True)
-                except Exception:
-                    pass
-                worker.wait(timeout_ms)
 
     def _on_feature_selected(self, idx: int) -> None:
         if idx < 0 or len(self._cached_X) == 0:
@@ -557,6 +577,8 @@ class TabDataStudio(QWidget):
         self._compare_worker.start()
 
     def _on_compare_done(self, result: dict[str, Any]) -> None:
+        if getattr(self.window(), "_closing", False):
+            return
         self.btn_run_compare.setEnabled(True)
         self.btn_run_compare.setText("Chạy thử: dữ liệu gốc vs dữ liệu nhân bản")
         self.compare_bars.set_results(result["baseline_val"], result["augmented_val"])
@@ -567,6 +589,8 @@ class TabDataStudio(QWidget):
         )
 
     def _on_compare_error(self, msg: str) -> None:
+        if getattr(self.window(), "_closing", False):
+            return
         self.btn_run_compare.setEnabled(True)
         self.btn_run_compare.setText("Chạy thử: dữ liệu gốc vs dữ liệu nhân bản")
         QMessageBox.warning(self, "Lỗi Thí Nghiệm", f"Không thể hoàn tất thí nghiệm so sánh:\n{msg}")

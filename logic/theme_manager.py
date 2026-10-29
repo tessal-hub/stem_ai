@@ -1,14 +1,14 @@
 """
-logic/theme_manager.py — Quản lý theme toàn cục ứng dụng (Hỗ trợ Light Mode & Dark Mode).
+logic/theme_manager.py — Quản lý giao diện sáng/tối; tương thích cấu hình theme.
 """
 
 from PyQt6.QtCore import QObject, pyqtSignal
-from ui.palettes import LIGHT_PALETTE, DARK_PALETTE, Palette
+from ui.palettes import DARK_PALETTE, LIGHT_PALETTE, Palette
 
 
 class ThemeManager(QObject):
     """
-    Manager cho theme ứng dụng (Light Mode / Dark Mode).
+    Manager cho giao diện sáng/tối của ứng dụng.
     Phát signal theme_changed(str) khi đổi theme thành công.
     """
     theme_changed = pyqtSignal(str)
@@ -34,10 +34,9 @@ class ThemeManager(QObject):
         return self._current_theme == "dark"
 
     def get_palette(self) -> Palette:
-        if self.is_dark:
-            return DARK_PALETTE
-        return LIGHT_PALETTE
+        return DARK_PALETTE if self._current_theme == "dark" else LIGHT_PALETTE
 
 
 # Singleton instance toàn cục
 theme_manager = ThemeManager()
+

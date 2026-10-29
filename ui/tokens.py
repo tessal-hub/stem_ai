@@ -9,80 +9,86 @@ from PyQt6.QtCore import QSize
 
 from ui.palettes import LIGHT_PALETTE
 
-# ── Primitive Palette ────────────────────────────────────────────────
+# ── Primitive Palette (Material You M3 Baseline) ──────────────────────────
 # Do not use these directly in QSS or page code.
 # Reference semantic tokens below instead.
 
-_BLUE_500    = "#007AFF"   # Apple system blue
-_GREEN_500   = "#34C759"   # Apple system green
-_RED_500     = "#FF3B30"   # Apple system red
-_ORANGE_500  = "#FF9500"   # Apple system orange
-_YELLOW_500  = "#FFCC00"   # Apple system yellow
-_INDIGO_500  = "#5856D6"   # Apple system indigo
+_M3_PRIMARY         = "#4E58A9"   # M3 Primary (Indigo)
+_M3_PRIMARY_CONTAIN = "#DFE0FF"   # M3 Primary Container
+_M3_ON_PRIMARY_CONT = "#0A1365"   # M3 On-Primary Container
+_M3_SUCCESS         = "#1A6C39"   # M3 Success
+_M3_SUCCESS_CONTAIN = "#A5F5B4"   # M3 Success Container
+_M3_ERROR           = "#BA1A1A"   # M3 Error
+_M3_ERROR_CONTAIN   = "#FFDAD6"   # M3 Error Container
+_M3_WARNING         = "#875200"   # M3 Warning
+_M3_WARNING_CONTAIN = "#FFDDB8"   # M3 Warning Container
 
-_GRAY_50     = "#F2F2F7"   # systemBackground
-_GRAY_100    = "#E5E5EA"   # opaqueSeparator
-_GRAY_200    = "#C7C7CC"   # systemGray4
-_GRAY_300    = "#AEAEB2"   # systemGray3
-_GRAY_400    = "#8E8E93"   # systemGray
-_GRAY_600    = "#3A3A3C"   # label secondary (dark)
-_GRAY_900    = "#1C1C1E"   # label primary
+_M3_SURFACE         = "#FAF8FD"   # M3 Surface Canvas
+_M3_SURFACE_LOW     = "#F5F2FA"   # M3 Surface Container Low
+_M3_SURFACE_CONT    = "#EFEBF4"   # M3 Surface Container
+_M3_SURFACE_HIGH    = "#E9E6EE"   # M3 Surface Container High
+_M3_SURFACE_HIGHEST = "#E3DFE8"   # M3 Surface Container Highest / Divider
+_M3_OUTLINE         = "#71717A"   # M3 Outline / Muted (WCAG AA)
+_M3_OUTLINE_VARIANT = "#CAC4D0"   # M3 Outline Variant
 
-_WHITE       = "#FFFFFF"
-_BLACK       = "#000000"
+_M3_ON_SURFACE      = "#1B1B21"   # M3 On-Surface (Ink)
+_M3_ON_SURF_VARIANT = "#46464F"   # M3 On-Surface Variant (Body)
+
+_WHITE              = "#FFFFFF"
+_BLACK              = "#000000"
 
 # ── Semantic Color Tokens ────────────────────────────────────────────
-# Background surfaces (light mode, Apple layering model)
-SURFACE_0        = _GRAY_50     # outermost app background
-SURFACE_1        = _WHITE       # card / grouped content background
-SURFACE_2        = _GRAY_50     # secondary grouped content
+# ── Semantic Color Tokens (Material You M3) ──────────────────────────
+# Background surfaces (M3 Tonal Layering)
+SURFACE_0        = LIGHT_PALETTE.SURFACE_SECONDARY  # M3 Surface (#FAF8FD)
+SURFACE_1        = LIGHT_PALETTE.SURFACE_PRIMARY    # M3 Surface Container Lowest (#FFFFFF)
+SURFACE_2        = LIGHT_PALETTE.SURFACE_TERTIARY   # M3 Surface Container (#EFEBF4)
 SURFACE_PRIMARY  = SURFACE_1
 SURFACE_SECONDARY = SURFACE_0
-SURFACE_TERTIARY  = _GRAY_50
+SURFACE_TERTIARY  = SURFACE_2
 
-# Text hierarchy — aligned to DESIGN.md Bench (ink/body/muted) for AA contrast
-TEXT_PRIMARY     = "#0f172a"    # Ink — 10px tracked caps still legible
-TEXT_SECONDARY   = "#334155"    # Body — 10.35:1 on white
-TEXT_TERTIARY    = "#5b6b7f"    # Muted — 5.45:1 (AA) — for hints/status, not placeholder
-TEXT_MUTED       = "#5b6b7f"
-TEXT_BODY        = "#0f172a"
+# Text hierarchy — M3 On-Surface & On-Surface Variant (high contrast, WCAG AAA/AA)
+TEXT_PRIMARY     = LIGHT_PALETTE.TEXT_PRIMARY       # M3 On-Surface (#1B1B21, 16.2:1)
+TEXT_SECONDARY   = LIGHT_PALETTE.TEXT_SECONDARY     # M3 On-Surface Variant (#46464F, 8.5:1)
+TEXT_TERTIARY    = LIGHT_PALETTE.TEXT_TERTIARY      # M3 Outline / Muted (#767680, 4.8:1)
+TEXT_MUTED       = TEXT_TERTIARY
+TEXT_BODY        = TEXT_PRIMARY
 
-# Interactive accent — calibrated blue (DESIGN.md / lab_style)
-PRIMARY_COLOR    = "#0668d1"    # 5.37:1 on white
-PRIMARY_LIGHT    = "rgba(10, 122, 255, 0.07)"
-PRIMARY_DARK     = "#0557b0"
+# Interactive accent — Material 3 Baseline Tech Indigo
+PRIMARY_COLOR    = LIGHT_PALETTE.PRIMARY            # #4E58A9 (5.7:1 on white)
+PRIMARY_LIGHT    = LIGHT_PALETTE.PRIMARY_LIGHT      # #DFE0FF (M3 Primary Container)
+PRIMARY_DARK     = LIGHT_PALETTE.PRIMARY_DARK       # #38428B (Pressed / Active)
 
 ACCENT           = PRIMARY_COLOR
 ACCENT_DARK      = PRIMARY_DARK
 ACCENT_TEXT      = _WHITE
 
-# Semantic status — calibrated to DESIGN.md / WCAG AA (≥4.5:1 on white)
-SUCCESS          = "#1e7a46"   # 5.35:1 on white
-DANGER           = "#dc2626"   # 4.54:1 on white
-WARNING          = "#b45309"   # 4.56:1 on white
+# Semantic status — M3 semantic tokens
+SUCCESS          = LIGHT_PALETTE.STATUS_SUCCESS     # #1A6C39
+DANGER           = LIGHT_PALETTE.STATUS_ERROR       # #BA1A1A
+WARNING          = LIGHT_PALETTE.STATUS_WARNING     # #875200
 
-STATUS_SUCCESS   = "#1e7a46"
-STATUS_WARNING   = "#b45309"
-STATUS_ERROR     = "#dc2626"
+STATUS_SUCCESS   = SUCCESS
+STATUS_WARNING   = WARNING
+STATUS_ERROR     = DANGER
 
-# Borders — tonal ink-based (DESIGN.md)
-BORDER_COLOR     = "#e4e9f0"
-BORDER_LIGHT     = "rgba(15, 23, 42, 0.06)"
-BORDER_MID       = "#cdd6e1"
+# Borders — M3 Outline Variant & Dividers
+BORDER_COLOR     = LIGHT_PALETTE.BORDER             # #E3DFE8
+BORDER_LIGHT     = LIGHT_PALETTE.BORDER_LIGHT       # #CAC4D0
+BORDER_MID       = LIGHT_PALETTE.BORDER_LIGHT       # #CAC4D0
 
-# Fill colors — tonal sunk layer (DESIGN.md)
-FILL_PRIMARY     = "#f1f5f9"
-FILL_SECONDARY   = "rgba(15, 23, 42, 0.06)"
-FILL_TERTIARY    = "rgba(15, 23, 42, 0.04)"
+# Fill colors — M3 Surface Containers
+FILL_PRIMARY     = LIGHT_PALETTE.SURFACE_TERTIARY   # #EFEBF4
+FILL_SECONDARY   = "rgba(78, 88, 169, 0.08)"        # 8% Primary State Layer
+FILL_TERTIARY    = "rgba(78, 88, 169, 0.05)"
 
-# Surface states — bench layering
-HOVER_BG         = "rgba(10, 122, 255, 0.07)"
+# Surface states
+HOVER_BG         = LIGHT_PALETTE.HOVER_BG
 BG_WHITE         = _WHITE
-BG_LIGHT         = "#f6f7f9"
-BG_DARK          = "#16181d"   # terminal dark (DESIGN.md)
+BG_LIGHT         = LIGHT_PALETTE.SURFACE_SECONDARY
+BG_DARK          = LIGHT_PALETTE.TERM_BG            # #191C20
 
 # Legacy aliases — keep these pointing to new semantic tokens
-# (existing page files import these names)
 MAC_BG                = SURFACE_0
 MAC_SURFACE_SOLID     = SURFACE_1
 MAC_SIDEBAR_BG        = SURFACE_0
@@ -104,7 +110,7 @@ SHADOW_LIGHT          = "transparent"
 SHADOW_MEDIUM         = "transparent"
 SHADOW_DARK           = "transparent"
 BORDER                = BORDER_COLOR
-TERM_FG               = "#d7dde6"    # DESIGN.md terminal_fg
+TERM_FG               = LIGHT_PALETTE.TERM_FG
 TERM_BG               = BG_DARK
 
 SETTINGS_ACCENT       = PRIMARY_COLOR
@@ -113,23 +119,25 @@ SETTINGS_HOVER_BG     = PRIMARY_LIGHT
 
 WAND_ACCENT           = PRIMARY_COLOR
 
-# ── Typography ─────────────────────────────────────────────────────────────
-APP_FONT_STACK = "'Geist', 'Plus Jakarta Sans', 'Be Vietnam Pro', 'SF Pro Display', 'Segoe UI', sans-serif"
-TITLE_FONT_STACK = "'PP Editorial New', 'Clash Display', 'Geist', 'Be Vietnam Pro', sans-serif"
-MONO_FONT_STACK = "'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace"
+# ── Typography (Material You M3) ──────────────────────────────────────────
+APP_FONT_STACK = "'Segoe UI', 'Google Sans', 'Roboto', 'Plus Jakarta Sans', 'Be Vietnam Pro', sans-serif"
+TITLE_FONT_STACK = "'Segoe UI', 'Google Sans', 'Roboto', 'Plus Jakarta Sans', 'Be Vietnam Pro', sans-serif"
+MONO_FONT_STACK = "'Cascadia Code', 'JetBrains Mono', 'Roboto Mono', Consolas, monospace"
 
-# ── Geometry & Border Radius — aligned to DESIGN.md / lab_style (6/8/10/999)
-RADIUS_XS   = 6    # checkboxes, small tags
-RADIUS_SM   = 6    # chips (lab RADIUS_SM)
-RADIUS_MD   = 8    # buttons, inputs (lab RADIUS_MD)
-RADIUS_LG   = 10   # standard cards (lab RADIUS_LG)
-RADIUS_XL   = 10   # large hero cards — capped at 10 per Do's
-RADIUS_FULL = 999  # pill shape
+# ── Geometry & Border Radius (Material You M3 Shape Scale) ───────────────
+# Spec: extra-small 4 / small 8 / medium 12 / large 16 / extra-large 28 / full
+RADIUS_XS   = 4    # tooltips, tags, dense indicators
+RADIUS_SM   = 8    # chips, text inputs, menus
+RADIUS_MD   = 12   # compact cards, dialog elements
+RADIUS_LG   = 16   # standard M3 cards & surface containers
+RADIUS_XL   = 28   # large hero cards, modal dialogs (M3 extra-large)
+RADIUS_FULL = 16   # M3 pill (stadium) — Qt discards corners if radius > h/2, so ≤16 works for ≥32px buttons
+RADIUS_BADGE = 11  # M3 pill badge for status labels (~22-24px height)
 
 RADIUS_CARD = f"{RADIUS_LG}px"
-RADIUS_BUTTON = f"{RADIUS_SM}px"
+RADIUS_BUTTON = f"{RADIUS_FULL}px"
 RADIUS_INPUT = f"{RADIUS_SM}px"
-RADIUS_PILL = "999px"
+RADIUS_PILL = f"{RADIUS_FULL}px"
 
 CROP_REGION = (0, 122, 255, 40)
 
@@ -202,14 +210,21 @@ CARD_OUTER_RADIUS = RADIUS_CARD
 V_SURFACE_DEFAULT = SURFACE_0
 V_SURFACE_RAISED = SURFACE_1
 
-BADGE_RADIUS = "999px"
+BADGE_RADIUS = f"{RADIUS_BADGE}px"
 CARD_BEZEL = 4
 
-RARITY_NONE = "#94A3B8"
-RARITY_COM = "#10B981"
-RARITY_UNC = "#3B82F6"
-RARITY_RARE = "#8B5CF6"
-RARITY_EPIC = "#F59E0B"
+# Material You M3 Tonal Containers & On-Container text for rarity badges
+RARITY_NONE = "#EFEBF4"
+RARITY_COM = "#DFE0FF"
+RARITY_UNC = "#E8DEF8"
+RARITY_RARE = "#A5F5B4"
+RARITY_EPIC = "#FFDDB8"
+
+RARITY_TEXT_NONE = "#46464F"
+RARITY_TEXT_COM = "#0A1365"
+RARITY_TEXT_UNC = "#1D192B"
+RARITY_TEXT_RARE = "#0A3B1C"
+RARITY_TEXT_EPIC = "#613800"
 
 MARGIN_COMFORTABLE = SPACE_PAGE
 SPACING_LG = SPACE_PAGE
@@ -239,17 +254,17 @@ STYLE_HOME_MAIN_CONTAINER = STYLE_PAGE_MAIN_CONTAINER
 STYLE_STATISTICS_MAIN_CONTAINER = STYLE_PAGE_MAIN_CONTAINER
 STYLE_SETTING_MAIN_CONTAINER = STYLE_PAGE_MAIN_CONTAINER
 
-STYLE_BTN_PRIMARY = f"background-color: {PRIMARY_COLOR}; color: {ACCENT_TEXT}; border-radius: {RADIUS_SM}px; font-weight: 600;"
+STYLE_BTN_PRIMARY = f"background-color: {PRIMARY_COLOR}; color: {ACCENT_TEXT}; border-radius: {RADIUS_FULL}px; font-weight: 600; padding: 8px 20px; border: none;"
 STYLE_BTN_START = STYLE_BTN_PRIMARY
 
-STYLE_BTN_BASE = f"background-color: rgba(6, 104, 209, 0.10); color: {PRIMARY_COLOR}; border-radius: {RADIUS_SM}px; font-weight: 600;"
-STYLE_BTN_STOP = f"background-color: rgba(220, 38, 38, 0.10); color: #b91c1c; border-radius: {RADIUS_SM}px;"
-STYLE_BTN_DANGER_OUTLINE = STYLE_BTN_STOP
+STYLE_BTN_BASE = f"background-color: {PRIMARY_LIGHT}; color: #0A1365; border-radius: {RADIUS_FULL}px; font-weight: 600; padding: 8px 18px; border: none;"
+STYLE_BTN_STOP = f"background-color: #FFDAD6; color: #93000A; border-radius: {RADIUS_FULL}px; font-weight: 600; padding: 8px 18px; border: none;"
+STYLE_BTN_DANGER_OUTLINE = f"background-color: transparent; border: 1px solid #BA1A1A; color: #BA1A1A; border-radius: {RADIUS_FULL}px; font-weight: 600; padding: 7px 18px;"
 
-STYLE_BTN_OUTLINE = f"background-color: {FILL_TERTIARY}; color: {TEXT_SECONDARY}; border-radius: {RADIUS_SM}px;"
+STYLE_BTN_OUTLINE = f"background-color: transparent; border: 1px solid #767680; color: {PRIMARY_COLOR}; border-radius: {RADIUS_FULL}px; font-weight: 600; padding: 7px 18px;"
 STYLE_BTN_SNIP = STYLE_BTN_OUTLINE
 STYLE_BTN_BACK = STYLE_BTN_BASE
-STYLE_BTN_SMALL = f"border-radius: {RADIUS_SM}px;"
+STYLE_BTN_SMALL = f"border-radius: {RADIUS_FULL}px; padding: 4px 12px;"
 
 STYLE_CARD = f"background-color: {SURFACE_1}; border: 1px solid {BORDER_COLOR}; border-radius: {RADIUS_LG}px;"
 STYLE_RECORD_GRAPH_CARD = STYLE_CARD
@@ -258,7 +273,7 @@ STYLE_SETTING_CARD = STYLE_CARD
 STYLE_WAND_TERMINAL_CARD = STYLE_CARD
 STYLE_WAND_STATS_CARD = STYLE_CARD
 
-STYLE_RECORD_COMBO = f"background-color: {SURFACE_0}; border: none; border-radius: {RADIUS_SM}px;"
+STYLE_RECORD_COMBO = f"background-color: {SURFACE_TERTIARY}; border: 1px solid {BORDER_LIGHT}; border-radius: {RADIUS_SM}px; padding: 6px 12px; color: {TEXT_PRIMARY};"
 STYLE_WAND_COMBO = STYLE_RECORD_COMBO
 STYLE_SETTING_INPUT = STYLE_RECORD_COMBO
 
@@ -291,5 +306,5 @@ STYLE_RECORD_STATUS_TEMPLATE = "font-family: {app_font}; color: {color}; font-we
     "{app_font}", APP_FONT_STACK)
 STATUS_LABEL_STYLE_TEMPLATE = STYLE_RECORD_STATUS_TEMPLATE
 STYLE_WAND_FLASH_STATUS = STYLE_RECORD_STATUS_TEMPLATE
-STYLE_SETTINGS_HINT_TEMPLATE = "font-family: 'Geist', sans-serif; color: {color}; font-size: 11px; line-height: 1.5;"
-STYLE_WAND_EMPTY_ROW_TEMPLATE = "font-family: 'Geist', sans-serif; color: {color}; font-size: 11px; font-style: italic; padding: 12px;"
+STYLE_SETTINGS_HINT_TEMPLATE = f"font-family: {APP_FONT_STACK}; color: {{color}}; font-size: 11px; line-height: 1.5;"
+STYLE_WAND_EMPTY_ROW_TEMPLATE = f"font-family: {APP_FONT_STACK}; color: {{color}}; font-size: 11px; font-style: italic; padding: 12px;"

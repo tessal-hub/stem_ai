@@ -27,9 +27,6 @@ from ml_lab.data.window_config import (
     WINDOW_SAMPLES,
 )
 
-WINDOW_SIZE = WINDOW_SAMPLES
-
-
 def window_motion_score(window: np.ndarray) -> float:
     """
     Điểm chuyển động M của 1 cửa sổ (đơn vị vật lý g/dps, khớp firmware).

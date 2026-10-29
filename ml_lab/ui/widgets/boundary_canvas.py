@@ -277,5 +277,5 @@ class DecisionBoundaryCanvas(QWidget):
         painter.drawText(
             QRectF(0, 0, w, h),
             Qt.AlignmentFlag.AlignCenter,
-            "Chưa có dữ liệu huấn luyện.\nChọn thuật toán ở tab Huấn luyện rồi bấm 'Huấn luyện & đánh giá'.",
+            "Chưa có dữ liệu huấn luyện.\nChọn thuật toán ở tab Huấn luyện rồi bấm 'Huấn luyện và đánh giá'.",
         )

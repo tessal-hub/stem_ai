@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import numpy as np
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QDialog,
     QFrame,
@@ -30,6 +31,7 @@ from ui.i18n_bridge import tr_ui
 from ui.tokens import (
     ACCENT,
     APP_FONT_STACK,
+    RADIUS_LG,
     RADIUS_MD,
     SUCCESS,
     WARNING,
@@ -51,7 +53,7 @@ class SimilarityMatrixDialog(QDialog):
         self._matrix = matrix
         self._conflicts = conflicts
 
-        self.setWindowTitle("🔍 STEM AI — Ma Trận Tương Đồng Thần Chú (Confusion Matrix)")
+        self.setWindowTitle("STEM AI — Ma Trận Tương Đồng Thần Chú (Confusion Matrix)")
         self.setMinimumSize(780, 560)
         self.resize(860, 620)
         self.setModal(True)
@@ -73,8 +75,21 @@ class SimilarityMatrixDialog(QDialog):
         header = QHBoxLayout()
         header.setSpacing(12)
 
-        icon_lbl = QLabel("🔍")
-        icon_lbl.setStyleSheet("font-size: 28px;")
+        icon_lbl = QLabel()
+        icon_lbl.setFixedSize(32, 32)
+        icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        from PyQt6.QtSvg import QSvgRenderer
+        from PyQt6.QtGui import QPixmap, QPainter
+        from ui.asset_utils import resolve_asset_path
+        renderer = QSvgRenderer(resolve_asset_path("assets/icon/statistic.svg"))
+        pix = QPixmap(32, 32)
+        pix.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pix)
+        renderer.render(painter)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+        painter.fillRect(pix.rect(), QColor(p.PRIMARY))
+        painter.end()
+        icon_lbl.setPixmap(pix)
         header.addWidget(icon_lbl)
 
         title_box = QVBoxLayout()
@@ -92,26 +107,26 @@ class SimilarityMatrixDialog(QDialog):
         # 2. Conflict Banner / Status Alert Card
         alert_card, a_layout = make_card(margins=(16, 12, 16, 12), spacing=6)
         if self._conflicts:
-            alert_header = QLabel(f"⚠️ Phát hiện {len(self._conflicts)} cặp thần chú có độ tương đồng cao (>75%):")
+            alert_header = QLabel(f"● Phát hiện {len(self._conflicts)} cặp thần chú có độ tương đồng cao (>75%):")
             alert_header.setStyleSheet(f"font-weight: 700; font-size: 13px; color: {self._p.STATUS_ERROR};")
             a_layout.addWidget(alert_header)
 
             for sp_a, sp_b, score in self._conflicts[:3]:
                 pct = int(round(score * 100))
-                lbl_c = QLabel(f"• <b>{sp_a}</b> ⟷ <b>{sp_b}</b>: giống nhau <b>{pct}%</b>. <i>(Khuyến nghị: Thử đổi hướng xuất phát hoặc góc vung tay để AI phân biệt sắc nét hơn)</i>")
+                lbl_c = QLabel(f"• <b>{sp_a}</b> & <b>{sp_b}</b>: giống nhau <b>{pct}%</b>. <i>(Khuyến nghị: Thử đổi hướng xuất phát hoặc góc vung tay để AI phân biệt sắc nét hơn)</i>")
                 lbl_c.setWordWrap(True)
                 lbl_c.setStyleSheet(f"font-size: 12px; color: {p.TEXT_PRIMARY}; margin-left: 6px;")
                 a_layout.addWidget(lbl_c)
         else:
             if len(self._spell_names) >= 2:
-                alert_header = QLabel("✅ Bộ thần chú có độ phân biệt xuất sắc!")
-                alert_header.setStyleSheet("font-weight: 700; font-size: 13px; color: #28A745;")
+                alert_header = QLabel("● Bộ thần chú có độ phân biệt xuất sắc!")
+                alert_header.setStyleSheet(f"font-weight: 700; font-size: 13px; color: {p.STATUS_SUCCESS};")
                 lbl_ok = QLabel("Tất cả các thần chú đã đăng ký đều có quỹ đạo cử chỉ khác biệt rõ ràng, AI sẽ nhận diện cực kỳ chính xác.")
                 lbl_ok.setStyleSheet(f"font-size: 12px; color: {p.TEXT_PRIMARY};")
                 a_layout.addWidget(alert_header)
                 a_layout.addWidget(lbl_ok)
             else:
-                alert_header = QLabel("ℹ️ Cần tối thiểu 2 thần chú có dữ liệu để lập ma trận so sánh.")
+                alert_header = QLabel("● Cần tối thiểu 2 thần chú có dữ liệu để lập ma trận so sánh.")
                 alert_header.setStyleSheet(f"font-weight: 600; font-size: 12px; color: {p.TEXT_SECONDARY};")
                 a_layout.addWidget(alert_header)
 
@@ -148,12 +163,12 @@ class SimilarityMatrixDialog(QDialog):
         legend_layout = QHBoxLayout()
         legend_layout.setSpacing(14)
 
-        leg1 = QLabel("🟢 < 50%: Tách biệt rất tốt")
-        leg1.setStyleSheet("font-size: 11px; font-weight: 600; color: #28A745;")
-        leg2 = QLabel("🟡 50% - 75%: Tương đồng vừa phải")
-        leg2.setStyleSheet("font-size: 11px; font-weight: 600; color: #FF9500;")
-        leg3 = QLabel("🔴 > 75%: Nguy cơ nhầm lẫn")
-        leg3.setStyleSheet("font-size: 11px; font-weight: 700; color: #FF3B30;")
+        leg1 = QLabel("● < 50%: Tách biệt rất tốt")
+        leg1.setStyleSheet(f"font-size: 11px; font-weight: 600; color: {p.STATUS_SUCCESS};")
+        leg2 = QLabel("● 50% - 75%: Tương đồng vừa phải")
+        leg2.setStyleSheet(f"font-size: 11px; font-weight: 600; color: {p.STATUS_WARNING};")
+        leg3 = QLabel("● > 75%: Nguy cơ nhầm lẫn")
+        leg3.setStyleSheet(f"font-size: 11px; font-weight: 700; color: {p.STATUS_ERROR};")
 
         legend_layout.addWidget(leg1)
         legend_layout.addWidget(leg2)
@@ -170,7 +185,6 @@ class SimilarityMatrixDialog(QDialog):
 
     def _style_table_cells(self) -> None:
         n = len(self._spell_names)
-        is_dark = self._is_dark
         p = self._p
 
         for i in range(n):
@@ -180,39 +194,29 @@ class SimilarityMatrixDialog(QDialog):
                     continue
                 val = float(self._matrix[i, j]) if self._matrix.size > 0 else 0.0
                 if i == j:
-                    # Diagonal
-                    bg = "rgba(0, 122, 255, 0.15)"
-                    color = "#007AFF"
+                    # Đường chéo chính: Tương đồng bản thân — M3 Primary
+                    text_color = QColor(p.PRIMARY)
                 else:
                     if val >= 0.75:
-                        bg = "rgba(255, 59, 48, 0.22)"
-                        color = "#FF3B30"
+                        # Nguy cơ xung đột cao — M3 Error
+                        text_color = QColor(p.STATUS_ERROR)
                     elif val >= 0.50:
-                        bg = "rgba(255, 149, 0, 0.18)"
-                        color = "#FF9500"
+                        # Tương đồng trung bình — M3 Warning
+                        text_color = QColor(p.STATUS_WARNING)
                     else:
-                        bg = "rgba(52, 199, 89, 0.15)"
-                        color = "#28A745"
+                        # Phân biệt rõ — M3 Success
+                        text_color = QColor(p.STATUS_SUCCESS)
 
-                # Cell font and background
                 font = item.font()
                 font.setBold(i == j or val >= 0.75)
                 item.setFont(font)
-                if i == j:
-                    item.setForeground(Qt.GlobalColor.darkBlue if not is_dark else Qt.GlobalColor.cyan)
-                elif val >= 0.75:
-                    item.setForeground(Qt.GlobalColor.darkRed if not is_dark else Qt.GlobalColor.red)
-                elif val >= 0.50:
-                    item.setForeground(Qt.GlobalColor.darkYellow if not is_dark else Qt.GlobalColor.yellow)
-                else:
-                    item.setForeground(Qt.GlobalColor.darkGreen if not is_dark else Qt.GlobalColor.green)
+                item.setForeground(text_color)
 
     def _apply_theme(self) -> None:
         p = self._p
-        is_dark = self._is_dark
-        border_color = "rgba(255, 255, 255, 0.12)" if is_dark else "rgba(0, 0, 0, 0.08)"
         bg_dialog = p.SURFACE_SECONDARY
         card_bg = p.SURFACE_PRIMARY
+        border_color = p.BORDER
 
         self.setStyleSheet(f"""
             QDialog {{
@@ -222,8 +226,8 @@ class SimilarityMatrixDialog(QDialog):
             QTableWidget {{
                 background-color: {card_bg};
                 border: 1px solid {border_color};
-                border-radius: 10px;
-                gridline-color: {border_color};
+                border-radius: {RADIUS_MD}px;
+                gridline-color: {p.BORDER_LIGHT};
                 font-size: 13px;
                 color: {p.TEXT_PRIMARY};
             }}
@@ -238,6 +242,6 @@ class SimilarityMatrixDialog(QDialog):
             QFrame#Card {{
                 background-color: {card_bg};
                 border: 1px solid {border_color};
-                border-radius: 10px;
+                border-radius: {RADIUS_LG}px;
             }}
         """)

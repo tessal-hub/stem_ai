@@ -1,16 +1,21 @@
 """
 ml_lab/core/pipeline.py — Pipeline Huấn Luyện ML Cổ Điển & Đánh Giá Không Rò Rỉ.
 
-Hỗ trợ 15 thuật toán:
+Hỗ trợ 14 thuật toán:
 - KNN
 - Decision Tree
 - Random Forest
+- Extra Trees
 - Gradient Boosting (GBDT)
+- AdaBoost
 - SVM
 - Logistic Regression
+- Ridge Classifier
+- SGD Classifier
 - Gaussian Naive Bayes (GNB)
 - Linear Discriminant Analysis (LDA)
 - Multi-Layer Perceptron (MLP Neural Net)
+- Nearest Centroid
 
 Đảm bảo nguyên tắc:
 1. Không rò rỉ dữ liệu (Scaler fit strictly on Train only).
@@ -120,6 +125,8 @@ class TrainClassicResult:
     standby_thresholds: tuple[float, float] = (0.12, 20.0) # (acc_std_sum_max, gyr_std_sum_max) — khớp firmware
     val_samples: Any | None = None     # list[(cửa sổ 64x6, nhãn)] — phục vụ inspector mẫu lỗi
     val_predictions: Any | None = None # mảng dự đoán trên tập validation
+    feature_means: list[float] = field(default_factory=list)
+    feature_ranges: list[tuple[float, float]] = field(default_factory=list)
 
     @property
     def hyperparams(self) -> dict[str, Any]:
@@ -411,6 +418,11 @@ def train_classic_model(
         confusion_matrix=cm,
         class_names=list(class_names),
         feature_names=list(feature_names),
+        feature_means=np.mean(X_train, axis=0).astype(float).tolist(),
+        feature_ranges=[
+            (float(lo), float(hi))
+            for lo, hi in zip(np.min(X_train, axis=0), np.max(X_train, axis=0))
+        ],
         pca_result=pca_res,
         benchmark=bench,
         train_time_ms=train_time_ms,

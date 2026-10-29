@@ -56,7 +56,7 @@ class TabHistory(QWidget):
         h_layout.addStretch()
 
         btn_clear = QPushButton("Xóa tất cả")
-        btn_clear.setStyleSheet(f"QPushButton {{ padding: 6px 12px; font-weight: 600; border-radius: {ls.RADIUS_SM}px; background: {ls.DANGER_TINT}; color: {ls.DANGER}; border: none; }} QPushButton:hover {{ background: rgba(220, 38, 38, 0.15); }}")
+        btn_clear.setStyleSheet(f"QPushButton {{ padding: 6px 12px; font-weight: 600; border-radius: {ls.RADIUS_SM}px; background: {ls.DANGER_TINT}; color: {ls.DANGER}; border: none; }} QPushButton:hover {{ background: {ls.DANGER_TINT_STRONG}; color: {ls.DANGER_TEXT}; }}")
         btn_clear.clicked.connect(self._clear_history)
         h_layout.addWidget(btn_clear)
 
@@ -136,7 +136,7 @@ class TabHistory(QWidget):
             acc_item = QTableWidgetItem(f"{val_acc*100:.1f}%")
             acc_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             acc_item.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-            acc_item.setBackground(QColor(52, 199, 89, 45))
+            acc_item.setBackground(QColor(ls.SUCCESS_TINT_HEX))
             self.table.setItem(r_idx, 2, acc_item)
 
             cv_item = QTableWidgetItem(f"{cv_mean*100:.1f}%")

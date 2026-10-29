@@ -59,7 +59,7 @@ class UdpWorker(QThread):
             self._sock.settimeout(_SOCKET_TIMEOUT_S)
             self._sock.bind((self.host, self.port))
 
-            while self._is_running:
+            while self._is_running and not self.isInterruptionRequested():
                 try:
                     data, _addr = self._sock.recvfrom(_UDP_BUFFER_SIZE)
                     self.sig_status_change.emit(True)

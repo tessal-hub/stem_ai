@@ -5,7 +5,7 @@ Hệ thống Studio hoàn chỉnh phục vụ nghiên cứu & giảng dạy chuy
 1. Data & Feature Science Studio
 2. Model Lab & Math Dissection
 3. Bias-Variance & Sweep Curves Studio
-4. Model Arena (So sánh 15 mô hình)
+4. Model Arena (So sánh 14 mô hình)
 5. What-If Interactive Simulator & 1-Click C99 Exporter
 6. Experiment History & Logs
 7. Serial Monitor (Giám sát UART & HUD thời gian thực)
@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from typing import Any
+from PyQt6.QtCore import QTimer, pyqtSignal
 
 from PyQt6.QtWidgets import (
     QFrame,
@@ -58,10 +59,10 @@ _TAB_TITLES = (
 _TAB_TOOLTIPS = (
     "Chọn thần chú để luyện — chỉ thần chú đã chọn mới được huấn luyện, lưu lại cho lần sau",
     "Xem dữ liệu đã ghi: phân phối đặc trưng, tạo thêm dữ liệu mẫu",
-    "Huấn luyện máy: chọn 1 trong 15 thuật toán và huấn luyện",
+    "Huấn luyện máy: chọn 1 trong 14 thuật toán và huấn luyện",
     "Thử tham số tốt nhất: quét cài đặt + thử cần bao nhiêu dữ liệu",
-    "So sánh 15 thuật toán: xếp hạng chính xác, tốc độ, RAM",
-    "Thử nhanh & nạp lên wand: What-If, xuất mã C++, nạp 1-click",
+    "So sánh 14 thuật toán: xếp hạng chính xác, tốc độ, RAM",
+    "Thử nhanh & nạp lên wand: What-If, xuất mã C++, nạp firmware đã build",
     "Lịch sử huấn luyện: các lần thử đã lưu + bảng vàng",
     "Kết nối wand: UART terminal + thử mô hình trực tiếp",
 )
@@ -69,11 +70,16 @@ _TAB_TOOLTIPS = (
 
 class MlLabWindow(QMainWindow):
     """Cửa sổ Studio Học Máy Bản Chất ML Lab."""
+    sig_closed = pyqtSignal()
 
     def __init__(self, spell_dataset_dir: str | Path, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.spell_dataset_dir = Path(spell_dataset_dir)
         self.experiment_store = ExperimentStore()
+        self._closing = False
+        self._close_timer = QTimer(self)
+        self._close_timer.setInterval(40)
+        self._close_timer.timeout.connect(self.close)
 
         self.setWindowTitle("STEM ML Lab")
         self.resize(1260, 880)
@@ -105,7 +111,7 @@ class MlLabWindow(QMainWindow):
         title_vbox.setSpacing(2)
         lbl_title = QLabel("STEM ML Lab")
         lbl_title.setStyleSheet(ls.font(ls.FS_TITLE, 800) + f"color: {ls.INK}; border: none; background: transparent;")
-        lbl_desc = QLabel("Từ dữ liệu vung wand của bạn → mô hình AI chạy thật trên ESP32, theo 7 bước dẫn dắt")
+        lbl_desc = QLabel("Từ dữ liệu vung wand của bạn → mô hình AI chạy thật trên ESP32, theo 8 bước dẫn dắt")
         lbl_desc.setStyleSheet(ls.font(ls.FS_CAPTION) + f"color: {ls.MUTED}; border: none; background: transparent;")
         lbl_desc.setWordWrap(True)
         title_vbox.addWidget(lbl_title)
@@ -183,7 +189,7 @@ class MlLabWindow(QMainWindow):
                     tab.set_allowed_spells(init_sel)
             self._update_filter_tab_title()
         except Exception:
-            pass
+            log.exception("Could not initialize ML Lab spell filter")
 
     def _current_allowed_spells(self) -> set[str] | None:
         """Tập spell đang chọn từ filter bar; None = tất cả."""
@@ -195,7 +201,8 @@ class MlLabWindow(QMainWindow):
                     return None
                 return sel
             except Exception:
-                return None
+                log.exception("Could not read selected ML Lab spells; refusing to train with an unknown selection")
+                return set()
         return None
 
     def _update_filter_tab_title(self) -> None:
@@ -212,17 +219,19 @@ class MlLabWindow(QMainWindow):
                 self.tabs.setTabText(0, f"{label} · {n}/{total}")
             self.tabs.setTabToolTip(0, f"Đang chọn {n}/{total} thần chú — bấm để đổi")
         except Exception:
-            pass
+            log.exception("Could not update ML Lab spell filter title")
 
     def _on_spell_selection_changed(self, selected: set[str]) -> None:
         """Khi filter bar đổi → phát lại cho các tab và làm mới chip."""
+        if self._closing:
+            return
         # broadcast
         for tab in (self.tab_data, self.tab_model, self.tab_curves, self.tab_arena):
             if hasattr(tab, "set_allowed_spells"):
                 try:
                     tab.set_allowed_spells(selected)
                 except Exception:
-                    pass
+                    log.exception("Could not apply spell filter to %s", type(tab).__name__)
         self._update_filter_tab_title()
         self.refresh_dataset_info()
 
@@ -233,7 +242,7 @@ class MlLabWindow(QMainWindow):
             try:
                 self.filter_bar.reload(force_rescan=True)
             except Exception:
-                pass
+                log.exception("Could not rescan ML Lab dataset")
         # Dùng cache từ filter_bar làm single source — tránh 2 glob
         if hasattr(self, "filter_bar") and self.filter_bar._counts:
             all_counts = dict(self.filter_bar._counts)
@@ -260,14 +269,14 @@ class MlLabWindow(QMainWindow):
                         try:
                             tab.set_allowed_spells(allowed)
                         except Exception:
-                            pass
+                            log.exception("Could not refresh spell filter in %s", type(tab).__name__)
                 all_counts = dict(self.filter_bar._counts)
                 total_available = len(all_counts)
                 counts = {k: v for k, v in all_counts.items() if k in allowed} if allowed else dict(all_counts)
                 total_samples = sum(counts.values())
                 num_classes = len(counts)
             except Exception:
-                pass
+                log.exception("Could not update ML Lab after dataset rescan")
 
         if allowed is not None and len(allowed) != total_available:
             self.lbl_dataset_chip.setText(
@@ -305,6 +314,8 @@ class MlLabWindow(QMainWindow):
 
     def _on_model_trained_globally(self, result: TrainClassicResult) -> None:
         """Khi mô hình được huấn luyện, tự động lưu lịch sử và nạp sang Tab Giả lập."""
+        if self._closing:
+            return
         try:
             self.experiment_store.save_experiment(result)
         except Exception as exc:
@@ -314,7 +325,54 @@ class MlLabWindow(QMainWindow):
         self.tab_serial.set_trained_model(result)
         self.tab_history.reload_history()
 
+    def showEvent(self, event: Any) -> None:
+        super().showEvent(event)
+        if getattr(self, "_refresh_on_open", False):
+            self._refresh_on_open = False
+            from ml_lab.core.serial_coordinator import ML_LAB_SERIAL, register_owner
+            register_owner(ML_LAB_SERIAL, self.tab_serial._coordinator_release)
+            self.tab_serial.refresh_ports()
+            self.refresh_dataset_info()
+
     def closeEvent(self, event: Any) -> None:
+        workers = [
+            self.tab_data._analysis_worker, self.tab_data._compare_worker,
+            self.tab_model._current_worker, self.tab_model._auto_worker,
+            self.tab_curves._worker, self.tab_curves._datasize_worker,
+            self.tab_arena._worker, self.tab_serial._worker,
+            self.tab_serial._port_scan_worker,
+        ]
+        running = [w for w in workers if w is not None and w.isRunning()]
+        if running:
+            self._closing = True
+            self.tabs.setEnabled(False)
+            self.lbl_dataset_chip.setText("Đang dừng tác vụ… chờ bước tính hiện tại kết thúc")
+            self.tab_data._pending_reload = False
+            for worker in running:
+                worker.blockSignals(True)
+                worker.requestInterruption()
+            if self.tab_serial._worker is not None:
+                self.tab_serial._worker.stop()
+            self._close_timer.start()
+            event.ignore()
+            return
+        self._close_timer.stop()
+        for worker in workers:
+            if worker is not None:
+                worker.blockSignals(False)
+        if self._closing:
+            self._closing = False
+            self.tabs.setEnabled(True)
+            self.tab_model._set_cta_mode("train")
+            self.tab_model.btn_auto.setText("Tự chọn thuật toán")
+            self.tab_data.btn_run_compare.setText("Chạy thử: dữ liệu gốc vs dữ liệu nhân bản")
+            self.tab_curves.lbl_chart_caption.setText("")
+            for button in (self.tab_model.btn_train, self.tab_model.btn_auto,
+                           self.tab_curves.btn_run_sweep, self.tab_curves.btn_run_datasize,
+                           self.tab_arena.btn_run_arena, self.tab_data.btn_run_compare):
+                button.setEnabled(True)
+            for tab in (self.tab_model, self.tab_curves, self.tab_arena):
+                tab.progress_bar.setVisible(False)
         if hasattr(self, "tab_serial") and self.tab_serial:
             self.tab_serial.disconnect_serial()
         # Gỡ callback khỏi coordinator — tránh gọi vào widget đã xóa
@@ -324,12 +382,6 @@ class MlLabWindow(QMainWindow):
             unregister_owner(ML_LAB_SERIAL)
         except Exception:
             pass
-        if hasattr(self, "tab_data") and self.tab_data:
-            try:
-                if hasattr(self.tab_data, "wait_for_workers"):
-                    self.tab_data.wait_for_workers(4000)
-                else:
-                    self.tab_data.close()
-            except Exception:
-                pass
         super().closeEvent(event)
+        self._refresh_on_open = True
+        self.sig_closed.emit()

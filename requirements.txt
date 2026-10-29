@@ -1,8 +1,9 @@
 # requirements.txt — Core runtime (no TensorFlow)
-PyQt6>=6.5.0
-PyQt6-Multimedia>=6.5.0
-pyqtgraph>=0.13.3
-numpy>=1.26.0
-esptool
-esp-idf-nvs-partition-gen
-pyserial>=3.5
+PyQt6>=6.5.0,<7
+PyQt6-Multimedia>=6.5.0,<7
+pyqtgraph>=0.13.3,<1
+numpy>=1.26.0,<2
+scikit-learn>=1.4,<2
+esptool>=4,<6
+esp-idf-nvs-partition-gen>=0.1,<1
+pyserial>=3.5,<4

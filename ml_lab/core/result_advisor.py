@@ -98,14 +98,14 @@ def generate_advice(result: TrainClassicResult) -> list[AdviceItem]:
             "Mô hình đang học vẹt nặng (Overfitting)",
             f"Train {train*100:.1f}% nhưng Validation chỉ {val*100:.1f}% (chênh {(gap)*100:.1f}%). "
             "Máy thuộc lòng dữ liệu cũ thay vì học quy luật. Giải pháp: giảm Max Depth/K, "
-            "bật tùy chọn ✨ dữ liệu tăng cường, hoặc ghi thêm nhiều biến thể cử chỉ.",
+            "bật tùy chọn dữ liệu tăng cường, hoặc ghi thêm nhiều biến thể cử chỉ.",
         ))
     elif gap > 0.07:
         items.append(AdviceItem(
             "warn",
             "Dấu hiệu học vẹt nhẹ",
             f"Chênh lệch Train-Validation là {gap*100:+.1f}%. Vẫn chấp nhận được, nhưng nên bật "
-            "✨ dữ liệu tăng cường để mô hình tổng quát hóa tốt hơn.",
+            "dữ liệu tăng cường để mô hình tổng quát hóa tốt hơn.",
         ))
     else:
         items.append(AdviceItem(
@@ -150,7 +150,7 @@ def generate_advice(result: TrainClassicResult) -> list[AdviceItem]:
         items.append(AdviceItem(
             "good",
             "Sẵn sàng lên đũa phép ESP32!",
-            "Chỉ số đã đạt chuẩn triển khai. Bấm nút 🔥 màu xanh để nạp mô hình vào board và thi triển thần chú thật!",
+            "Chỉ số đã đạt chuẩn triển khai. Bấm nút nạp màu xanh để đưa mô hình lên board và thi triển thần chú thật!",
         ))
 
     # Sắp xếp: vấn đề nghiêm trọng lên đầu
@@ -162,5 +162,5 @@ def advice_summary_line(result: TrainClassicResult) -> str:
     """Tóm tắt 1 câu dùng cho notification/log."""
     items = generate_advice(result)
     worst = items[0]
-    icons = {"good": "✅", "warn": "⚠️", "bad": "❌"}
-    return f"{icons.get(worst.severity, '💡')} {worst.title}"
+    icons = {"good": "[Tốt]", "warn": "[Chú ý]", "bad": "[Cần sửa]"}
+    return f"{icons.get(worst.severity, '[Gợi ý]')} {worst.title}"

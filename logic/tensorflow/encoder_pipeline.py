@@ -60,7 +60,7 @@ def _get_triplet_stack_layer_class():
 def build_encoder(
     window_size: int = 64,
     channels: int = 9,
-    embedding_dim: int = 32,
+    embedding_dim: int = 16,
 ):
     tf = _require_tensorflow()
 

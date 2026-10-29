@@ -112,7 +112,7 @@ def build_model_card_markdown(result: TrainClassicResult, stats: list[dict[str, 
     lines.append(
         f"Nhận diện **{len(result.class_names)} thần chú** "
         f"({', '.join(result.class_names)}) từ dữ liệu cảm biến IMU khi vung wand. "
-        "Đầu vào là 63 con số thống kê được trích từ 64 điểm cảm biến (~1.3 giây vung)."
+        f"Đầu vào là {len(result.feature_names)} con số thống kê được trích từ 64 điểm cảm biến (~1.3 giây vung)."
     )
     lines.append("")
     lines.append("## 2. Độ chính xác")

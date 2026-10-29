@@ -57,6 +57,8 @@ class MlLabTrainWorker(QThread):
         self.allowed_spells = set(allowed_spells) if allowed_spells is not None else None
 
     def run(self) -> None:
+        if self.isInterruptionRequested():
+            return
         try:
             # Ẩn cảnh báo hội tụ MLP/sklearn — không hữu ích cho học sinh
             with warnings.catch_warnings():
@@ -102,6 +104,8 @@ class MlLabTrainWorker(QThread):
                 n_orig = len(train_windows)
                 augmented: list[tuple[np.ndarray, int]] = list(train_windows)
                 for i in range(n_orig * (eff_multiplier - 1)):
+                    if self.isInterruptionRequested():
+                        return
                     window, cls_idx = train_windows[i % n_orig]
                     try:
                         aug_win = augment_sample_window(window, noise_std=0.025, time_warp=True, random_state=42 + i)
@@ -115,6 +119,8 @@ class MlLabTrainWorker(QThread):
 
             # 3. Trích xuất đặc trưng
             extractor = ClassicFeatureExtractor(self.feature_config)
+            if self.isInterruptionRequested():
+                return
             X_train, y_train = extractor.extract_from_samples(train_windows)
             X_val, y_val = extractor.extract_from_samples(val_windows)
 
@@ -124,6 +130,8 @@ class MlLabTrainWorker(QThread):
             from ml_lab.data.spell_reader import compute_standby_thresholds
             standby_th = compute_standby_thresholds(self.dataset_root)
 
+            if self.isInterruptionRequested():
+                return
             result = train_classic_model(
                 X_train=X_train,
                 y_train=y_train,
@@ -147,6 +155,8 @@ class MlLabTrainWorker(QThread):
                 pass
 
             self.sig_progress.emit(95, "Đang tổng hợp kết quả đánh giá...")
+            if self.isInterruptionRequested():
+                return
             self.sig_finished.emit(result)
 
         except Exception as exc:
@@ -190,6 +200,8 @@ class AutoSelectWorker(QThread):
         self.allowed_spells = set(allowed_spells) if allowed_spells is not None else None
 
     def run(self) -> None:
+        if self.isInterruptionRequested():
+            return
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
@@ -234,6 +246,8 @@ class AutoSelectWorker(QThread):
             n_orig = len(train_windows)
             augmented: list[tuple[np.ndarray, int]] = list(train_windows)
             for i in range(n_orig * 2):
+                if self.isInterruptionRequested():
+                    return
                 window, cls_idx = train_windows[i % n_orig]
                 try:
                     aug_win = augment_sample_window(window, noise_std=0.025, time_warp=True, random_state=42 + i)
@@ -245,6 +259,8 @@ class AutoSelectWorker(QThread):
         standby_th = compute_standby_thresholds(self.dataset_root)
         feature_config = FeatureGroupConfig()
         extractor = ClassicFeatureExtractor(feature_config)
+        if self.isInterruptionRequested():
+            return
         X_train, y_train = extractor.extract_from_samples(train_windows)
         X_val, y_val = extractor.extract_from_samples(val_windows)
         if len(X_train) == 0 or len(X_val) == 0:
@@ -268,10 +284,14 @@ class AutoSelectWorker(QThread):
         tried: list[tuple[str, float]] = []
         best_key, best_cfg, best_acc = "", None, -1.0
         for i, (key, _cfg) in enumerate(_SHORTLIST):
+            if self.isInterruptionRequested():
+                return
             self.sig_progress.emit(
                 int(10 + i * (85 / len(_SHORTLIST))), f"Đang thử mô hình {i + 1}/{len(_SHORTLIST)}..."
             )
             try:
+                if self.isInterruptionRequested():
+                    return
                 res = train_classic_model(
                     X_train, y_train, X_val, y_val,
                     class_names, extractor.feature_names,
@@ -290,4 +310,6 @@ class AutoSelectWorker(QThread):
             return
 
         self.sig_progress.emit(100, "Đã chọn xong!")
+        if self.isInterruptionRequested():
+            return
         self.sig_finished.emit(best_key, best_cfg, best_acc, tried)

@@ -170,8 +170,8 @@ class SpellFilterBar(QFrame):
         # Header row
         header = QHBoxLayout()
         header.setSpacing(ls.SP_2)
-        lbl_title = QLabel("TẬP THẦN CHÚ HUẤN LUYỆN")
-        lbl_title.setStyleSheet(ls.section_label())
+        lbl_title = QLabel("Tập thần chú huấn luyện")
+        lbl_title.setStyleSheet(ls.chart_title())
         lbl_title.setToolTip("Chỉ thần chú được tích mới dùng để huấn luyện, vẽ biểu đồ và so sánh.")
         header.addWidget(lbl_title)
 
@@ -268,7 +268,7 @@ class SpellFilterBar(QFrame):
         self.stats_frame = QFrame()
         self.stats_frame.setObjectName("FilterStats")
         self.stats_frame.setStyleSheet(
-            f"#FilterStats {{ background: {ls.SURFACE_SUNK}; border: 1px solid {ls.BORDER}; "
+            f"#FilterStats {{ background: {ls.SURFACE_SUNK}; border: none; "
             f"border-radius: {ls.RADIUS_MD}px; }}"
         )
         stats_layout = QHBoxLayout(self.stats_frame)
@@ -300,14 +300,14 @@ class SpellFilterBar(QFrame):
         self.detail_frame = QFrame()
         self.detail_frame.setObjectName("FilterDetail")
         self.detail_frame.setStyleSheet(
-            f"#FilterDetail {{ background: {ls.SURFACE_SUNK}; border: 1px solid {ls.BORDER}; "
+            f"#FilterDetail {{ background: {ls.SURFACE_SUNK}; border: none; "
             f"border-radius: {ls.RADIUS_MD}px; }}"
         )
         detail_outer = QVBoxLayout(self.detail_frame)
         detail_outer.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
         detail_outer.setSpacing(ls.SP_2)
-        lbl_detail_title = QLabel("CHI TIẾT MẪU TỪNG THẦN CHÚ")
-        lbl_detail_title.setStyleSheet(ls.section_label())
+        lbl_detail_title = QLabel("Chi tiết mẫu từng thần chú")
+        lbl_detail_title.setStyleSheet(ls.chart_title())
         detail_outer.addWidget(lbl_detail_title)
 
         detail_scroll = QScrollArea()
@@ -330,7 +330,7 @@ class SpellFilterBar(QFrame):
         self.guide_box.setWordWrap(True)
         self.guide_box.setStyleSheet(ls.note_box(ls.ACCENT))
         self.guide_box.setText(
-            "<b>💡 Mẹo huấn luyện:</b> Bắt đầu với 2–3 thần chú có quỹ đạo cử chỉ khác biệt rõ rệt "
+            "<b>Mẹo huấn luyện:</b> Bắt đầu với 2–3 thần chú có quỹ đạo cử chỉ khác biệt rõ rệt "
             "(ví dụ vung ngang vs vung dọc) để mô hình dễ đạt độ chính xác >85% ngay lần đầu."
         )
         right_layout.addWidget(self.guide_box)
@@ -390,7 +390,7 @@ class SpellFilterBar(QFrame):
         # nếu file chưa từng tồn tại và available rỗng → sel empty okay
         self._rebuild_chips(available, sel)
         self._update_summary_and_warn()
-        # Không phát signal ở lần reload đầu nếu caller sẽ tự đọc get_selected?
+        self.sig_selection_changed.emit(self.get_selected())
 
     def get_selected(self) -> set[str]:
         return {name for name, btn in self._chip_btns.items() if btn.isChecked()}

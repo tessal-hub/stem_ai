@@ -9,11 +9,11 @@ from __future__ import annotations
 
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QListWidget,
-                             QListWidgetItem, QVBoxLayout, QWidget)
+                             QListWidgetItem, QPushButton, QVBoxLayout, QWidget)
 
 from logic.rarity_utils import RARITY_TIERS, RarityTier
 from logic.theme_manager import theme_manager
-from ui.component_factory import make_rarity_badge_wand
+from ui.component_factory import make_outline_button, make_rarity_badge_wand
 from ui.i18n_bridge import tr_ui
 from ui.tokens import SPACING_SM, WAND_SPELL_LIST_MIN_H
 
@@ -47,9 +47,16 @@ class WandSpellPayloadPanel(QWidget):
         left_col = QWidget()
         left_layout = QVBoxLayout(left_col)
         left_layout.setContentsMargins(0, 0, 0, 0)
+        left_header = QHBoxLayout()
         self._left_title = QLabel(tr_ui("wand_selected_title"))
         self._left_title.setProperty("type", "settings_section_label")
-        left_layout.addWidget(self._left_title)
+        self.btn_deselect_all = make_outline_button(tr_ui("wand_deselect_all", default="Bỏ chọn tất cả"), height=26)
+        self.btn_deselect_all.setToolTip("Bỏ chọn toàn bộ các câu thần chú")
+        self.btn_deselect_all.clicked.connect(self._on_deselect_all_clicked)
+        left_header.addWidget(self._left_title)
+        left_header.addStretch()
+        left_header.addWidget(self.btn_deselect_all)
+        left_layout.addLayout(left_header)
 
         self.list_selected_spells = QListWidget()
         self.list_selected_spells.setMinimumHeight(WAND_SPELL_LIST_MIN_H)
@@ -65,9 +72,16 @@ class WandSpellPayloadPanel(QWidget):
         right_col = QWidget()
         right_layout = QVBoxLayout(right_col)
         right_layout.setContentsMargins(0, 0, 0, 0)
+        right_header = QHBoxLayout()
         self._right_title = QLabel(tr_ui("wand_available_title"))
         self._right_title.setProperty("type", "settings_section_label")
-        right_layout.addWidget(self._right_title)
+        self.btn_select_all = make_outline_button(tr_ui("wand_select_all", default="Chọn tất cả"), height=26)
+        self.btn_select_all.setToolTip("Chọn toàn bộ các câu thần chú để nạp firmware")
+        self.btn_select_all.clicked.connect(self._on_select_all_clicked)
+        right_header.addWidget(self._right_title)
+        right_header.addStretch()
+        right_header.addWidget(self.btn_select_all)
+        right_layout.addLayout(right_header)
 
         self.list_available_spells = QListWidget()
         self.list_available_spells.setMinimumHeight(WAND_SPELL_LIST_MIN_H)
@@ -106,6 +120,8 @@ class WandSpellPayloadPanel(QWidget):
         """Làm mới văn bản khi ngôn ngữ ứng dụng thay đổi."""
         self._left_title.setText(tr_ui("wand_selected_title"))
         self._right_title.setText(tr_ui("wand_available_title"))
+        self.btn_deselect_all.setText(tr_ui("wand_deselect_all", default="Bỏ chọn tất cả"))
+        self.btn_select_all.setText(tr_ui("wand_select_all", default="Chọn tất cả"))
         self._refresh_lists()
 
     def refresh_styles(self) -> None:
@@ -168,9 +184,10 @@ class WandSpellPayloadPanel(QWidget):
         p = theme_manager.get_palette()
         lbl = QLabel(text)
         lbl.setProperty("type", "empty_state_text")
-        lbl.setStyleSheet(f"color: {p.TEXT_SECONDARY};")
+        lbl.setStyleSheet(f"color: {p.TEXT_SECONDARY}; padding: 8px;")
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl.setWordWrap(True)
-        item.setSizeHint(lbl.sizeHint())
+        item.setSizeHint(QSize(0, max(44, lbl.sizeHint().height())))
         list_widget.setItemWidget(item, lbl)
 
     def _resolve_rarity(self, count: int) -> RarityTier:
@@ -178,6 +195,14 @@ class WandSpellPayloadPanel(QWidget):
         return max((t for t in RARITY_TIERS if count >= t.min_count), key=lambda t: t.min_count, default=RARITY_TIERS[0])
 
     # ── Slots ───────────────────────────────────
+
+    def _on_select_all_clicked(self) -> None:
+        self._selected_spells = {name for name in self._spell_order if "::" not in name}
+        self._refresh_lists()
+
+    def _on_deselect_all_clicked(self) -> None:
+        self._selected_spells.clear()
+        self._refresh_lists()
 
     def _on_selected_item_clicked(self, item: QListWidgetItem) -> None:
         name = str(item.data(Qt.ItemDataRole.UserRole) or "")

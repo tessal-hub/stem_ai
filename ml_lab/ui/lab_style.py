@@ -10,49 +10,50 @@ Một nguồn duy nhất cho màu sắc, khoảng cách, bo góc, cỡ chữ và
 tái sử dụng. Nguyên tắc:
 - Lưới khoảng cách 4pt (4/8/12/16/20/24).
 - Type scale cố định (không fluid): 11 caption / 12 body / 13 section / 15 title / 20 display.
-- Radius: sm 6 (control nhỏ) / md 8 (input, nút) / lg 10 (card) / pill cho chip.
-- Màu accent duy nhất (#0668d1); xanh lá/cam/đỏ chỉ dùng cho trạng thái.
+- Radius: M3 Shape scale (sm 10 / md 14 / lg 18 / pill 9999).
+- Màu accent duy nhất (#4E58A9 - M3 Baseline Tech Indigo); xanh lá/cam/đỏ chỉ dùng cho trạng thái.
 """
 
 from __future__ import annotations
 
-# ── Color ────────────────────────────────────────────────────────────────
-BG_APP = "#f6f7f9"          # nền cửa sổ
-SURFACE = "#ffffff"          # card / panel
-SURFACE_SUNK = "#f1f5f9"     # vùng lún: track, hover nhẹ
-INK = "#0f172a"              # tiêu đề
-BODY = "#334155"             # nội dung chính
-MUTED = "#5b6b7f"            # text phụ (≥4.6:1 trên trắng)
-FAINT = "#8494a7"            # chỉ dùng cho placeholder/nhãn không thiết yếu
-BORDER = "#e4e9f0"
-BORDER_STRONG = "#cdd6e1"
+# ── Color (Material You M3) ──────────────────────────────────────────────
+BG_APP = "#FAF8FD"          # M3 Surface Canvas
+SURFACE = "#FFFFFF"         # M3 Surface Container Lowest (card / panel)
+SURFACE_SUNK = "#EFEBF4"    # M3 Surface Container (vùng lún: track, hover nhẹ)
+INK = "#1B1B21"             # M3 On-Surface (tiêu đề)
+BODY = "#46464F"            # M3 On-Surface Variant (nội dung chính)
+MUTED = "#71717A"           # M3 Outline / Muted (text phụ, ≥4.83:1 trên trắng, WCAG AA)
+FAINT = "#A4A2AE"           # placeholder/nhãn không thiết yếu
+BORDER = "#E3DFE8"          # M3 Surface Container Highest
+BORDER_STRONG = "#C7C5D0"   # M3 Outline Variant
 
-ACCENT = "#0668d1"   # 5.37:1 với trắng cả 2 chiều (WCAG AA)
-ACCENT_NOTE_TEXT = "#1d4ed8"  # chữ trên ACCENT_TINT (note_box, box sư phạm) — 6.15:1
-ACCENT_HOVER = "#0557b0"
-ACCENT_PRESSED = "#044a99"
-ACCENT_TINT = "rgba(10, 122, 255, 0.07)"
-ACCENT_TINT_STRONG = "rgba(10, 122, 255, 0.14)"
+ACCENT = "#4E58A9"          # M3 Baseline Tech Indigo (5.7:1 với trắng, WCAG AA)
+ACCENT_NOTE_TEXT = "#0A1365" # M3 On-Primary Container (chữ trên ACCENT_TINT)
+ACCENT_HOVER = "#434D9A"
+ACCENT_PRESSED = "#38428B"
+ACCENT_TINT = "rgba(78, 88, 169, 0.08)"
+ACCENT_TINT_STRONG = "#DFE0FF" # M3 Primary Container
 
-SUCCESS = "#1e7a46"   # 5.35:1 với trắng cả 2 chiều
-SUCCESS_HOVER = "#18663a"
-SUCCESS_PRESSED = "#145232"
-SUCCESS_TEXT = "#166534"  # chữ trên nền tint/trắng
-DANGER_HOVER = "#b91c1c"  # hover cho nút nền DANGER
-SURFACE_GOLD = "#fdf6e3"  # nền bảng vàng (leaderboard)
-SUCCESS_TINT = "rgba(47, 158, 87, 0.09)"
-SUCCESS_TINT_HEX = "#ecf4ee"   # bản solid cho QColor (QColor không parse rgba)
-WARNING = "#b45309"
-WARNING_TEXT = "#92400e"  # chữ trên nền WARNING_TINT — 5.9:1
-WARNING_TINT = "rgba(217, 119, 6, 0.10)"
-WARNING_TINT_HEX = "#faeedd"   # bản solid cho QColor
-DANGER = "#dc2626"
-DANGER_TEXT = "#991b1b"  # chữ trên nền DANGER_TINT — 7.3:1
-DANGER_TINT = "rgba(220, 38, 38, 0.08)"
-DANGER_TINT_HEX = "#fdeded"    # bản solid cho QColor
-TERMINAL_BG = "#16181d"
-TERMINAL_FG = "#d7dde6"
-TERMINAL_BORDER = "#262a33"
+SUCCESS = "#1A6C39"         # M3 Forest Green
+SUCCESS_HOVER = "#14592E"
+SUCCESS_PRESSED = "#0E4523"
+SUCCESS_TEXT = "#0A3B1C"
+DANGER_HOVER = "#93000A"
+SURFACE_GOLD = "#FEF2D6"
+SUCCESS_TINT = "rgba(26, 108, 57, 0.09)"
+SUCCESS_TINT_HEX = "#E8F5EB"
+WARNING = "#875200"
+WARNING_TEXT = "#613800"
+WARNING_TINT = "rgba(135, 82, 0, 0.10)"
+WARNING_TINT_HEX = "#FFF0D6"
+DANGER = "#BA1A1A"
+DANGER_TEXT = "#93000A"
+DANGER_TINT = "rgba(186, 26, 26, 0.08)"
+DANGER_TINT_HEX = "#FFDAD6"   # M3 Error Container
+DANGER_TINT_STRONG = "rgba(186, 26, 26, 0.15)"  # hover trên nền đã tint
+TERMINAL_BG = "#191C20"
+TERMINAL_FG = "#E1E2E8"
+TERMINAL_BORDER = "#2A2D33"
 
 # Kênh IMU — ≥3:1 trên trắng, dùng cho mọi plot/sóng (đừng pastel hóa)
 PLOT_AX = "#c2417a"
@@ -62,29 +63,29 @@ PLOT_GX = "#b45309"
 PLOT_GY = "#7c3aed"
 PLOT_GZ = "#4d7c0f"
 
-# Màu lớp (tối đa 10, phân biệt trên nền trắng) — mọi widget vẽ theo lớp
-# (boundary, distribution, tree, confusion) dùng chung list này, đừng fork.
+# Màu lớp (tối đa 10, phân biệt trên nền trắng)
 CLASS_COLORS = [
-    "#0066cc",  # Xanh dương
-    "#dc2626",  # Đỏ
-    "#168a4a",  # Xanh lục
-    "#d97706",  # Cam
-    "#6d28d9",  # Tím
-    "#db2777",  # Hồng đậm
-    "#0891b2",  # Cyan đậm
-    "#65a30d",  # Xanh chanh
-    "#78350f",  # Nâu đậm
-    "#475569",  # Xám xanh đậm
+    "#4E58A9",  # M3 Indigo
+    "#BA1A1A",  # M3 Đỏ
+    "#1A6C39",  # M3 Xanh lục
+    "#875200",  # M3 Cam/Hổ phách
+    "#7B526A",  # M3 Tím hồng
+    "#00677D",  # M3 Teal
+    "#00639B",  # M3 Cyan/Cobalt
+    "#4B6600",  # M3 Xanh chanh
+    "#7D5260",  # M3 Nâu hồng
+    "#5C5D72",  # M3 Slate xám
 ]
 
 # ── Spacing (4pt grid) ───────────────────────────────────────────────────
 SP_1, SP_2, SP_3, SP_4, SP_5, SP_6 = 4, 8, 12, 16, 20, 24
 
-# ── Radius ───────────────────────────────────────────────────────────────
-RADIUS_SM, RADIUS_MD, RADIUS_LG, RADIUS_PILL = 6, 8, 10, 999
+# ── Radius (Material You M3 Shape Scale) ─────────────────────────────────
+# sm 8 (inputs/chips) / md 12 (compact cards, terminal) / lg 16 (cards, panes) / pill
+RADIUS_SM, RADIUS_MD, RADIUS_LG, RADIUS_PILL = 8, 12, 16, 9999
 
 # ── Typography ───────────────────────────────────────────────────────────
-FONT_STACK = "'Segoe UI', system-ui, sans-serif"
+FONT_STACK = "'Google Sans', 'Roboto', 'Segoe UI', system-ui, sans-serif"
 MONO_STACK = "Consolas, 'Cascadia Mono', monospace"
 
 FS_MICRO = 11      # badge, đơn vị trục
@@ -137,13 +138,14 @@ def note_box(hue: str = ACCENT) -> str:
         ACCENT: (ACCENT_TINT, ACCENT_NOTE_TEXT),
         SUCCESS: (SUCCESS_TINT, "#166534"),
         WARNING: (WARNING_TINT, WARNING),
+        DANGER: (DANGER_TINT, DANGER_TEXT),
     }
     bg, fg = tints.get(hue, (ACCENT_TINT, ACCENT_NOTE_TEXT))
     return f"{font(FS_BODY)} color: {fg}; background: {bg}; border-radius: {RADIUS_MD}px; padding: {SP_2}px {SP_3}px; border: none;"
 
 
 BTN_PRIMARY = (
-    f"QPushButton {{ background: {ACCENT}; color: #fff; border: 2px solid transparent; border-radius: {RADIUS_MD}px; "
+    f"QPushButton {{ background: {ACCENT}; color: #fff; border: 2px solid transparent; border-radius: {RADIUS_PILL}px; "
     f"padding: 8px {SP_4 - 2}px; {font(FS_SECTION, 700)} }} "
     f"QPushButton:hover {{ background: {ACCENT_HOVER} }} "
     f"QPushButton:pressed {{ background: {ACCENT_PRESSED} }} "
@@ -152,7 +154,7 @@ BTN_PRIMARY = (
 )
 
 BTN_SUCCESS = (
-    f"QPushButton {{ background: {SUCCESS}; color: #fff; border: 2px solid transparent; border-radius: {RADIUS_MD}px; "
+    f"QPushButton {{ background: {SUCCESS}; color: #fff; border: 2px solid transparent; border-radius: {RADIUS_PILL}px; "
     f"padding: 8px {SP_4 - 2}px; {font(FS_BODY, 700)} }} "
     f"QPushButton:hover {{ background: {SUCCESS_HOVER} }} "
     f"QPushButton:pressed {{ background: {SUCCESS_PRESSED} }} "
@@ -162,7 +164,7 @@ BTN_SUCCESS = (
 
 BTN_SECONDARY = (
     f"QPushButton {{ background: {SURFACE}; color: {BODY}; border: 1px solid {BORDER_STRONG}; "
-    f"border-radius: {RADIUS_MD}px; padding: 6px {SP_3}px; {font(FS_CAPTION, 600)} }} "
+    f"border-radius: {RADIUS_PILL}px; padding: 6px {SP_3}px; {font(FS_CAPTION, 600)} }} "
     f"QPushButton:hover {{ background: {SURFACE_SUNK}; border-color: {FAINT} }} "
     f"QPushButton:pressed {{ background: {BORDER} }} "
     f"QPushButton:focus {{ border-color: {ACCENT}; }}"
@@ -171,7 +173,7 @@ BTN_SECONDARY = (
 
 BTN_GHOST = (
     f"QPushButton {{ background: transparent; color: {MUTED}; border: 1px solid transparent; "
-    f"border-radius: {RADIUS_SM}px; padding: 6px {SP_2}px; {font(FS_CAPTION, 600)} }} "
+    f"border-radius: {RADIUS_PILL}px; padding: 6px {SP_2}px; {font(FS_CAPTION, 600)} }} "
     f"QPushButton:hover {{ background: {SURFACE_SUNK}; color: {INK} }} "
     f"QPushButton:focus {{ border-color: {ACCENT}; }}"
     f"QPushButton:disabled {{ color: {FAINT}; }}"
@@ -184,14 +186,14 @@ CHIP_INFO = (
 
 INPUT_SPIN = (
     f"QSpinBox, QDoubleSpinBox {{ background: {SURFACE}; color: {BODY}; border: 1px solid {BORDER_STRONG}; "
-    f"border-radius: {RADIUS_MD}px; padding: 4px {SP_2}px; {font(FS_BODY, 600)} }} "
+    f"border-radius: {RADIUS_SM}px; padding: 4px {SP_2}px; {font(FS_BODY, 600)} }} "
     f"QSpinBox:focus, QDoubleSpinBox:focus {{ border-color: {ACCENT}; }} "
     f"QSpinBox:disabled, QDoubleSpinBox:disabled {{ background: {SURFACE_SUNK}; color: {FAINT}; border-color: {BORDER}; }} "
     f"QSpinBox::up-button, QDoubleSpinBox::up-button {{ subcontrol-origin: border; subcontrol-position: top right; "
     f"width: 18px; border-left: 1px solid {BORDER}; border-bottom: 1px solid {BORDER}; "
-    f"border-top-right-radius: {RADIUS_MD}px; background: {SURFACE_SUNK}; }} "
+    f"border-top-right-radius: {RADIUS_SM}px; background: {SURFACE_SUNK}; }} "
     f"QSpinBox::down-button, QDoubleSpinBox::down-button {{ subcontrol-origin: border; subcontrol-position: bottom right; "
-    f"width: 18px; border-left: 1px solid {BORDER}; border-bottom-right-radius: {RADIUS_MD}px; background: {SURFACE_SUNK}; }} "
+    f"width: 18px; border-left: 1px solid {BORDER}; border-bottom-right-radius: {RADIUS_SM}px; background: {SURFACE_SUNK}; }} "
     f"QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover, "
     f"QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {{ background: {BORDER}; }} "
     f"QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{ width: 0; height: 0; "
@@ -202,7 +204,7 @@ INPUT_SPIN = (
 
 INPUT_COMBO = (
     f"QComboBox {{ background: {SURFACE}; color: {BODY}; border: 1px solid {BORDER_STRONG}; "
-    f"border-radius: {RADIUS_MD}px; padding: 6px {SP_2}px; {font(FS_BODY, 600)} }} "
+    f"border-radius: {RADIUS_SM}px; padding: 6px {SP_2}px; {font(FS_BODY, 600)} }} "
     f"QComboBox:hover {{ border-color: {FAINT} }} "
     f"QComboBox:focus {{ border-color: {ACCENT} }} "
     f"QComboBox:disabled {{ background: {SURFACE_SUNK}; color: {FAINT}; border-color: {BORDER} }}"
@@ -213,19 +215,26 @@ TAB_BAR = (
     + "px; background: " + SURFACE + "; top: -1px; } "
     f"QTabBar > QToolButton {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 4px; width: 20px; }} "
     f"QTabBar > QToolButton:hover {{ background: {SURFACE_SUNK}; }} "
+    f"QTabBar > QToolButton:focus {{ border-color: {ACCENT}; }} "
     "QTabBar::tab { " + font(FS_BODY, 600) + f" color: {MUTED}; background: transparent; "
     f"padding: 9px 10px; margin-right: 2px; border: none; "
     f"border-bottom: 2px solid transparent; }} "
     f"QTabBar::tab:hover {{ color: {INK}; background: {SURFACE_SUNK}; }} "
     # Giữ weight 600 cả selected — đổi sang 700 làm tab rộng hơn khi chọn → bar tràn → scroll nhấp nháy
-    f"QTabBar::tab:selected {{ color: {ACCENT}; border-bottom: 2px solid {ACCENT}; }}"
+    f"QTabBar::tab:selected {{ color: {ACCENT}; border-bottom: 2px solid {ACCENT}; }} "
+    # :focus bắt buộc — đã style QTabBar là Qt bỏ focus ring gốc (WCAG 2.4.7)
+    f"QTabBar::tab:focus {{ color: {INK}; border-bottom: 2px solid {INK}; }} "
+    f"QTabBar::tab:selected:focus {{ color: {ACCENT}; border-bottom: 2px solid {ACCENT}; "
+    f"background: {ACCENT_TINT}; }}"
 )
 
 SUB_TAB_BAR = (
     "QTabBar::tab { " + font(FS_CAPTION, 600) + f" color: {MUTED}; padding: 7px {SP_3}px; "
     "border-bottom: 2px solid transparent; } "
     f"QTabBar::tab:hover {{ color: {INK} }} "
-    f"QTabBar::tab:selected {{ color: {ACCENT}; border-bottom-color: {ACCENT}; }}"
+    f"QTabBar::tab:selected {{ color: {ACCENT}; border-bottom-color: {ACCENT}; }} "
+    f"QTabBar::tab:focus {{ color: {INK}; border-bottom-color: {INK}; }} "
+    f"QTabBar::tab:selected:focus {{ background: {ACCENT_TINT}; }}"
 )
 
 DATA_TABLE = (
@@ -233,12 +242,14 @@ DATA_TABLE = (
     f"{font(FS_BODY)} color: {BODY}; }} "
     f"QHeaderView::section {{ background: {SURFACE_SUNK}; color: {MUTED}; "
     f"border: none; border-bottom: 1px solid {BORDER}; padding: 7px {SP_2}px; {font(FS_CAPTION, 700)} }} "
-    f"QTableWidget::item {{ padding: 4px {SP_2}px; }}"
+    f"QTableWidget::item {{ padding: 4px {SP_2}px; }} "
+    f"QTableWidget:focus {{ border-color: {ACCENT}; }}"
 )
 
 TERMINAL = (
     f"QTextEdit, QPlainTextEdit {{ background: {TERMINAL_BG}; color: {TERMINAL_FG}; border: 1px solid {TERMINAL_BORDER}; "
-    f"border-radius: {RADIUS_MD}px; padding: {SP_3}px; {font(FS_BODY, mono=True)} }}"
+    f"border-radius: {RADIUS_MD}px; padding: {SP_3}px; {font(FS_BODY, mono=True)} }} "
+    f"QTextEdit:focus, QPlainTextEdit:focus {{ border: 1.5px solid {ACCENT}; }}"
 )
 
 
@@ -247,6 +258,6 @@ def slider_value_label() -> str:
 
 
 PROGRESS_BAR = (
-    f"QProgressBar {{ background: {SURFACE_SUNK}; border: none; border-radius: 3px; max-height: 4px; text-align: center; }} "
-    f"QProgressBar::chunk {{ background: {ACCENT}; border-radius: 3px; }}"
+    f"QProgressBar {{ background: {SURFACE_SUNK}; border: none; border-radius: 2px; max-height: 4px; text-align: center; }} "
+    f"QProgressBar::chunk {{ background: {ACCENT}; border-radius: 2px; }}"
 )

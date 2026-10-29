@@ -11,7 +11,7 @@ Giao diện chuyên nghiệp cho phép học sinh nạp mã nguồn thuật toá
 from __future__ import annotations
 
 from typing import Any
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QThread, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -36,6 +36,15 @@ from ml_lab.core.serial_coordinator import (
 from ml_lab.core.pipeline import TrainClassicResult
 
 
+class _PortScanWorker(QThread):
+    """Quét cổng COM trong luồng nền — Bluetooth serial có thể chặn UI vài giây."""
+
+    sig_done = pyqtSignal(list)  # list[(port, description)]
+
+    def run(self) -> None:
+        self.sig_done.emit(list_serial_ports())
+
+
 class FlashDialog(QDialog):
     """
     Hộp thoại Nạp Code 1-Click Trực Tiếp Sang ESP32.
@@ -45,6 +54,7 @@ class FlashDialog(QDialog):
         super().__init__(parent)
         self.result = result
         self._worker: Esp32FlashWorker | None = None
+        self._port_scan: _PortScanWorker | None = None
         self._claimed_port: str | None = None
 
         self.setWindowTitle("Nạp mô hình vào ESP32")
@@ -93,9 +103,7 @@ class FlashDialog(QDialog):
         p_layout.addWidget(btn_rescan)
 
         self.btn_flash = QPushButton("BẮT ĐẦU NẠP")
-        self.btn_flash.setStyleSheet(
-            f"padding: 8px 18px; font-weight: 800; font-size: 12px; border-radius: 6px; background: {ls.SUCCESS}; color: white;"
-        )
+        self.btn_flash.setStyleSheet(ls.BTN_SUCCESS)
         self.btn_flash.clicked.connect(self.start_flash)
         p_layout.addWidget(self.btn_flash)
 
@@ -107,8 +115,8 @@ class FlashDialog(QDialog):
         layout.addWidget(self.lbl_chip_badge)
 
         # ── Real-time Terminal Log ──────────────────────────
-        lbl_log = QLabel("TIẾN TRÌNH & NHẬT KÝ NẠP")
-        lbl_log.setStyleSheet(ls.section_label())
+        lbl_log = QLabel("Tiến trình & nhật ký nạp")
+        lbl_log.setStyleSheet(ls.chart_title())
         layout.addWidget(lbl_log)
 
         self.term_edit = QTextEdit()
@@ -141,7 +149,14 @@ class FlashDialog(QDialog):
 
     def refresh_ports(self) -> None:
         self.combo_ports.clear()
-        ports = list_serial_ports()
+        self.combo_ports.addItem("Đang quét cổng...", "")
+        self.btn_flash.setEnabled(False)
+        self._port_scan = _PortScanWorker()
+        self._port_scan.sig_done.connect(self._on_ports_scanned)
+        self._port_scan.start()
+
+    def _on_ports_scanned(self, ports: list) -> None:
+        self.combo_ports.clear()
         if not ports:
             self.combo_ports.addItem("Không tìm thấy cổng Serial nào", "")
             self.btn_flash.setEnabled(False)
@@ -158,7 +173,9 @@ class FlashDialog(QDialog):
 
         # Claim toàn cục: STEM / ML serial đang giữ cổng này thì tự nhả
         # trước khi esptool mở — hết xung đột COM lúc nạp.
-        coord_acquire(ML_LAB_FLASH, port)
+        if not coord_acquire(ML_LAB_FLASH, port):
+            self.term_edit.append("Cổng đang bận hoặc đang ngắt. Hãy thử nạp lại khi đã dừng.")
+            return
         self._claimed_port = port
         self.btn_flash.setEnabled(False)
         self.btn_flash.setText("Đang nạp...")
@@ -169,7 +186,7 @@ class FlashDialog(QDialog):
         self._worker.log_msg.connect(self.term_edit.append)
         self._worker.sig_progress.connect(self.progress_bar.setValue)
         self._worker.sig_status.connect(self.lbl_status.setText)
-        self._worker.sig_chip_info.connect(lambda info: self.lbl_chip_badge.setText(f"📟 [CHIP DETECTED] {info}"))
+        self._worker.sig_chip_info.connect(lambda info: self.lbl_chip_badge.setText(f"[CHIP] {info}"))
         self._worker.sig_finished.connect(self._on_flash_finished)
         self._worker.start()
 
@@ -186,11 +203,22 @@ class FlashDialog(QDialog):
         self._claimed_port = None
         if success:
             self.progress_bar.setValue(100)
-            self.lbl_status.setText("✅ Nạp thành công 100%!")
+            self.lbl_status.setText("Nạp thành công 100%!")
+            self.lbl_status.setStyleSheet(f"{ls.font(ls.FS_CAPTION, 700)} color: {ls.SUCCESS}; border: none; background: transparent;")
         else:
-            self.lbl_status.setText(f"❌ {msg}")
+            self.lbl_status.setText(msg)
+            self.lbl_status.setStyleSheet(f"{ls.font(ls.FS_CAPTION, 700)} color: {ls.DANGER}; border: none; background: transparent;")
 
     def closeEvent(self, event: Any) -> None:
+        if self._port_scan and self._port_scan.isRunning():
+            try:
+                self._port_scan.blockSignals(True)
+            except Exception:
+                pass
+            try:
+                self._port_scan.wait(1000)
+            except Exception:
+                pass
         if self._worker and self._worker.isRunning():
             self._worker.cancel()
             try:

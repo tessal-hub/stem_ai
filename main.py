@@ -13,8 +13,7 @@ from logic.locale_manager import locale_manager
 from logic.sound_player import SoundPlayer
 from logic.spell_config_store import SpellConfigStore
 from logic.theme_manager import theme_manager
-from theme import (apply_flat_widget_chrome, apply_modern_theme,
-                   get_modern_stylesheet)
+from theme import apply_modern_theme, get_modern_stylesheet
 from ui.main_window import MainWindow
 
 
@@ -114,7 +113,6 @@ def main():
         spell_config_store=spell_config_store,
         sound_player=sound_player,
     )
-    apply_flat_widget_chrome(window)
     window.showMaximized()
     app.processEvents()
 

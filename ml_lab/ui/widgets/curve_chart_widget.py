@@ -13,6 +13,8 @@ from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QBrush, QColor, QFont, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import QWidget
 
+import ml_lab.ui.lab_style as ls
+
 
 class CurveChartWidget(QWidget):
     """
@@ -22,6 +24,7 @@ class CurveChartWidget(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setMinimumSize(420, 260)
+        self.setAccessibleName("Biểu đồ đường cong Train và Validation theo siêu tham số")
         self._param_name: str = "Tham số"
         self._x_values: list[float | int | str] = []
         self._train_scores: list[float] = []
@@ -41,6 +44,16 @@ class CurveChartWidget(QWidget):
         self._train_scores = list(train_scores)
         self._val_scores = list(val_scores)
         self._val_stds = list(val_stds) if val_stds else [0.0] * len(val_scores)
+        # Screen reader: tóm tắt kết quả thay vì chỉ thấy canvas trống
+        if self._val_scores:
+            best_idx = int(np.argmax(self._val_scores))
+            best_x = self._x_values[best_idx] if best_idx < len(self._x_values) else "?"
+            self.setAccessibleDescription(
+                f"Quét theo {param_name}: {len(self._x_values)} cấu hình. "
+                f"Tốt nhất {best_x} đạt {self._val_scores[best_idx]*100:.1f}% trên dữ liệu mới."
+            )
+        else:
+            self.setAccessibleDescription("Chưa có dữ liệu thử nghiệm.")
         self.update()
 
     def paintEvent(self, _event: object) -> None:
@@ -49,7 +62,7 @@ class CurveChartWidget(QWidget):
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
             w, h = self.width(), self.height()
-            painter.fillRect(0, 0, w, h, QColor(255, 255, 255))
+            painter.fillRect(0, 0, w, h, QColor(ls.SURFACE))
 
             if not self._x_values or not self._val_scores:
                 self._draw_empty_state(painter, w, h)
@@ -77,18 +90,18 @@ class CurveChartWidget(QWidget):
                 return margin_top + plot_h - ((score - y_min) / y_range) * plot_h
 
             # 1. Grid & Trục
-            grid_pen = QPen(QColor(0, 0, 0, 20), 1, Qt.PenStyle.DashLine)
+            grid_pen = QPen(QColor(ls.BORDER), 1, Qt.PenStyle.DashLine)
             painter.setPen(grid_pen)
             for s in np.linspace(y_min, y_max, 5):
                 sy = to_screen_y(s)
                 painter.drawLine(int(margin_left), int(sy), int(w - margin_right), int(sy))
                 painter.setFont(QFont("Segoe UI", 9))
-                painter.setPen(QColor(120, 120, 130))
+                painter.setPen(QColor(ls.MUTED))
                 painter.drawText(margin_left - 42, int(sy + 4), f"{s*100:.0f}%")
                 painter.setPen(grid_pen)
 
             # Border
-            painter.setPen(QPen(QColor(0, 0, 0, 40), 1))
+            painter.setPen(QPen(QColor(ls.BORDER_STRONG), 1))
             painter.drawRect(margin_left, margin_top, plot_w, plot_h)
 
             # 2. Vùng Sweet Spot (Điểm Validation cao nhất)
@@ -96,9 +109,13 @@ class CurveChartWidget(QWidget):
                 best_idx = int(np.argmax(self._val_scores))
                 bx = to_screen_x(best_idx)
                 # Dải highlight
+                _hl = QColor(ls.SUCCESS)
+                _hl.setAlpha(25)
+                _hl_line = QColor(ls.SUCCESS)
+                _hl_line.setAlpha(120)
                 highlight_rect = QRectF(bx - 18, margin_top, 36, plot_h)
-                painter.fillRect(highlight_rect, QColor(52, 199, 89, 25))
-                painter.setPen(QPen(QColor(52, 199, 89, 120), 1, Qt.PenStyle.DotLine))
+                painter.fillRect(highlight_rect, _hl)
+                painter.setPen(QPen(_hl_line, 1, Qt.PenStyle.DotLine))
                 painter.drawLine(int(bx), margin_top, int(bx), int(h - margin_bottom))
 
             # 3. Vẽ đường Train Score (Màu Xám / Xanh lam nhạt)
@@ -110,16 +127,16 @@ class CurveChartWidget(QWidget):
                         train_path.moveTo(pt)
                     else:
                         train_path.lineTo(pt)
-                painter.setPen(QPen(QColor(142, 142, 147), 2))
+                painter.setPen(QPen(QColor(ls.MUTED), 2))
                 painter.drawPath(train_path)
 
                 for i, score in enumerate(self._train_scores):
                     pt = QPointF(to_screen_x(i), to_screen_y(score))
-                    painter.setBrush(QBrush(QColor(142, 142, 147)))
-                    painter.setPen(QPen(QColor(255, 255, 255), 1.5))
+                    painter.setBrush(QBrush(QColor(ls.MUTED)))
+                    painter.setPen(QPen(QColor(ls.SURFACE), 1.5))
                     painter.drawEllipse(pt, 3.5, 3.5)
 
-            # 4. Vẽ đường Validation Score (Màu Xanh Apple Blue nổi bật)
+            # 4. Vẽ đường Validation Score (ACCENT nổi bật)
             if self._val_scores and len(self._val_scores) == n_points:
                 val_path = QPainterPath()
                 for i, score in enumerate(self._val_scores):
@@ -128,19 +145,19 @@ class CurveChartWidget(QWidget):
                         val_path.moveTo(pt)
                     else:
                         val_path.lineTo(pt)
-                painter.setPen(QPen(QColor(0, 122, 255), 2.5))
+                painter.setPen(QPen(QColor(ls.ACCENT), 2.5))
                 painter.drawPath(val_path)
 
                 for i, score in enumerate(self._val_scores):
                     pt = QPointF(to_screen_x(i), to_screen_y(score))
                     is_best = (i == int(np.argmax(self._val_scores)))
-                    painter.setBrush(QBrush(QColor(52, 199, 89) if is_best else QColor(0, 122, 255)))
-                    painter.setPen(QPen(QColor(255, 255, 255), 2.0))
+                    painter.setBrush(QBrush(QColor(ls.SUCCESS) if is_best else QColor(ls.ACCENT)))
+                    painter.setPen(QPen(QColor(ls.SURFACE), 2.0))
                     painter.drawEllipse(pt, 5.0 if is_best else 4.0, 5.0 if is_best else 4.0)
 
             # 5. X Ticks & Labels
             painter.setFont(QFont("Segoe UI", 9, QFont.Weight.Medium))
-            painter.setPen(QColor(80, 80, 90))
+            painter.setPen(QColor(ls.BODY))
             for i, x_val in enumerate(self._x_values):
                 sx = to_screen_x(i)
                 text = str(x_val)
@@ -158,17 +175,17 @@ class CurveChartWidget(QWidget):
             leg_x = margin_left + 15
             leg_y = margin_top + 15
             # Train dot
-            painter.setBrush(QBrush(QColor(142, 142, 147)))
+            painter.setBrush(QBrush(QColor(ls.MUTED)))
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawEllipse(QRectF(leg_x, leg_y, 8, 8))
             painter.setFont(QFont("Segoe UI", 9))
-            painter.setPen(QColor(90, 90, 100))
+            painter.setPen(QColor(ls.BODY))
             painter.drawText(leg_x + 14, leg_y + 8, "Điểm trên dữ liệu cũ (máy đã học)")
 
             # Val dot
-            painter.setBrush(QBrush(QColor(0, 122, 255)))
+            painter.setBrush(QBrush(QColor(ls.ACCENT)))
             painter.drawEllipse(QRectF(leg_x + 180, leg_y, 8, 8))
-            painter.setPen(QColor(0, 122, 255))
+            painter.setPen(QColor(ls.ACCENT))
             painter.drawText(leg_x + 194, leg_y + 8, "Điểm trên dữ liệu MỚI (quan trọng nhất)")
 
         finally:
@@ -176,7 +193,7 @@ class CurveChartWidget(QWidget):
 
     def _draw_empty_state(self, painter: QPainter, w: int, h: int) -> None:
         painter.setFont(QFont("Segoe UI", 11, QFont.Weight.Medium))
-        painter.setPen(QColor(100, 110, 122))
+        painter.setPen(QColor(ls.MUTED))
         painter.drawText(
             QRectF(0, 0, w, h),
             Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,

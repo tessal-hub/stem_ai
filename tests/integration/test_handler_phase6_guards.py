@@ -75,6 +75,7 @@ class WandStub(QObject):
         self.logs: list[str] = []
         self.flash_progress: list[tuple[int, str]] = []
         self.serial_status: list[tuple[bool, str]] = []
+        self.firmware_status: list[str] = []
         self.serial_ports: list[str] = []
         self.stats_updates: list[dict] = []
         self.payload_updates: list[dict] = []
@@ -88,6 +89,9 @@ class WandStub(QObject):
     def set_serial_status(self, connected: bool, port_name: str = "") -> None:
         self.serial_status.append((connected, port_name))
 
+    def set_firmware_status(self, status: str) -> None:
+        self.firmware_status.append(status)
+
     def update_serial_port_list(self, ports: list[str]) -> None:
         self.serial_ports = list(ports)
 
@@ -99,6 +103,10 @@ class WandStub(QObject):
 
 
 class RecordStub(QObject):
+    def show_recording_error(self, message: str) -> None:
+        self.last_recording_error = message
+        self.is_live = False
+
     sig_data_cropped = pyqtSignal(list, str)
     sig_spell_selected = pyqtSignal(str)
     sig_spell_deleted = pyqtSignal(str)
@@ -163,6 +171,9 @@ class HomeStub(QObject):
     def set_mode(self, mode: str) -> None:
         self.mode_events.append(mode)
 
+    def _on_firmware_updated(self, _status: str) -> None:
+        pass
+
     def set_sensor_readout(self, values: list[float]) -> None:
         self.sensor_readouts.append(list(values))
 
@@ -207,6 +218,9 @@ class SettingStub(QObject):
 
     def update_flash_progress(self, value: int) -> None:
         self.flash_progress_values.append(value)
+
+    def update_firmware_status(self, _status: str) -> None:
+        pass
 
 
 class PrimitiveCollectStub(QObject):

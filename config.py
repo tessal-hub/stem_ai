@@ -26,25 +26,10 @@ if getattr(sys, "frozen", False):
 else:
     WORKSPACE_ROOT = Path(__file__).resolve().parent
 
-
-
-
-def _detect_workspace_file() -> Path:
-    """Tìm file .code-workspace trong thư mục gốc dự án.
-
-    Returns:
-        Đường dẫn tới file workspace đầu tiên tìm thấy,
-        hoặc đường dẫn mặc định nếu không tìm thấy.
-    """
-    try:
-        with os.scandir(WORKSPACE_ROOT) as entries:
-            for entry in entries:
-                if entry.is_file() and entry.name.endswith(".code-workspace"):
-                    return Path(entry.path)
-    except OSError:
-        pass
-    return WORKSPACE_ROOT / f"{WORKSPACE_ROOT.name}.code-workspace"
-
+# Ensure packages from local .venv (e.g. esptool, esp_idf_nvs_partition_gen) are importable as fallback
+_venv_site = WORKSPACE_ROOT / ".venv" / "Lib" / "site-packages"
+if _venv_site.is_dir() and str(_venv_site) not in sys.path:
+    sys.path.append(str(_venv_site))
 
 APP_DATA_DIR = WORKSPACE_ROOT / "app_data"
 USER_DATA_DIR = WORKSPACE_ROOT / "user_data"
@@ -62,7 +47,6 @@ SOUNDS_USER_DIR = USER_DATA_DIR / "sounds"
 FIRMWARE_PROJECT_ROOT = WORKSPACE_ROOT / "mpu6050"
 FIRMWARE_BIN_DIR = WORKSPACE_ROOT / "firmware"
 DEFAULT_MODEL_PATH = APP_DATA_DIR / "model.tflite"
-VSCODE_WORKSPACE_FILE = _detect_workspace_file()
 GESTURE_MODEL_CC_OUTPUT = APP_DATA_DIR / "gesture_model.cc"
 
 

@@ -43,7 +43,7 @@ def test_first_claim_wins_port():
 
 def test_second_owner_steals_and_auto_releases_first():
     released: list[str] = []
-    register_owner("t_a", lambda: released.append("t_a"))
+    register_owner("t_a", lambda: (released.append("t_a"), release("t_a")))
     register_owner("t_b", lambda: released.append("t_b"))
     assert acquire("t_a", "COM3") is True
     assert acquire("t_b", "COM3") is True
@@ -67,3 +67,12 @@ def test_release_frees_port():
 def test_empty_port_rejected():
     assert acquire("t_a", "") is False
     assert acquire("t_a", "   ") is False
+
+
+def test_handoff_waits_for_explicit_release():
+    register_owner("t_a", lambda: None)
+    assert acquire("t_a", "COM3")
+    assert not acquire("t_b", "COM3")
+    assert owner_of("COM3") == "t_a"
+    release("t_a")
+    assert acquire("t_b", "COM3")

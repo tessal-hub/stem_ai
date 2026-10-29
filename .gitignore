@@ -4,24 +4,43 @@
 .venv-tf/
 .env/
 
+# Local agent and IDE settings
+.agents/
+.codex/
+.cursor/
+.continue/
+.aider/
+.claude/
+.gemini/
+.github/*
+!.github/
+!.github/workflows/
+.github/workflows/*
+!.github/workflows/*.yml
+.github/copilot-instructions.md
+.impeccable/
+.opencode/
+.vscode/
+/AGENTS.md
+/skill.md
+
 # Python cache and artifacts
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
 
-# Test/cache outputs
+# Test/cache outputs and generated files
 .pytest_cache/
 .worktrees/
-
-# App local data (ignore everything except what we want to track)
-
-# Dataset (Tracked at root)
-!dataset/
+test_settings.ini
+artifacts/
+output_sounds/
+all_icons.txt
+*.DS_Store
+user_data/
 
 # Build artifacts
 build/
 dist/
-*.spec
 env/
-__pycache__/

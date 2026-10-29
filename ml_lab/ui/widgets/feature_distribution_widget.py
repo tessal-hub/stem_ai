@@ -132,8 +132,8 @@ class FeatureDistributionWidget(QWidget):
                 painter.setBrush(QBrush(col))
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.drawEllipse(QRectF(leg_x + c_idx * 110, leg_y, 8, 8))
-                painter.setFont(QFont("Segoe UI", 8, QFont.Weight.Medium))
-                painter.setPen(QColor(60, 60, 70))
+                painter.setFont(QFont("Segoe UI", 9, QFont.Weight.Medium))
+                painter.setPen(QColor(ls.BODY))
                 painter.drawText(leg_x + c_idx * 110 + 12, leg_y + 8, cls_name)
 
         finally:

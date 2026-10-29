@@ -7,6 +7,8 @@ và quản lý các nhóm cử chỉ cơ bản theo danh mục.
 
 from __future__ import annotations
 
+from ui.layout_utils import scroll_panel
+
 import numpy as np
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QProgressBar,
@@ -25,7 +27,7 @@ def _get_pg():
 from logic.locale_manager import locale_manager
 from logic.primitive_i18n import get_primitive_catalog
 from logic.theme_manager import theme_manager
-from ui.component_factory import make_button, make_hint, make_section_label
+from ui.component_factory import make_button, make_empty_state_card, make_hint, make_section_label
 from ui.i18n_bridge import tr_ui
 from ui.layout_utils import clear_layout
 from ui.tokens import (MARGIN_COMFORTABLE, PLOT_AX_COLOR, PLOT_AY_COLOR,
@@ -75,13 +77,15 @@ class PagePrimitiveCollect(QWidget):
 
         self._monitor_col = self._build_monitor_column()
         self._catalog_col = self._build_catalog_column()
-        self._content_layout = QHBoxLayout()
+        content = QWidget()
+        self._content_layout = QHBoxLayout(content)
+        self._content_layout.setContentsMargins(0, 0, 0, 0)
         self._content_layout.setSpacing(SPACING_MD)
         self._content_layout.addWidget(self._monitor_col, stretch=3)
         self._content_layout.addWidget(self._catalog_col, stretch=2)
         self._is_stacked = False
 
-        layout.addLayout(self._content_layout, stretch=1)
+        layout.addWidget(scroll_panel(content), stretch=1)
         self.refresh_styles()
 
     def _init_signals(self) -> None:
@@ -140,7 +144,14 @@ class PagePrimitiveCollect(QWidget):
         self._rebuild_cards()
         self._sec_preview.setText(tr_ui("primitive_signal_preview"))
         if hasattr(self, '_sec_training'):
-            self._sec_training.setText("ENCODER TRAINING")
+            self._sec_training.setText(tr_ui("encoder_training"))
+        self.btn_train_encoder.setText(tr_ui("encoder_train"))
+        self.cbo_preset.setToolTip(tr_ui("encoder_preset"))
+        self.cbo_preset.setAccessibleName(tr_ui("encoder_preset"))
+        self.btn_start_collect.setText(tr_ui("record_btn_start"))
+        self.btn_stop_collect.setText(tr_ui("record_btn_stop"))
+        self.btn_capture_collect.setText(tr_ui("primitive_btn_capture"))
+        self._empty_preview_text.setText(tr_ui("primitive_no_preview"))
 
     def set_advanced_mode(self, enabled: bool) -> None:
         """Bật/tắt chế độ nâng cao (ẩn/hiện terminal huấn luyện)."""
@@ -207,8 +218,10 @@ class PagePrimitiveCollect(QWidget):
                 prog.setValue(min(count, target)) # cap visual fill at 100%
             fmt = f"{count}/{target}"
             if prog.format() != fmt:
-                prog.setFormat(fmt)  # text shows real count e.g. "187/150"
-            prog.setTextVisible(True)
+                prog.setFormat(fmt)
+            lbl_count = widgets.get("count_label")
+            if lbl_count:
+                lbl_count.setText(f"{count} / {target}")
             if count >= 100:
                 gestures_ready += 1
             self._update_group_buttons(name, count, widgets["groups"])
@@ -334,13 +347,14 @@ class PagePrimitiveCollect(QWidget):
 
         # 2. Encoder Training
         card_t, lay_t = make_card(margins=(20, 20, 20, 20), spacing=SPACING_MD)
-        self._sec_training = make_section_label("ENCODER TRAINING")
+        self._sec_training = make_section_label(tr_ui("encoder_training"))
         
         self.cbo_preset = QComboBox()
         self.cbo_preset.addItems(["original", "medium", "aggressive"])
-        self.cbo_preset.setToolTip("Select model architecture preset")
+        self.cbo_preset.setToolTip(tr_ui("encoder_preset"))
+        self.cbo_preset.setAccessibleName(tr_ui("encoder_preset"))
         
-        self.btn_train_encoder = make_button("TRAIN ENCODER", "primary")
+        self.btn_train_encoder = make_button(tr_ui("encoder_train"), "primary")
         self.btn_train_encoder.setEnabled(False)
         self.btn_train_encoder.clicked.connect(lambda _: self.sig_train_encoder_requested.emit(self.cbo_preset.currentText()))
         
@@ -434,37 +448,46 @@ class PagePrimitiveCollect(QWidget):
             self.update_collection_stats(self._stats)
 
     def _make_empty_state_widget(self) -> QWidget:
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        widget.setMinimumHeight(220)
-        icon = QLabel("📊")
-        icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon.setProperty("type", "empty_state_icon")
-        text = QLabel("No data to evaluate yet")
-        text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        text.setProperty("type", "empty_state_text")
-        layout.addWidget(icon)
-        layout.addWidget(text)
-        return widget
+        card, _layout = make_empty_state_card(
+            title=tr_ui("primitive_no_preview"),
+            flat=True,
+            icon_path="assets/icon/statistic.svg",
+        )
+        card.setMinimumHeight(220)
+        self._empty_preview_text = None
+        for lbl in card.findChildren(QLabel):
+            if lbl.property("type") == "state_empty_title":
+                self._empty_preview_text = lbl
+                break
+        return card
 
     def _create_gesture_card(self, name: str, info: dict) -> QFrame:
-        """Tạo một thẻ cử chỉ đơn lẻ."""
+        """Tạo một thẻ cử chỉ đơn lẻ theo chuẩn Material You M3."""
         card = QFrame()
         card.setProperty("type", "statistics_card")
         lay = QVBoxLayout(card)
 
+        # Header: Tên cử chỉ + Bộ đếm tiến độ M3
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
         title = QLabel(name)
         title.setProperty("type", "gesture_card_title")
+
+        lbl_count = QLabel(f"0 / {int(info['target_samples'])}")
+        lbl_count.setStyleSheet(f"font-size: 11px; font-weight: 600; color: {theme_manager.get_palette().TEXT_SECONDARY};")
+        header_row.addWidget(title)
+        header_row.addStretch()
+        header_row.addWidget(lbl_count)
+        lay.addLayout(header_row)
+
+        desc = QLabel(info["description"])
+        desc.setStyleSheet(f"font-size: 12px; color: {theme_manager.get_palette().TEXT_SECONDARY};")
+        lay.addWidget(desc)
+
         prog = QProgressBar()
         prog.setRange(0, int(info["target_samples"]))
         prog.setValue(0)
-        prog.setFormat(f"0/{int(info['target_samples'])}")
-        prog.setTextVisible(True)
-
-        lay.addWidget(title)
-        lay.addWidget(QLabel(info["description"]))
+        prog.setTextVisible(False)
         lay.addWidget(prog)
 
         group_btns = {}
@@ -480,7 +503,7 @@ class PagePrimitiveCollect(QWidget):
             group_btns[g_name] = btn
         lay.addLayout(row)
 
-        self._card_widgets[name] = {"progress": prog, "groups": group_btns}
+        self._card_widgets[name] = {"progress": prog, "groups": group_btns, "count_label": lbl_count}
         return card
 
     # ── Slots ───────────────────────────────────
@@ -553,11 +576,15 @@ class PagePrimitiveCollect(QWidget):
                         w.setParent(None)
                 if should_stack:
                     lay.setDirection(QVBoxLayout.Direction.TopToBottom)
-                    lay.addWidget(self._monitor_col)
                     lay.addWidget(self._catalog_col)
+                    lay.addWidget(self._monitor_col)
+                    self._catalog_col.setMinimumHeight(380)
+                    self.preview_stack.setMaximumHeight(300)
                     self._catalog_col.setMaximumWidth(16777215)
                     self._catalog_col.setMinimumWidth(0)
                 else:
+                    self._catalog_col.setMinimumHeight(0)
+                    self.preview_stack.setMaximumHeight(16777215)
                     lay.setDirection(QBoxLayout.Direction.LeftToRight)
                     lay.addWidget(self._monitor_col, stretch=3)
                     lay.addWidget(self._catalog_col, stretch=2)

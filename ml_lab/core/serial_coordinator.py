@@ -5,8 +5,8 @@ Vấn đề: app STEM chính (SerialWorker) và ML Lab (MlLabSerialWorker / espt
 cùng mở 1 cổng COM → xung đột, bên mở sau lỗi câm hoặc crash. Windows giữ lock
 độc quyền nên 2 handle cùng COM không bao giờ cùng sống.
 
-Luật: 1 cổng tại 1 thời điểm chỉ 1 owner. Bên xin sau thắng — coordinator tự gọi
-release callback của bên đang giữ (auto-disconnect) rồi mới cấp cho bên mới.
+Luật: 1 cổng tại 1 thời điểm chỉ 1 owner. Coordinator yêu cầu chủ cũ dừng;
+chỉ cấp cho chủ mới sau khi chủ cũ đã trả cổng.
 Không Qt, không import app — cả handler chính và ML Lab đều dùng được.
 """
 
@@ -55,10 +55,10 @@ def owner_of(port: str) -> str | None:
 
 
 def acquire(owner: str, port: str) -> bool:
-    """
-    Xin giữ cổng. Bên xin sau luôn thắng: nếu cổng đang bị owner khác giữ,
-    coordinator gọi release callback của họ trước rồi mới cấp.
-    Trả về True khi đã giữ (luôn True trừ port rỗng).
+    """Request ownership. Return False while the previous owner is releasing.
+
+    Release callbacks must call release() only after their port handle closes.
+    Callers may retry once the previous worker has stopped.
     """
     key = _norm(port)
     if not key:
@@ -69,13 +69,16 @@ def acquire(owner: str, port: str) -> bool:
         holder = _claims.get(key)
         if holder is not None and holder != owner:
             release_cb = _release_cbs.get(holder)
-        _claims[key] = owner
     if release_cb is not None:
         try:
             release_cb()
         except Exception as exc:
             log.warning("SerialCoordinator: auto-release %s failed: %s", holder, exc)
-    return True
+    with _lock:
+        if _claims.get(key) not in (None, owner):
+            return False
+        _claims[key] = owner
+        return True
 
 
 def release(owner: str, port: str | None = None) -> None:

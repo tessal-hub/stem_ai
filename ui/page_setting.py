@@ -23,7 +23,9 @@ from PyQt6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QFormLayout,
 from logic.locale_manager import locale_manager
 from logic.ui_i18n import normalize_ui_language, tr
 from ui.asset_utils import resolve_asset_path
-from ui.tokens import (MARGIN_COMFORTABLE, SETTINGS_ACCENT, SPACE_32,
+from ui.layout_utils import scroll_panel
+from ui.terminal_widget import TerminalWidget
+from ui.tokens import (BORDER_LIGHT, MARGIN_COMFORTABLE, SETTINGS_ACCENT, SPACE_32,
                        SPACING_LG, SPACING_MD, SPACING_SM, STATUS_ERROR,
                        STATUS_SUCCESS)
 
@@ -64,7 +66,10 @@ class PageSetting(QWidget):
         outer.setSpacing(12)
 
         # ── Dashboard 2 Cột ──
-        columns = QHBoxLayout()
+        content = QWidget()
+        columns = QHBoxLayout(content)
+        columns.setContentsMargins(0, 0, 0, 0)
+        self._columns = columns
         columns.setSpacing(16)
 
         self._left_col = QVBoxLayout()
@@ -85,7 +90,7 @@ class PageSetting(QWidget):
         columns.addLayout(self._left_col, stretch=1)
         columns.addLayout(self._right_col, stretch=1)
 
-        outer.addLayout(columns, stretch=1)
+        outer.addWidget(scroll_panel(content), stretch=1)
         outer.addWidget(self._build_control_bar())
 
     # ── Section Builders ────────────────────────
@@ -101,7 +106,7 @@ class PageSetting(QWidget):
         card, c_lay = self._make_card(margins=(20, 18, 20, 18), spacing=14)
 
         self.combo_ui_language = self._make_combo([])
-        self.combo_ui_theme = self._make_combo(["Light Mode", "Dark Mode"])
+        self.combo_ui_theme = self._make_combo([])
         self.chk_show_primitives = QCheckBox()
         self.chk_show_primitives.setToolTip("Bật giao diện đầy đủ (Console, UART Terminal, Primitives)" if self._lang == "vi" else "Enable full interface (Console, UART Terminal, Primitives)")
 
@@ -114,17 +119,21 @@ class PageSetting(QWidget):
 
         # Theme
         lbl_theme = QLabel("Theme:")
+        self._tx(lbl_theme, "label_theme")
         lbl_theme.setProperty("type", "settings_form_label")
+        lbl_theme.setBuddy(self.combo_ui_theme)
         form.addRow(lbl_theme, self.combo_ui_theme)
 
         folder_icon = QIcon(resolve_asset_path("assets/icon/cooliocns SVG/File/Folder_Open.svg"))
 
         # Dataset Directory Input Group
         self.txt_dataset_dir = QLineEdit()
+        self.txt_dataset_dir.setMinimumHeight(36)
         self.txt_dataset_dir.setPlaceholderText("Select dataset directory...")
         self.txt_dataset_dir.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
-        self.btn_browse_dataset = QPushButton(" 🔍 Browse")
+        self.btn_browse_dataset = QPushButton("Browse")
+        self._tx(self.btn_browse_dataset, "btn_browse")
         self.btn_browse_dataset.setIcon(folder_icon)
         self.btn_browse_dataset.setIconSize(QSize(14, 14))
         self.btn_browse_dataset.setProperty("type", "outline")
@@ -141,10 +150,12 @@ class PageSetting(QWidget):
 
         # Model File Input Group
         self.txt_model_path = QLineEdit()
+        self.txt_model_path.setMinimumHeight(36)
         self.txt_model_path.setPlaceholderText("Select TFLite model file (.tflite)...")
         self.txt_model_path.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
-        self.btn_browse_model = QPushButton(" 🔍 Browse")
+        self.btn_browse_model = QPushButton("Browse")
+        self._tx(self.btn_browse_model, "btn_browse")
         self.btn_browse_model.setIcon(folder_icon)
         self.btn_browse_model.setIconSize(QSize(14, 14))
         self.btn_browse_model.setProperty("type", "outline")
@@ -162,6 +173,7 @@ class PageSetting(QWidget):
         # Advanced Mode Checkbox
         self.lbl_show_primitives = QLabel("Chế độ nâng cao" if self._lang == "vi" else "Advanced Mode")
         self.lbl_show_primitives.setProperty("type", "settings_form_label")
+        self.lbl_show_primitives.setBuddy(self.chk_show_primitives)
         form.addRow(self.lbl_show_primitives, self.chk_show_primitives)
 
         c_lay.addLayout(form)
@@ -188,6 +200,8 @@ class PageSetting(QWidget):
         accel_box.setSpacing(4)
         lbl_accel = QLabel(tr(self._lang, "label_accel"))
         lbl_accel.setProperty("type", "settings_form_label")
+        lbl_accel.setBuddy(self.combo_accel_scale)
+        self._tx(lbl_accel, "label_accel")
         accel_box.addWidget(lbl_accel)
         accel_box.addWidget(self.combo_accel_scale)
         imu_row.addLayout(accel_box, stretch=1)
@@ -197,6 +211,8 @@ class PageSetting(QWidget):
         gyro_box.setSpacing(4)
         lbl_gyro = QLabel(tr(self._lang, "label_gyro"))
         lbl_gyro.setProperty("type", "settings_form_label")
+        lbl_gyro.setBuddy(self.combo_gyro_scale)
+        self._tx(lbl_gyro, "label_gyro")
         gyro_box.addWidget(lbl_gyro)
         gyro_box.addWidget(self.combo_gyro_scale)
         imu_row.addLayout(gyro_box, stretch=1)
@@ -212,9 +228,8 @@ class PageSetting(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(8)
 
-        self.lbl_hw_metrics_title = QLabel("CẤU HÌNH PHẦN CỨNG & MÔ HÌNH" if self._lang == "vi" else "HARDWARE & MODEL METRICS")
+        self.lbl_hw_metrics_title = QLabel("Cấu hình phần cứng & Mô hình" if self._lang == "vi" else "Hardware & Model Metrics")
         self.lbl_hw_metrics_title.setProperty("type", "settings_section_label")
-        self.lbl_hw_metrics_title.setProperty("status", "accent")
         lay.addWidget(self.lbl_hw_metrics_title)
 
         card, c_lay = self._make_card(margins=(20, 18, 20, 18), spacing=12)
@@ -271,9 +286,9 @@ class PageSetting(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(8)
 
-        lbl_quality = QLabel("PRIMITIVE DATASET QUALITY")
+        lbl_quality = QLabel("Primitive Dataset Quality")
+        self._tx(lbl_quality, "quality_title")
         lbl_quality.setProperty("type", "settings_section_label")
-        lbl_quality.setProperty("status", "accent")
         lay.addWidget(lbl_quality)
 
         quality_card, quality_layout = self._make_card(margins=(20, 18, 20, 18), spacing=14)
@@ -281,7 +296,8 @@ class PageSetting(QWidget):
         quality_btn_row = QHBoxLayout()
         quality_btn_row.setSpacing(12)
 
-        self.btn_scan_quality = QPushButton("🔍 SCAN QUALITY")
+        self.btn_scan_quality = QPushButton("Scan Quality")
+        self._tx(self.btn_scan_quality, "quality_scan")
         self.btn_scan_quality.setProperty("type", "primary")
         self.btn_scan_quality.setFixedHeight(36)
         self.btn_scan_quality.setToolTip(
@@ -289,7 +305,8 @@ class PageSetting(QWidget):
         )
         self.btn_scan_quality.setAccessibleName("Scan primitive dataset quality")
 
-        self.btn_stop_scan = QPushButton("■ STOP SCAN")
+        self.btn_stop_scan = QPushButton("Stop Scan")
+        self._tx(self.btn_stop_scan, "quality_stop")
         self.btn_stop_scan.setEnabled(False)
         self.btn_stop_scan.setProperty("type", "stop")
         self.btn_stop_scan.setFixedHeight(36)
@@ -338,14 +355,14 @@ class PageSetting(QWidget):
         btns = QHBoxLayout()
         btns.setSpacing(12)
         self.btn_flash_collect = QPushButton("")
-        self.btn_flash_collect.setProperty("type", "primary")
+        self.btn_flash_collect.setProperty("type", "outline")
         self.btn_flash_collect.setFixedHeight(36)
-        self._tx(self.btn_flash_collect, "btn_flash_data", "⬆ ")
+        self._tx(self.btn_flash_collect, "btn_flash_data")
 
         self.btn_flash_ai = QPushButton("")
         self.btn_flash_ai.setProperty("type", "primary")
         self.btn_flash_ai.setFixedHeight(36)
-        self._tx(self.btn_flash_ai, "btn_flash_ai", "⬆ ")
+        self._tx(self.btn_flash_ai, "btn_flash_ai")
 
         btns.addWidget(self.btn_flash_collect, stretch=1)
         btns.addWidget(self.btn_flash_ai, stretch=1)
@@ -369,15 +386,14 @@ class PageSetting(QWidget):
     def _build_control_bar(self) -> QWidget:
         """Thanh tác vụ lưu/hủy cấu hình đính bên dưới."""
         container = QFrame()
-        container.setObjectName("CardFrame")
-        container.setStyleSheet("QFrame#CardFrame { border-top: 1px solid #e4e9f0; border-radius: 0px; }")
+        container.setObjectName("SettingsControlBar")
 
         row = QHBoxLayout(container)
         row.setContentsMargins(20, 12, 20, 12)
         row.setSpacing(14)
 
         self.lbl_status_msg = QLabel("")
-        self.lbl_status_msg.setStyleSheet("font-weight: 600; color: #1e7a46;")
+        self.lbl_status_msg.setStyleSheet(f"font-weight: 600; color: {STATUS_SUCCESS};")
         self.lbl_status_msg.hide()
 
         self.btn_revert = QPushButton("")
@@ -408,6 +424,8 @@ class PageSetting(QWidget):
         self.btn_browse_model.clicked.connect(self._on_btn_browse_model_clicked)
         self.combo_ui_language.currentIndexChanged.connect(self._on_ui_language_changed)
         self.combo_ui_theme.currentIndexChanged.connect(self._on_ui_theme_changed)
+        from logic.theme_manager import theme_manager
+        theme_manager.theme_changed.connect(self.refresh_styles)
         self.btn_scan_quality.clicked.connect(self._on_btn_scan_quality_clicked)
         self.btn_stop_scan.clicked.connect(self._on_btn_stop_scan_clicked)
         self.chk_show_primitives.toggled.connect(self.set_advanced_mode)
@@ -453,12 +471,14 @@ class PageSetting(QWidget):
 
         self._set_combo_data(self.combo_ui_language, normalize_ui_language(config.get("ui_language")))
 
-        current_theme = config.get("theme", theme_manager.current_theme)
-        theme_idx = 1 if str(current_theme).lower() == "dark" else 0
+        current_theme = str(config.get("theme", theme_manager.current_theme)).lower()
+        if current_theme not in ("light", "dark"):
+            current_theme = "light"
         self.combo_ui_theme.blockSignals(True)
-        self.combo_ui_theme.setCurrentIndex(theme_idx)
+        self._set_combo_data(self.combo_ui_theme, current_theme)
         self.combo_ui_theme.blockSignals(False)
-        theme_manager.current_theme = current_theme
+        if "theme" in config:
+            theme_manager.current_theme = current_theme
 
     def _rebalance_layout(self, advanced: bool) -> None:
         """Cân bằng lại vị trí các khối giữa 2 cột theo chế độ."""
@@ -507,22 +527,22 @@ class PageSetting(QWidget):
         if not hasattr(self, "lbl_setting_fw_status") or self.lbl_setting_fw_status is None:
             return
         if fw_type == "data":
-            self.lbl_setting_fw_status.setText(f"⚡ {tr(self._lang, 'fw_status_data', default='Data Collection (collect.bin)')}")
+            self.lbl_setting_fw_status.setText(f"● {tr(self._lang, 'fw_status_data', default='Data Collection (collect.bin)')}")
             self.lbl_setting_fw_status.setProperty("status", "success")
         elif fw_type == "inference":
-            self.lbl_setting_fw_status.setText(f"🧠 {tr(self._lang, 'fw_status_inference', default='AI Inference (Ready)')}")
+            self.lbl_setting_fw_status.setText(f"● {tr(self._lang, 'fw_status_inference', default='AI Inference (Ready)')}")
             self.lbl_setting_fw_status.setProperty("status", "accent")
         elif fw_type == "inference_no_nvs":
-            self.lbl_setting_fw_status.setText(f"🧠 {tr(self._lang, 'fw_status_inference_no_nvs', default='AI Firmware (No NVS / Unloaded)')}")
+            self.lbl_setting_fw_status.setText(f"● {tr(self._lang, 'fw_status_inference_no_nvs', default='AI Firmware (No NVS / Unloaded)')}")
             self.lbl_setting_fw_status.setProperty("status", "warning")
         elif fw_type == "detecting":
-            self.lbl_setting_fw_status.setText(f"🔍 {tr(self._lang, 'fw_status_detecting', default='Detecting...')}")
+            self.lbl_setting_fw_status.setText(f"● {tr(self._lang, 'fw_status_detecting', default='Detecting...')}")
             self.lbl_setting_fw_status.setProperty("status", "warning")
         elif fw_type == "unknown":
-            self.lbl_setting_fw_status.setText(f"❓ {tr(self._lang, 'fw_status_unknown', default='Unknown / Unrecognized')}")
+            self.lbl_setting_fw_status.setText(f"● {tr(self._lang, 'fw_status_unknown', default='Unknown / Unrecognized')}")
             self.lbl_setting_fw_status.setProperty("status", "warning")
         else:
-            self.lbl_setting_fw_status.setText(tr(self._lang, 'fw_status_disconnected', default='Not Connected'))
+            self.lbl_setting_fw_status.setText(f"○ {tr(self._lang, 'fw_status_disconnected', default='Not Connected')}")
             self.lbl_setting_fw_status.setProperty("status", "muted")
 
         self.lbl_setting_fw_status.style().unpolish(self.lbl_setting_fw_status)
@@ -586,6 +606,7 @@ class PageSetting(QWidget):
         form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         form.setFormAlignment(Qt.AlignmentFlag.AlignTop)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         return form
 
     def _add_i18n_form_row(self, form: QFormLayout, key: str, field: QWidget) -> None:
@@ -593,13 +614,22 @@ class PageSetting(QWidget):
         label.setProperty("type", "settings_form_label")
         label.setMinimumWidth(120)
         label.setWordWrap(False)
+        label.setBuddy(field.findChild(QLineEdit) or field)
         form.addRow(label, field)
         self._tx(label, key)
 
-    def _make_section_label_i18n(self, key: str, color: str = SETTINGS_ACCENT) -> QLabel:
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._columns.setDirection(
+            QHBoxLayout.Direction.TopToBottom if self.width() < 880
+            else QHBoxLayout.Direction.LeftToRight
+        )
+
+    def _make_section_label_i18n(self, key: str, accent: bool = False) -> QLabel:
         lbl = QLabel("")
         lbl.setProperty("type", "settings_section_label")
-        lbl.setProperty("status", "accent" if color == SETTINGS_ACCENT else "error")
+        if accent:
+            lbl.setProperty("status", "accent")
         self._tx(lbl, key)
         return lbl
 
@@ -610,6 +640,18 @@ class PageSetting(QWidget):
 
     def _refresh_ui_texts(self, lang: str) -> None:
         self._lang = lang
+        from logic.theme_manager import theme_manager
+        current_theme_data = self.combo_ui_theme.currentData() or theme_manager.current_theme
+
+        self.combo_ui_theme.blockSignals(True)
+        self.combo_ui_theme.clear()
+        self.combo_ui_theme.addItem(tr(lang, "theme_light"), "light")
+        self.combo_ui_theme.addItem(tr(lang, "theme_dark"), "dark")
+        self._set_combo_data(self.combo_ui_theme, current_theme_data)
+        self.combo_ui_theme.blockSignals(False)
+
+        self.btn_scan_quality.setAccessibleName(tr(lang, "quality_scan"))
+        self.btn_stop_scan.setAccessibleName(tr(lang, "quality_stop"))
         for w, key, prefix in self._i18n_text:
             w.setText(prefix + tr(lang, key))
 
@@ -617,7 +659,7 @@ class PageSetting(QWidget):
             self.lbl_show_primitives.setText("Chế độ nâng cao" if lang == "vi" else "Advanced Mode")
 
         if hasattr(self, "lbl_hw_metrics_title"):
-            self.lbl_hw_metrics_title.setText("CẤU HÌNH PHẦN CỨNG & MÔ HÌNH" if lang == "vi" else "HARDWARE & MODEL METRICS")
+            self.lbl_hw_metrics_title.setText("Cấu hình phần cứng & Mô hình" if lang == "vi" else "Hardware & Model Metrics")
 
         if hasattr(self, "lbl_cur_fw_title"):
             self.lbl_cur_fw_title.setText(tr(lang, "label_current_firmware", default="Current ESP Firmware:"))
@@ -635,6 +677,16 @@ class PageSetting(QWidget):
 
         self._set_combo_data(self.combo_ui_language, current_data)
         self.combo_ui_language.blockSignals(False)
+
+    def refresh_styles(self, theme_name: str | None = None) -> None:
+        """Đồng bộ trạng thái theme vào combo khi theme toàn cục thay đổi."""
+        from logic.theme_manager import theme_manager
+        current = theme_name or theme_manager.current_theme
+        idx = self.combo_ui_theme.findData(current)
+        if idx >= 0 and self.combo_ui_theme.currentIndex() != idx:
+            self.combo_ui_theme.blockSignals(True)
+            self.combo_ui_theme.setCurrentIndex(idx)
+            self.combo_ui_theme.blockSignals(False)
 
     def _configure_accessibility(self) -> None:
         self.btn_scan_quality.setAccessibleName("Scan primitive dataset quality")
@@ -657,11 +709,22 @@ class PageSetting(QWidget):
         }
         self._last_saved = config
         self.sig_settings_saved.emit(config)
-        self.show_status_message("✓ Settings saved successfully", is_error=False)
+        self.show_status_message(tr(self._lang, "settings_saved"), is_error=False)
 
     def _on_btn_revert_clicked(self) -> None:
+        from logic.theme_manager import theme_manager
         self.load_settings(self._last_saved)
-        self.show_status_message("Changes reverted", is_error=False)
+        if "theme" in self._last_saved:
+            theme_manager.current_theme = self._last_saved["theme"]
+        self.show_status_message(tr(self._lang, "settings_reverted"), is_error=False)
+
+    def closeEvent(self, event) -> None:
+        try:
+            from logic.theme_manager import theme_manager
+            theme_manager.theme_changed.disconnect(self.refresh_styles)
+        except Exception:
+            pass
+        super().closeEvent(event)
 
     def _on_btn_flash_collect_clicked(self) -> None:
         self.sig_flash_data_firmware.emit()
@@ -676,8 +739,9 @@ class PageSetting(QWidget):
 
     def _on_ui_theme_changed(self) -> None:
         from logic.theme_manager import theme_manager
-        idx = self.combo_ui_theme.currentIndex()
-        theme_str = "dark" if idx == 1 else "light"
+        theme_str = self.combo_ui_theme.currentData()
+        if not theme_str:
+            theme_str = "dark" if self.combo_ui_theme.currentIndex() == 1 else "light"
         theme_manager.current_theme = theme_str
 
     def _on_btn_browse_dataset_clicked(self) -> None:

@@ -30,6 +30,10 @@ from ui.tokens import (
     ACCENT,
     APP_FONT_STACK,
     BTN_H,
+    RADIUS_LG,
+    RADIUS_MD,
+    RADIUS_SM,
+    RADIUS_XS,
     SUCCESS,
     TEXT_MUTED,
     WARNING,
@@ -48,6 +52,27 @@ def _tint(hex_color: str, alpha: float) -> str:
         return hex_color
     r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
     return f"rgba({r}, {g}, {b}, {alpha})"
+
+
+def _make_svg_icon_label(icon_path: str, size: int = 24, color: str | None = None) -> QLabel:
+    """Tạo QLabel chứa icon SVG sắc nét với màu tùy chỉnh."""
+    lbl = QLabel()
+    lbl.setFixedSize(size, size)
+    lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    from PyQt6.QtSvg import QSvgRenderer
+    from PyQt6.QtGui import QPixmap, QPainter, QColor
+    from ui.asset_utils import resolve_asset_path
+    renderer = QSvgRenderer(resolve_asset_path(icon_path))
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pix)
+    renderer.render(painter)
+    if color:
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+        painter.fillRect(pix.rect(), QColor(color))
+    painter.end()
+    lbl.setPixmap(pix)
+    return lbl
 
 
 class BeginnerGuideDialog(QDialog):
@@ -88,8 +113,7 @@ class BeginnerGuideDialog(QDialog):
         header = QHBoxLayout()
         header.setSpacing(12)
 
-        icon_lbl = QLabel("🪄")
-        icon_lbl.setStyleSheet("font-size: 30px;")
+        icon_lbl = _make_svg_icon_label("assets/icon/wand.svg", 32, p.PRIMARY)
         header.addWidget(icon_lbl)
 
         title_box = QVBoxLayout()
@@ -164,7 +188,7 @@ class BeginnerGuideDialog(QDialog):
         layout.addWidget(
             self._make_step_card(
                 step_num="1",
-                icon="🔌",
+                icon="assets/icon/wand.svg",
                 title=tr_ui("guide_step1_title"),
                 badge=tr_ui("nav_wand"),
                 badge_color=ACCENT,
@@ -182,7 +206,7 @@ class BeginnerGuideDialog(QDialog):
         layout.addWidget(
             self._make_step_card(
                 step_num="2",
-                icon="✍️",
+                icon="assets/icon/record.svg",
                 title=tr_ui("guide_step2_title"),
                 badge=tr_ui("nav_record"),
                 badge_color=WARNING,
@@ -200,7 +224,7 @@ class BeginnerGuideDialog(QDialog):
         layout.addWidget(
             self._make_step_card(
                 step_num="3",
-                icon="⚡",
+                icon="assets/icon/cooliocns SVG/System/Data.svg",
                 title=tr_ui("guide_step3_title"),
                 badge=tr_ui("nav_wand"),
                 badge_color=SUCCESS,
@@ -223,7 +247,7 @@ class BeginnerGuideDialog(QDialog):
         pages_info = [
             (
                 "nav_home",
-                "🏠",
+                "assets/icon/home.svg",
                 tr_ui("guide_page_home_title"),
                 tr_ui("guide_page_home_desc"),
                 [
@@ -235,7 +259,7 @@ class BeginnerGuideDialog(QDialog):
             ),
             (
                 "nav_record",
-                "📊",
+                "assets/icon/record.svg",
                 tr_ui("guide_page_record_title"),
                 tr_ui("guide_page_record_desc"),
                 [
@@ -248,7 +272,7 @@ class BeginnerGuideDialog(QDialog):
             ),
             (
                 "nav_wand",
-                "🪄",
+                "assets/icon/wand.svg",
                 tr_ui("guide_page_wand_title"),
                 tr_ui("guide_page_wand_desc"),
                 [
@@ -265,8 +289,11 @@ class BeginnerGuideDialog(QDialog):
             c_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
             header = QHBoxLayout()
-            lbl_icon = QLabel(icon)
-            lbl_icon.setStyleSheet("font-size: 20px;")
+            if icon.endswith(".svg"):
+                lbl_icon = _make_svg_icon_label(icon, 20, p.PRIMARY)
+            else:
+                lbl_icon = QLabel(icon)
+                lbl_icon.setStyleSheet("font-size: 20px;")
             lbl_t = QLabel(title)
             lbl_t.setStyleSheet(f"font-weight: 700; font-size: 15px; color: {p.TEXT_PRIMARY};")
             header.addWidget(lbl_icon)
@@ -278,7 +305,7 @@ class BeginnerGuideDialog(QDialog):
             btn_go.setCursor(Qt.CursorShape.PointingHandCursor)
             btn_go.setStyleSheet(
                 f"background: {_tint(p.PRIMARY, 0.10)}; color: {p.PRIMARY}; "
-                f"border: 1px solid {_tint(p.PRIMARY, 0.33)}; border-radius: 6px; "
+                f"border: 1px solid {_tint(p.PRIMARY, 0.33)}; border-radius: {RADIUS_SM}px; "
                 f"padding: 4px 14px; font-weight: 700; font-size: 12px;"
             )
             btn_go.clicked.connect(lambda _, idx=tab_idx: self._on_cta_clicked(idx))
@@ -329,8 +356,7 @@ class BeginnerGuideDialog(QDialog):
         f1_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         h1 = QHBoxLayout()
-        icon1 = QLabel("📡")
-        icon1.setStyleSheet("font-size: 22px;")
+        icon1 = _make_svg_icon_label("assets/icon/cooliocns SVG/System/Data.svg", 22, p.PRIMARY)
         t1 = QLabel(tr_ui("guide_fw_data_title"))
         t1.setStyleSheet(f"font-weight: 700; font-size: 14px; color: {p.TEXT_PRIMARY};")
         b1 = QLabel(tr_ui("btn_flash_data"))
@@ -360,7 +386,7 @@ class BeginnerGuideDialog(QDialog):
         btn_fw1_go.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_fw1_go.setStyleSheet(
             f"background: {_tint(p.PRIMARY, 0.10)}; color: {p.PRIMARY}; "
-            f"border: 1px solid {_tint(p.PRIMARY, 0.33)}; border-radius: 6px; "
+            f"border: 1px solid {_tint(p.PRIMARY, 0.33)}; border-radius: 18px; "
             f"padding: 4px 12px; font-weight: 700; font-size: 12px;"
         )
         btn_fw1_go.clicked.connect(lambda _: self._on_cta_clicked(4))
@@ -373,8 +399,7 @@ class BeginnerGuideDialog(QDialog):
         f2_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         h2 = QHBoxLayout()
-        icon2 = QLabel("🧠")
-        icon2.setStyleSheet("font-size: 22px;")
+        icon2 = _make_svg_icon_label("assets/icon/wand.svg", 22, p.STATUS_SUCCESS)
         t2 = QLabel(tr_ui("guide_fw_ai_title"))
         t2.setStyleSheet(f"font-weight: 700; font-size: 14px; color: {p.TEXT_PRIMARY};")
         b2 = QLabel(tr_ui("wand_upload_model"))
@@ -404,7 +429,7 @@ class BeginnerGuideDialog(QDialog):
         btn_fw2_go.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_fw2_go.setStyleSheet(
             f"background: {_tint(p.STATUS_SUCCESS, 0.12)}; color: {p.STATUS_SUCCESS}; "
-            f"border: 1px solid {_tint(p.STATUS_SUCCESS, 0.33)}; border-radius: 6px; "
+            f"border: 1px solid {_tint(p.STATUS_SUCCESS, 0.33)}; border-radius: {RADIUS_SM}px; "
             f"padding: 4px 12px; font-weight: 700; font-size: 12px;"
         )
         btn_fw2_go.clicked.connect(lambda _: self._on_cta_clicked(3))
@@ -417,8 +442,10 @@ class BeginnerGuideDialog(QDialog):
         # Flow summary card with Wand CTA
         flow_card, fl_layout = make_card(margins=(18, 14, 18, 14), spacing=8)
         fl_header = QHBoxLayout()
-        lbl_flow_t = QLabel(f"🔄 {tr_ui('guide_fw_flow_title')}")
+        icon_flow = _make_svg_icon_label("assets/icon/cooliocns SVG/Arrow/Arrows_Reload_01.svg", 20, p.STATUS_WARNING)
+        lbl_flow_t = QLabel(tr_ui('guide_fw_flow_title'))
         lbl_flow_t.setStyleSheet(f"font-weight: 700; font-size: 14px; color: {p.STATUS_WARNING};")
+        fl_header.addWidget(icon_flow)
         fl_header.addWidget(lbl_flow_t)
         fl_header.addStretch()
 
@@ -427,7 +454,7 @@ class BeginnerGuideDialog(QDialog):
         btn_go_home.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_go_home.setStyleSheet(
             f"background: {_tint(p.STATUS_WARNING, 0.12)}; color: {p.STATUS_WARNING}; "
-            f"border: 1px solid {_tint(p.STATUS_WARNING, 0.33)}; border-radius: 6px; "
+            f"border: 1px solid {_tint(p.STATUS_WARNING, 0.33)}; border-radius: {RADIUS_SM}px; "
             f"padding: 4px 14px; font-weight: 700; font-size: 12px;"
         )
         btn_go_home.clicked.connect(lambda _: self._on_cta_clicked(0))
@@ -468,15 +495,15 @@ class BeginnerGuideDialog(QDialog):
             ("Space", tr_ui("guide_shortcut_space")),
         ]
 
-        badge_bg = "rgba(255, 255, 255, 0.12)" if is_dark else "rgba(0, 0, 0, 0.06)"
-        badge_border = "rgba(255, 255, 255, 0.15)" if is_dark else "rgba(0, 0, 0, 0.12)"
+        badge_bg = p.SURFACE_TERTIARY
+        badge_border = p.BORDER_LIGHT
 
         for key_combo, desc in shortcuts:
             row = QHBoxLayout()
             badge = QLabel(key_combo)
             badge.setStyleSheet(
                 f"background: {badge_bg}; color: {p.TEXT_PRIMARY}; "
-                f"border: 1px solid {badge_border}; border-radius: 5px; "
+                f"border: 1px solid {badge_border}; border-radius: {RADIUS_XS}px; "
                 f"padding: 5px 12px; font-weight: 700; font-family: monospace; font-size: 12px;"
             )
             badge.setFixedWidth(110)
@@ -504,7 +531,7 @@ class BeginnerGuideDialog(QDialog):
             tr_ui("guide_protip3"),
         ]
         for pt in protips:
-            lbl = QLabel(f"💡 {pt}")
+            lbl = QLabel(f"• {pt}")
             lbl.setWordWrap(True)
             lbl.setStyleSheet(f"font-size: 13px; color: {p.TEXT_PRIMARY}; line-height: 1.45;")
             t_layout.addWidget(lbl)
@@ -544,8 +571,11 @@ class BeginnerGuideDialog(QDialog):
             f"font-size: 13px; border-radius: 13px;"
         )
 
-        lbl_icon = QLabel(icon)
-        lbl_icon.setStyleSheet("font-size: 20px;")
+        if icon.endswith(".svg"):
+            lbl_icon = _make_svg_icon_label(icon, 20, p.TEXT_SECONDARY)
+        else:
+            lbl_icon = QLabel(icon)
+            lbl_icon.setStyleSheet("font-size: 20px;")
 
         lbl_t = QLabel(title)
         lbl_t.setStyleSheet(f"font-weight: 700; font-size: 15px; color: {p.TEXT_PRIMARY};")
@@ -567,7 +597,7 @@ class BeginnerGuideDialog(QDialog):
             btn_cta.setCursor(Qt.CursorShape.PointingHandCursor)
             btn_cta.setStyleSheet(
                 f"background: {badge_color}1A; color: {badge_color}; "
-                f"border: 1px solid {badge_color}44; border-radius: 6px; "
+                f"border: 1px solid {badge_color}44; border-radius: {RADIUS_XS}px; "
                 f"padding: 4px 14px; font-weight: 700; font-size: 12px;"
             )
             btn_cta.clicked.connect(lambda _, idx=target_tab_idx: self._on_cta_clicked(idx))
@@ -593,10 +623,9 @@ class BeginnerGuideDialog(QDialog):
 
     def _apply_theme(self) -> None:
         p = self._p
-        is_dark = self._is_dark
-        border_color = "rgba(255, 255, 255, 0.12)" if is_dark else "rgba(0, 0, 0, 0.08)"
         bg_dialog = p.SURFACE_SECONDARY
         card_bg = p.SURFACE_PRIMARY
+        border_color = p.BORDER
 
         self.setStyleSheet(f"""
             QDialog {{
@@ -605,28 +634,28 @@ class BeginnerGuideDialog(QDialog):
             }}
             QTabWidget::pane {{
                 border: 1px solid {border_color};
-                border-radius: 10px;
+                border-radius: {RADIUS_LG}px;
                 background: {bg_dialog};
             }}
             QTabBar::tab {{
                 padding: 10px 20px;
                 margin-right: 6px;
-                border-top-left-radius: 6px;
-                border-top-right-radius: 6px;
+                border-top-left-radius: {RADIUS_SM}px;
+                border-top-right-radius: {RADIUS_SM}px;
                 font-weight: 600;
                 font-size: 13px;
                 color: {p.TEXT_SECONDARY};
                 background: transparent;
             }}
             QTabBar::tab:selected {{
-                color: {ACCENT};
-                border-bottom: 2px solid {ACCENT};
+                color: {p.PRIMARY};
+                border-bottom: 2px solid {p.PRIMARY};
                 font-weight: 700;
             }}
             QFrame#Card {{
                 background-color: {card_bg};
                 border: 1px solid {border_color};
-                border-radius: 10px;
+                border-radius: {RADIUS_LG}px;
             }}
             QScrollBar:vertical {{
                 border: none;
@@ -635,7 +664,7 @@ class BeginnerGuideDialog(QDialog):
                 margin: 0;
             }}
             QScrollBar::handle:vertical {{
-                background: {'rgba(255,255,255,0.2)' if is_dark else 'rgba(0,0,0,0.15)'};
+                background: {p.BORDER_LIGHT};
                 min-height: 20px;
                 border-radius: 3px;
             }}

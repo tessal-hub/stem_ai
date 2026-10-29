@@ -116,8 +116,8 @@ class MisclassificationWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
 
-        self.lbl_title = QLabel("XEM TẠI SAO MÁY NHẦM (các mẫu kiểm tra bị sai)")
-        self.lbl_title.setStyleSheet(ls.section_label())
+        self.lbl_title = QLabel("Xem tại sao máy nhầm (các mẫu kiểm tra bị sai)")
+        self.lbl_title.setStyleSheet(ls.chart_title())
         layout.addWidget(self.lbl_title)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)

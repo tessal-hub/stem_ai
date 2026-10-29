@@ -70,6 +70,8 @@ class ArenaWorker(QThread):
         self.allowed_spells = set(allowed_spells) if allowed_spells is not None else None
 
     def run(self) -> None:
+        if self.isInterruptionRequested():
+            return
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
@@ -88,6 +90,8 @@ class ArenaWorker(QThread):
                     return
 
                 extractor = ClassicFeatureExtractor()
+                if self.isInterruptionRequested():
+                    return
                 X_train, y_train = extractor.extract_from_samples(train_wins)
                 X_val, y_val = extractor.extract_from_samples(val_wins)
 
@@ -112,8 +116,12 @@ class ArenaWorker(QThread):
                 failed: list[tuple[str, str]] = []
                 step = 85 / max(1, len(algos))
                 for i, (algo_key, cfg) in enumerate(algos):
+                    if self.isInterruptionRequested():
+                        return
                     self.sig_progress.emit(int(10 + i * step), f"Đang huấn luyện {algo_key.upper()}...")
                     try:
+                        if self.isInterruptionRequested():
+                            return
                         res = train_classic_model(
                             X_train, y_train, X_val, y_val, class_names, extractor.feature_names, algo=algo_key, config=cfg
                         )
@@ -127,6 +135,8 @@ class ArenaWorker(QThread):
                     return
 
                 self.sig_progress.emit(100, "Hoàn tất đấu trường!")
+                if self.isInterruptionRequested():
+                    return
                 self.sig_finished.emit(results)
                 if failed:
                     names = ", ".join(a for a, _ in failed)
@@ -169,7 +179,7 @@ class TabModelArena(QWidget):
         h_layout.setSpacing(ls.SP_3)
 
         t_vbox = QVBoxLayout()
-        lbl_t = QLabel("SO SÁNH 15 THUẬT TOÁN — THUẬT NÀO PHÙ HỢP NHẤT?")
+        lbl_t = QLabel("SO SÁNH 14 THUẬT TOÁN — THUẬT NÀO PHÙ HỢP NHẤT?")
         lbl_t.setStyleSheet(f"{ls.font(ls.FS_SECTION, 700)} color: {ls.ACCENT}; border: none; background: transparent;")
         lbl_d = QLabel("Huấn luyện thử cả 14 thuật toán trên đúng dữ liệu của bạn, xếp hạng theo độ chính xác và tốc độ.")
         lbl_d.setStyleSheet(ls.font(ls.FS_CAPTION) + f"color: {ls.MUTED}; border: none; background: transparent;")
@@ -270,6 +280,8 @@ class TabModelArena(QWidget):
         self._worker.start()
 
     def _on_arena_finished(self, results: list[TrainClassicResult]) -> None:
+        if getattr(self.window(), "_closing", False):
+            return
         self.btn_run_arena.setEnabled(True)
         self.progress_bar.setVisible(False)
         
@@ -338,6 +350,8 @@ class TabModelArena(QWidget):
         dlg.exec()
 
     def _on_arena_error(self, msg: str) -> None:
+        if getattr(self.window(), "_closing", False):
+            return
         self.btn_run_arena.setEnabled(True)
         self.progress_bar.setVisible(False)
         QMessageBox.warning(self, "Lỗi Đấu Trường", f"Không thể hoàn tất so sánh mô hình:\n{msg}")

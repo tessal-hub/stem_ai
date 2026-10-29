@@ -13,10 +13,10 @@ from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
 from ui.i18n_bridge import tr_ui
+from ui.component_factory import make_section_label
 from ui.terminal_widget import TerminalWidget
 from ui.tokens import BTN_SMALL_H, SPACING_SM
 
-from .shared import make_section_label
 
 # Tần suất làm mới terminal (ms)
 _FLUSH_INTERVAL_MS = 100
@@ -53,7 +53,6 @@ class WandTerminalPanel(QWidget):
         self.btn_term_clear.setProperty("type", "small")
         self.btn_term_clear.setMinimumHeight(BTN_SMALL_H)
         self.btn_term_clear.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_term_clear.setProperty("status", "accent")
         header.addWidget(self.btn_term_clear)
 
         layout.addLayout(header)
@@ -83,8 +82,11 @@ class WandTerminalPanel(QWidget):
         self.btn_term_clear.setText(tr_ui("wand_clear"))
 
     def refresh_styles(self) -> None:
-        """Làm mới style theo theme hiện tại."""
-        # Theme handling is mostly done via inline stylesheet for Requirement 4
+        """Giữ slot cho fan-out refresh_styles của page_wand.
+
+        Panel này không có style phụ thuộc palette: nút dùng property QSS
+        (type="small") của app stylesheet, terminal dùng TERM_BG giống cả 2 theme.
+        """
 
     # ── Private methods ─────────────────────────
 

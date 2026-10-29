@@ -12,7 +12,7 @@ STEM AI gồm hai phần chính chạy trên máy tính (Windows), kết nối v
 
 1. **STEM Spell Book (app chính)** — thu ghi cử chỉ, nhận diện thần chú theo thời gian thực bằng
    mạng nơ-ron few-shot (TensorFlow), phát âm thanh + điều khiển LED RGB theo spell.
-2. **ML Lab** — studio học máy cổ điển độc lập: 15 thuật toán (KNN → MLP), chẩn đoán bằng AI Coach,
+2. **ML Lab** — studio học máy cổ điển độc lập: 14 thuật toán (KNN → MLP), chẩn đoán bằng AI Coach,
    thí nghiệm tăng cường dữ liệu, xuất mã C++ và **nạp thẳng vào wand** không cần IDE.
 
 Hai đường AI song song trên cùng một dữ liệu IMU:
@@ -26,7 +26,7 @@ Hai đường AI song song trên cùng một dữ liệu IMU:
                         │      ├──► Encoder few-shot (TF Lite)    │──► Âm thanh + LED RGB
                         │      │    (nhận diện thời gian thực)    │
                         │      │                                  │
-                        │      └──► ML Lab (15 thuật toán classic)│
+                        │      └──► ML Lab (14 thuật toán classic)│
                         │           huấn luyện ──► mã C99 ────────┼──► Nạp lại wand
                         └─────────────────────────────────────────┘
 ```
@@ -41,15 +41,15 @@ Hai đường AI song song trên cùng một dữ liệu IMU:
 - Trang thu primitive riêng (few-shot collection) + hướng dẫn người mới (beginner guide).
 
 **ML Lab — studio học máy cổ điển** (chạy độc lập hoặc mở từ toolbar app)
-- **15 thuật toán**: KNN, Decision Tree, Random Forest, Extra Trees, GBDT, AdaBoost,
-  SVM, Logistic, Ridge, SGD, Gaussian NB, LDA, QDA, MLP, Nearest Centroid —
+- **14 thuật toán**: KNN, Decision Tree, Random Forest, Extra Trees, GBDT, AdaBoost,
+  SVM, Logistic, Ridge, SGD, Gaussian NB, LDA, MLP, Nearest Centroid —
   siêu tham số đầy đủ dạng ô điền số, có tooltip giải thích từng cái.
 - **AI Coach**: chẩn đoán tự động sau mỗi lần train (học vẹt? thiếu dữ liệu? nhầm cặp nào?) + bảng "Thần chú nào yếu nhất?".
 - **"Để máy tự chọn"**: thử 11 mô hình nhẹ, tự chọn mô hình tốt nhất rồi huấn luyện luôn.
 - **Thí nghiệm có kiểm chứng**: quét tham số (sweet spot), đường cong 25%→100% dữ liệu, A/B tăng cường dữ liệu.
 - **Hồ sơ mô hình (Model Card)**: tự sinh tài liệu "khi nào KHÔNG nên tin" — xuất PDF/Markdown.
 - **What-If Simulator + SHAP**: kéo đặc trưng, xem vì sao máy quyết định.
-- **Xuất mã C99 + nạp 1-click lên ESP32** (esptool), xem trước mã C++ ngay trong app.
+- **Xuất mã C++ và nạp ESP32**: đồng bộ model vào ESP-IDF project; cần `idf.py build` sau khi đổi model. App từ chối nạp nếu binary thiếu hoặc cũ.
 - **Thử mô hình trực tiếp từ PC**: wand stream IMU qua serial, mô hình đoán ngay không cần nạp.
 - **Sổ tay thuật ngữ** 17 mục + chế độ Người mới bắt đầu.
 
@@ -69,8 +69,10 @@ Hai đường AI song song trên cùng một dữ liệu IMU:
 | `esp32_classic_ml/` | Project ESP-IDF cho firmware suy luận ML cổ điển trên wand |
 | `assets/` | Icon, âm thanh, firmware binary |
 | `docs/` | Tài liệu chính thức (00_Getting Started → 08_ESP-IDF) + `teaching-guide.md` |
-| `tests/` | ~75 unit test (pytest) |
+| `tests/` | Unit test và integration test (pytest) |
 | `app_data/`, `user_data/`, `output_sounds/` | Dữ liệu chạy thời gian ghi đè được (model, cấu hình, âm thanh user) |
+
+`user_data/`, `output_sounds/`, `artifacts/`, cấu hình test và file/thư mục agent/IDE được giữ trên máy nhưng bỏ khỏi Git. `dataset/` vẫn được theo dõi.
 
 ## Cài đặt
 
@@ -81,10 +83,10 @@ Hai đường AI song song trên cùng một dữ liệu IMU:
 python -m venv .venv
 .venv\Scripts\activate
 
-# 2. Cài phụ thuộc lõi (chạy app, không cần TensorFlow)
+# 2. Cài phụ thuộc lõi và ML Lab (không cần TensorFlow)
 pip install -r requirements.txt
 
-# 3. (Tùy chọn) Cài phần huấn luyện AI — TensorFlow + pandas
+# 3. (Tùy chọn) Cài phần huấn luyện AI — TensorFlow
 pip install -r requirements-train.txt
 ```
 
@@ -114,9 +116,10 @@ từ bundle sang thư mục ghi được (`app_data/`, `output_sounds/`).
 ## Firmware & nạp lên wand
 
 - `esp32_classic_ml/` là project ESP-IDF hoàn chỉnh (CMake, sdkconfig, partitions)
-  chứa firmware suy luận ML cổ điển: nhận 63 đặc trưng → `classic_predict()` → ESP-NOW/Serial.
-- ML Lab tự sinh `model_classic.h/.cc` và đồng bộ vào `esp32_classic_ml/main/`,
-  sau đó nạp 1-click qua esptool (nút "Nạp mô hình lên ESP32" ở tab 5).
+  chứa firmware suy luận ML cổ điển: nhận `CLASSIC_NUM_FEATURES` đặc trưng (75 mặc định, theo cấu hình) → `classic_predict()` → ESP-NOW/Serial.
+- ML Lab sinh `model_classic.h/.cc` trong `esp32_classic_ml/main/`. Chạy `idf.py build` trong project sau khi đổi model; nút nạp dùng binary vừa build.
+- Bản đóng gói không kèm ESP-IDF project. Đặt thư mục `esp32_classic_ml/` cạnh file `.exe`, cài môi trường ESP-IDF và build trước khi nạp.
+- Build thủ công: chạy `idf.py build` trong terminal đã nạp môi trường ESP-IDF.
 - Nạp thủ công:
 
 ```bash
@@ -125,13 +128,12 @@ python -m esptool --chip esp32 --port COM9 --baud 921600 write-flash 0x10000 esp
 
 ## Kiểm thử
 
-```bash
-.venv\Scripts\python -m pytest tests/unit -q
+```powershell
+python -m pip install -r requirements-dev.txt
+python -m pytest tests -q
 ```
 
-~75 test phủ: trích xuất đặc trưng, chống rò rỉ dữ liệu, 15 thuật toán + sinh mã C,
-augmentation, model card, AI Coach, serial monitor, biên giới kiến trúc (ML Lab không
-được import Handler/DataStore của app chính)...
+GitHub Actions chạy Python 3.12 trên Windows và Ubuntu. Test firmware biên dịch extractor C++ với `g++`; integration test đi từ CSV qua train model đến dự đoán C++. Cần ESP-IDF và wand thật để xác nhận build, nạp và hành vi phần cứng.
 
 ## Tài liệu
 
@@ -151,7 +153,7 @@ augmentation, model card, AI Coach, serial monitor, biên giới kiến trúc (M
 |---|---|
 | UI | PyQt6, Qt Multimedia (FFmpeg), pyqtgraph |
 | AI — few-shot | TensorFlow / TensorFlow Lite (Prototypical Network) |
-| AI — cổ điển | scikit-learn (15 thuật toán), numpy |
+| AI — cổ điển | scikit-learn (14 thuật toán), numpy |
 | Phần cứng | ESP32 (ESP-IDF), MPU6050, esptool, pyserial, ESP-NOW |
 | Đóng gói | PyInstaller (seed app_data tự động lần chạy đầu) |
 

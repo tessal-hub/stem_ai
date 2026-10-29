@@ -21,8 +21,8 @@
 #include "driver/i2c_master.h"
 #include "driver/ledc.h"
 
-#include "classic_features.h"
 #include "model_classic.h"
+#include "classic_features.h"
 
 static const char* TAG = "STEM_CLASSIC_ML";
 
@@ -271,10 +271,16 @@ static void classic_ml_task(void* pvParameters) {
                     // 1. Trích xuất đặc trưng từ cửa sổ ĐỈNH
                     int64_t t_start = esp_timer_get_time();
                     memset(s_features, 0, sizeof(s_features));
-                    extract_classic_features(s_peak_buffer, WINDOW_SAMPLES, s_features);
+                    int feature_count = extract_classic_features(s_peak_buffer, WINDOW_SAMPLES, s_features);
 
                     float confidence = 0.0f;
-                    int pred_spell = classic_predict(s_features, &confidence);
+                    int pred_spell = -1;
+                    if (feature_count == CLASSIC_NUM_FEATURES) {
+                        pred_spell = classic_predict(s_features, &confidence);
+                    } else {
+                        ESP_LOGE(TAG, "Feature contract mismatch: extracted %d, model expects %d",
+                                 feature_count, CLASSIC_NUM_FEATURES);
+                    }
                     int64_t t_end = esp_timer_get_time();
                     float elapsed_ms = (float)(t_end - t_start) / 1000.0f;
 

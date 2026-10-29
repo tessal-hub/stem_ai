@@ -11,6 +11,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QGridLayout, QVBoxLayout, QWidget
 
 from ui.tokens import MARGIN_COMFORTABLE, SPACE_32, SPACING_LG, SPACING_MD
+from ui.layout_utils import scroll_panel
 from ui.wand_panels.connection_panel import WandConnectionPanel
 from ui.wand_panels.flash_panel import WandFlashPanel
 from ui.wand_panels.settings_panel import WandSettingsPanel
@@ -36,6 +37,8 @@ class PageWand(QWidget):
     sig_term_clear = pyqtSignal()
     sig_train_build_requested = pyqtSignal()
     sig_train_build_firmware_requested = pyqtSignal(list)
+    sig_flash_data_firmware = pyqtSignal()
+    sig_flash_inference_firmware = pyqtSignal()
     sig_settings_saved = pyqtSignal(dict)
 
     def __init__(self, data_store) -> None:
@@ -53,7 +56,9 @@ class PageWand(QWidget):
         layout.setContentsMargins(MARGIN_COMFORTABLE, 14, MARGIN_COMFORTABLE, 14)
         layout.setSpacing(SPACING_MD)
 
-        grid = QGridLayout()
+        content = QWidget()
+        grid = QGridLayout(content)
+        grid.setContentsMargins(0, 0, 0, 0)
         self._grid = grid
         grid.setSpacing(SPACING_MD)
 
@@ -74,7 +79,7 @@ class PageWand(QWidget):
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
 
-        layout.addLayout(grid, stretch=1)
+        layout.addWidget(scroll_panel(content), stretch=1)
         self._is_stacked = False
 
     def _init_signals(self) -> None:
@@ -85,6 +90,8 @@ class PageWand(QWidget):
         self.connection_panel.sig_serial_disconnect.connect(self.sig_serial_disconnect.emit)
 
         # Thao tác Flash & Build & Similarity
+        self.flash_panel.sig_flash_data_firmware.connect(self.sig_flash_data_firmware.emit)
+        self.flash_panel.sig_flash_inference_firmware.connect(self.sig_flash_inference_firmware.emit)
         self.flash_panel.sig_build_firmware_clicked.connect(self._on_btn_build_firmware_clicked)
         self.flash_panel.sig_upload_clicked.connect(self.sig_flash_upload.emit)
         self.flash_panel.sig_similarity_clicked.connect(self.sig_show_similarity_matrix.emit)
@@ -100,6 +107,14 @@ class PageWand(QWidget):
         self.load_spell_payload_list(data_store.spell_counts)
 
     # ── Public methods ──────────────────────────
+
+    def notify_user_alert(self, title: str, message: str, is_error: bool = True) -> None:
+        """Hiển thị thông báo trực tiếp cho người dùng (đặc biệt khi terminal đang bị ẩn)."""
+        from PyQt6.QtWidgets import QMessageBox
+        if is_error:
+            QMessageBox.critical(self, title, message)
+        else:
+            QMessageBox.information(self, title, message)
 
     def refresh_styles(self) -> None:
         """Làm mới style cho tất cả các panel con."""

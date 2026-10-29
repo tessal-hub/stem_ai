@@ -83,6 +83,7 @@ class WeightsBarWidget(QWidget):
 class _WeightsCanvas(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.setAccessibleName("Biểu đồ trọng số đặc trưng")
         self._feature_names: list[str] = []
         self._weights: list[float] = []
         self._class_name: str = ""
@@ -97,6 +98,12 @@ class _WeightsCanvas(QWidget):
             self._feature_names = []
             self._weights = []
         self._class_name = class_name
+        # Screen reader: đọc được top trọng số thay vì chỉ canvas vẽ
+        if self._feature_names:
+            top = ", ".join(f"{n} {v:+.2f}" for n, v in zip(self._feature_names[:5], self._weights[:5]))
+            self.setAccessibleDescription(f"Lớp {class_name}, trọng số lớn nhất: {top}.")
+        else:
+            self.setAccessibleDescription("Chưa có dữ liệu trọng số.")
         self.update()
 
     def paintEvent(self, _event: object) -> None:
@@ -105,7 +112,7 @@ class _WeightsCanvas(QWidget):
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
             w, h = self.width(), self.height()
-            painter.fillRect(0, 0, w, h, QColor(255, 255, 255))
+            painter.fillRect(0, 0, w, h, QColor(ls.SURFACE))
 
             if not self._feature_names or not self._weights:
                 self._draw_empty_state(painter, w, h)
@@ -127,7 +134,7 @@ class _WeightsCanvas(QWidget):
             half_w = plot_w / 2.0
 
             # Trục giữa 0
-            painter.setPen(QPen(QColor(0, 0, 0, 40), 1))
+            painter.setPen(QPen(QColor(ls.BORDER_STRONG), 1))
             painter.drawLine(int(center_x), margin_top, int(center_x), h - margin_bottom)
 
             for i in range(n_items):
@@ -140,25 +147,27 @@ class _WeightsCanvas(QWidget):
 
                 if val >= 0:
                     bar_rect = QRectF(center_x, y + row_h * 0.15, bar_len, rect_h)
-                    col = QColor(52, 199, 89, 190)  # Positive: Green
+                    col = QColor(ls.SUCCESS)  # Positive: ủng hộ lớp
+                    col.setAlpha(190)
                 else:
                     bar_rect = QRectF(center_x - bar_len, y + row_h * 0.15, bar_len, rect_h)
-                    col = QColor(255, 59, 48, 190)  # Negative: Red
+                    col = QColor(ls.DANGER)  # Negative: chống lại lớp
+                    col.setAlpha(190)
 
                 painter.fillRect(bar_rect, col)
 
                 # Label bên trái
                 painter.setFont(QFont("Segoe UI", 9, QFont.Weight.Medium))
-                painter.setPen(QColor(50, 50, 60))
+                painter.setPen(QColor(ls.BODY))
                 painter.drawText(
                     QRectF(0, y, margin_left - 10, row_h),
                     Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
                     feat_name,
                 )
 
-                # Giá trị số
-                painter.setFont(QFont("Segoe UI", 8))
-                painter.setPen(QColor(100, 100, 110))
+                # Giá trị số (9pt = sàn cỡ chữ 11px của hệ thống)
+                painter.setFont(QFont("Segoe UI", 9))
+                painter.setPen(QColor(ls.MUTED))
                 val_x = center_x + bar_len + 4 if val >= 0 else center_x - bar_len - 38
                 painter.drawText(
                     QRectF(val_x, y, 36, row_h),
@@ -171,7 +180,7 @@ class _WeightsCanvas(QWidget):
 
     def _draw_empty_state(self, painter: QPainter, w: int, h: int) -> None:
         painter.setFont(QFont("Segoe UI", 11, QFont.Weight.Medium))
-        painter.setPen(QColor(100, 110, 122))
+        painter.setPen(QColor(ls.MUTED))
         painter.drawText(
             QRectF(0, 0, w, h),
             Qt.AlignmentFlag.AlignCenter,

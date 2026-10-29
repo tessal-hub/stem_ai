@@ -7,13 +7,14 @@ thời gian thực trực tiếp từ board ESP32 khi kết nối qua cáp USB.
 
 from __future__ import annotations
 
+from collections import deque
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 import queue
 import serial
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QTextCursor
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -35,6 +36,7 @@ from PyQt6.QtWidgets import (
 )
 
 import ml_lab.ui.lab_style as ls
+from ui.layout_utils import scroll_panel
 from ml_lab.core.esp32_flasher import list_serial_ports
 from ml_lab.core.live_inference import LiveGesturePredictor
 from ml_lab.core.serial_coordinator import (
@@ -73,6 +75,7 @@ class MlLabSerialWorker(QThread):
         return True
 
     def stop(self) -> None:
+        self.requestInterruption()
         self._running = False
         if self._serial and self._serial.is_open:
             try:
@@ -93,7 +96,7 @@ class MlLabSerialWorker(QThread):
             self.sig_status.emit(False, f"Không thể mở cổng {self.port}: {exc}")
             return
 
-        while self._running:
+        while self._running and not self.isInterruptionRequested():
             # 1. Gửi lệnh đi nếu có trong hàng đợi
             while not self._outbound_queue.empty():
                 try:
@@ -172,14 +175,25 @@ class TabSerialMonitor(QWidget):
     Tab Giám Sát Serial Monitor & HUD Thần Chú Thời Gian Thực.
     """
 
+    # Terminal UART phải chặn giới hạn dòng — 115200 baud lâu sẽ phình document,
+    # append/cuộn chậm dần và ăn memory không giới hạn.
+    MAX_TERM_LINES = 1000
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._disconnecting = False
         self._worker: MlLabSerialWorker | None = None
         self._port_scan_worker: MlLabPortScanWorker | None = None
         self._live_predictor: LiveGesturePredictor | None = None
         self._trained_result: Any = None
         self._detected_count = 0
         self._claimed_port: str | None = None
+        # Buffer gom dòng UART, flush theo lô 100ms để khỏi append từng dòng
+        self._pending_lines: deque[str] = deque(maxlen=500)
+        self._flush_timer = QTimer(self)
+        self._flush_timer.setInterval(100)
+        self._flush_timer.timeout.connect(self._flush_log)
+        self._flush_timer.start()
         # Đăng ký để app STEM xin cổng thì coordinator tự gọi disconnect này
         coord_register(ML_LAB_SERIAL, self._coordinator_release)
 
@@ -266,8 +280,8 @@ class TabSerialMonitor(QWidget):
         l_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
         l_layout.setSpacing(ls.SP_2)
 
-        lbl_term_t = QLabel("NHẬT KÝ KẾT NỐI (UART)")
-        lbl_term_t.setStyleSheet(ls.section_label())
+        lbl_term_t = QLabel("Nhật ký kết nối (UART)")
+        lbl_term_t.setStyleSheet(ls.chart_title())
         l_layout.addWidget(lbl_term_t)
 
         self.term_edit = QTextEdit()
@@ -321,14 +335,14 @@ class TabSerialMonitor(QWidget):
         r_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
         r_layout.setSpacing(ls.SP_3)
 
-        lbl_hud_t = QLabel("KẾT QUẢ MỚI NHẤT TỪ WAND")
-        lbl_hud_t.setStyleSheet(ls.section_label())
+        lbl_hud_t = QLabel("Kết quả mới nhất từ wand")
+        lbl_hud_t.setStyleSheet(ls.chart_title())
         r_layout.addWidget(lbl_hud_t)
 
         # Live Spell Outcome Box
         self.hud_box = QFrame()
         self.hud_box.setStyleSheet(
-            f".QFrame {{ background: {ls.ACCENT_TINT_STRONG}; border-radius: {ls.RADIUS_LG}px; padding: {ls.SP_4}px; border: 1px solid {ls.ACCENT}; }}"
+            f".QFrame {{ background: {ls.ACCENT_TINT_STRONG}; border-radius: {ls.RADIUS_LG}px; padding: {ls.SP_4}px; border: none; }}"
         )
         hud_vbox = QVBoxLayout(self.hud_box)
         hud_vbox.setSpacing(4)
@@ -336,8 +350,10 @@ class TabSerialMonitor(QWidget):
         lbl_h_tag = QLabel("THẦN CHÚ VỪA ĐƯỢC NHẬN DIỆN:")
         lbl_h_tag.setStyleSheet(ls.font(ls.FS_MICRO, 700) + f"color: {ls.ACCENT}; border: none; background: transparent;")
         self.lbl_spell_name = QLabel("CHỜ CỬ CHỈ...")
+        self.lbl_spell_name.setWordWrap(True)
         self.lbl_spell_name.setStyleSheet(ls.font(ls.FS_DISPLAY, 800) + f"color: {ls.ACCENT}; border: none; background: transparent;")
         self.lbl_conf_text = QLabel("Chưa có kết quả — hãy vung wand để cảm biến ghi dữ liệu.")
+        self.lbl_conf_text.setWordWrap(True)
         self.lbl_conf_text.setStyleSheet(ls.font(ls.FS_BODY, 600) + f"color: {ls.SUCCESS}; border: none; background: transparent;")
 
         hud_vbox.addWidget(lbl_h_tag)
@@ -355,6 +371,7 @@ class TabSerialMonitor(QWidget):
 
         lbl_live_t = QLabel("THỬ MÔ HÌNH NGAY TRÊN MÁY (KHÔNG CẦN NẠP)")
         lbl_live_t.setStyleSheet(ls.font(ls.FS_MICRO, 700) + f"color: {ls.SUCCESS}; border: none; background: transparent;")
+        lbl_live_t.setWordWrap(True)
         lbl_live_t.setToolTip(
             "Wand gửi dữ liệu cảm biến lên máy tính, mô hình vừa huấn luyện đoán trực tiếp tại đây.\n"
             "Muốn wand tự đoán khi rút cáp thì dùng nút “Nạp lên wand”."
@@ -368,12 +385,14 @@ class TabSerialMonitor(QWidget):
         self.chk_live_predict.setStyleSheet(ls.font(ls.FS_CAPTION, 600) + f"color: {ls.BODY}; border: none; background: transparent;")
 
         self.lbl_live_result = QLabel("")
+        self.lbl_live_result.setWordWrap(True)
         self.lbl_live_result.setStyleSheet(ls.font(16, 800) + f"color: {ls.SUCCESS}; border: none; background: transparent;")
         self.lbl_live_detail = QLabel(
             f"Vung dứt khoát — wand bắt ĐỈNH chuyển động trong {WINDOW_SAMPLES} mẫu "
             f"(~{WINDOW_SAMPLES * 20 // 1000}.{WINDOW_SAMPLES * 20 % 1000 // 100}s), "
             f"đủ {int(MIN_CONFIDENCE * 100)}% chắc mới ra kết quả. Tay khẽ rung không lọt."
         )
+        self.lbl_live_detail.setWordWrap(True)
         self.lbl_live_detail.setStyleSheet(ls.font(ls.FS_CAPTION) + f"color: {ls.MUTED}; border: none; background: transparent;")
 
         live_vbox.addWidget(lbl_live_t)
@@ -389,6 +408,7 @@ class TabSerialMonitor(QWidget):
         r_layout.addWidget(lbl_hist)
 
         self.table_history = QTableWidget()
+        self.table_history.setMinimumHeight(150)
         self.table_history.setColumnCount(3)
         self.table_history.setHorizontalHeaderLabels(["Thời điểm", "Thần chú", "Độ chắc chắn"])
         self.table_history.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -406,7 +426,7 @@ class TabSerialMonitor(QWidget):
         lbl_serial_guide.setStyleSheet(ls.note_box(ls.ACCENT).replace(f"padding: {ls.SP_2}px {ls.SP_3}px", "padding: 8px 10px"))
         r_layout.addWidget(lbl_serial_guide)
 
-        splitter.addWidget(right_box)
+        splitter.addWidget(scroll_panel(right_box))
         splitter.setStretchFactor(0, 6)
         main_layout.addWidget(splitter, stretch=1)
 
@@ -438,7 +458,7 @@ class TabSerialMonitor(QWidget):
 
     def _on_ports_scanned(self, ports: list) -> None:
         self.combo_ports.clear()
-        self.btn_connect.setEnabled(True)
+        self.btn_connect.setEnabled(not self._disconnecting)
         if not ports:
             self.combo_ports.addItem("Không có cổng", "")
         else:
@@ -452,6 +472,8 @@ class TabSerialMonitor(QWidget):
             self._connect_serial()
 
     def _connect_serial(self) -> None:
+        if self._worker is not None:
+            return
         port = self.combo_ports.currentData()
         if not port:
             QMessageBox.warning(self, "Chưa Chọn Cổng", "Vui lòng chọn cổng Serial COM để kết nối.")
@@ -459,7 +481,9 @@ class TabSerialMonitor(QWidget):
         # Claim toàn cục trước: app STEM đang giữ cổng này thì tự ngắt —
         # hết xung đột COM khi 2 bên cùng mở.
         prev_holder = coord_owner_of(port)
-        coord_acquire(ML_LAB_SERIAL, port)
+        if not coord_acquire(ML_LAB_SERIAL, port):
+            self.lbl_status.setText("Cổng đang bận hoặc đang ngắt. Hãy bấm Kết nối lại khi đã dừng.")
+            return
         self._claimed_port = port
 
         baud = int(self.combo_baud.currentText())
@@ -474,28 +498,35 @@ class TabSerialMonitor(QWidget):
         self._worker.sig_prediction.connect(self._on_prediction_received)
         self._worker.sig_imu_data.connect(self._on_live_imu_sample)
         self._worker.sig_status.connect(self._on_status_changed)
+        self._worker.finished.connect(self._finish_disconnect)
         self._worker.start()
 
     def disconnect_serial(self) -> None:
         """Ngắt kết nối Serial (API công khai, an toàn gọi nhiều lần)."""
-        try:
-            if self._claimed_port:
-                coord_release(ML_LAB_SERIAL, self._claimed_port)
-            else:
-                coord_release(ML_LAB_SERIAL)
-        except Exception:
-            pass
-        self._claimed_port = None
         if self._worker and self._worker.isRunning():
+            self._disconnecting = True
+            self.btn_connect.setEnabled(False)
+            self.lbl_status.setText("Đang ngắt kết nối...")
             self._worker.stop()
-            self._worker.wait(1000)
+            return
+        self._finish_disconnect()
+
+    def _finish_disconnect(self) -> None:
+        if self._worker is not None and self._worker.isRunning():
+            return
+        was_disconnecting = self._disconnecting
+        coord_release(ML_LAB_SERIAL, self._claimed_port)
+        self._claimed_port = None
         self._worker = None
+        self._disconnecting = False
+        self.btn_connect.setEnabled(True)
         if self._live_predictor is not None:
             self._live_predictor.reset()
         self.btn_connect.setText("Kết nối")
         self.btn_connect.setStyleSheet(ls.BTN_PRIMARY)
-        self.lbl_status.setText("Chưa kết nối")
-        self.lbl_status.setStyleSheet(ls.font(ls.FS_CAPTION, 600) + f"color: {ls.MUTED}; border: none; background: transparent;")
+        if was_disconnecting:
+            self.lbl_status.setText("Chưa kết nối")
+            self.lbl_status.setStyleSheet(ls.font(ls.FS_CAPTION, 600) + f"color: {ls.MUTED}; border: none; background: transparent;")
 
     def _disconnect_serial(self) -> None:
         self.disconnect_serial()
@@ -508,7 +539,9 @@ class TabSerialMonitor(QWidget):
             pass
 
     def _on_status_changed(self, is_connected: bool, msg: str) -> None:
-        self.btn_connect.setEnabled(True)
+        if self._disconnecting:
+            return
+        self.btn_connect.setEnabled(is_connected)
         if is_connected:
             self.btn_connect.setText("Ngắt kết nối")
             self.btn_connect.setStyleSheet(
@@ -527,10 +560,35 @@ class TabSerialMonitor(QWidget):
 
     def _on_raw_line(self, line: str) -> None:
         ts = f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] " if self.chk_timestamps.isChecked() else ""
-        self.term_edit.append(f"{ts}{line}")
+        self._pending_lines.append(f"{ts}{line}")
+
+    def _flush_log(self) -> None:
+        """Xả buffer log ra terminal theo lô: 1 lần update cho cả burst dòng."""
+        if not self._pending_lines:
+            return
+        batch = list(self._pending_lines)
+        self._pending_lines.clear()
+        self.term_edit.setUpdatesEnabled(False)
+        try:
+            for text in batch:
+                self.term_edit.append(text)
+            self._trim_terminal()
+        finally:
+            self.term_edit.setUpdatesEnabled(True)
         if self.chk_autoscroll.isChecked():
             sb = self.term_edit.verticalScrollBar()
             sb.setValue(sb.maximum())
+
+    def _trim_terminal(self) -> None:
+        """Cắt dòng cũ bằng bulk block-move của Qt (không loop từng dòng)."""
+        doc = self.term_edit.document()
+        overflow = doc.blockCount() - self.MAX_TERM_LINES
+        if overflow <= 0:
+            return
+        cursor = QTextCursor(doc)
+        cursor.movePosition(QTextCursor.MoveOperation.Start)
+        cursor.movePosition(QTextCursor.MoveOperation.NextBlock, QTextCursor.MoveMode.KeepAnchor, overflow)
+        cursor.removeSelectedText()
 
     def _on_prediction_received(self, spell: str, conf: float, latency: float) -> None:
         self.lbl_spell_name.setText(spell.upper())
@@ -591,11 +649,12 @@ class TabSerialMonitor(QWidget):
     def _send_quick_cmd(self, cmd: str) -> None:
         if self._worker and self._worker.isRunning():
             self._worker.send_cmd(cmd)
-            self.term_edit.append(f"<b>&gt;&gt; [SEND] {cmd}</b>")
+            self._pending_lines.append(f"<b>&gt;&gt; [SEND] {cmd}</b>")
         else:
             QMessageBox.warning(self, "Chưa Kết Nối", "Vui lòng kết nối Serial trước khi gửi lệnh.")
 
     def _clear_terminal(self) -> None:
+        self._pending_lines.clear()
         self.term_edit.clear()
 
     def _save_log_to_file(self) -> None:

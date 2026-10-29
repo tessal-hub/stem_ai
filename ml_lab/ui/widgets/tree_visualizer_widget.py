@@ -80,8 +80,8 @@ class TreeVisualizerWidget(QWidget):
                     painter.drawLine(pos, child_pos)
                     # Label "True"
                     mid_x, mid_y = (pos.x() + child_pos.x()) / 2.0, (pos.y() + child_pos.y()) / 2.0
-                    painter.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
-                    painter.setPen(QColor(52, 199, 89))
+                    painter.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+                    painter.setPen(QColor(ls.SUCCESS))
                     painter.drawText(int(mid_x - 14), int(mid_y), "True")
                     painter.setPen(QPen(QColor(180, 185, 195), 1.5))
 
@@ -90,8 +90,8 @@ class TreeVisualizerWidget(QWidget):
                     painter.drawLine(pos, child_pos)
                     # Label "False"
                     mid_x, mid_y = (pos.x() + child_pos.x()) / 2.0, (pos.y() + child_pos.y()) / 2.0
-                    painter.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
-                    painter.setPen(QColor(255, 59, 48))
+                    painter.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+                    painter.setPen(QColor(ls.DANGER))
                     painter.drawText(int(mid_x + 4), int(mid_y), "False")
                     painter.setPen(QPen(QColor(180, 185, 195), 1.5))
 
@@ -127,7 +127,7 @@ class TreeVisualizerWidget(QWidget):
                     painter.setPen(QPen(QColor(0, 122, 255), 1.5))
                     painter.drawRoundedRect(rect, 6, 6)
 
-                    painter.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+                    painter.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
                     painter.setPen(QColor(30, 30, 40))
                     text = f"{feat_name}\n≤ {thresh:.2f} (n={tree.n_node_samples[node_id]})"
                     painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)

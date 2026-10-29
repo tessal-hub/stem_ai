@@ -12,10 +12,10 @@ from PyQt6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel,
                              QVBoxLayout, QWidget)
 
 from ui.i18n_bridge import tr_ui
+from ui.component_factory import make_card, make_outline_button, make_primary_button, make_section_label
 from ui.tokens import MARGIN_COMFORTABLE, SETTINGS_INPUT_H, SPACING_SM
 
 from .connection_presenter import ConnectionStatusPresenter
-from .shared import make_button, make_card, make_section_label
 
 
 class WandConnectionPanel(QWidget):
@@ -74,31 +74,31 @@ class WandConnectionPanel(QWidget):
         """Cập nhật trạng thái firmware hiển thị trên panel."""
         self._current_firmware = fw_type
         if not self._serial_connected or fw_type == "disconnected":
-            self.lbl_firmware_status.setText(tr_ui("fw_status_disconnected"))
+            self.lbl_firmware_status.setText(f"○ {tr_ui('fw_status_disconnected')}")
             self.lbl_firmware_status.setProperty("status", "muted")
             self.lbl_firmware_status.setToolTip("")
         elif fw_type == "data":
-            self.lbl_firmware_status.setText(f"⚡ {tr_ui('fw_status_data')}")
+            self.lbl_firmware_status.setText(f"● {tr_ui('fw_status_data')}")
             self.lbl_firmware_status.setProperty("status", "success")
             self.lbl_firmware_status.setToolTip(tr_ui("fw_desc_data"))
         elif fw_type == "inference":
-            self.lbl_firmware_status.setText(f"🧠 {tr_ui('fw_status_inference')}")
+            self.lbl_firmware_status.setText(f"● {tr_ui('fw_status_inference')}")
             self.lbl_firmware_status.setProperty("status", "accent")
             self.lbl_firmware_status.setToolTip(tr_ui("fw_desc_inference"))
         elif fw_type == "inference_no_nvs":
-            self.lbl_firmware_status.setText(f"🧠 {tr_ui('fw_status_inference_no_nvs')}")
+            self.lbl_firmware_status.setText(f"● {tr_ui('fw_status_inference_no_nvs')}")
             self.lbl_firmware_status.setProperty("status", "warning")
             self.lbl_firmware_status.setToolTip(tr_ui("fw_desc_inference_no_nvs"))
         elif fw_type == "detecting":
-            self.lbl_firmware_status.setText(f"🔍 {tr_ui('fw_status_detecting')}")
+            self.lbl_firmware_status.setText(f"● {tr_ui('fw_status_detecting')}")
             self.lbl_firmware_status.setProperty("status", "warning")
             self.lbl_firmware_status.setToolTip(tr_ui("fw_desc_detecting"))
         elif fw_type == "unknown":
-            self.lbl_firmware_status.setText(f"❓ {tr_ui('fw_status_unknown')}")
+            self.lbl_firmware_status.setText(f"● {tr_ui('fw_status_unknown')}")
             self.lbl_firmware_status.setProperty("status", "warning")
             self.lbl_firmware_status.setToolTip(tr_ui("fw_desc_unknown"))
         else:
-            self.lbl_firmware_status.setText(tr_ui("fw_status_disconnected"))
+            self.lbl_firmware_status.setText(f"○ {tr_ui('fw_status_disconnected')}")
             self.lbl_firmware_status.setProperty("status", "muted")
             self.lbl_firmware_status.setToolTip("")
 
@@ -146,7 +146,7 @@ class WandConnectionPanel(QWidget):
         status_row = QHBoxLayout()
         self._serial_heading = QLabel(tr_ui("wand_serial"))
         self._serial_heading.setProperty("type", "settings_form_label")
-        self.lbl_serial_status = QLabel(tr_ui("wand_status_disconnected"))
+        self.lbl_serial_status = QLabel(f"○ {tr_ui('wand_status_disconnected')}")
         self.lbl_serial_status.setProperty("type", "status_label")
         self.lbl_serial_status.setProperty("status", "error")
         self.lbl_serial_status.setWordWrap(True)
@@ -173,8 +173,8 @@ class WandConnectionPanel(QWidget):
         layout.addWidget(self.combo_serial_ports)
 
         btn_row = QHBoxLayout()
-        self.btn_serial_scan = make_button(tr_ui("wand_scan"), "outline")
-        self.btn_serial_connect = make_button(tr_ui("wand_connect"), "primary")
+        self.btn_serial_scan = make_outline_button(tr_ui("wand_scan"), height=36)
+        self.btn_serial_connect = make_primary_button(tr_ui("wand_connect"), height=36)
         self.btn_serial_connect.setEnabled(False)
         btn_row.addWidget(self.btn_serial_scan)
         btn_row.addWidget(self.btn_serial_connect)

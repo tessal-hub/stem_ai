@@ -37,7 +37,7 @@ class ConfusionMatrixWidget(QWidget):
         self.metrics_card = QFrame()
         self.metrics_card.setObjectName("CMMetrics")
         self.metrics_card.setStyleSheet(
-            f"#CMMetrics {{ background: {ls.SURFACE_SUNK}; border: 1px solid {ls.BORDER}; "
+            f"#CMMetrics {{ background: {ls.SURFACE_SUNK}; border: none; "
             f"border-radius: {ls.RADIUS_MD}px; padding: {ls.SP_2}px; }}"
         )
         m_layout = QHBoxLayout(self.metrics_card)

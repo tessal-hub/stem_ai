@@ -38,6 +38,9 @@ class WandStub(QObject):
     def update_esp_stats(self, _stats: dict) -> None:
         pass
 
+    def set_firmware_status(self, _status: str) -> None:
+        pass
+
 
 class RecordStub(QObject):
     sig_start_record = pyqtSignal(str)
@@ -69,6 +72,9 @@ class HomeStub(QObject):
     def set_mode(self, _mode: str) -> None:
         pass
 
+    def _on_firmware_updated(self, _status: str) -> None:
+        pass
+
     def set_connection_status(self, _status: bool) -> None:
         pass
 
@@ -90,6 +96,9 @@ class SettingStub(QObject):
     sig_stop_primitive_scan = pyqtSignal()
 
     def update_flash_progress(self, _progress: int, _status: str) -> None:
+        pass
+
+    def update_firmware_status(self, _status: str) -> None:
         pass
 
 

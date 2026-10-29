@@ -57,6 +57,7 @@ from logic.sound_player import SoundPlayer
 from logic.spell_config_store import SpellConfigStore
 from logic.tensorflow.nvs_builder import build_config_bin
 from PyQt6.QtCore import QThread, pyqtSignal
+from ui.i18n_bridge import tr_ui
 
 class NVSBuildWorker(QThread):
     sig_status = pyqtSignal(str)
@@ -687,6 +688,10 @@ class Handler(QObject):
         self.ui_wand.sig_serial_connect.connect(self.on_serial_connect)
         self.ui_wand.sig_serial_disconnect.connect(self.on_serial_disconnect)
         self.ui_wand.sig_flash_upload.connect(self.on_flash_upload)
+        if hasattr(self.ui_wand, 'sig_flash_data_firmware'):
+            self.ui_wand.sig_flash_data_firmware.connect(self.on_flash_data_firmware)
+        if hasattr(self.ui_wand, 'sig_flash_inference_firmware'):
+            self.ui_wand.sig_flash_inference_firmware.connect(self.on_flash_inference_firmware)
         if hasattr(self.ui_wand, 'sig_show_similarity_matrix'):
             self.ui_wand.sig_show_similarity_matrix.connect(self.on_show_similarity_matrix)
         self.ui_wand.sig_train_build_firmware_requested.connect(self.on_build_firmware)
@@ -722,6 +727,7 @@ class Handler(QObject):
 
         if hasattr(self, "recorder") and self.recorder:
             self.recorder.sig_finished.connect(self._on_recorder_finished, type=Qt.ConnectionType.QueuedConnection)
+            self.recorder.sig_recording_state.connect(self._on_recording_state, type=Qt.ConnectionType.QueuedConnection)
 
         # Uploader signals
         self.uploader.status_msg.connect(self.ui_wand.append_terminal_text, type=Qt.ConnectionType.QueuedConnection)
@@ -730,7 +736,7 @@ class Handler(QObject):
 
         # Flash worker signals
         self.flash_worker.log_msg.connect(self._flash_log_to_console, type=Qt.ConnectionType.QueuedConnection)
-        self.flash_worker.sig_progress.connect(self.ui_setting.update_flash_progress, type=Qt.ConnectionType.QueuedConnection)
+        self.flash_worker.sig_progress.connect(self._on_flash_progress, type=Qt.ConnectionType.QueuedConnection)
         self.flash_worker.sig_finished.connect(self._on_firmware_flash_finished, type=Qt.ConnectionType.QueuedConnection)
 
     def _connect_store_signals(self) -> None:
@@ -770,7 +776,9 @@ class Handler(QObject):
             return
         # Claim toàn cục trước: nếu ML Lab đang giữ cổng này thì nó tự
         # disconnect rồi mình mới mở — hết xung đột COM.
-        coord_acquire(STEM_SERIAL, port)
+        if not coord_acquire(STEM_SERIAL, port):
+            self.ui_wand.append_terminal_text("Cổng đang bận hoặc đang ngắt. Hãy kết nối lại khi đã dừng.")
+            return
         with self._port_lock:
             if self._port_owner and self._port_owner != "serial":
                 return
@@ -784,28 +792,15 @@ class Handler(QObject):
 
     def on_serial_disconnect(self) -> None:
         """Ngắt kết nối Serial (non-blocking)."""
-        try:
-            coord_release(STEM_SERIAL, getattr(self.serial_worker, "port", None))
-        except Exception:
-            pass
         if self.serial_worker.isRunning():
             self.serial_worker.finished.connect(self._on_serial_stopped)
             self.serial_worker.stop()
+        else:
+            self._on_serial_stopped()
 
     def _coordinator_release_serial(self) -> None:
         """Callback cho coordinator: ML Lab/flash xin cổng → tự nhả."""
-        try:
-            if self.serial_worker.isRunning():
-                self.ui_wand.append_terminal_text(
-                    ">> [PORT] ML Lab cần cổng — đã tự ngắt kết nối STEM để tránh xung đột."
-                )
-                self.serial_worker.finished.connect(self._on_serial_stopped)
-                self.serial_worker.stop()
-            else:
-                with self._port_lock:
-                    self._port_owner = None
-        except Exception as exc:
-            log.warning("Handler: coordinator auto-release failed: %s", exc)
+        self.on_serial_disconnect()
 
     def _init_usb_hotplug(self) -> None:
         """Khởi động bộ giám sát cắm/rút USB đũa phép tự động."""
@@ -883,22 +878,41 @@ class Handler(QObject):
         connected, _ = self.store.get_connection_state()
         if not connected:
             self.ui_wand.append_terminal_text("[ERROR] Serial connection is required.")
+            self.ui_record.show_recording_error(tr_ui("record_connect_first"))
             return
         if self._mode == self._MODE_UPDATE:
             self.ui_wand.append_terminal_text("[ERROR] Cannot start recording while update mode is active.")
+            self.ui_record.show_recording_error(tr_ui("record_update_busy"))
             return
         self._recording_raw_file = None
         if self.recorder.start_recording(spell):
             self.store.clear_live_buffer()
-            self.ui_record.is_live = True
+        else:
+            self.ui_record.show_recording_error(tr_ui("record_start_failed"))
+
+    def _on_recording_state(self, recording: bool) -> None:
+        if getattr(self, "_shutdown_done", False):
+            return
+        if recording and not self.store.get_connection_state()[0]:
+            self.recorder.stop_recording()
+            return
+        self.store.set_recording_state(recording)
+        self.ui_record.set_recording_state(recording)
+        if recording:
             self._set_mode(self._MODE_RECORD)
+        elif self._mode == self._MODE_RECORD:
+            self._set_mode(self._MODE_INFER if self.store.get_connection_state()[0] else self._MODE_IDLE)
 
     def _on_recorder_finished(self, success: bool, message: str) -> None:
+        if getattr(self, "_shutdown_done", False):
+            return
         """Nhận sự kiện hoàn tất ghi file từ DataRecorder."""
         if success and hasattr(self.recorder, "last_recorded_file") and self.recorder.last_recorded_file:
             self._recording_raw_file = self.recorder.last_recorded_file
         else:
             self._recording_raw_file = None
+            self._on_recording_state(False)
+            self.ui_record.show_recording_error(message)
 
     def on_record_stop(self) -> None:
         """Dừng quá trình ghi mẫu."""
@@ -915,20 +929,14 @@ class Handler(QObject):
     def on_data_cropped(self, data: list, spell: str) -> None:
         """Gửi yêu cầu lưu dữ liệu đã cắt vào dataset."""
         if data and spell.strip():
-            raw_file = getattr(self, "_recording_raw_file", None)
-            if raw_file:
-                try:
-                    p = Path(raw_file)
-                    if p.exists():
-                        p.unlink()
-                        log.info("Removed uncropped raw sample %s in favor of snipped sample.", p.name)
-                except Exception as exc:
-                    log.warning("Could not remove raw recording file %s: %s", raw_file, exc)
-                self._recording_raw_file = None
-
+            if self._pending_save_context:
+                self.ui_record.show_recording_error("Đang lưu mẫu trước. Hãy thử lại sau.")
+                return
             self._pending_save_context = "record"
             self._pending_save_spell = spell
-            self.data_io_worker.enqueue_save(spell, data)
+            self._pending_save_raw_file = getattr(self, "_recording_raw_file", None)
+            if self.data_io_worker.enqueue_save(spell, data, raw_file=self._pending_save_raw_file) is False:
+                self._on_io_save_done(False, "Hàng đợi đầy. CSV gốc vẫn còn; hãy thử lưu lại.")
 
     def on_clear_buffer(self) -> None:
         """Xóa sạch bộ đệm dữ liệu đang ghi và reset trạng thái."""
@@ -976,11 +984,17 @@ class Handler(QObject):
         """Sinh ra file labels.bin chứa cấu hình NVS động cho các spell và primitive."""
         if not self.spell_recognizer or not self.spell_recognizer.encoder:
             if hasattr(self, "_encoder_worker") and self._encoder_worker and self._encoder_worker.isRunning():
-                self.ui_wand.append_terminal_text(">> [WAIT] Encoder is currently loading in background. Please wait a few seconds and click again...")
+                msg_wait = "Đang tải Encoder trong nền, vui lòng đợi vài giây rồi thử lại."
+                self.ui_wand.append_terminal_text(f">> [WAIT] {msg_wait}")
                 self.ui_wand.update_flash_progress(0, "Loading Encoder...")
+                if hasattr(self.ui_wand, "terminal_panel") and not self.ui_wand.terminal_panel.isVisible():
+                    self.ui_wand.notify_user_alert("Chờ tải mô hình", msg_wait, is_error=False)
                 return
-            self.ui_wand.append_terminal_text(">> [ERROR] Encoder is not trained or loaded. Please train encoder in Primitive page first.")
+            msg_err = "Chưa có mô hình Encoder! Vui lòng huấn luyện mô hình ở studio ML Lab (hoặc trang Cử chỉ cơ bản) trước khi nạp."
+            self.ui_wand.append_terminal_text(f">> [ERROR] {msg_err}")
             self.ui_wand.update_flash_progress(0, "Failed")
+            if hasattr(self.ui_wand, "terminal_panel") and not self.ui_wand.terminal_panel.isVisible():
+                self.ui_wand.notify_user_alert("Chưa có mô hình", msg_err, is_error=True)
             return
 
         if self._nvs_build_worker and self._nvs_build_worker.isRunning():
@@ -1007,6 +1021,8 @@ class Handler(QObject):
             self._nvs_build_worker.start()
 
     def _on_nvs_build_finished(self, success: bool, message: str) -> None:
+        if getattr(self, "_shutdown_done", False):
+            return
         if success:
             if self._nvs_build_worker and hasattr(self._nvs_build_worker, "spell_names"):
                 self.store.set_registered_prototypes(set(self._nvs_build_worker.spell_names))
@@ -1043,6 +1059,9 @@ class Handler(QObject):
             if hasattr(self.ui_record, "set_wand_ready"):
                 self.ui_record.set_wand_ready(connected)
         if not connected:
+            if self.store.get_recording_state():
+                self.recorder.stop_recording()
+                self._on_recording_state(False)
             self._set_mode(self._MODE_IDLE)
             with self._port_lock:
                 self._port_owner = None
@@ -1117,6 +1136,8 @@ class Handler(QObject):
             self._encoder_worker.start()
 
     def _on_encoder_loaded(self, encoder, proto_path, error_msg: str = ""):
+        if getattr(self, "_shutdown_done", False):
+            return
         if not encoder:
             if hasattr(self, "ui_wand") and self.ui_wand:
                 keras_path = APP_DATA_DIR / "gesture_encoder.keras"
@@ -1290,6 +1311,8 @@ class Handler(QObject):
             log.info(f"Updated spell prototypes in {proto_path}")
 
     def _on_io_done(self, success: bool, msg: str) -> None:
+        if getattr(self, "_shutdown_done", False):
+            return
         """Phản hồi sau khi thao tác I/O hoàn tất."""
         if success:
             self.ui_wand.append_terminal_text(f">> Success: {msg}")
@@ -1300,15 +1323,21 @@ class Handler(QObject):
         settings = self.store.get_settings_snapshot()
         model_path = settings.get("model_path")
         if not model_path:
-            self.ui_wand.append_terminal_text("[ERROR] Model file not found in settings.")
+            msg = "Chưa chọn file mô hình TFLite trong Cài đặt!"
+            self.ui_wand.append_terminal_text(f"[ERROR] Model file not found in settings: {msg}")
             self.ui_wand.update_flash_progress(0, "Error")
+            if hasattr(self.ui_wand, "terminal_panel") and not self.ui_wand.terminal_panel.isVisible():
+                self.ui_wand.notify_user_alert("Thiếu file mô hình", msg, is_error=True)
             return
 
         import os
         import shutil
         if not os.path.exists(model_path):
-            self.ui_wand.append_terminal_text(f"[ERROR] Model file not found: {model_path}")
+            msg = f"Không tìm thấy file mô hình: {model_path}\nVui lòng kiểm tra lại đường dẫn trong Cài đặt."
+            self.ui_wand.append_terminal_text(f"[ERROR] Model file not found: {model_path}\n[ERROR] {msg}")
             self.ui_wand.update_flash_progress(0, "Error")
+            if hasattr(self.ui_wand, "terminal_panel") and not self.ui_wand.terminal_panel.isVisible():
+                self.ui_wand.notify_user_alert("Lỗi file mô hình", msg, is_error=True)
             return
 
         # Copy external model into APP_DATA_DIR to pass FlashWorker's
@@ -1400,6 +1429,8 @@ class Handler(QObject):
         )
 
     def _on_upload_finished(self, success: bool, message: str) -> None:
+        if getattr(self, "_shutdown_done", False):
+            return
         """Called when ModelUploader finishes uploading."""
         port = self._pending_upload_port
         self._clear_pending_upload_context()
@@ -1451,6 +1482,8 @@ class Handler(QObject):
         self.data_io_worker.enqueue_delete_latest_sample(spell_name)
 
     def _on_io_delete_sample_done(self, success: bool, message: str) -> None:
+        if getattr(self, "_shutdown_done", False):
+            return
         """Sau khi xóa mẫu xong: re-run consistency nếu đang xem spell đó."""
         current_spell = getattr(self.ui_record, 'current_spell_name', None)
         if success and current_spell:
@@ -1481,6 +1514,8 @@ class Handler(QObject):
             self._quality_worker.stop()
 
     def _on_quality_scan_finished(self, success: bool, message: str) -> None:
+        if getattr(self, "_shutdown_done", False):
+            return
         """Called when quality scan completes or is stopped."""
         if self.ui_setting:
             self.ui_setting.set_scan_running(False)
@@ -1601,10 +1636,16 @@ class Handler(QObject):
                 self.ui_primitive_collect.set_capture_ready(False)
             return
 
+        if self._pending_save_context:
+            if self.ui_primitive_collect:
+                self.ui_primitive_collect.on_capture_saved(False, "Đang lưu mẫu trước. Hãy thử lại sau.")
+            return
         folder_name = self._primitive_folder_name(gesture_name)
         self._pending_save_spell = folder_name
         self._pending_save_context = "primitive"
-        self.data_io_worker.enqueue_save(folder_name, snapshot, prefix=group_name)
+        if self.data_io_worker.enqueue_save(folder_name, snapshot, prefix=group_name) is False:
+            self._on_io_save_done(False, "Hàng đợi đầy. Hãy thử lưu lại.")
+            return
         self.ui_wand.append_terminal_text(
             f">> Capturing primitive sample: {folder_name}/{group_name} ({len(snapshot)} frames)"
         )
@@ -1797,6 +1838,8 @@ class Handler(QObject):
         self._consistency_worker.start()
 
     def _on_consistency_analysis_done(self, spell_name: str, result: dict) -> None:
+        if getattr(self, "_shutdown_done", False):
+            return
         """Cập nhật kết quả phân tích lên giao diện nếu user vẫn đang xem spell đó."""
         current_spell = getattr(self.ui_record, 'current_spell_name', None)
         if current_spell == spell_name:
@@ -1844,16 +1887,22 @@ class Handler(QObject):
     # ── IO Save Done ──────────────────────────────────────────────────
 
     def _on_io_save_done(self, success: bool, message: str) -> None:
+        if getattr(self, "_shutdown_done", False):
+            return
         """Called in the main thread when DataIOWorker finishes a save job."""
         saved_spell = self._pending_save_spell
         saved_context = self._pending_save_context
         if success:
             if saved_context == "record":
+                if getattr(self, "_recording_raw_file", None) == getattr(self, "_pending_save_raw_file", None):
+                    self._recording_raw_file = None
                 self.on_spell_selected(saved_spell)
                 if hasattr(self.ui_record, 'set_save_status'):
                     self.ui_record.set_save_status(saved_spell)
             elif saved_context == "primitive" and self.ui_primitive_collect:
                 self.ui_primitive_collect.on_capture_saved(True, message)
+        elif saved_context == "record":
+            self.ui_record.show_recording_error(f"Không lưu được mẫu. CSV gốc vẫn còn; hãy thử lại. {message}")
         elif saved_context == "primitive" and self.ui_primitive_collect:
             self.ui_primitive_collect.on_capture_saved(False, message)
         self._pending_save_context = ""
@@ -1874,9 +1923,14 @@ class Handler(QObject):
         if not connected or not port:
             if hasattr(self.ui_wand, "combo_serial_ports"):
                 port = self.ui_wand.combo_serial_ports.currentText()
-            if not port:
+            if not port or port == tr_ui("wand_no_ports"):
+                msg = "Chưa kết nối hoặc chưa chọn cổng COM của đũa phép. Vui lòng cắm cáp USB, bấm 'Quét cổng' và chọn cổng COM."
                 if self.ui_setting:
-                    self.ui_setting.append_console_text("[ERROR] No serial port selected.")
+                    self.ui_setting.append_console_text(f"[ERROR] {msg}")
+                if hasattr(self, "ui_wand") and self.ui_wand:
+                    self.ui_wand.append_terminal_text(f"[ERROR] {msg}")
+                    if hasattr(self.ui_wand, "terminal_panel") and not self.ui_wand.terminal_panel.isVisible():
+                        self.ui_wand.notify_user_alert("Chưa chọn cổng COM", msg, is_error=True)
                 return
 
         filename = "collect.bin" if bin_type == "data" else "inference.bin"
@@ -1887,8 +1941,13 @@ class Handler(QObject):
             bin_path = Path(resolve_asset_path(f"assets/firmware/{filename}"))
 
         if not self._validate_required_file(bin_path):
+            msg = f"Không tìm thấy file firmware binary: {bin_path}"
             if self.ui_setting:
-                self.ui_setting.append_console_text(f"[ERROR] Firmware binary not found: {bin_path}")
+                self.ui_setting.append_console_text(f"[ERROR] {msg}")
+            if hasattr(self, "ui_wand") and self.ui_wand:
+                self.ui_wand.append_terminal_text(f"[ERROR] {msg}")
+                if hasattr(self.ui_wand, "terminal_panel") and not self.ui_wand.terminal_panel.isVisible():
+                    self.ui_wand.notify_user_alert("Lỗi file firmware", msg, is_error=True)
             return
 
         if self._mode == self._MODE_UPDATE:
@@ -1925,11 +1984,14 @@ class Handler(QObject):
         self.handle_firmware_flash("inference")
 
     def _on_serial_stopped_start_flash(self) -> None:
+        if getattr(self, "_shutdown_done", False):
+            return
         """Called when SerialWorker stops, starts the firmware flash."""
         try:
             self.serial_worker.finished.disconnect(self._on_serial_stopped_start_flash)
         except TypeError:
             pass
+        coord_release(STEM_SERIAL)
         self._start_flash_immediately()
 
     def _start_flash_immediately(self) -> None:
@@ -1949,17 +2011,41 @@ class Handler(QObject):
             self.ui_setting.append_console_text(f">> [START] Flashing {self._pending_flash_bin_type} firmware to {port}...")
             self.ui_setting.update_flash_progress(0)
             self.ui_setting.set_flash_buttons_enabled(False)
+        if hasattr(self, "ui_wand") and self.ui_wand:
+            self.ui_wand.append_terminal_text(f">> [START] Flashing {self._pending_flash_bin_type} firmware to {port}...")
+            self.ui_wand.update_flash_progress(0, f"Đang nạp {self._pending_flash_bin_type}...")
 
         # Claim toàn cục: ML Lab đang giữ cổng này thì tự nhả trước khi esptool mở
-        coord_acquire(STEM_FLASH, port)
-        self.flash_worker.flash_firmware(port, str(bin_path))
+        if not coord_acquire(STEM_FLASH, port):
+            self._on_firmware_flash_finished(False, "Cổng đang bận hoặc đang ngắt. Hãy thử nạp lại khi đã dừng.")
+            return
+
+        flash_parts = {"0x10000": str(bin_path)}
+        bootloader_path = Path(resolve_asset_path("assets/firmware/bootloader.bin"))
+        if bootloader_path.exists():
+            flash_parts["0x1000"] = str(bootloader_path)
+        partition_table_path = Path(resolve_asset_path("assets/firmware/partition-table.bin"))
+        if partition_table_path.exists():
+            flash_parts["0x8000"] = str(partition_table_path)
+
+        self.flash_worker.flash_firmware(port=port, flash_parts=flash_parts)
 
     def _flash_log_to_console(self, text: str) -> None:
-        """Forward flash log messages to setting console."""
+        """Forward flash log messages to setting console and wand terminal."""
         if self.ui_setting:
             self.ui_setting.append_console_text(text)
+        if hasattr(self, "ui_wand") and self.ui_wand:
+            self.ui_wand.append_terminal_text(text)
+
+    def _on_flash_progress(self, val: int) -> None:
+        if self.ui_setting:
+            self.ui_setting.update_flash_progress(val)
+        if hasattr(self, "ui_wand") and self.ui_wand:
+            self.ui_wand.update_flash_progress(val, f"Nạp FW: {val}%")
 
     def _on_firmware_flash_finished(self, success: bool, message: str) -> None:
+        if getattr(self, "_shutdown_done", False):
+            return
         """Called when FlashWorker finishes flashing."""
         flashed_bin_type = self._pending_flash_bin_type
         self._clear_pending_flash_context()
@@ -1980,6 +2066,16 @@ class Handler(QObject):
             else:
                 self.ui_setting.append_console_text(f">> [FAIL] Firmware flash FAILED: {message}")
                 self.ui_setting.update_flash_progress(0)
+
+        if hasattr(self, "ui_wand") and self.ui_wand:
+            if success:
+                self.ui_wand.update_flash_progress(100, "Nạp Firmware thành công!")
+                self.ui_wand.append_terminal_text(f">> [DONE] Firmware flash COMPLETE: {message}")
+            else:
+                self.ui_wand.update_flash_progress(0, "Nạp Firmware thất bại")
+                self.ui_wand.append_terminal_text(f">> [FAIL] Firmware flash FAILED: {message}")
+                if hasattr(self.ui_wand, "terminal_panel") and not self.ui_wand.terminal_panel.isVisible():
+                    self.ui_wand.notify_user_alert("Nạp Firmware thất bại", f"Không thể nạp firmware lên đũa phép:\n\n{message}\n\nHãy kiểm tra xem cổng COM có bị chương trình khác chiếm dụng không và thử lại.", is_error=True)
 
     def _clear_pending_flash_context(self) -> None:
         self._pending_flash_bin_type = ""
@@ -2030,6 +2126,8 @@ class Handler(QObject):
             log.error("ERROR in on_train_encoder_requested: %s", e)
 
     def _on_encoder_training_finished(self, success: bool, message: str) -> None:
+        if getattr(self, "_shutdown_done", False):
+            return
         if success:
             self._start_async_encoder_load()
             # Refresh consistency display for whichever spell is open so the
@@ -2057,11 +2155,18 @@ class Handler(QObject):
         # Propagate updated IMU scale profile to serial worker immediately
         self.serial_worker.set_scale_profile(build_scale_profile(config))
 
+    def running_workers(self) -> list[QThread]:
+        return [worker for worker in vars(self).values()
+                if isinstance(worker, QThread) and worker.isRunning()]
+
     def shutdown(self) -> None:
         """Dừng toàn bộ hệ thống an toàn không gây nghẽn GUI."""
         if getattr(self, '_shutdown_done', False):
             return
         self._shutdown_done = True
+        for worker in self.running_workers():
+            worker.blockSignals(True)
+            worker.requestInterruption()
         try:
             coord_release(STEM_SERIAL)
             coord_release(STEM_FLASH)
@@ -2093,7 +2198,6 @@ class Handler(QObject):
                 if w.isRunning():
                     try:
                         w.requestInterruption()
-                        w.wait(300)
                     except Exception:
                         pass
                 # Chỉ ngắt signal custom — disconnect() trống sẽ chạm cả finished/

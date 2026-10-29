@@ -35,8 +35,8 @@ class ClassBreakdownWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
 
-        self.lbl_title = QLabel("THẦN CHÚ NÀO YẾU NHẤT?")
-        self.lbl_title.setStyleSheet(ls.section_label())
+        self.lbl_title = QLabel("Thần chú nào yếu nhất?")
+        self.lbl_title.setStyleSheet(ls.chart_title())
         layout.addWidget(self.lbl_title)
 
         self.lbl_summary = QLabel("Huấn luyện xong, bảng này sẽ chỉ lớp yếu nhất và cách khắc phục.")

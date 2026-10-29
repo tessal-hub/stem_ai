@@ -1,0 +1,2 @@
+-r requirements-train.txt
+pyinstaller>=6,<7

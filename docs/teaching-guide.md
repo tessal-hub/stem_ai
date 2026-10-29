@@ -12,10 +12,10 @@
 - **Một câu**: Máy nhận dữ liệu vào và chọn 1 đáp án trong danh sách có sẵn.
 - **Ví dụ**: Hộp thư có sẵn các ngăn; lá thư mới bỏ vào đúng một ngăn.
 - **Chỉ vào**: Tab 2 — combo thuật toán + nút "Huấn luyện & đánh giá".
-  Đầu vào: 63 con số; đầu ra: 1 tên thần chú.
+  Đầu vào: tối đa 75 đặc trưng (theo nhóm được chọn); đầu ra: 1 tên thần chú.
 
 ### 2. Đặc trưng (features) — khái niệm quan trọng nhất
-- **Một câu**: Thay vì đưa 384 số cảm biến thô vào máy, ta nén thành 63 con số
+- **Một câu**: Thay vì đưa 384 số cảm biến thô vào máy, ta nén thành tối đa 75 đặc trưng
   thống kê có ý nghĩa (trung bình, dao động, năng lượng...).
 - **Ví dụ**: Nhận diện bạn bè không đo từng lỗ chân lông — nhìn "chiều cao,
   giọng nói, kiểu tóc".
@@ -59,17 +59,17 @@
   ("B hay nhầm thành P") — hành động theo nó: ghi thêm 2 cử chỉ đó **khác biệt
   hơn**.
 
-### 7. 15 thuật toán — dạy theo 4 "tính cách", không dạy công thức
+### 7. 14 thuật toán — dạy theo 4 "tính cách", không dạy công thức
 
 | Họ | Thành viên | Trực giác | Điểm mạnh/yếu |
 |---|---|---|---|
 | So khoảng cách | KNN, Nearest Centroid | "Cử chỉ mới giống những cử chỉ đã học nhất" | Đơn giản; KNN chậm nếu nhiều mẫu |
 | Họ câu hỏi if-else | Tree, Forest, Extra Trees, GBDT, AdaBoost | "Chuỗi câu hỏi có/không dẫn đến phán quyết" | Nhanh trên chip, dễ giải thích; cây đơn dễ vẹt |
 | Họ ranh giới phẳng | Logistic, Ridge, SGD, SVM-tuyến tính, LDA | "Vẽ một mặt phẳng chia hai bên" | Nhẹ nhất, nhanh nhất; chỉ tách được dữ liệu tuyến tính |
-| Họ phân phối | GNB, QDA | "Học hình dạng phân phối từng lớp" | Học nhanh từ ít mẫu; QDA cho ranh giới cong |
+| Họ phân phối | GNB, LDA | "Ước lượng phân phối theo từng lớp" | GNB gọn; LDA tìm ranh giới tuyến tính |
 | Nơ-ron | MLP | "Nhiều ô tính nhỏ ghép lại" | Mạnh nhất nhưng nặng, dễ vẹt, hộp đen |
 
-- **Cách dạy**: Tab 4 (So sánh 15 thuật toán) → bấm chạy ~18 giây → đọc bảng
+- **Cách dạy**: Tab 4 (So sánh 14 thuật toán) → bấm chạy ~18 giây → đọc bảng
   xếp hạng cùng nhau.
 - **Câu thần chú**: "Không có mô hình tốt nhất — chỉ có mô hình phù hợp nhất
   với dữ liệu và con chip của bạn."
@@ -127,7 +127,7 @@
 | 25–40 | Train model đầu (chế độ Người mới) + đọc AI Coach | Tab 2 | Train/val, học vẹt |
 | 40–55 | Demo học vẹt: depth 8 vs depth 3 | Tab 2 | Overfitting bằng mắt |
 | 55–70 | Quét sweet spot + thử 25→100% dữ liệu | Tab 3 | Bias-variance, data efficiency |
-| 70–80 | Arena 15 model + What-If slider | Tab 4, 5 | Đánh đổi, minh bạch mô hình |
+| 70–80 | Arena 14 model + What-If slider | Tab 4, 5 | Đánh đổi, minh bạch mô hình |
 | 80–90 | Nạp wand + thi triển thật | Tab 5, 7 | Triển khai + phần thưởng |
 
 ---
@@ -143,7 +143,7 @@
    → Tùy ràng buộc: nhanh + nhỏ (Tree, GNB) hay chính xác (Forest, MLP). Chạy
    tab 4 trên chính dữ liệu của em.
 4. **"Máy có hiểu mình đang vung không?"**
-   → Không. Nó thấy 63 con số thống kê và tìm quy luật số — như phân loại thư
+   → Không. Nó thấy tối đa 75 đặc trưng thống kê và tìm quy luật số — như phân loại thư
    theo từ khóa mà không cần "hiểu" lá thư.
 5. **"Sao lần sau train lại ra khác?"**
    → Chia dữ liệu + khởi tạo ngẫu nhiên. Vì thế có "Kiểm tra chéo" đo độ tin.
@@ -161,7 +161,7 @@
   đều chặn đúng — nhưng đừng dạy tiết đầu trên màn hình trống.
 - **Cử chỉ demo phải khác biệt rõ** (vung lên vs quét ngang). Hai cử chỉ giống
   nhau → confusion matrix chính là bài học, nhưng để dành tiết 2.
-- **Đừng nạp QDA/MLP lớn lên chip khi demo** — dùng Tree/NB (nhỏ, nhanh).
+- **Đừng nạp MLP lớn lên chip khi demo** — dùng Tree/NB (nhỏ, nhanh).
 - **Máy chiếu**: app thiết kế cho laptop 1-1; khi chiếu, phóng cửa sổ và dùng
   HUD tab 7 (chữ to).
 - **Editor (VS Code/Cursor) mở cùng repo**: reload file trước khi sửa — buffer

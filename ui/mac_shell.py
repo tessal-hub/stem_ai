@@ -1,7 +1,7 @@
 """
-ui/mac_shell.py — Shell điều hướng kiểu iOS với sidebar và hỗ trợ cử chỉ.
+ui/mac_shell.py — Shell điều hướng Material You (M3 Navigation Rail / Drawer) với hỗ trợ cử chỉ.
 
-Cung cấp giao diện khung cho ứng dụng gồm thanh công cụ (toolbar), thanh điều hướng (sidebar)
+Cung cấp giao diện khung cho ứng dụng gồm thanh công cụ (toolbar), thanh điều hướng (navigation rail)
 và hỗ trợ chuyển trang bằng vuốt (swipe gesture).
 """
 
@@ -121,6 +121,12 @@ class MacShell(QWidget):
         if not (0 <= index < len(NAV_ITEMS)):
             return
 
+        # Nếu nút mục tiêu đang bị ẩn (Simple Mode), chuyển về trang hiển thị hợp lệ (mặc định Home)
+        if index < len(self._buttons) and not self._buttons[index].isVisible():
+            visible_indices = [i for i, btn in enumerate(self._buttons) if btn.isVisible()]
+            if visible_indices and index not in visible_indices:
+                index = 0
+
         if index == self._active_index and self._buttons[index].property("active"):
             return
 
@@ -189,13 +195,17 @@ class MacShell(QWidget):
         for i, item in enumerate(NAV_ITEMS):
             if i < len(self._buttons):
                 self._buttons[i].setText(f"  {tr_ui(item.label_key)}")
+                self._buttons[i].setAccessibleName(tr_ui(item.label_key))
 
         # Cập nhật toolbar hiện tại
         item = NAV_ITEMS[self._active_index]
         self.lbl_title.setText(tr_ui(item.label_key))
         self.lbl_subtitle.setText(tr_ui(item.subtitle_key))
+        if hasattr(self, "btn_ml_lab"):
+            self.btn_ml_lab.setText(tr_ui("shell_ml_lab_button"))
+            self.btn_ml_lab.setToolTip(tr_ui("shell_ml_lab_tooltip"))
         if hasattr(self, "btn_guide"):
-            self.btn_guide.setText(f"💡 {tr_ui('guide_btn_title')}")
+            self.btn_guide.setText(tr_ui("guide_btn_title"))
 
     def _update_nav_icons(self) -> None:
         """Cập nhật màu icon (tint) theo trạng thái active và theme."""
@@ -207,12 +217,18 @@ class MacShell(QWidget):
             item = NAV_ITEMS[i]
             is_active = (i == self._active_index)
             if is_active:
-                color = "#FFFFFF"
+                color = "#DFE0FF" if is_dark else "#0A1365"  # M3 On-Primary Container
             elif is_dark:
-                color = "#F2F2F7"
+                color = "#C6C5D0"  # M3 Dark On-Surface Variant
             else:
-                color = "#4A4A4A"
+                color = "#46464F"  # M3 On-Surface Variant
             btn.setIcon(make_tinted_icon(item.icon, color))
+
+        btn_color = "#C6C5D0" if is_dark else "#46464F"
+        if hasattr(self, "btn_ml_lab"):
+            self.btn_ml_lab.setIcon(make_tinted_icon("assets/icon/statistic.svg", btn_color))
+        if hasattr(self, "btn_guide"):
+            self.btn_guide.setIcon(make_tinted_icon("assets/icon/cooliocns SVG/Warning/Help.svg", btn_color))
 
     def refresh_styles(self) -> None:
         """Repaint shell chrome using current theme stylesheet."""
@@ -291,11 +307,14 @@ class MacShell(QWidget):
         """Tạo một nút bấm điều hướng."""
         from ui.asset_utils import make_tinted_icon
         is_dark = theme_manager.current_theme == "dark"
-        icon_color = "#FFFFFF" if index == self._active_index else ("#F2F2F7" if is_dark else "#334155")
+        icon_color = "#0A1365" if index == self._active_index else ("#E1E2E8" if is_dark else "#46464F")
 
         btn = QToolButton()
         btn.setObjectName("StemNavBtn")
-        btn.setText(f"  {tr_ui(item.label_key)}")
+        label = tr_ui(item.label_key)
+        btn.setText(f"  {label}")
+        # Compact mode xóa text — accessibleName giữ tên cho screen reader
+        btn.setAccessibleName(label)
         btn.setIcon(make_tinted_icon(item.icon, icon_color))
         btn.setIconSize(QSize(20, 20))
         btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
@@ -340,14 +359,23 @@ class MacShell(QWidget):
         layout.addStretch()
 
         from ui.component_factory import make_outline_button
-        self.btn_ml_lab = make_outline_button("🔬 ML Lab", height=36)
+        from ui.asset_utils import make_tinted_icon
+        p = theme_manager.get_palette()
+        btn_color = p.TEXT_SECONDARY
+
+        self.btn_ml_lab = make_outline_button(tr_ui('shell_ml_lab_button'), height=36)
         self.btn_ml_lab.setObjectName("StemMlLabBtn")
+        self.btn_ml_lab.setIcon(make_tinted_icon("assets/icon/statistic.svg", btn_color))
+        self.btn_ml_lab.setIconSize(QSize(16, 16))
+        self.btn_ml_lab.setToolTip(tr_ui("shell_ml_lab_tooltip"))
         self.btn_ml_lab.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_ml_lab.clicked.connect(self.open_ml_lab_requested.emit)
         layout.addWidget(self.btn_ml_lab, alignment=Qt.AlignmentFlag.AlignVCenter)
 
-        self.btn_guide = make_outline_button(f"💡 {tr_ui('guide_btn_title')}", height=36)
+        self.btn_guide = make_outline_button(tr_ui('guide_btn_title'), height=36)
         self.btn_guide.setObjectName("StemGuideBtn")
+        self.btn_guide.setIcon(make_tinted_icon("assets/icon/cooliocns SVG/Warning/Help.svg", btn_color))
+        self.btn_guide.setIconSize(QSize(16, 16))
         self.btn_guide.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_guide.clicked.connect(self._open_beginner_guide)
         layout.addWidget(self.btn_guide, alignment=Qt.AlignmentFlag.AlignVCenter)
@@ -362,16 +390,24 @@ class MacShell(QWidget):
         dlg.exec()
 
     def _handle_gesture(self, event: QGestureEvent) -> bool:
-        """Điều phối cử chỉ vuốt ngang."""
+        """Điều phối cử chỉ vuốt ngang giữa các trang đang hiển thị."""
         swipe = event.gesture(Qt.GestureType.SwipeGesture)
         if isinstance(swipe, QSwipeGesture):
             direction = swipe.horizontalDirection()
             left = QSwipeGesture.SwipeDirection.Left
             right = QSwipeGesture.SwipeDirection.Right
-            if direction == left:
-                self.set_active_index(min(len(NAV_ITEMS) - 1, self._active_index + 1))
-            elif direction == right:
-                self.set_active_index(max(0, self._active_index - 1))
+            visible_indices = [i for i, btn in enumerate(self._buttons) if btn.isVisible()]
+            if not visible_indices:
+                return True
+            try:
+                curr_pos = visible_indices.index(self._active_index)
+            except ValueError:
+                curr_pos = 0
+
+            if direction == left and curr_pos < len(visible_indices) - 1:
+                self.set_active_index(visible_indices[curr_pos + 1])
+            elif direction == right and curr_pos > 0:
+                self.set_active_index(visible_indices[curr_pos - 1])
             return True
         return False
 

@@ -20,6 +20,43 @@ extern "C" {
 #define CLASSIC_NUM_FEATURES 75
 #endif
 
+#ifndef CLASSIC_FEATURE_BASIC_STATS
+#define CLASSIC_FEATURE_BASIC_STATS 1
+#endif
+#ifndef CLASSIC_FEATURE_ENERGY_DYNAMICS
+#define CLASSIC_FEATURE_ENERGY_DYNAMICS 1
+#endif
+#ifndef CLASSIC_FEATURE_TEMPORAL_SPLITS
+#define CLASSIC_FEATURE_TEMPORAL_SPLITS 1
+#endif
+#ifndef CLASSIC_FEATURE_MAGNITUDES
+#define CLASSIC_FEATURE_MAGNITUDES 1
+#endif
+#ifndef CLASSIC_FEATURE_CROSS_DERIVATIVES
+#define CLASSIC_FEATURE_CROSS_DERIVATIVES 1
+#endif
+
+#define CLASSIC_PER_CHANNEL_FEATURES ( \
+    (CLASSIC_FEATURE_BASIC_STATS ? 5 : 0) + \
+    (CLASSIC_FEATURE_ENERGY_DYNAMICS ? 3 : 0) + \
+    (CLASSIC_FEATURE_TEMPORAL_SPLITS ? 2 : 0))
+#define CLASSIC_MAGNITUDE_FEATURES ( \
+    CLASSIC_FEATURE_MAGNITUDES ? 2 * ( \
+        (CLASSIC_FEATURE_BASIC_STATS ? 4 : 0) + \
+        (CLASSIC_FEATURE_ENERGY_DYNAMICS ? 2 : 0)) : 0)
+#define CLASSIC_EXPECTED_FEATURES ( \
+    6 * CLASSIC_PER_CHANNEL_FEATURES + \
+    CLASSIC_MAGNITUDE_FEATURES + \
+    (CLASSIC_FEATURE_CROSS_DERIVATIVES ? 3 : 0))
+
+#if CLASSIC_NUM_FEATURES != CLASSIC_EXPECTED_FEATURES
+#error "Model feature profile does not match firmware extractor; regenerate model and firmware together."
+#endif
+
+#undef CLASSIC_PER_CHANNEL_FEATURES
+#undef CLASSIC_MAGNITUDE_FEATURES
+#undef CLASSIC_EXPECTED_FEATURES
+
 #define CLASSIC_ACCEL_SCALE  16384.0f  // MPU6050 +-2g (1g = 16384 LSB)
 #define CLASSIC_GYRO_SCALE   131.0f    // MPU6050 +-250dps (1 dps = 131 LSB)
 
@@ -44,7 +81,7 @@ static inline int extract_classic_features(
     const float inv_N = 1.0f / (float)num_samples;
     int half = num_samples / 2;
 
-    // 1. Trích xuất đặc trưng cơ bản + phân đoạn thời gian trên 6 kênh (6 * 10 = 60 đặc trưng)
+    // 1. Per-channel features (up to 10 each; 60 total with all groups enabled).
     for (int ch = 0; ch < 6; ++ch) {
         float scale = (ch < 3) ? CLASSIC_ACCEL_SCALE : CLASSIC_GYRO_SCALE;
         float inv_scale = 1.0f / scale;
@@ -85,7 +122,7 @@ static inline int extract_classic_features(
             var_sum += diff * diff;
 
             if (i > 0) {
-                if ((prev_centered < 0.0f && diff >= 0.0f) || (prev_centered >= 0.0f && diff < 0.0f)) {
+                if (prev_centered * diff < 0.0f) {
                     zcr_count++;
                 }
                 prev_centered = diff;
@@ -95,21 +132,28 @@ static inline int extract_classic_features(
         float std_val = sqrtf(var_sum * inv_N);
         float zcr = (float)zcr_count / (float)(num_samples - 1);
 
-        // Ghi tuần tự 10 đặc trưng cho mỗi kênh
+        // Keep feature order identical to ClassicFeatureExtractor.
+#if CLASSIC_FEATURE_BASIC_STATS
         out_features[feat_idx++] = mean;
         out_features[feat_idx++] = std_val;
         out_features[feat_idx++] = min_val;
         out_features[feat_idx++] = max_val;
         out_features[feat_idx++] = range_val;
+#endif
+#if CLASSIC_FEATURE_ENERGY_DYNAMICS
         out_features[feat_idx++] = rms;
         out_features[feat_idx++] = energy;
         out_features[feat_idx++] = zcr;
+#endif
+#if CLASSIC_FEATURE_TEMPORAL_SPLITS
         out_features[feat_idx++] = mean_h1;
         out_features[feat_idx++] = mean_h2;
+#endif
     }
 
-    // 2. Độ lớn tổng hợp (Magnitudes: acc_mag, gyro_mag -> 12 đặc trưng)
-    if (feat_idx < CLASSIC_NUM_FEATURES) {
+    // 2. Magnitude features (up to 12 total, depending on enabled groups).
+#if CLASSIC_FEATURE_MAGNITUDES && (CLASSIC_FEATURE_BASIC_STATS || CLASSIC_FEATURE_ENERGY_DYNAMICS)
+    {
         float inv_acc_scale = 1.0f / CLASSIC_ACCEL_SCALE;
         float inv_gyr_scale = 1.0f / CLASSIC_GYRO_SCALE;
 
@@ -160,17 +204,23 @@ static inline int extract_classic_features(
             }
             float std_val = sqrtf(var_sum * inv_N);
 
-            if (feat_idx < CLASSIC_NUM_FEATURES) out_features[feat_idx++] = mean;
-            if (feat_idx < CLASSIC_NUM_FEATURES) out_features[feat_idx++] = std_val;
-            if (feat_idx < CLASSIC_NUM_FEATURES) out_features[feat_idx++] = max_val;
-            if (feat_idx < CLASSIC_NUM_FEATURES) out_features[feat_idx++] = range_val;
-            if (feat_idx < CLASSIC_NUM_FEATURES) out_features[feat_idx++] = rms;
-            if (feat_idx < CLASSIC_NUM_FEATURES) out_features[feat_idx++] = energy;
+#if CLASSIC_FEATURE_BASIC_STATS
+            out_features[feat_idx++] = mean;
+            out_features[feat_idx++] = std_val;
+            out_features[feat_idx++] = max_val;
+            out_features[feat_idx++] = range_val;
+#endif
+#if CLASSIC_FEATURE_ENERGY_DYNAMICS
+            out_features[feat_idx++] = rms;
+            out_features[feat_idx++] = energy;
+#endif
         }
     }
+#endif
 
     // 3. Vi phân chéo (Cross Derivatives: az_gx, az_gy, jerk_z_max -> 3 đặc trưng)
-    if (feat_idx < CLASSIC_NUM_FEATURES) {
+#if CLASSIC_FEATURE_CROSS_DERIVATIVES
+    {
         float inv_acc_scale = 1.0f / CLASSIC_ACCEL_SCALE;
         float inv_gyr_scale = 1.0f / CLASSIC_GYRO_SCALE;
 
@@ -194,10 +244,11 @@ static inline int extract_classic_features(
             }
         }
 
-        if (feat_idx < CLASSIC_NUM_FEATURES) out_features[feat_idx++] = sum_az_gx * inv_N;
-        if (feat_idx < CLASSIC_NUM_FEATURES) out_features[feat_idx++] = sum_az_gy * inv_N;
-        if (feat_idx < CLASSIC_NUM_FEATURES) out_features[feat_idx++] = max_jerk_z;
+        out_features[feat_idx++] = sum_az_gx * inv_N;
+        out_features[feat_idx++] = sum_az_gy * inv_N;
+        out_features[feat_idx++] = max_jerk_z;
     }
+#endif
 
     return feat_idx;
 }

@@ -19,7 +19,8 @@ from logic.locale_manager import locale_manager
 from logic.ui_i18n import normalize_ui_language, tr
 from logic.theme_manager import theme_manager
 from ui.asset_utils import resolve_asset_path
-from ui.component_factory import make_card, make_section_label
+from ui.component_factory import (make_card, make_outline_button,
+                                  make_primary_button, make_section_label)
 from ui.i18n_bridge import tr_ui
 from ui.tokens import (BTN_H, MARGIN_COMFORTABLE, SETTINGS_ACCENT,
                        SETTINGS_INPUT_H, SPACING_SM, SPACING_XS)
@@ -40,6 +41,7 @@ class WandSettingsPanel(QWidget):
 
         self._init_ui()
         self._init_signals()
+        self.apply_ui_language()
         if data_store:
             self.load_settings(data_store.get_settings_snapshot())
 
@@ -75,7 +77,8 @@ class WandSettingsPanel(QWidget):
         self.lbl_theme.setProperty("type", "settings_form_label")
         self.combo_ui_theme = QComboBox()
         self.combo_ui_theme.setFixedHeight(SETTINGS_INPUT_H)
-        self.combo_ui_theme.addItems(["Light Mode", "Dark Mode"])
+        self.combo_ui_theme.addItem(tr(self._lang, "theme_light"), "light")
+        self.combo_ui_theme.addItem(tr(self._lang, "theme_dark"), "dark")
         form.addRow(self.lbl_theme, self.combo_ui_theme)
 
         folder_icon = QIcon(resolve_asset_path("assets/icon/cooliocns SVG/File/Folder_Open.svg"))
@@ -127,20 +130,25 @@ class WandSettingsPanel(QWidget):
         self.chk_advanced_mode.setToolTip("Bật giao diện đầy đủ (Console, UART Terminal, Primitives)")
         form.addRow(self.lbl_advanced_mode, self.chk_advanced_mode)
 
+        self.lbl_language.setBuddy(self.combo_ui_language)
+        self.lbl_theme.setBuddy(self.combo_ui_theme)
+        self.lbl_dataset_dir.setBuddy(self.txt_dataset_dir)
+        self.lbl_model_path.setBuddy(self.txt_model_path)
+        self.lbl_advanced_mode.setBuddy(self.chk_advanced_mode)
         c_lay.addLayout(form)
 
-        # Nút Lưu cấu hình
+        # Nút Lưu cấu hình & Hoàn tác
         btn_box = QHBoxLayout()
         btn_box.setSpacing(8)
         self.lbl_status = QLabel("")
         self.lbl_status.setStyleSheet(
             f"color: {theme_manager.get_palette().STATUS_SUCCESS}; font-size: 11px; font-weight: 500;"
         )
-        self.btn_save = QPushButton("LƯU CÀI ĐẶT" if self._lang == "vi" else "SAVE SETTINGS")
-        self.btn_save.setProperty("type", "primary")
-        self.btn_save.setFixedHeight(32)
+        self.btn_revert = make_outline_button(tr_ui("btn_revert", default="HOÀN TÁC"), height=32)
+        self.btn_save = make_primary_button("LƯU CÀI ĐẶT" if self._lang == "vi" else "SAVE SETTINGS", height=32)
 
         btn_box.addWidget(self.lbl_status, stretch=1)
+        btn_box.addWidget(self.btn_revert)
         btn_box.addWidget(self.btn_save)
         c_lay.addLayout(btn_box)
 
@@ -149,11 +157,13 @@ class WandSettingsPanel(QWidget):
     def _init_signals(self) -> None:
         """Kết nối các signal."""
         self.btn_save.clicked.connect(self._on_save_clicked)
+        self.btn_revert.clicked.connect(self._on_revert_clicked)
         self.btn_browse_dataset.clicked.connect(self._on_browse_dataset)
         self.btn_browse_model.clicked.connect(self._on_browse_model)
         self.chk_advanced_mode.toggled.connect(self._on_advanced_mode_toggled)
         self.combo_ui_language.currentIndexChanged.connect(self._on_language_changed)
         self.combo_ui_theme.currentIndexChanged.connect(self._on_theme_changed)
+        theme_manager.theme_changed.connect(self.refresh_styles)
 
     def load_settings(self, config: dict[str, Any]) -> None:
         """Đẩy dữ liệu cấu hình vào UI."""
@@ -171,9 +181,13 @@ class WandSettingsPanel(QWidget):
 
         # Theme
         theme_str = str(config.get("theme", theme_manager.current_theme)).lower()
-        self.combo_ui_theme.blockSignals(True)
-        self.combo_ui_theme.setCurrentIndex(1 if theme_str == "dark" else 0)
-        self.combo_ui_theme.blockSignals(False)
+        if theme_str not in ("light", "dark"):
+            theme_str = "light"
+        idx = self.combo_ui_theme.findData(theme_str)
+        if idx >= 0:
+            self.combo_ui_theme.blockSignals(True)
+            self.combo_ui_theme.setCurrentIndex(idx)
+            self.combo_ui_theme.blockSignals(False)
 
         # Paths
         if "dataset_dir" in config:
@@ -191,17 +205,38 @@ class WandSettingsPanel(QWidget):
         """Cập nhật ngôn ngữ."""
         self._lang = locale_manager.current_language
         self._title_lbl.setText(tr_ui("section_appearance"))
+        current_theme_data = self.combo_ui_theme.currentData() or theme_manager.current_theme
+        self.combo_ui_theme.blockSignals(True)
+        self.combo_ui_theme.clear()
+        self.combo_ui_theme.addItem(tr(self._lang, "theme_light"), "light")
+        self.combo_ui_theme.addItem(tr(self._lang, "theme_dark"), "dark")
+        idx = self.combo_ui_theme.findData(current_theme_data)
+        if idx >= 0:
+            self.combo_ui_theme.setCurrentIndex(idx)
+        self.combo_ui_theme.blockSignals(False)
+
+        self.btn_browse_dataset.setText(tr_ui("btn_browse"))
+        self.btn_browse_model.setText(tr_ui("btn_browse"))
         self.lbl_language.setText(tr(self._lang, "label_ui_language"))
         self.lbl_theme.setText(tr(self._lang, "label_theme"))
         self.lbl_dataset_dir.setText(tr(self._lang, "label_dataset_dir"))
         self.lbl_model_path.setText(tr(self._lang, "label_model_path"))
         self.lbl_advanced_mode.setText("Chế độ nâng cao" if self._lang == "vi" else "Advanced Mode")
+        self.btn_revert.setText(tr_ui("btn_revert", default="HOÀN TÁC"))
         self.btn_save.setText("LƯU CÀI ĐẶT" if self._lang == "vi" else "SAVE SETTINGS")
+
+    def refresh_styles(self) -> None:
+        """Đồng bộ trạng thái theme vào combo khi theme toàn cục thay đổi."""
+        idx = self.combo_ui_theme.findData(theme_manager.current_theme)
+        if idx >= 0 and self.combo_ui_theme.currentIndex() != idx:
+            self.combo_ui_theme.blockSignals(True)
+            self.combo_ui_theme.setCurrentIndex(idx)
+            self.combo_ui_theme.blockSignals(False)
 
     def _collect_config(self) -> dict[str, Any]:
         """Thu thập cấu hình hiện tại."""
         lang = self.combo_ui_language.currentData() or self._lang
-        theme_str = "dark" if self.combo_ui_theme.currentIndex() == 1 else "light"
+        theme_str = self.combo_ui_theme.currentData() or theme_manager.current_theme
         adv = self.chk_advanced_mode.isChecked()
         return {
             "ui_language": lang,
@@ -213,12 +248,21 @@ class WandSettingsPanel(QWidget):
             "auto_save": True,
         }
 
+    def _on_revert_clicked(self) -> None:
+        """Khôi phục cấu hình trước đó hoặc giá trị mặc định."""
+        if hasattr(self, "_last_saved") and self._last_saved:
+            self.load_settings(self._last_saved)
+        else:
+            self.txt_dataset_dir.setText("dataset")
+            self.txt_model_path.setText("")
+        self.lbl_status.setText(tr_ui("settings_reverted", default="Đã khôi phục"))
+
     def _on_save_clicked(self) -> None:
         """Xử lý khi bấm nút Lưu cài đặt."""
         config = self._collect_config()
         self._last_saved = config
         self.sig_settings_saved.emit(config)
-        self.lbl_status.setText("✓ Đã lưu" if self._lang == "vi" else "✓ Saved")
+        self.lbl_status.setText(tr_ui("settings_saved"))
 
     def _on_advanced_mode_toggled(self, checked: bool) -> None:
         """Tự động phát tín hiệu lưu khi chuyển đổi chế độ nâng cao."""
@@ -235,7 +279,9 @@ class WandSettingsPanel(QWidget):
             self.apply_ui_language()
 
     def _on_theme_changed(self) -> None:
-        theme_str = "dark" if self.combo_ui_theme.currentIndex() == 1 else "light"
+        theme_str = self.combo_ui_theme.currentData()
+        if not theme_str:
+            theme_str = "dark" if self.combo_ui_theme.currentIndex() == 1 else "light"
         theme_manager.current_theme = theme_str
 
     def _on_browse_dataset(self) -> None:
@@ -249,3 +295,10 @@ class WandSettingsPanel(QWidget):
         file_path, _ = QFileDialog.getOpenFileName(self, "Chọn file Model TFLite", current, "TFLite Models (*.tflite);;All Files (*)")
         if file_path:
             self.txt_model_path.setText(file_path)
+
+    def closeEvent(self, event) -> None:
+        try:
+            theme_manager.theme_changed.disconnect(self.refresh_styles)
+        except Exception:
+            pass
+        super().closeEvent(event)

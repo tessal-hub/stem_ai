@@ -14,7 +14,7 @@ import logging
 
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QCloseEvent, QIcon
-from PyQt6.QtWidgets import QMainWindow, QStackedWidget, QWidget
+from PyQt6.QtWidgets import QMessageBox, QMainWindow, QStackedWidget, QWidget
 
 from logic.locale_manager import locale_manager
 from logic.theme_manager import theme_manager
@@ -184,6 +184,8 @@ class MainWindow(QMainWindow):
         self.stack.insertWidget(index, widget)
 
     def _preload_one(self, idx: int) -> None:
+        if getattr(self, "_closing", False):
+            return
         try:
             if idx == 1:
                 _ = self.page_record  # nhẹ (~0.6s), store events hay chạm tới — dựng trước
@@ -206,7 +208,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("STEM Spell Book")
         self.setWindowIcon(QIcon(resolve_asset_path("assets/icon/cooliocns SVG/Interface/Book_Open.svg")))
         self.resize(1100, 850)
-        self.setMinimumSize(920, 640)
+        self.setMinimumSize(820, 580)
 
         # 1. Khởi tạo Shell điều hướng
         self.shell = MacShell("STEM Spell Book")
@@ -229,6 +231,7 @@ class MainWindow(QMainWindow):
         # Điều hướng
         self.shell.nav_requested.connect(self._on_shell_nav_requested)
         self.shell.open_ml_lab_requested.connect(self._open_ml_lab)
+        self._page_home.sig_navigate_requested.connect(self._set_page)
 
         # Dữ liệu UDP
         self.udp_worker.sig_data_received.connect(self._on_udp_sensor_dispatch, type=Qt.ConnectionType.QueuedConnection)
@@ -245,13 +248,32 @@ class MainWindow(QMainWindow):
 
     def _open_ml_lab(self) -> None:
         """Mở cửa sổ độc lập ML Lab (Classic ML Studio)."""
-        from ml_lab.ui.window_ml_lab import MlLabWindow
-        from config import SPELL_DIR
-        if self._ml_lab_window is None:
-            self._ml_lab_window = MlLabWindow(spell_dataset_dir=str(SPELL_DIR))
-        self._ml_lab_window.show()
-        self._ml_lab_window.raise_()
-        self._ml_lab_window.activateWindow()
+        if getattr(self, "_closing", False):
+            return
+        try:
+            from pathlib import Path
+            from ml_lab.ui.window_ml_lab import MlLabWindow
+            dataset_dir = Path(self.data_store.dataset_dir).resolve()
+            if self._ml_lab_window is not None and self._ml_lab_window.spell_dataset_dir.resolve() != dataset_dir:
+                if not self._ml_lab_window.close():
+                    QTimer.singleShot(40, self._open_ml_lab)
+                    return
+                self._ml_lab_window.deleteLater()
+                self._ml_lab_window = None
+            if self._ml_lab_window is None:
+                self._ml_lab_window = MlLabWindow(spell_dataset_dir=str(dataset_dir))
+                self._ml_lab_window.setWindowTitle(f"ML Lab — {dataset_dir}")
+            self._ml_lab_window.show()
+            self._ml_lab_window.raise_()
+            self._ml_lab_window.activateWindow()
+        except Exception as exc:
+            self._ml_lab_window = None
+            log.exception("Could not open ML Lab")
+            QMessageBox.critical(
+                self,
+                tr_ui("ml_lab_open_error_title"),
+                f"{tr_ui('ml_lab_open_error_body')}\n\n{exc}",
+            )
 
     def _on_primitive_stats_updated(self, stats: dict) -> None:
         if self._page_primitive_collect is not None:
@@ -274,14 +296,31 @@ class MainWindow(QMainWindow):
 
     # ── Public methods ──────────────────────────
 
+    def set_advanced_mode(self, mode: bool) -> None:
+        """Chuyển đổi giữa chế độ nâng cao và chế độ cơ bản (Simple Mode)."""
+        cfg = self.data_store.get_settings_snapshot()
+        cfg["advanced_mode"] = bool(mode)
+        cfg["show_primitives_menu"] = bool(mode)
+        self._on_settings_saved(cfg)
+
     def closeEvent(self, event: QCloseEvent) -> None:
         """Xử lý khi đóng ứng dụng."""
+        self._closing = True
         log.info("MainWindow: Ứng dụng đang đóng...")
+        try:
+            theme_manager.theme_changed.disconnect(self._on_theme_changed)
+        except Exception:
+            pass
         if self._ml_lab_window is not None:
             try:
-                self._ml_lab_window.close()
+                if not self._ml_lab_window.close():
+                    if not getattr(self, "_waiting_for_ml_lab", False):
+                        self._waiting_for_ml_lab = True
+                        self._ml_lab_window.sig_closed.connect(self._resume_close_after_ml_lab)
+                    event.ignore()
+                    return
             except Exception:
-                pass
+                log.exception("Could not close ML Lab window")
         handler = getattr(self, "handler", None)
         if handler is not None:
             try:
@@ -290,8 +329,20 @@ class MainWindow(QMainWindow):
                 log.warning("MainWindow: Handler shutdown thất bại: %s", exc)
 
         if self.udp_worker.isRunning():
+            self.udp_worker.requestInterruption()
             self.udp_worker.stop()
+        if self.udp_worker.isRunning() or (handler is not None and handler.running_workers()):
+            self.centralWidget().setEnabled(False)
+            self.setWindowTitle(tr_ui("closing_tasks"))
+            QTimer.singleShot(40, self.close)
+            event.ignore()
+            return
         event.accept()
+
+    def _resume_close_after_ml_lab(self) -> None:
+        self._ml_lab_window.sig_closed.disconnect(self._resume_close_after_ml_lab)
+        self._waiting_for_ml_lab = False
+        QTimer.singleShot(0, self.close)
 
     def resizeEvent(self, event) -> None:
         """Breakpoint-driven adapt: <960px → compact sidebar + vertical content reflow."""
@@ -378,6 +429,8 @@ class MainWindow(QMainWindow):
     def _on_settings_saved(self, config: dict) -> None:
         """Lưu cấu hình ứng dụng."""
         self.data_store.save_settings(config)
+        if self._ml_lab_window is not None and self._ml_lab_window.isVisible():
+            self._open_ml_lab()
         adv_mode = config.get("advanced_mode", config.get("show_primitives_menu", True))
         self.shell.set_nav_item_visible(1, adv_mode)
         self.shell.set_nav_item_visible(4, adv_mode)

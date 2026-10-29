@@ -31,6 +31,7 @@ from PyQt6.QtWidgets import (
 )
 
 import ml_lab.ui.lab_style as ls
+from ui.layout_utils import scroll_panel
 from ml_lab.core.hyperparam_schema import (
     AdaBoostConfig,
     DecisionTreeConfig,
@@ -110,14 +111,32 @@ class TabModelLab(QWidget):
         self._current_worker: MlLabTrainWorker | None = None
         self._auto_worker: AutoSelectWorker | None = None
         self._last_result: TrainClassicResult | None = None
-        self._flash_ready = False  # True khi primary CTA đã morph thành "Nạp lên wand"
+        self._flash_ready = False
+        self._input_revision = 0
+        self._training_revision = -1
+        self._trained_files = ()
+        self._auto_revision = -1
         self._feat_checks: list[QCheckBox] = []
         self._allowed_spells: set[str] | None = None
 
         self._init_ui()
+        self.combo_algo.currentIndexChanged.connect(self._invalidate_model)
+        for check in (*self._feat_checks, self.chk_augment):
+            check.toggled.connect(self._invalidate_model)
 
     def set_allowed_spells(self, allowed: set[str] | None) -> None:
         self._allowed_spells = set(allowed) if allowed is not None else None
+        self._invalidate_model()
+
+    def _invalidate_model(self, *_args) -> None:
+        self._input_revision += 1
+        self._set_cta_mode("train")
+        if self._current_worker is not None and self._current_worker.isRunning():
+            self.btn_train.setText("Đang huấn luyện…")
+
+    def _dataset_snapshot(self) -> tuple:
+        return tuple(sorted((str(p), p.stat().st_mtime_ns, p.stat().st_size)
+                            for p in self.dataset_dir.rglob("*.csv")))
 
     def _get_allowed(self) -> set[str] | None:
         return self._allowed_spells
@@ -179,7 +198,8 @@ class TabModelLab(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setStyleSheet("QScrollArea { background: transparent; }")
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setMinimumWidth(350)
 
         container = QWidget()
         container.setStyleSheet("background: transparent;")
@@ -203,7 +223,7 @@ class TabModelLab(QWidget):
 
         self.lbl_beginner_hint = QLabel(
             "Bước 1 — chọn một thuật toán ở khung bên dưới.\n"
-            "Bước 2 — bấm nút xanh “Huấn luyện & đánh giá”.\n"
+            "Bước 2 — bấm nút xanh “Huấn luyện và đánh giá”.\n"
             "Xong! AI Coach sẽ chấm bài và hướng dẫn bước tiếp theo. "
             "Muốn tự chỉnh cài đặt nâng cao thì tắt chế độ này."
         )
@@ -266,7 +286,7 @@ class TabModelLab(QWidget):
         cta_wrap.setSpacing(ls.SP_2)
         cta_wrap.setContentsMargins(0, ls.SP_2, 0, 0)
 
-        self.btn_auto = QPushButton("Không biết chọn? Để máy tự chọn giúp bạn")
+        self.btn_auto = QPushButton("Tự chọn thuật toán")
         self.btn_auto.setStyleSheet(
             f"QPushButton {{ background: {ls.SURFACE}; color: {ls.ACCENT}; border: 1px solid {ls.ACCENT}; "
             f"border-radius: {ls.RADIUS_MD}px; padding: 9px 16px; {ls.font(ls.FS_BODY, 700)} }} "
@@ -280,7 +300,7 @@ class TabModelLab(QWidget):
         self.btn_auto.clicked.connect(self.start_auto_select)
         cta_wrap.addWidget(self.btn_auto)
 
-        self.btn_train = QPushButton("Huấn luyện & đánh giá")
+        self.btn_train = QPushButton("Huấn luyện và đánh giá")
         self.btn_train.setStyleSheet(ls.BTN_PRIMARY)
         self.btn_train.setMinimumHeight(44)
         self.btn_train.clicked.connect(self._on_primary_cta)
@@ -367,7 +387,7 @@ class TabModelLab(QWidget):
             "<b>Không gian quyết định 2D (PCA)</b> — PCA nén không gian đặc trưng về 2 trục chính "
             "(PC1, PC2) để quan sát được. Vùng màu là “lãnh thổ” của mỗi lớp; chấm tròn là từng lần vung wand."
         ))
-        tabs.addTab(tab1, "Bản đồ quyết định")
+        tabs.addTab(scroll_panel(tab1), "Bản đồ quyết định")
 
         # Sub-tab 2: Confusion Matrix + AI Coach
         tab2 = QWidget()
@@ -382,7 +402,7 @@ class TabModelLab(QWidget):
             "<b>Đánh giá trên tập kiểm thử</b> — toàn bộ số liệu tính trên file CSV độc lập mà mô hình "
             "<b>chưa từng thấy khi học</b>. Đường chéo xanh càng đậm, mô hình càng đáng tin."
         ))
-        tabs.addTab(tab2, "Kết quả & AI Coach")
+        tabs.addTab(scroll_panel(tab2), "Kết quả & AI Coach")
 
         # Sub-tab 3: Math Dissection
         tab3 = QWidget()
@@ -398,7 +418,7 @@ class TabModelLab(QWidget):
             "<b>Mổ xẻ cấu trúc toán học</b> — xem trực tiếp các câu hỏi điều kiện rẽ nhánh (cây quyết định) "
             "hoặc vector trọng số W (Logistic / LDA). Không còn hộp đen: bạn hiểu đúng từng phép tính máy thực hiện."
         ))
-        tabs.addTab(tab3, "Bên trong mô hình")
+        tabs.addTab(scroll_panel(tab3), "Bên trong mô hình")
 
         # Sub-tab 4: Lớp nào yếu? + xem tại sao máy nhầm
         tab4 = QWidget()
@@ -417,7 +437,7 @@ class TabModelLab(QWidget):
             "<b>Chẩn đoán từng thần chú</b> — lớp yếu nhất đứng đầu kèm gợi ý hành động. "
             "Chọn một mẫu bị sai bên dưới để xem dạng sóng thật và hiểu vì sao máy nhầm."
         ))
-        tabs.addTab(tab4, "Lớp nào yếu?")
+        tabs.addTab(scroll_panel(tab4), "Lớp nào yếu?")
 
         return tabs
 
@@ -481,6 +501,12 @@ class TabModelLab(QWidget):
         row = QHBoxLayout()
         row.setSpacing(ls.SP_2)
         lbl = QLabel(name)
+        lbl.setBuddy(editor)
+        editor.setAccessibleName(name)
+        if isinstance(editor, QComboBox):
+            editor.currentIndexChanged.connect(self._invalidate_model)
+        else:
+            editor.valueChanged.connect(self._invalidate_model)
         lbl.setStyleSheet(ls.font(ls.FS_BODY) + f"color: {ls.BODY}; border: none; background: transparent;")
         row.addWidget(lbl)
         row.addWidget(editor, stretch=1)
@@ -764,13 +790,15 @@ class TabModelLab(QWidget):
             widget.setValue(cast(value))
             self.lbl_tip.setText(
                 f"Đã điền giá trị tốt nhất từ Tab 3 ({algo_key.upper()} = {value}). "
-                "Bấm “Huấn luyện & đánh giá” để chốt!"
+                "Bấm “Huấn luyện và đánh giá” để chốt!"
             )
         except Exception:
             pass
 
     def start_auto_select(self) -> None:
         """Để máy tự chọn: thử 11 mô hình nhẹ, chọn tốt nhất rồi huấn luyện luôn."""
+        if self._current_worker is not None and self._current_worker.isRunning():
+            return
         counts = count_user_spell_samples(self.dataset_dir, allowed_spells=self._get_allowed())
         if len(counts) < 2:
             QMessageBox.warning(
@@ -784,6 +812,8 @@ class TabModelLab(QWidget):
             return
 
         self.btn_auto.setEnabled(False)
+        self._invalidate_model()
+        self._auto_revision = self._input_revision
         self.btn_train.setEnabled(False)
         self.btn_auto.setText("Đang thử từng mô hình để chọn giúp bạn…")
         self.progress_bar.setVisible(True)
@@ -798,9 +828,15 @@ class TabModelLab(QWidget):
         self._auto_worker.start()
 
     def _on_auto_selected(self, algo_key: str, config: Any, val_acc: float, tried: list) -> None:
+        if getattr(self.window(), "_closing", False):
+            return
         self.btn_auto.setEnabled(True)
         self.btn_train.setEnabled(True)
-        self.btn_auto.setText("Không biết chọn? Để máy tự chọn giúp bạn")
+        self.btn_auto.setText("Tự chọn thuật toán")
+        if self._auto_revision != self._input_revision:
+            self.progress_bar.setVisible(False)
+            self.lbl_tip.setText("Dữ liệu hoặc cấu hình đã đổi. Bấm Tự chọn thuật toán để thử lại.")
+            return
 
         # Chọn thuật toán trong combo + áp tham số vào controls
         idx = self.combo_algo.findData(algo_key)
@@ -820,9 +856,11 @@ class TabModelLab(QWidget):
         self.start_training()
 
     def _on_auto_error(self, msg: str) -> None:
+        if getattr(self.window(), "_closing", False):
+            return
         self.btn_auto.setEnabled(True)
         self.btn_train.setEnabled(True)
-        self.btn_auto.setText("Không biết chọn? Để máy tự chọn giúp bạn")
+        self.btn_auto.setText("Tự chọn thuật toán")
         self.progress_bar.setVisible(False)
         QMessageBox.warning(self, "Không tự chọn được", f"Đã xảy ra lỗi khi thử các mô hình:\n{msg}")
 
@@ -915,6 +953,10 @@ class TabModelLab(QWidget):
             pass
 
     def start_training(self) -> None:
+        if getattr(self.window(), "_closing", False):
+            return
+        if self._current_worker is not None and self._current_worker.isRunning():
+            return
         counts = count_user_spell_samples(self.dataset_dir, allowed_spells=self._get_allowed())
         if len(counts) < 2:
             QMessageBox.warning(
@@ -936,11 +978,18 @@ class TabModelLab(QWidget):
             include_cross_derivatives=self.chk_f_cross.isChecked(),
         )
 
+        self._set_cta_mode("train")
+        self._training_revision = self._input_revision
+        try:
+            self._trained_files = self._dataset_snapshot()
+        except OSError as exc:
+            self._on_training_error(str(exc))
+            return
+        self.btn_auto.setEnabled(False)
         self.btn_train.setEnabled(False)
         self.btn_train.setText("Đang huấn luyện… thường 5–15 giây…")
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(10)
-        self._set_cta_mode("train")
 
         self._current_worker = MlLabTrainWorker(
             dataset_root=self.dataset_dir,
@@ -960,31 +1009,27 @@ class TabModelLab(QWidget):
         self._current_worker.start()
 
     def _on_primary_cta(self) -> None:
-        """1 nút chính duy nhất: chưa có model thì huấn luyện, xong thì morph thành nạp."""
-        if self._flash_ready and self._last_result is not None:
-            self._open_flash_dialog()
-        else:
-            self.start_training()
+        self.start_training()
 
     def _set_cta_mode(self, mode: str) -> None:
-        """Morph primary CTA: 'train' (xanh dương) ↔ 'flash' (xanh lá)."""
-        if mode == "flash":
-            self._flash_ready = True
-            self.btn_train.setText("Nạp lên wand")
-            self.btn_train.setStyleSheet(ls.BTN_SUCCESS)
-            self.btn_train.setToolTip("Mô hình đã sẵn sàng — nạp ngay lên ESP32.")
-            self.btn_flash_direct.setVisible(False)  # primary đã gánh, tránh 2 nút xanh competing
-        else:
-            self._flash_ready = False
-            self.btn_train.setText("Huấn luyện & đánh giá")
-            self.btn_train.setStyleSheet(ls.BTN_PRIMARY)
-            self.btn_train.setToolTip("")
+        self._flash_ready = mode == "flash"
+        self.btn_train.setText("Huấn luyện và đánh giá")
+        self.btn_flash_direct.setVisible(self._last_result is not None)
+        self.btn_flash_direct.setEnabled(self._flash_ready)
+        self.btn_flash_direct.setToolTip(
+            "Nạp kết quả vừa huấn luyện." if self._flash_ready else
+            "Cấu hình hoặc dữ liệu đã đổi. Hãy huấn luyện lại trước khi nạp."
+        )
 
     def _on_training_finished(self, result: TrainClassicResult) -> None:
+        if getattr(self.window(), "_closing", False):
+            return
         self.btn_train.setEnabled(True)
+        self.btn_auto.setEnabled(True)
         self.progress_bar.setVisible(False)
         self._last_result = result
-        self._set_cta_mode("flash")
+        self._set_cta_mode("flash" if self._training_revision == self._input_revision else "train")
+        self.btn_flash_direct.setText(f"Nạp mô hình {result.algo.upper()} lên ESP32")
         self.btn_model_card.setVisible(True)
         self.class_breakdown.set_result(result)
         self.misclass_widget.set_result(result)
@@ -1051,10 +1096,14 @@ class TabModelLab(QWidget):
             self.tree_vis.setVisible(True)
             self.weights_vis.setVisible(False)
 
-        self.sig_model_trained.emit(result)
+        if self._flash_ready:
+            self.sig_model_trained.emit(result)
 
     def _on_training_error(self, msg: str) -> None:
+        if getattr(self.window(), "_closing", False):
+            return
         self.btn_train.setEnabled(True)
+        self.btn_auto.setEnabled(True)
         self._set_cta_mode("train")
         self.progress_bar.setVisible(False)
         QMessageBox.warning(self, "Lỗi huấn luyện", f"Không thể hoàn tất huấn luyện:\n{msg}")
@@ -1066,7 +1115,15 @@ class TabModelLab(QWidget):
         dlg.exec()
 
     def _open_flash_dialog(self) -> None:
-        if not self._last_result:
+        if not self._last_result or not self._flash_ready:
+            return
+        try:
+            unchanged = self._trained_files == self._dataset_snapshot()
+        except OSError:
+            unchanged = False
+        if not unchanged:
+            self._invalidate_model()
+            QMessageBox.information(self, "Dữ liệu đã đổi", "Hãy huấn luyện lại trước khi nạp mô hình.")
             return
         dlg = FlashDialog(self._last_result, self)
         dlg.exec()

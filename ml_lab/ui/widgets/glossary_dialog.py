@@ -2,7 +2,7 @@
 ml_lab/ui/widgets/glossary_dialog.py — Sổ Tay Thuật Ngữ & Cẩm Nang Sư Phạm STEM AI (ML Glossary).
 
 Tài liệu tra cứu toàn bộ khái niệm trong ML Lab: đặc trưng, chia dữ liệu,
-học vẹt, kiểm tra chéo, 15 thuật toán theo 4 họ, tăng cường dữ liệu, đường cong
+học vẹt, kiểm tra chéo, 14 thuật toán theo 4 họ, tăng cường dữ liệu, đường cong
 dữ liệu, độ chắc chắn, triển khai vi điều khiển và hồ sơ mô hình.
 """
 
@@ -30,10 +30,10 @@ GLOSSARY_TOPICS = [
 <p><b>ML Lab</b> là phòng thí nghiệm học máy giúp bạn đi qua toàn bộ quy trình của một kỹ sư AI thực thụ, trên chính dữ liệu vung wand của mình:</p>
 <ol>
   <li><b>Xem dữ liệu đã ghi</b> — khám phá đặc trưng, tạo thêm dữ liệu mẫu.</li>
-  <li><b>Huấn luyện máy</b> — chọn 1 trong 15 thuật toán, đọc chẩn đoán của AI Coach.</li>
+  <li><b>Huấn luyện máy</b> — chọn 1 trong 14 thuật toán, đọc chẩn đoán của AI Coach.</li>
   <li><b>Thử tham số</b> — tìm cài đặt tốt nhất, trả lời "cần bao nhiêu dữ liệu?"</li>
-  <li><b>So sánh 15 thuật toán</b> — xếp hạng chính xác, tốc độ, RAM.</li>
-  <li><b>Thử nhanh &amp; nạp lên wand</b> — giả lập What-If, xuất mã C++, nạp 1-click.</li>
+  <li><b>So sánh 14 thuật toán</b> — xếp hạng chính xác, tốc độ, RAM.</li>
+  <li><b>Thử nhanh &amp; nạp lên wand</b> — giả lập What-If, xuất mã C++, nạp firmware đã build.</li>
   <li><b>Kết nối wand</b> — thi triển thật và thử mô hình trực tiếp trên máy.</li>
 </ol>
 <p><b>Mẹo cho người mới:</b> bật "Chế độ Người mới bắt đầu" ở tab 2, hoặc bấm "Để máy tự chọn giúp bạn" để máy thử 11 mô hình nhẹ và chọn giúp bạn.</p>
@@ -42,7 +42,7 @@ GLOSSARY_TOPICS = [
     ("Đặc trưng (Feature Engineering)", "features", """
 <h2>Trích Xuất Đặc Trưng (Feature Engineering) là gì?</h2>
 <p>Cảm biến wand ghi 50 mẫu mỗi giây, mỗi mẫu 6 trục (a_x, a_y, a_z, g_x, g_y, g_z). Trong ~1.3 giây vung, có tới <b>384 con số thô</b>!</p>
-<p>Đưa thẳng 384 số vào máy học cổ điển thì quá nhiều chiều và nhiều nhiễu. Thay vào đó, ta nén thành <b>63 đặc trưng thống kê</b>:</p>
+<p>Đưa thẳng 384 số vào máy học cổ điển thì quá nhiều chiều và nhiều nhiễu. Thay vào đó, ta trích tối đa <b>75 đặc trưng thống kê</b>; số đặc trưng giảm theo nhóm được chọn:</p>
 <h3>Các nhóm đặc trưng:</h3>
 <ul>
   <li><b>Trung bình (mean)</b> — hướng nghiêng và trọng lực cơ bản.</li>
@@ -163,7 +163,7 @@ GLOSSARY_TOPICS = [
 
     ("Mạng nơ-ron (MLP)", "mlp", """
 <h2>Mạng Nơ-ron Tầng Nông (Shallow MLP)</h2>
-<p>Cầu nối sang Deep Learning: 63 đặc trưng → tầng ẩn (16 ô tính, kích hoạt ReLU) → tầng ra (Softmax theo số lớp).</p>
+<p>Cầu nối sang Deep Learning: các đặc trưng đã chọn → tầng ẩn (16 ô tính, kích hoạt ReLU) → tầng ra (Softmax theo số lớp).</p>
 <h3>Các cài đặt chính:</h3>
 <ul>
   <li><b>Số ô tính trung gian</b>: nhiều = học được quy luật phức tạp hơn nhưng dễ học vẹt và chậm hơn.</li>

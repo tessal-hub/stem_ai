@@ -28,7 +28,7 @@ class EncoderTrainerWorker(QThread):
         primitive_names: list[str],
         window_size: int = 64,
         epochs: int = 50,
-        embedding_dim: int = 32,
+        embedding_dim: int = 16,
         n_triplets: int = 10_000,
         parent=None,
     ) -> None:

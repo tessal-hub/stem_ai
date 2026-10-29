@@ -28,6 +28,7 @@ from PyQt6.QtWidgets import (
 )
 
 import ml_lab.ui.lab_style as ls
+from ui.layout_utils import scroll_panel
 from ml_lab.core.hyperparam_schema import (
     DecisionTreeConfig,
     KNNConfig,
@@ -68,6 +69,8 @@ class SweepWorker(QThread):
         self.allowed_spells = set(allowed_spells) if allowed_spells is not None else None
 
     def run(self) -> None:
+        if self.isInterruptionRequested():
+            return
         try:
             from ml_lab.core.lazy_sklearn import ensure_sklearn
 
@@ -93,6 +96,8 @@ class SweepWorker(QThread):
                     return
 
                 extractor = ClassicFeatureExtractor()
+                if self.isInterruptionRequested():
+                    return
                 X, y = extractor.extract_from_samples(all_wins)
 
                 train_scores: list[float] = []
@@ -109,6 +114,8 @@ class SweepWorker(QThread):
                 cv = StratifiedKFold(n_splits=max(2, n_splits), shuffle=True, random_state=42)
 
                 for i, val in enumerate(self.param_values):
+                    if self.isInterruptionRequested():
+                        return
                     cfg = self._build_config_with_val(val)
                     model, use_scaler = build_sklearn_model(self.algo, cfg)
 
@@ -128,6 +135,8 @@ class SweepWorker(QThread):
                     pct = int(((i + 1) / len(self.param_values)) * 100)
                     self.sig_progress.emit(pct)
 
+                if self.isInterruptionRequested():
+                    return
                 self.sig_finished.emit(self.param_values, train_scores, val_scores)
         except Exception as exc:
             self.sig_error.emit(str(exc))
@@ -193,6 +202,8 @@ class DataSizeWorker(QThread):
         self.allowed_spells = set(allowed_spells) if allowed_spells is not None else None
 
     def run(self) -> None:
+        if self.isInterruptionRequested():
+            return
         try:
             from ml_lab.core.lazy_sklearn import ensure_sklearn
 
@@ -220,6 +231,8 @@ class DataSizeWorker(QThread):
                 # Gom mẫu theo lớp (giữ nguyên tuple window, nhãn) để cắt tỉa cân bằng
                 by_class: dict[int, list] = {}
                 for sample in train_samples:
+                    if self.isInterruptionRequested():
+                        return
                     cls_idx = sample[1]
                     by_class.setdefault(cls_idx, []).append(sample)
 
@@ -228,8 +241,12 @@ class DataSizeWorker(QThread):
                 val_scores: list[float] = []
 
                 for step, frac in enumerate(self.FRACTIONS):
+                    if self.isInterruptionRequested():
+                        return
                     subset: list = []
                     for _cls, samples_cls in sorted(by_class.items()):
+                        if self.isInterruptionRequested():
+                            return
                         keep = max(1, int(round(len(samples_cls) * frac)))
                         subset.extend(samples_cls[:keep])
                     if len(subset) < 4:
@@ -248,6 +265,8 @@ class DataSizeWorker(QThread):
                     self.sig_error.emit("Dữ liệu quá ít để chạy thử theo từng phần.")
                     return
 
+                if self.isInterruptionRequested():
+                    return
                 self.sig_finished.emit(labels, train_scores, val_scores)
         except Exception as exc:
             self.sig_error.emit(str(exc))
@@ -292,8 +311,8 @@ class TabCurvesStudio(QWidget):
         l_layout.setSpacing(ls.SP_3)
         l_layout.setContentsMargins(ls.SP_3, ls.SP_3, ls.SP_3, ls.SP_3)
 
-        lbl_title = QLabel("THỬ NGHIỆM: CÀI ĐẶT NÀO TỐT NHẤT?")
-        lbl_title.setStyleSheet(ls.section_label())
+        lbl_title = QLabel("Thử nghiệm: cài đặt nào tốt nhất?")
+        lbl_title.setStyleSheet(ls.chart_title())
         l_layout.addWidget(lbl_title)
 
         # Combo Algo
@@ -342,8 +361,8 @@ class TabCurvesStudio(QWidget):
         l_layout.addWidget(self.btn_apply_best)
 
         # ── Thử nghiệm thứ hai: cần bao nhiêu dữ liệu? ──────
-        lbl_data_t = QLabel("THỬ NGHIỆM: CẦN BAO NHIÊU DỮ LIỆU?")
-        lbl_data_t.setStyleSheet(ls.section_label())
+        lbl_data_t = QLabel("Thử nghiệm: cần bao nhiêu dữ liệu?")
+        lbl_data_t.setStyleSheet(ls.chart_title())
         l_layout.addSpacing(6)
         l_layout.addWidget(lbl_data_t)
 
@@ -369,7 +388,7 @@ class TabCurvesStudio(QWidget):
         l_layout.addWidget(lbl_guide)
 
         l_layout.addStretch()
-        splitter.addWidget(left_box)
+        splitter.addWidget(scroll_panel(left_box))
 
         # ── Right Panel: Curve Chart ────────────────────────
         right_box = QFrame()
@@ -380,6 +399,7 @@ class TabCurvesStudio(QWidget):
         r_layout.setSpacing(ls.SP_2)
 
         lbl_chart_title = QLabel("CÀI ĐẶT NÀO VỪA HỌC TỐT VỪA KHÔNG HỌC VỆT?")
+        lbl_chart_title.setWordWrap(True)
         lbl_chart_title.setStyleSheet(ls.chart_title())
         r_layout.addWidget(lbl_chart_title)
 
@@ -397,7 +417,7 @@ class TabCurvesStudio(QWidget):
         self.progress_bar.setStyleSheet(ls.PROGRESS_BAR)
         r_layout.addWidget(self.progress_bar)
 
-        splitter.addWidget(right_box)
+        splitter.addWidget(scroll_panel(right_box))
         splitter.setStretchFactor(0, 3)
         main_layout.addWidget(splitter)
 
@@ -511,6 +531,8 @@ class TabCurvesStudio(QWidget):
         self._worker.start()
 
     def _on_sweep_finished(self, x_vals: list, train_scores: list, val_scores: list) -> None:
+        if getattr(self.window(), "_closing", False):
+            return
         self.btn_run_sweep.setEnabled(True)
         self.progress_bar.setVisible(False)
         param_name = self.combo_param.currentText()
@@ -570,6 +592,8 @@ class TabCurvesStudio(QWidget):
         self._datasize_worker.start()
 
     def _on_datasize_finished(self, labels: list, train_scores: list, val_scores: list) -> None:
+        if getattr(self.window(), "_closing", False):
+            return
         self.btn_run_datasize.setEnabled(True)
         self.btn_run_sweep.setEnabled(True)
         self.progress_bar.setVisible(False)
@@ -580,6 +604,8 @@ class TabCurvesStudio(QWidget):
         self.chart_widget.set_curve_data("Lượng dữ liệu dùng để học", labels, train_scores, val_scores)
 
     def _on_datasize_error(self, err_msg: str) -> None:
+        if getattr(self.window(), "_closing", False):
+            return
         self.btn_run_datasize.setEnabled(True)
         self.btn_run_sweep.setEnabled(True)
         self.progress_bar.setVisible(False)
@@ -587,6 +613,8 @@ class TabCurvesStudio(QWidget):
         QMessageBox.warning(self, "Lỗi Thử Nghiệm", f"Không thể chạy thử theo lượng dữ liệu:\n{err_msg}")
 
     def _on_sweep_error(self, err_msg: str) -> None:
+        if getattr(self.window(), "_closing", False):
+            return
         self.btn_run_sweep.setEnabled(True)
         self.progress_bar.setVisible(False)
         QMessageBox.warning(self, "Lỗi Quét Tham Số", f"Không thể hoàn tất quét tham số:\n{err_msg}")

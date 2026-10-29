@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import functools
 from PyQt6.QtGui import QColor, QPalette
-from PyQt6.QtWidgets import QFrame, QWidget
+from PyQt6.QtWidgets import QFrame
 
 from ui.asset_utils import resolve_asset_path
 from ui.tokens import (
@@ -25,15 +25,15 @@ from ui.tokens import (
 )
 
 
-from ui.palettes import LIGHT_PALETTE, DARK_PALETTE, Palette
+from ui.palettes import DARK_PALETTE, LIGHT_PALETTE, Palette
 
 
 @functools.lru_cache(maxsize=4)
 def get_modern_stylesheet(theme_name: str = "light") -> str:
     """
-    Tạo chuỗi stylesheet QSS dựa trên theme đã chọn ("light" hoặc "dark").
+    Tạo QSS Material You (M3 Dynamic Tonal) cho Light Mode hoặc Dark Mode.
     """
-    is_dark = str(theme_name).lower() == "dark"
+    is_dark = (str(theme_name).lower() == "dark")
     p: Palette = DARK_PALETTE if is_dark else LIGHT_PALETTE
 
     check_icon = resolve_asset_path("assets/icon/cooliocns SVG/Interface/Check.svg").replace("\\", "/")
@@ -53,93 +53,132 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
     BORDER_LIGHT = p.BORDER_LIGHT
     BORDER_MID = p.BORDER
 
-    if is_dark:
-        SIDEBAR_BG = "#121214"
-        SIDEBAR_BORDER = "rgba(255, 255, 255, 0.12)"
-        NAV_ACTIVE_BG = p.PRIMARY
-        NAV_ACTIVE_TEXT = "#FFFFFF"
-        NAV_HOVER_BG = "rgba(10, 132, 255, 0.22)"
-        TOOLBAR_BORDER = "rgba(255, 255, 255, 0.12)"
-        CARD_SHADOW_BORDER = "rgba(0, 0, 0, 0.60)"
-        STATUS_SUCCESS_BG = "rgba(48, 209, 88, 0.20)"
-        STATUS_ERROR_BG = "rgba(255, 69, 58, 0.20)"
-        STATUS_WARNING_BG = "rgba(255, 159, 10, 0.20)"
-        STATUS_ACCENT_BG = "rgba(10, 132, 255, 0.22)"
+    if not is_dark:
+        SIDEBAR_BG = "#F5F2FA"          # M3 Surface Container Low
+        SIDEBAR_BORDER = "#E3DFE8"      # M3 Surface Container Highest
+        NAV_ACTIVE_BG = "#DFE0FF"       # M3 Primary Container
+        NAV_ACTIVE_TEXT = "#0A1365"     # M3 On-Primary Container (deep contrast indigo)
+        NAV_HOVER_BG = "rgba(78, 88, 169, 0.08)"
+        TOOLBAR_BORDER = "#E3DFE8"
+        CARD_SHADOW_BORDER = "rgba(27, 27, 33, 0.04)"
+        STATUS_SUCCESS_BG = "#A5F5B4"   # M3 Success Container
+        STATUS_ERROR_BG = "#FFDAD6"     # M3 Error Container
+        STATUS_WARNING_BG = "#FFDDB8"   # M3 Warning Container
+        STATUS_ACCENT_BG = "#DFE0FF"
+        STATUS_SUCCESS_TEXT_ON_TINT = "#005221"
+        STATUS_WARNING_TEXT_ON_TINT = "#6B3D00"
+        STATUS_ACCENT_TEXT_ON_TINT = "#0A1365"
+        BORDER_SUCCESS_TINT = "rgba(26, 108, 57, 0.25)"
+        BORDER_WARNING_TINT = "rgba(135, 82, 0, 0.25)"
+        BORDER_ERROR_TINT = "rgba(186, 26, 26, 0.25)"
 
-        FILL_PRIMARY = "rgba(255, 255, 255, 0.18)"
-        FILL_SECONDARY = "rgba(255, 255, 255, 0.14)"
-        FILL_TERTIARY = "rgba(255, 255, 255, 0.08)"
+        FILL_PRIMARY = "#EFEBF4"        # M3 Surface Container
+        FILL_SECONDARY = "rgba(78, 88, 169, 0.08)"
+        FILL_TERTIARY = "rgba(78, 88, 169, 0.05)"
 
-        BTN_BASE_BG = "rgba(10, 132, 255, 0.22)"
-        BTN_BASE_TEXT = "#0A84FF"
-        BTN_OUTLINE_BG = "rgba(255, 255, 255, 0.10)"
-        BTN_OUTLINE_TEXT = "#FFFFFF"
+        BTN_PRIMARY_TEXT = "#FFFFFF"
+        BTN_PRIMARY_HOVER = p.PRIMARY_DARK
+        BTN_PRIMARY_PRESSED = "#38428B"
+        BTN_BASE_BG = "#DFE0FF"
+        BTN_BASE_TEXT = "#0A1365"
+        BTN_OUTLINE_BG = "#FFFFFF"
+        BTN_OUTLINE_TEXT = "#46464F"
+        BTN_DANGER_HOVER_TEXT = "#FFFFFF"
 
-        INPUT_BG = "#2C2C2E"
-        INPUT_BORDER = "rgba(255, 255, 255, 0.16)"
+        INPUT_BG = "#EFEBF4"
+        INPUT_BORDER = "#C7C5D0"
 
-        COMBO_POPUP_BG = "#3A3A3C"
-        COMBO_POPUP_TEXT = "#FFFFFF"
-        COMBO_SEL_BG = "#0A84FF"
-        COMBO_SEL_TEXT = "#FFFFFF"
+        # M3 secondary container — list / combo / menu selection (baseline tonal)
+        SEC_CONT_BG = "#E8DEF8"
+        SEC_CONT_TEXT = "#1D192B"
+        # M3 inverse surface — tooltips
+        INVERSE_BG = "#313033"
+        INVERSE_TEXT = "#F4EFF4"
+        # M3 menu container — surface container
+        MENU_BG = "#EFEBF4"
 
-        SCROLL_HANDLE = "rgba(255, 255, 255, 0.35)"
-        SCROLL_HANDLE_HOVER = "rgba(255, 255, 255, 0.50)"
-        ACCENT_TITLE_COLOR = PRIMARY_COLOR
-        BG_DARK = "#16181d"
+        COMBO_POPUP_BG = "#FFFFFF"
+        COMBO_POPUP_TEXT = p.TEXT_PRIMARY
+        COMBO_SEL_BG = SEC_CONT_BG
+        COMBO_SEL_TEXT = SEC_CONT_TEXT
 
-        # Interactive-state tokens — dark equivalents (never hard-code light values here)
-        FOCUS_BORDER = "#f2f2f7"
-        PRIMARY_PRESSED = "#0066CC"
-        DISABLED_BG = "rgba(255, 255, 255, 0.08)"
-        DISABLED_TEXT = "rgba(255, 255, 255, 0.45)"
-        DISABLED_BORDER = "rgba(255, 255, 255, 0.16)"
-        OUTLINE_BORDER = "rgba(255, 255, 255, 0.16)"
-        ERROR_TEXT_ON_TINT = STATUS_ERROR
+        SCROLL_HANDLE = "rgba(27, 27, 33, 0.20)"
+        SCROLL_HANDLE_HOVER = "rgba(27, 27, 33, 0.35)"
+        ACCENT_TITLE_COLOR = p.PRIMARY
+        BG_DARK = "#191C20"
+
+        # Interactive-state tokens — M3 state layers
+        FOCUS_BORDER = "#4E58A9"
+        PRIMARY_PRESSED = "#38428B"
+        DISABLED_BG = "#EFEBF4"
+        DISABLED_TEXT = "#767680"
+        DISABLED_BORDER = "#E3DFE8"
+        OUTLINE_BORDER = "#767680"
+        ERROR_TEXT_ON_TINT = "#93000A"
+
     else:
-        SIDEBAR_BG = "#f6f7f9"
-        SIDEBAR_BORDER = "#e4e9f0"
-        NAV_ACTIVE_BG = PRIMARY_COLOR
-        NAV_ACTIVE_TEXT = "#FFFFFF"
-        NAV_HOVER_BG = "rgba(10, 122, 255, 0.07)"
-        TOOLBAR_BORDER = "#e4e9f0"
-        CARD_SHADOW_BORDER = "rgba(15, 23, 42, 0.04)"
-        STATUS_SUCCESS_BG = "rgba(30, 122, 70, 0.09)"
-        STATUS_ERROR_BG = "rgba(220, 38, 38, 0.08)"
-        STATUS_WARNING_BG = "rgba(180, 83, 9, 0.10)"
-        STATUS_ACCENT_BG = "rgba(10, 122, 255, 0.07)"
+        SIDEBAR_BG = "#1A1B21"          # M3 Dark Surface Container Low
+        SIDEBAR_BORDER = "#33343B"      # M3 Dark Surface Container Highest
+        NAV_ACTIVE_BG = "#373F8F"       # M3 Dark Primary Container
+        NAV_ACTIVE_TEXT = "#DFE0FF"     # M3 Dark On-Primary Container (6.95:1 contrast)
+        NAV_HOVER_BG = "rgba(190, 194, 255, 0.08)"
+        TOOLBAR_BORDER = "#33343B"
+        CARD_SHADOW_BORDER = "rgba(0, 0, 0, 0.30)"
+        STATUS_SUCCESS_BG = "#005221"   # M3 Dark Success Container
+        STATUS_ERROR_BG = "#690005"     # M3 Dark Error Container
+        STATUS_WARNING_BG = "#4A2800"   # M3 Dark Warning Container
+        STATUS_ACCENT_BG = "#373F8F"
+        STATUS_SUCCESS_TEXT_ON_TINT = "#81D691"
+        STATUS_WARNING_TEXT_ON_TINT = "#FFB870"
+        STATUS_ACCENT_TEXT_ON_TINT = "#DFE0FF"
+        BORDER_SUCCESS_TINT = "rgba(129, 214, 145, 0.25)"
+        BORDER_WARNING_TINT = "rgba(255, 184, 112, 0.25)"
+        BORDER_ERROR_TINT = "rgba(255, 180, 171, 0.25)"
 
-        FILL_PRIMARY = "#f1f5f9"
-        FILL_SECONDARY = "rgba(15, 23, 42, 0.06)"
-        FILL_TERTIARY = "rgba(15, 23, 42, 0.04)"
+        FILL_PRIMARY = "#24252C"        # M3 Dark Surface Container
+        FILL_SECONDARY = "rgba(190, 194, 255, 0.08)"
+        FILL_TERTIARY = "rgba(190, 194, 255, 0.05)"
 
-        BTN_BASE_BG = "rgba(10, 122, 255, 0.07)"
-        BTN_BASE_TEXT = PRIMARY_COLOR
-        BTN_OUTLINE_BG = "#ffffff"
-        BTN_OUTLINE_TEXT = "#334155"
+        BTN_PRIMARY_TEXT = "#1B2678"    # M3 Dark On-Primary (8.0:1 on #BEC2FF)
+        BTN_PRIMARY_HOVER = "#D8DAFF"   # Light tonal hover
+        BTN_PRIMARY_PRESSED = "#959BF0"
+        BTN_BASE_BG = "#373F8F"
+        BTN_BASE_TEXT = "#DFE0FF"
+        BTN_OUTLINE_BG = "#1A1B21"
+        BTN_OUTLINE_TEXT = "#C6C5D0"
+        BTN_DANGER_HOVER_TEXT = "#690005"
 
-        INPUT_BG = SURFACE_1
-        INPUT_BORDER = "#cdd6e1"
+        INPUT_BG = "#24252C"
+        INPUT_BORDER = "#46464F"
 
-        COMBO_POPUP_BG = SURFACE_1
-        COMBO_POPUP_TEXT = TEXT_PRIMARY
-        COMBO_SEL_BG = "rgba(10, 122, 255, 0.14)"
-        COMBO_SEL_TEXT = "#044a99"
+        # M3 secondary container — list / combo / menu selection (baseline tonal)
+        SEC_CONT_BG = "#4A4458"
+        SEC_CONT_TEXT = "#E8DEF8"
+        # M3 inverse surface — tooltips
+        INVERSE_BG = "#E6E1E5"
+        INVERSE_TEXT = "#313033"
+        # M3 menu container — surface container high
+        MENU_BG = "#33343B"
 
-        SCROLL_HANDLE = "rgba(15, 23, 42, 0.18)"
-        SCROLL_HANDLE_HOVER = "rgba(15, 23, 42, 0.28)"
-        ACCENT_TITLE_COLOR = PRIMARY_COLOR
-        BG_DARK = "#16181d"
+        COMBO_POPUP_BG = "#24252C"
+        COMBO_POPUP_TEXT = p.TEXT_PRIMARY
+        COMBO_SEL_BG = SEC_CONT_BG
+        COMBO_SEL_TEXT = SEC_CONT_TEXT
 
-        # Interactive-state tokens — light equivalents
-        FOCUS_BORDER = "#0f172a"
-        PRIMARY_PRESSED = "#044a99"
-        DISABLED_BG = "#f1f5f9"
-        DISABLED_TEXT = "#8494a7"
-        DISABLED_BORDER = "#e4e9f0"
-        OUTLINE_BORDER = "#cdd6e1"
-        # #dc2626 on the 8% error tint is 4.28:1 — one step darker for small text
-        ERROR_TEXT_ON_TINT = "#b91c1c"
+        SCROLL_HANDLE = "rgba(226, 226, 233, 0.20)"
+        SCROLL_HANDLE_HOVER = "rgba(226, 226, 233, 0.35)"
+        ACCENT_TITLE_COLOR = p.PRIMARY
+        BG_DARK = "#0D0E13"
+
+        # Interactive-state tokens — M3 state layers
+        FOCUS_BORDER = "#BEC2FF"
+        PRIMARY_PRESSED = "#959BF0"
+        DISABLED_BG = "#24252C"
+        DISABLED_TEXT = "#90909A"
+        DISABLED_BORDER = "#33343B"
+        OUTLINE_BORDER = "#8A8994"
+        ERROR_TEXT_ON_TINT = "#FFB4AB"
+
 
     return f"""
         /* ══════════════════════════════════════════════
@@ -192,19 +231,19 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
         /* Nav section header */
         QLabel#StemNavSectionLabel {{
             font-size: 11px;
-            font-weight: 700;
+            font-weight: 600;
             color: {TEXT_SECONDARY};
-            letter-spacing: 1px;
+            letter-spacing: 0.2px;
             padding-left: 4px;
         }}
-        /* Nav buttons — pill shape */
+        /* Nav buttons — M3 Navigation Rail active pill shape */
         QToolButton#StemNavBtn {{
             background-color: transparent;
             color: {TEXT_SECONDARY};
             border: none;
-            border-radius: {RADIUS_SM}px;
-            padding: 6px 16px;
-            margin: 1px 12px;
+            border-radius: 22px;
+            padding: 8px 18px;
+            margin: 2px 12px;
             font-size: 13px;
             font-weight: 500;
             text-align: left;
@@ -212,15 +251,26 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
         QToolButton#StemNavBtn:hover {{
             background-color: {NAV_HOVER_BG};
             color: {TEXT_PRIMARY};
+            border-radius: 22px;
         }}
         QToolButton#StemNavBtn:focus {{
-            border: 1.5px solid {FOCUS_BORDER};
+            border: none;
             background-color: {NAV_HOVER_BG};
+            border-radius: 22px;
         }}
         QToolButton#StemNavBtn[active="true"] {{
             background-color: {NAV_ACTIVE_BG};
             color: {NAV_ACTIVE_TEXT};
-            font-weight: 600;
+            font-weight: 700;
+            border: none;
+            border-radius: 22px;
+        }}
+        QToolButton#StemNavBtn[active="true"]:focus {{
+            background-color: {NAV_ACTIVE_BG};
+            color: {NAV_ACTIVE_TEXT};
+            font-weight: 700;
+            border: none;
+            border-radius: 22px;
         }}
         /* Swipe hint at bottom of sidebar */
         QLabel[type="shell_nav_hint"] {{
@@ -249,7 +299,7 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
         }}
 
         /* ══════════════════════════════════════════════
-           CARDS — White surface with soft border + depth
+           CARDS — Clean M3 Surface Container Lowest with uniform 1px border
            ══════════════════════════════════════════════ */
         QFrame#CardFrame, QFrame#VanguardCardOuter, QWidget#Card, QFrame#Card,
         #HomeViewerCard, #HomeRightSection, #CardFrameElevated, #HomeHeroCard,
@@ -259,120 +309,149 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
         QFrame#ModernCard {{
             background-color: {SURFACE_1};
             border: 1px solid {BORDER_COLOR};
-            border-bottom: 2px solid {BORDER_LIGHT};
             border-radius: {RADIUS_LG}px;
+        }}
+        QFrame#SettingsControlBar {{
+            background-color: {SURFACE_1};
+            border-top: 1px solid {BORDER_LIGHT};
+            border-radius: 0px;
         }}
 
         /* ══════════════════════════════════════════════
-           BUTTONS — Complete variant system
+           BUTTONS — Material You (M3 Full Pill Variants)
            ══════════════════════════════════════════════ */
         QPushButton, QToolButton {{
             background-color: transparent;
             color: {TEXT_PRIMARY};
             border: none;
-            border-radius: {RADIUS_SM}px;
-            padding: 8px 16px;
-            font-weight: 500;
+            border-radius: {RADIUS_FULL}px;
+            padding: 8px 20px;
+            font-weight: 600;
             font-size: 13px;
         }}
 
-        /* Primary / Start — ink focus, calibrated blue only */
+        /* Primary / Start — M3 Filled Button */
         QPushButton[type="primary"], QPushButton[type="start"] {{
             background-color: {PRIMARY_COLOR};
-            color: white;
-            font-weight: 700;
-            border: 2px solid transparent;
+            color: {BTN_PRIMARY_TEXT};
+            font-weight: 600;
+            border: none;
+            border-radius: {RADIUS_FULL}px;
+            padding: 8px 22px;
         }}
         QPushButton[type="primary"]:hover, QPushButton[type="start"]:hover {{
-            background-color: {PRIMARY_DARK};
+            background-color: {BTN_PRIMARY_HOVER};
         }}
         QPushButton[type="primary"]:pressed, QPushButton[type="start"]:pressed {{
             background-color: {PRIMARY_PRESSED};
         }}
         QPushButton[type="primary"]:focus, QPushButton[type="start"]:focus {{
-            border-color: {FOCUS_BORDER};
+            border: 2px solid {FOCUS_BORDER};
         }}
         QPushButton[type="primary"]:disabled, QPushButton[type="start"]:disabled {{
             background-color: {DISABLED_BG};
             color: {DISABLED_TEXT};
         }}
 
-        /* Base / Back — with focus ink */
+        /* Base / Back — M3 Filled Tonal Button */
         QPushButton[type="base"], QPushButton[type="back"] {{
             background-color: {BTN_BASE_BG};
             color: {BTN_BASE_TEXT};
             font-weight: 600;
-            border: 1.5px solid transparent;
+            border: none;
+            border-radius: {RADIUS_FULL}px;
+            padding: 8px 20px;
         }}
         QPushButton[type="base"]:hover, QPushButton[type="back"]:hover {{
             background-color: {NAV_HOVER_BG};
         }}
         QPushButton[type="base"]:focus, QPushButton[type="back"]:focus {{
-            border-color: {FOCUS_BORDER};
+            border: 2px solid {FOCUS_BORDER};
             background-color: {NAV_HOVER_BG};
         }}
 
-        /* Stop / Danger — focus ink */
+        /* Stop / Danger — M3 Error Container Button */
         QPushButton[type="stop"], QPushButton[type="danger"] {{
             background-color: {STATUS_ERROR_BG};
             color: {STATUS_ERROR};
             font-weight: 600;
-            border: 1.5px solid transparent;
+            border: none;
+            border-radius: {RADIUS_FULL}px;
+            padding: 8px 20px;
         }}
         QPushButton[type="stop"]:hover, QPushButton[type="danger"]:hover {{
             background-color: {STATUS_ERROR};
-            color: white;
+            color: {BTN_DANGER_HOVER_TEXT};
         }}
         QPushButton[type="stop"]:focus, QPushButton[type="danger"]:focus {{
-            border-color: {FOCUS_BORDER};
+            border: 2px solid {FOCUS_BORDER};
         }}
 
-        /* Danger outline — focus ink */
+        /* Danger outline — M3 Outlined Error Button */
         QPushButton[type="danger_outline"] {{
             background-color: transparent;
             color: {STATUS_ERROR};
-            border: 1px solid rgba(220, 38, 38, 0.30);
-            font-weight: 500;
+            border: 1px solid {STATUS_ERROR};
+            border-radius: {RADIUS_FULL}px;
+            padding: 7px 18px;
+            font-weight: 600;
         }}
         QPushButton[type="danger_outline"]:hover {{
             background-color: {STATUS_ERROR_BG};
             border-color: {STATUS_ERROR};
         }}
         QPushButton[type="danger_outline"]:focus {{
-            border: 1.5px solid {FOCUS_BORDER};
+            border: 2px solid {FOCUS_BORDER};
             background-color: {STATUS_ERROR_BG};
         }}
 
-        /* Outline / Snip — focus ink */
+        /* Outline / Snip — M3 Outlined Button */
         QPushButton[type="outline"], QPushButton[type="snip"] {{
             background-color: {BTN_OUTLINE_BG};
             color: {BTN_OUTLINE_TEXT};
             border: 1px solid {OUTLINE_BORDER};
+            border-radius: {RADIUS_FULL}px;
+            padding: 7px 18px;
+            font-weight: 600;
         }}
         QPushButton[type="outline"]:hover, QPushButton[type="snip"]:hover {{
             background-color: {FILL_PRIMARY};
             color: {TEXT_PRIMARY};
+            border-color: {PRIMARY_COLOR};
         }}
         QPushButton[type="outline"]:pressed, QPushButton[type="snip"]:pressed {{
             background-color: {FILL_SECONDARY};
         }}
         QPushButton[type="outline"]:focus, QPushButton[type="snip"]:focus {{
-            border: 1.5px solid {FOCUS_BORDER};
+            border: 2px solid {FOCUS_BORDER};
         }}
 
-        /* Icon-only — focus ink */
+        /* Icon-only — M3 Tonal Squircle Button */
         QToolButton[type="icon"] {{
-            background-color: {FILL_TERTIARY};
-            border: 1.5px solid transparent;
-            border-radius: {RADIUS_SM}px;
-            padding: 4px;
+            background-color: {FILL_PRIMARY};
+            border: none;
+            border-radius: {RADIUS_MD}px;
+            padding: 6px;
         }}
         QToolButton[type="icon"]:hover {{
             background-color: {FILL_SECONDARY};
         }}
+        QToolButton[type="icon"]:pressed {{
+            background-color: {FILL_PRIMARY};
+        }}
+        QToolButton[type="icon"]:checked {{
+            background-color: {BTN_BASE_BG};
+        }}
         QToolButton[type="icon"]:focus {{
             border-color: {FOCUS_BORDER};
             background-color: {FILL_SECONDARY};
+        }}
+        /* Generic tool button — transparent state layer */
+        QToolButton:hover {{
+            background-color: {NAV_HOVER_BG};
+        }}
+        QToolButton:pressed, QToolButton:checked {{
+            background-color: {FILL_PRIMARY};
         }}
 
         QPushButton:disabled {{
@@ -384,7 +463,7 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
         /* ══════════════════════════════════════════════
            INPUTS — Refined form controls
            ══════════════════════════════════════════════ */
-        QLineEdit, QSpinBox, QTimeEdit, QDateEdit {{
+        QLineEdit, QSpinBox, QDoubleSpinBox, QTimeEdit, QDateEdit, QDateTimeEdit {{
             background-color: {INPUT_BG};
             border: 1px solid {INPUT_BORDER};
             border-radius: {RADIUS_SM}px;
@@ -392,11 +471,11 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
             color: {TEXT_PRIMARY};
             selection-background-color: {PRIMARY_LIGHT};
         }}
-        QLineEdit:focus, QSpinBox:focus {{
+        QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
             border: 1.5px solid {PRIMARY_COLOR};
             background-color: {SURFACE_1};
         }}
-        QLineEdit:disabled, QSpinBox:disabled {{
+        QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled {{
             background-color: {DISABLED_BG};
             color: {DISABLED_TEXT};
             border-color: {DISABLED_BORDER};
@@ -438,6 +517,21 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
             selection-color: {COMBO_SEL_TEXT};
             color: {COMBO_POPUP_TEXT};
         }}
+        QComboBox QAbstractItemView::item {{
+            min-height: 36px;
+            padding: 4px 8px;
+            border-radius: {RADIUS_SM}px;
+        }}
+        QComboBox QAbstractItemView::item:hover {{
+            background-color: {NAV_HOVER_BG};
+            color: {TEXT_PRIMARY};
+        }}
+        QListView::item, QTreeView::item {{
+            border-radius: {RADIUS_SM}px;
+        }}
+        QListView::item:hover, QTreeView::item:hover {{
+            background-color: {NAV_HOVER_BG};
+        }}
 
         /* ══════════════════════════════════════════════
            LISTS — Refined item styling
@@ -466,6 +560,30 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
             color: {COMBO_SEL_TEXT};
             font-weight: 600;
         }}
+        QListWidget::item:selected:focus {{
+            background-color: {COMBO_SEL_BG};
+            color: {COMBO_SEL_TEXT};
+        }}
+        QTableWidget::item:selected, QTreeWidget::item:selected {{
+            background-color: {COMBO_SEL_BG};
+            color: {COMBO_SEL_TEXT};
+        }}
+        QListWidget::item:disabled, QTableWidget::item:disabled {{
+            color: {TEXT_TERTIARY};
+        }}
+        QHeaderView::section {{
+            background-color: {FILL_PRIMARY};
+            color: {TEXT_SECONDARY};
+            padding: 6px 10px;
+            border: none;
+            border-bottom: 1px solid {BORDER_COLOR};
+            font-weight: 600;
+            font-size: 12px;
+        }}
+        QHeaderView::section:hover {{
+            background-color: {FILL_SECONDARY};
+            color: {TEXT_PRIMARY};
+        }}
 
         /* ══════════════════════════════════════════════
            PROGRESS BAR & SCROLLBARS
@@ -473,15 +591,46 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
         QProgressBar {{
             background-color: {FILL_TERTIARY};
             border: none;
-            border-radius: 4px;
+            border-radius: 2px;
             text-align: center;
             font-size: 11px;
             color: {TEXT_SECONDARY};
-            max-height: 8px;
+            max-height: 4px;
         }}
         QProgressBar::chunk {{
             background-color: {PRIMARY_COLOR};
-            border-radius: 4px;
+            border-radius: 2px;
+        }}
+
+        /* ══════════════════════════════════════════════
+           SLIDER — Material You (M3 Track & Handle)
+           ══════════════════════════════════════════════ */
+        QSlider::groove:horizontal {{
+            height: 4px;
+            background: {FILL_PRIMARY};
+            border-radius: 2px;
+        }}
+        QSlider::sub-page:horizontal {{
+            background: {PRIMARY_COLOR};
+            border-radius: 2px;
+        }}
+        QSlider::add-page:horizontal {{
+            background: {FILL_TERTIARY};
+            border-radius: 2px;
+        }}
+        QSlider::handle:horizontal {{
+            background: {PRIMARY_COLOR};
+            border: 2px solid {SURFACE_1};
+            width: 16px;
+            height: 16px;
+            margin: -6px 0;
+            border-radius: 8px;
+        }}
+        QSlider::handle:horizontal:hover {{
+            background: {BTN_PRIMARY_HOVER};
+        }}
+        QSlider::handle:horizontal:focus {{
+            border: 2px solid {FOCUS_BORDER};
         }}
 
         /* Vertical scrollbar */
@@ -532,18 +681,48 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
             background: none;
         }}
 
+        /* Groove reset */
+        QScrollBar::groove:vertical, QScrollBar::groove:horizontal {{
+            background: transparent;
+            border: none;
+        }}
+        QScrollBar:corner {{
+            background: transparent;
+            border: none;
+        }}
+
+        /* ══════════════════════════════════════════════
+           CHROME EXTRAS — statusbar, separators, splitter
+           ══════════════════════════════════════════════ */
+        QStatusBar {{
+            background-color: {SURFACE_0};
+            color: {TEXT_SECONDARY};
+            border-top: 1px solid {BORDER_COLOR};
+        }}
+        QMainWindow::separator {{
+            background: transparent;
+            width: 4px;
+            height: 4px;
+        }}
+        QSplitter::handle {{
+            background: transparent;
+        }}
+        QSplitter::handle:hover {{
+            background-color: {NAV_HOVER_BG};
+        }}
+
         /* ══════════════════════════════════════════════
            TERMINAL — Dark surface with refined type
            ══════════════════════════════════════════════ */
         QTextEdit, QPlainTextEdit {{
             background-color: {BG_DARK};
             color: {TERM_FG};
-            border: none;
+            border: 1px solid {BORDER_LIGHT};
             border-radius: {RADIUS_LG}px;
             font-family: {MONO_FONT_STACK};
             font-size: 12px;
             padding: 16px;
-            selection-background-color: rgba(50, 215, 75, 0.20);
+            selection-background-color: rgba(78, 88, 169, 0.35);
         }}
 
         /* ══════════════════════════════════════════════
@@ -551,7 +730,44 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
            ══════════════════════════════════════════════ */
         QDialog {{
             background-color: {SURFACE_0};
-            border-radius: {RADIUS_LG}px;
+            border-radius: {RADIUS_XL}px;
+        }}
+        QMessageBox {{
+            background-color: {SURFACE_0};
+        }}
+        QDialogButtonBox QPushButton {{
+            min-width: 88px;
+        }}
+
+        /* ══════════════════════════════════════════════
+           MENU — M3 menu container with pill item highlight
+           ══════════════════════════════════════════════ */
+        QMenu {{
+            background-color: {MENU_BG};
+            border: 1px solid {BORDER_LIGHT};
+            border-radius: {RADIUS_SM}px;
+            padding: 6px;
+        }}
+        QMenu::item {{
+            color: {TEXT_PRIMARY};
+            padding: 8px 24px 8px 14px;
+            border-radius: {RADIUS_FULL}px;
+            font-size: 13px;
+        }}
+        QMenu::item:selected {{
+            background-color: {SEC_CONT_BG};
+            color: {SEC_CONT_TEXT};
+        }}
+        QMenu::item:disabled {{
+            color: {TEXT_TERTIARY};
+        }}
+        QMenu::separator {{
+            height: 1px;
+            background: {BORDER_COLOR};
+            margin: 6px 8px;
+        }}
+        QMenu::icon {{
+            padding-left: 8px;
         }}
 
         /* ══════════════════════════════════════════════
@@ -565,8 +781,8 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
         QCheckBox::indicator {{
             width: 18px;
             height: 18px;
-            border-radius: {RADIUS_XS}px;
-            border: 1.5px solid {BORDER_MID};
+            border-radius: 2px;
+            border: 2px solid {BORDER_MID};
             background-color: {SURFACE_1};
         }}
         QCheckBox::indicator:hover {{
@@ -577,16 +793,23 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
             border-color: {PRIMARY_COLOR};
             image: url("{check_icon}");
         }}
-        QRadioButton::indicator {{
-            width: 18px;
-            height: 18px;
-            border-radius: 9px;
-            border: 1.5px solid {BORDER_MID};
-            background-color: {SURFACE_1};
-        }}
-        QRadioButton::indicator:checked {{
+        QCheckBox::indicator:indeterminate {{
             background-color: {PRIMARY_COLOR};
             border-color: {PRIMARY_COLOR};
+        }}
+        QRadioButton::indicator {{
+            width: 20px;
+            height: 20px;
+            border-radius: 10px;
+            border: 2px solid {BORDER_MID};
+            background-color: {SURFACE_1};
+        }}
+        QRadioButton::indicator:hover {{
+            border-color: {PRIMARY_COLOR};
+        }}
+        QRadioButton::indicator:checked {{
+            border: 6px solid {PRIMARY_COLOR};
+            background-color: {SURFACE_1};
         }}
 
         /* ══════════════════════════════════════════════
@@ -612,25 +835,28 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
             font-weight: 400;
             color: {TEXT_SECONDARY};
         }}
-        /* Settings section header — caps group label (form legend, not decorative eyebrow) */
+        /* Settings section header — crisp M3 section title */
         QLabel[type="settings_section_label"] {{
-            font-size: 11px;
-            font-weight: 700;
-            color: {TEXT_SECONDARY};
-            letter-spacing: 1.2px;
+            font-size: 12px;
+            font-weight: 600;
+            color: {TEXT_PRIMARY};
+            letter-spacing: 0.2px;
+        }}
+        QLabel[type="settings_section_label"][status="accent"] {{
+            color: {ACCENT_TITLE_COLOR};
         }}
         /* Status label — pill badges with semantic colors (padding dọc 7px cho dấu chồng VN) */
         QLabel[type="status_label"] {{
             font-size: 11px;
             font-weight: 600;
-            padding: 7px 14px;
-            border-radius: {RADIUS_FULL}px;
+            padding: 5px 12px;
+            border-radius: 11px;
             background-color: {FILL_TERTIARY};
             color: {TEXT_SECONDARY};
         }}
         QLabel[type="status_label"][status="success"] {{
             background-color: {STATUS_SUCCESS_BG};
-            color: {STATUS_SUCCESS};
+            color: {STATUS_SUCCESS_TEXT_ON_TINT};
         }}
         QLabel[type="status_label"][status="error"] {{
             background-color: {STATUS_ERROR_BG};
@@ -638,11 +864,16 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
         }}
         QLabel[type="status_label"][status="warning"] {{
             background-color: {STATUS_WARNING_BG};
-            color: {STATUS_WARNING};
+            color: {STATUS_WARNING_TEXT_ON_TINT};
         }}
         QLabel[type="status_label"][status="accent"] {{
             background-color: {STATUS_ACCENT_BG};
-            color: {PRIMARY_DARK};
+            color: {STATUS_ACCENT_TEXT_ON_TINT};
+        }}
+        QLabel[type="status_label"][status="muted"] {{
+            background-color: {FILL_PRIMARY};
+            color: {TEXT_SECONDARY};
+            border: 1px solid {BORDER_LIGHT};
         }}
         /* Hint text — theme-aware (MUTED 5.45:1 light / #A1A1A6 dark) */
         QLabel[type="settings_hint"] {{
@@ -698,9 +929,9 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
            TOOLTIP
            ══════════════════════════════════════════════ */
         QToolTip {{
-            background-color: {BG_DARK};
-            color: #F0F0F0;
-            border: 1px solid rgba(255, 255, 255, 0.12);
+            background-color: {INVERSE_BG};
+            color: {INVERSE_TEXT};
+            border: none;
             border-radius: {RADIUS_XS}px;
             padding: 6px 10px;
             font-size: 12px;
@@ -828,22 +1059,22 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
             font-size: 13px;
             font-weight: 700;
             padding: 5px 16px;
-            border-radius: {RADIUS_FULL}px;
+            border-radius: 13px;
         }}
         QLabel[type="hero_confidence"][level="high"] {{
             background-color: {STATUS_SUCCESS_BG};
-            color: {STATUS_SUCCESS};
-            border: 1px solid rgba(16, 185, 129, 0.25);
+            color: {STATUS_SUCCESS_TEXT_ON_TINT};
+            border: none;
         }}
         QLabel[type="hero_confidence"][level="moderate"] {{
             background-color: {STATUS_WARNING_BG};
-            color: {STATUS_WARNING};
-            border: 1px solid rgba(245, 158, 11, 0.25);
+            color: {STATUS_WARNING_TEXT_ON_TINT};
+            border: none;
         }}
         QLabel[type="hero_confidence"][level="low"] {{
             background-color: {STATUS_ERROR_BG};
-            color: {STATUS_ERROR};
-            border: 1px solid rgba(239, 68, 68, 0.25);
+            color: {ERROR_TEXT_ON_TINT};
+            border: none;
         }}
         QLabel[type="hero_subtitle"] {{
             font-size: 11px;
@@ -854,18 +1085,18 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
         QProgressBar[type="hero_confidence_bar"] {{
             background-color: {FILL_TERTIARY};
             border: none;
-            border-radius: 3px;
-            max-height: 5px;
-            min-height: 5px;
+            border-radius: 2px;
+            max-height: 4px;
+            min-height: 4px;
         }}
         QProgressBar[type="hero_confidence_bar"]::chunk {{
             background-color: {PRIMARY_COLOR};
-            border-radius: 3px;
+            border-radius: 2px;
         }}
-        /* Tip Card Container — flat tonal + full border, no side-stripe */
+        /* Tip Card Container — M3 tonal container, no border */
         QFrame#HomeTipCard {{
             background-color: {PRIMARY_LIGHT};
-            border: 1px solid {PRIMARY_COLOR};
+            border: none;
             border-radius: {RADIUS_MD}px;
         }}
         QLabel[type="tip_eyebrow"] {{
@@ -902,23 +1133,21 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
         }}
         QFrame[type="history_item_row"] {{
             background-color: {SURFACE_0};
-            border: 1px solid {BORDER_LIGHT};
+            border: none;
             border-radius: {RADIUS_MD}px;
             padding: 8px 12px;
         }}
         QFrame[type="history_item_row"]:hover {{
             background-color: {NAV_HOVER_BG};
-            border-color: {PRIMARY_LIGHT};
         }}
         QFrame[type="loaded_spell_row"] {{
             background-color: {SURFACE_0};
-            border: 1px solid {BORDER_LIGHT};
+            border: none;
             border-radius: {RADIUS_MD}px;
             padding: 8px 14px;
         }}
         QFrame[type="loaded_spell_row"]:hover {{
             background-color: {NAV_HOVER_BG};
-            border-color: {PRIMARY_LIGHT};
         }}
     """
 
@@ -927,17 +1156,13 @@ def apply_modern_theme(widget_or_app, theme_name: str = "light") -> None:
     """
     Áp dụng theme hiện đại cho một widget hoặc toàn bộ ứng dụng.
     """
+    is_dark = (str(theme_name).lower() == "dark")
     widget_or_app.setStyleSheet(get_modern_stylesheet(theme_name))
     # QSS không có selector cho placeholder text — đặt qua QPalette để đạt contrast
     # trên cả hai theme (mặc định của Qt quá nhạt trên nền tối).
     if hasattr(widget_or_app, "setPalette") and hasattr(widget_or_app, "palette"):
-        is_dark = str(theme_name).lower() == "dark"
         pal = widget_or_app.palette()
-        pal.setColor(QPalette.ColorRole.PlaceholderText, QColor("#a1a1a6" if is_dark else "#5b6b7f"))
+        placeholder_color = "#90909A" if is_dark else "#71717A"
+        pal.setColor(QPalette.ColorRole.PlaceholderText, QColor(placeholder_color))
         widget_or_app.setPalette(pal)
-
-
-def apply_flat_widget_chrome(root_widget: QWidget) -> None:
-    """No-op — frame removal is now handled by QSS in get_modern_stylesheet."""
-    pass
 

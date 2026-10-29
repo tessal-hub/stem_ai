@@ -22,7 +22,16 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from ml_lab.core.c_exporter import CCodeExporter
 from ml_lab.core.pipeline import TrainClassicResult
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+def _find_project_root() -> Path:
+    source_root = Path(__file__).resolve().parents[2]
+    for root in dict.fromkeys((source_root, Path(sys.executable).resolve().parent)):
+        project = root / "esp32_classic_ml"
+        if (project / "CMakeLists.txt").is_file() and (project / "main" / "CMakeLists.txt").is_file():
+            return root
+    return source_root
+
+
+PROJECT_ROOT = _find_project_root()
 
 
 def list_serial_ports() -> list[tuple[str, str]]:
@@ -127,18 +136,30 @@ class Esp32FlashWorker(QThread):
                 pass
 
     def run(self) -> None:
-        self.log_msg.emit(f"🚀 [BẮT ĐẦU] Chuẩn bị nạp mã nguồn cho mô hình '{self.result.algo_name}' vào cổng {self.port}...")
+        self.log_msg.emit(f"[BẮT ĐẦU] Chuẩn bị nạp mã nguồn cho mô hình '{self.result.algo_name}' vào cổng {self.port}...")
         self.sig_progress.emit(5)
         self.sig_status.emit("Đang đồng bộ mã nguồn C++...")
+
+        project_dir = PROJECT_ROOT / "esp32_classic_ml"
+        if not (project_dir / "CMakeLists.txt").is_file() or not (project_dir / "main" / "CMakeLists.txt").is_file():
+            err = (
+                f"Không tìm thấy ESP-IDF project tại {project_dir}. "
+                "Đặt thư mục esp32_classic_ml cạnh ứng dụng hoặc chạy từ source checkout."
+            )
+            self.sig_progress.emit(0)
+            self.sig_status.emit("Nạp thất bại")
+            self.log_msg.emit(f"[LỖI] {err}")
+            self.sig_finished.emit(False, err)
+            return
 
         # ── Bước 1: Đồng bộ mã nguồn C++ vào esp32_classic_ml ─
         try:
             esp32_main_dir = PROJECT_ROOT / "esp32_classic_ml" / "main"
             h_path, cc_path = self.c_exporter.export_to_esp32_project(self.result, esp32_main_dir)
-            self.log_msg.emit(f"✅ Đã sinh & đồng bộ mã nguồn C++:\n   • {h_path}\n   • {cc_path}")
+            self.log_msg.emit(f"[OK] Đã sinh & đồng bộ mã nguồn C++:\n   • {h_path}\n   • {cc_path}")
         except Exception as exc:
             err = f"Lỗi đồng bộ mã C++: {exc}"
-            self.log_msg.emit(f"❌ [LỖI] {err}")
+            self.log_msg.emit(f"[LỖI] {err}")
             self.sig_finished.emit(False, err)
             return
 
@@ -152,10 +173,10 @@ class Esp32FlashWorker(QThread):
         # ── Bước 2: Nhận diện Chip ESP32 qua esptool ─────────
         chip_info = self._probe_chip_id()
         if chip_info:
-            self.log_msg.emit(f"📟 [CHIP DETECTED] {chip_info}")
+            self.log_msg.emit(f"[CHIP] {chip_info}")
             self.sig_chip_info.emit(chip_info)
         else:
-            self.log_msg.emit("⚠️ Tiếp tục nạp vào cổng Serial...")
+            self.log_msg.emit("[CANH BÁO] Tiếp tục nạp vào cổng Serial...")
 
         if self._is_cancelled:
             self.sig_finished.emit(False, "Đã hủy bởi người dùng.")
@@ -168,13 +189,13 @@ class Esp32FlashWorker(QThread):
         success, msg = self._flash_payload()
         if success:
             self.sig_progress.emit(100)
-            self.sig_status.emit("✅ Nạp code thành công!")
-            self.log_msg.emit("🎉 [HOÀN TẤT] Mã nguồn học máy đã được nạp thành công vào ESP32!")
+            self.sig_status.emit("Nạp code thành công!")
+            self.log_msg.emit("[HOÀN TẤT] Mã nguồn học máy đã được nạp thành công vào ESP32!")
             self.sig_finished.emit(True, "Nạp code thành công vào ESP32!")
         else:
             self.sig_progress.emit(0)
-            self.sig_status.emit("❌ Nạp thất bại")
-            self.log_msg.emit(f"❌ [THẤT BÀI] {msg}")
+            self.sig_status.emit("Nạp thất bại")
+            self.log_msg.emit(f"[THẤT BÀI] {msg}")
             self.sig_finished.emit(False, msg)
 
     def _probe_chip_id(self) -> str | None:
@@ -206,24 +227,32 @@ class Esp32FlashWorker(QThread):
     def _flash_payload(self) -> tuple[bool, str]:
         """Thực thi lệnh nạp mã nguồn vào ESP32 qua esptool Python API."""
         build_bin = PROJECT_ROOT / "esp32_classic_ml" / "build" / "esp32_classic_ml.bin"
-        asset_bin = PROJECT_ROOT / "assets" / "firmware" / "classic_inference.bin"
-        bin_target = build_bin if build_bin.exists() else asset_bin
-
+        source_dir = PROJECT_ROOT / "esp32_classic_ml" / "main"
+        bin_target = build_bin
         if not bin_target.exists():
-            return True, "Đã đồng bộ mã C++ thành công vào esp32_classic_ml/main/ (Sẵn sàng biên dịch)"
+            return False, "Đã đồng bộ mã nguồn. Chưa có firmware binary; chạy 'idf.py build' trong esp32_classic_ml rồi thử lại."
 
-        # Cảnh báo bin cũ: vừa đồng bộ .h/.cc mới nhưng chưa build -> bin có thể lỗi thời
+        source_files = (
+            source_dir / "main.cpp",
+            source_dir / "classic_features.h",
+            source_dir / "model_classic.h",
+            source_dir / "model_classic.cc",
+        )
+        missing = [path.name for path in source_files if not path.is_file()]
+        if missing:
+            return False, f"Thiếu firmware source ({', '.join(missing)}); khôi phục file ESP-IDF trước khi nạp."
+
         try:
-            main_h = PROJECT_ROOT / "esp32_classic_ml" / "main" / "model_classic.h"
-            if main_h.exists() and bin_target.stat().st_mtime < main_h.stat().st_mtime:
-                self.log_msg.emit(
-                    "[WARN] File .bin cũ hơn model_classic.h vừa sinh — đang nạp firmware CŨ. "
-                    "Chạy 'idf.py build' trong esp32_classic_ml/ rồi nạp lại để có mô hình mới."
-                )
-        except Exception:
-            pass
+            binary_time = bin_target.stat().st_mtime
+            stale_sources = [path.name for path in source_files if path.stat().st_mtime > binary_time]
+        except OSError as exc:
+            return False, f"Không xác minh được độ mới firmware: {exc}"
+        if stale_sources:
+            return False, (
+                f"Firmware binary cũ hơn {', '.join(stale_sources)}. "
+                "Chạy 'idf.py build' trong esp32_classic_ml rồi thử lại; chưa nạp firmware."
+            )
 
-        # Tham số tương thích esptool v5 (dùng dấu gạch ngang chuẩn)
         esptool_args = [
             "--chip", "esp32",
             "--port", self.port,

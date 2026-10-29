@@ -3,7 +3,17 @@ Hàm tiện ích layout dùng chung.
 Gom các thao tác layout phổ biến dùng trên nhiều trang UI.
 """
 
-from PyQt6.QtWidgets import QLayout
+from PyQt6.QtWidgets import QFrame, QLayout, QScrollArea, QWidget
+
+
+def scroll_panel(content: QWidget) -> QScrollArea:
+    """Keep panel controls usable when available space is below their minimum."""
+    scroll = QScrollArea()
+    scroll.setWidgetResizable(True)
+    scroll.setFrameShape(QFrame.Shape.NoFrame)
+    content.layout().setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
+    scroll.setWidget(content)
+    return scroll
 
 
 def clear_layout(layout: QLayout | None) -> None:

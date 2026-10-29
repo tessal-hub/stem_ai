@@ -35,6 +35,3 @@ PEAK_TRIGGER_MIN_M: float = 2.0
 # Margin Gate (chỉ Python live, nơi có predict_proba) — top1 phải hơn top2
 # ít nhất chừng này mới tin. MLP overconfident nên conf đơn không đủ.
 MIN_MARGIN: float = 0.15
-
-# Backward-compat alias (nhiều chỗ đang dùng WINDOW_SIZE)
-WINDOW_SIZE: int = WINDOW_SAMPLES

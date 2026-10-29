@@ -10,10 +10,14 @@ from __future__ import annotations
 
 import time
 
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (QBoxLayout, QFrame, QHBoxLayout,
                              QLabel, QListWidget, QListWidgetItem,
                              QProgressBar, QVBoxLayout, QWidget)
+
+from ui.asset_utils import make_tinted_icon
+from ui.layout_utils import scroll_panel
 
 from logic.dataset_layout import _PRIMITIVE_LOGICAL_NAMES, folder_name_match_key
 from logic.home_tips_i18n import get_tip_pool
@@ -23,13 +27,15 @@ from logic.spell_config_store import SpellConfigStore
 from logic.tip_rotator import TipRotator
 from logic.theme_manager import theme_manager
 from ui.component_factory import (make_card, make_empty_state_card,
+                                  make_outline_button, make_primary_button,
                                   make_rarity_badge_wand, make_section_label)
 from ui.color_utils import contrast_ratio
 from ui.i18n_bridge import tr_ui
-from ui.tokens import (MARGIN_COMFORTABLE, PRIMARY_COLOR, SPACING_LG,
+from ui.tokens import (MARGIN_COMFORTABLE, SPACING_LG,
                        SPACING_MD, SPACING_SM, SPACING_XS)
 
 # ── Constants ────────────────────────────────────────────────────────────────
+_TIP_ICON_PATH = "assets/icon/cooliocns SVG/Warning/Info.svg"
 _TIP_ROTATION_MS = 15000
 _RELATIVE_TIME_REFRESH_MS = 1000
 _PULSE_DURATION_MS = 600
@@ -48,6 +54,8 @@ class PageHome(QWidget):
     Giao diện hiện đại, mượt mà với badge động và thẻ nổi.
     """
 
+    sig_navigate_requested = pyqtSignal(int)
+
     def __init__(self, data_store, spell_config_store: SpellConfigStore | None = None) -> None:
         super().__init__()
         self.data_store = data_store
@@ -60,6 +68,7 @@ class PageHome(QWidget):
         self._connected = False
         self._current_mode = "IDLE"
         self._last_hero_spell = ""
+        self._hero_user_rgb: tuple[int, int, int] | None = None
         self._last_confidence_level: str | None = None
 
         self._tip_rotator = TipRotator(get_tip_pool(
@@ -74,8 +83,13 @@ class PageHome(QWidget):
         self._load_data()
 
     def _init_ui(self) -> None:
-        """Khởi tạo giao diện dashboard fit toàn bộ trong một màn hình duy nhất."""
-        layout = QVBoxLayout(self)
+        """Khởi tạo giao diện dashboard có scroll bảo vệ khi màn hình thấp."""
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        content = QWidget()
+        layout = QVBoxLayout(content)
         layout.setContentsMargins(
             MARGIN_COMFORTABLE, 14,
             MARGIN_COMFORTABLE, 14,
@@ -94,6 +108,7 @@ class PageHome(QWidget):
         # 4. Bottom grid: History (left) + Loaded Spells (right)
         self._build_bottom_grid(layout)
 
+        outer.addWidget(scroll_panel(content), stretch=1)
         self.refresh_styles()
 
     def _init_signals(self) -> None:
@@ -132,16 +147,31 @@ class PageHome(QWidget):
         """Cập nhật trạng thái kết nối phần cứng."""
         self._connected = connected
         self._refresh_status_bar()
+        if not connected:
+            self.show_recognized_spell("", 0)
+        elif not self._last_hero_spell:
+            self._refresh_idle_hero()
 
     def set_mode(self, mode: str) -> None:
         """Cập nhật chế độ hoạt động hiện tại."""
         self._current_mode = mode.upper()
         self._refresh_status_bar()
 
+    def _refresh_idle_hero(self) -> None:
+        if self._last_hero_spell:
+            return
+        key = "home_hero_idle"
+        if not self._connected:
+            key = "home_hero_connect"
+        elif not getattr(self, "_has_loaded_spells", False):
+            key = "home_hero_prepare"
+        self.lbl_hero_spell.setText(tr_ui(key))
+
     def show_recognized_spell(self, action: str, confidence: float) -> None:
         """Hiển thị spell vừa nhận diện trên hero banner với thanh tự tin và hiệu ứng pulse."""
         if action in ("None", ""):
-            self.lbl_hero_spell.setText(tr_ui("home_hero_idle"))
+            self._last_hero_spell = ""
+            self._refresh_idle_hero()
             self.lbl_hero_confidence.setText("")
             self.lbl_hero_confidence.setProperty("level", "")
             self.hero_confidence_bar.setValue(0)
@@ -156,7 +186,7 @@ class PageHome(QWidget):
         self._last_confidence_level = level
 
         level_str = level.upper()
-        self.lbl_hero_confidence.setText(f"⚡ {pct}% Match  •  {level_str}")
+        self.lbl_hero_confidence.setText(f"{pct}% Match  •  {level_str}")
         self.lbl_hero_confidence.setProperty("level", level)
         self._repolish(self.lbl_hero_confidence)
 
@@ -173,29 +203,35 @@ class PageHome(QWidget):
                 if not (isinstance(color, (list, tuple)) and len(color) >= 3):
                     color = None
                 if color is not None:
-                    r, g, b = int(color[0]), int(color[1]), int(color[2])
-                    # Spell colors are user-chosen; a pale one on the hero card can
-                    # drop below WCAG large-text 3:1 — fall back to ink.
-                    hex_color = f"#{r:02x}{g:02x}{b:02x}"
-                    surface = theme_manager.get_palette().SURFACE_PRIMARY
-                    if contrast_ratio(hex_color, surface) < 3.0:
-                        r, g, b = 15, 23, 42  # TEXT_PRIMARY ink
-                    self.lbl_hero_spell.setStyleSheet(f"color: rgb({r}, {g}, {b}); font-weight: 700;")
-                    if hasattr(self, "orb_led"):
-                        self.orb_led.setStyleSheet(
-                            f"QLabel {{ background: qradialgradient(cx:0.5, cy:0.5, radius:0.65, fx:0.35, fy:0.35, "
-                            f"stop:0 #FFFFFF, stop:0.45 rgb({r}, {g}, {b}), stop:1 rgba({r}, {g}, {b}, 0.25)); "
-                            f"border-radius: 14px; border: 2px solid rgb({r}, {g}, {b}); }}"
-                        )
-                        self._orb_dim_timer.start(5000)
+                    self._hero_user_rgb = (int(color[0]), int(color[1]), int(color[2]))
+                    self._apply_hero_spell_color(*self._hero_user_rgb)
                 else:
+                    self._hero_user_rgb = None
                     self.lbl_hero_spell.setStyleSheet("")
                     self._set_orb_idle_style()
             except Exception:
+                self._hero_user_rgb = None
                 self.lbl_hero_spell.setStyleSheet("")
                 self._set_orb_idle_style()
             self._repolish(self.lbl_hero_spell)
             self._pulse_timer.start(_PULSE_DURATION_MS)
+
+    def _apply_hero_spell_color(self, r: int, g: int, b: int) -> None:
+        """Tô màu spell do người dùng chọn cho hero + orb, kèm guard tương phản theo theme."""
+        # Spell colors are user-chosen; a pale one on the hero card can
+        # drop below WCAG large-text 3:1 — fall back to ink of the CURRENT theme.
+        p = theme_manager.get_palette()
+        if contrast_ratio(f"#{r:02x}{g:02x}{b:02x}", p.SURFACE_PRIMARY) < 3.0:
+            ink = QColor(p.TEXT_PRIMARY)
+            r, g, b = ink.red(), ink.green(), ink.blue()
+        self.lbl_hero_spell.setStyleSheet(f"color: rgb({r}, {g}, {b}); font-weight: 700;")
+        if hasattr(self, "orb_led"):
+            self.orb_led.setStyleSheet(
+                f"QLabel {{ background: qradialgradient(cx:0.5, cy:0.5, radius:0.65, fx:0.35, fy:0.35, "
+                f"stop:0 #FFFFFF, stop:0.45 rgb({r}, {g}, {b}), stop:1 rgba({r}, {g}, {b}, 0.25)); "
+                f"border-radius: 14px; border: 2px solid rgb({r}, {g}, {b}); }}"
+            )
+            self._orb_dim_timer.start(5000)
 
     def update_spell_history(self, history: list[dict]) -> None:
         """Cập nhật danh sách lịch sử spell nhận diện gần đây với các hàng widget tùy chỉnh."""
@@ -230,6 +266,8 @@ class PageHome(QWidget):
             if folder_name_match_key(s) not in prim_keys
             and "::" not in s
         }
+        self._has_loaded_spells = bool(filtered)
+        self._refresh_idle_hero()
 
         if not filtered:
             self._show_loaded_empty(True)
@@ -261,22 +299,63 @@ class PageHome(QWidget):
         self._lbl_history_title.setText(tr_ui("home_history_title"))
         self._lbl_loaded_title.setText(tr_ui("home_loaded_title"))
 
-        if not self.data_store.spell_history:
-            if hasattr(self, "_history_empty_card"):
-                # findChild(QLabel, "") bắt nhãn icon 📊 đầu tiên và ghi đè bằng chữ
-                # tiêu đề ở font 32px — nhãn tiêu đề phải được chọn theo property.
-                for lbl in self._history_empty_card.findChildren(QLabel):
-                    if lbl.property("type") == "state_empty_title":
-                        lbl.setText(tr_ui("home_history_empty"))
-                        break
+        if hasattr(self, "_history_empty_card"):
+            for lbl in self._history_empty_card.findChildren(QLabel):
+                t = lbl.property("type")
+                if t == "state_empty_title":
+                    lbl.setText(tr_ui("home_history_empty"))
+                elif t == "state_empty_body":
+                    lbl.setText(tr_ui("home_history_empty_body"))
+
+        if hasattr(self, "_loaded_empty_card"):
+            for lbl in self._loaded_empty_card.findChildren(QLabel):
+                t = lbl.property("type")
+                if t == "state_empty_title":
+                    lbl.setText(tr_ui("home_loaded_empty"))
+                elif t == "state_empty_body":
+                    lbl.setText(tr_ui("home_loaded_empty_body"))
 
         if hasattr(self, "_last_loaded_spells"):
             self.update_loaded_spells(self._last_loaded_spells)
 
+        if hasattr(self, "btn_home_go_record"):
+            self.btn_home_go_record.setText(tr_ui("guide_btn_go_record", default="Ghi mẫu cử chỉ"))
+        if hasattr(self, "btn_home_go_wand"):
+            self.btn_home_go_wand.setText(tr_ui("guide_btn_go_wand", default="Đi tới Đũa phép"))
+
         self._refresh_history_relative_times()
 
     def refresh_styles(self) -> None:
-        """Làm mới giao diện theo theme hiện tại."""
+        """Làm mới giao diện theo theme hiện tại (mọi style inline phụ thuộc palette)."""
+        p = theme_manager.get_palette()
+        if hasattr(self, "_tip_icon_lbl"):
+            self._tip_icon_lbl.setStyleSheet(
+                f"background-color: {p.PRIMARY_LIGHT}; border-radius: 15px;"
+            )
+            self._tip_icon_lbl.setPixmap(make_tinted_icon(_TIP_ICON_PATH, p.PRIMARY).pixmap(16, 16))
+        self._set_orb_idle_style()
+        # Màu spell chỉ tồn tại trong cửa sổ pulse — re-guard theo surface mới
+        if self._hero_user_rgb and self.lbl_hero_spell.property("pulsing"):
+            self._apply_hero_spell_color(*self._hero_user_rgb)
+        if hasattr(self, "btn_home_go_record"):
+            self.btn_home_go_record.setIcon(make_tinted_icon("assets/icon/record.svg", p.PRIMARY))
+        if hasattr(self, "btn_home_go_wand"):
+            self.btn_home_go_wand.setIcon(make_tinted_icon("assets/icon/wand.svg", self._on_primary_icon_color()))
+        # Hàng loaded/history tô icon bằng palette lúc tạo — dựng lại theo theme mới
+        if hasattr(self, "_last_loaded_spells"):
+            self.update_loaded_spells(self._last_loaded_spells)
+        if self.history_list.count():
+            entries = []
+            for i in range(self.history_list.count()):
+                data = self.history_list.item(i).data(Qt.ItemDataRole.UserRole)
+                if isinstance(data, dict):
+                    entries.append(data)
+            if entries:
+                self.update_spell_history(entries)
+
+    def _on_primary_icon_color(self) -> str:
+        """Màu icon nằm trên nền nút primary — trắng ở light, on-primary đậm ở dark."""
+        return "#1B2678" if theme_manager.current_theme == "dark" else "#FFFFFF"
 
     # ── Private methods — UI builders ───────────
 
@@ -291,24 +370,24 @@ class PageHome(QWidget):
         bar.setSpacing(SPACING_MD)
 
         self.status_bar = QLabel(tr_ui("home_status_disconnected"))
-        self.status_bar.setFixedHeight(32)
+        self.status_bar.setMinimumHeight(32)
         self.status_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.status_bar.setProperty("type", "status_label")
         self.status_bar.setProperty("status", "error")
 
-        self._fw_chip = QLabel(f"⚡ {tr_ui('fw_status_disconnected')}")
-        self._fw_chip.setFixedHeight(32)
+        self._fw_chip = QLabel(f"○ {tr_ui('fw_status_disconnected')}")
+        self._fw_chip.setMinimumHeight(32)
         self._fw_chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._fw_chip.setProperty("type", "status_label")
 
         self._mode_chip = QLabel(f"{tr_ui('home_mode_prefix')} IDLE")
-        self._mode_chip.setFixedHeight(32)
+        self._mode_chip.setMinimumHeight(32)
         self._mode_chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._mode_chip.setProperty("type", "status_label")
         self._mode_chip.setProperty("status", "accent")
 
         self._spell_count_chip = QLabel("")
-        self._spell_count_chip.setFixedHeight(32)
+        self._spell_count_chip.setMinimumHeight(32)
         self._spell_count_chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._spell_count_chip.setProperty("type", "status_label")
 
@@ -325,13 +404,20 @@ class PageHome(QWidget):
         _add_shadow(self.tip_card, blur=14, alpha=12, y_offset=3)
 
         tip_layout = QHBoxLayout(self.tip_card)
-        tip_layout.setContentsMargins(14, 8, 14, 8)
-        tip_layout.setSpacing(10)
+        tip_layout.setContentsMargins(14, 10, 14, 10)
+        tip_layout.setSpacing(12)
 
-        # Tip icon
-        lbl_icon = QLabel("💡")
-        lbl_icon.setStyleSheet("font-size: 20px;")
-        tip_layout.addWidget(lbl_icon, alignment=Qt.AlignmentFlag.AlignTop)
+        # Tip icon in M3 container (giữ ref để refresh theo theme)
+        p = theme_manager.get_palette()
+        self._tip_icon_lbl = QLabel()
+        self._tip_icon_lbl.setFixedSize(30, 30)
+        self._tip_icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._tip_icon_lbl.setStyleSheet(f"""
+            background-color: {p.PRIMARY_LIGHT};
+            border-radius: 15px;
+        """)
+        self._tip_icon_lbl.setPixmap(make_tinted_icon(_TIP_ICON_PATH, p.PRIMARY).pixmap(16, 16))
+        tip_layout.addWidget(self._tip_icon_lbl, alignment=Qt.AlignmentFlag.AlignTop)
 
         text_box = QVBoxLayout()
         text_box.setSpacing(2)
@@ -352,10 +438,11 @@ class PageHome(QWidget):
     def _set_orb_idle_style(self) -> None:
         """Đặt style cho quả cầu LED ma thuật ở trạng thái chờ."""
         if hasattr(self, "orb_led"):
+            p = theme_manager.get_palette()
             self.orb_led.setStyleSheet(
-                "QLabel { background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.35, fy:0.35, "
-                "stop:0 #e4e9f0, stop:1 #5b6b7f); "
-                "border-radius: 14px; border: 2px solid rgba(15, 23, 42, 0.12); }"
+                f"QLabel {{ background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.35, fy:0.35, "
+                f"stop:0 {p.SURFACE_TERTIARY}, stop:1 {p.BORDER_LIGHT}); "
+                f"border-radius: 14px; border: 2px solid {p.BORDER_LIGHT}; }}"
             )
 
     def _build_hero_banner(self, parent_layout: QVBoxLayout) -> None:
@@ -364,8 +451,8 @@ class PageHome(QWidget):
             margins=(20, 10, 20, 10), spacing=SPACING_XS,
         )
         hero_card.setObjectName("HomeHeroCard")
-        # 150px: đủ cho hero 38px + dấu chồng (SẴN/Ữ) + hàng confidence khi hiện ra
-        hero_card.setFixedHeight(150)
+        # 150px min: đủ cho hero 38px + dấu chồng (SẴN/Ữ) + hàng confidence khi hiện ra
+        hero_card.setMinimumHeight(150)
         hero_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         _add_shadow(hero_card, blur=20, alpha=15, y_offset=4)
 
@@ -427,18 +514,26 @@ class PageHome(QWidget):
         _add_shadow(left_card, blur=16, alpha=10, y_offset=3)
 
         self._lbl_history_title = make_section_label(
-            tr_ui("home_history_title"), accent=True,
+            tr_ui("home_history_title"), accent=False,
         )
         left_layout.addWidget(self._lbl_history_title)
 
         self.history_list = QListWidget()
         self.history_list.setObjectName("HomeHistoryList")
 
-        self._history_empty_card, _ = make_empty_state_card(
+        self._history_empty_card, history_empty_lay = make_empty_state_card(
             tr_ui("home_history_empty"),
             body=tr_ui("home_history_empty_body"),
+            flat=True,
+            icon_path="assets/icon/record.svg",
         )
-        self._history_empty_card.setMinimumHeight(140)
+        from PyQt6.QtCore import QSize
+        self.btn_home_go_record = make_outline_button(tr_ui("guide_btn_go_record", default="Ghi mẫu cử chỉ"), height=36)
+        self.btn_home_go_record.setIcon(make_tinted_icon("assets/icon/record.svg", theme_manager.get_palette().PRIMARY))
+        self.btn_home_go_record.setIconSize(QSize(16, 16))
+        self.btn_home_go_record.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_home_go_record.clicked.connect(lambda: self.sig_navigate_requested.emit(2))
+        history_empty_lay.addWidget(self.btn_home_go_record, alignment=Qt.AlignmentFlag.AlignCenter)
 
         left_layout.addWidget(self.history_list, stretch=1)
         left_layout.addWidget(self._history_empty_card, stretch=1)
@@ -455,15 +550,22 @@ class PageHome(QWidget):
         _add_shadow(right_card, blur=16, alpha=10, y_offset=3)
 
         self._lbl_loaded_title = make_section_label(
-            tr_ui("home_loaded_title"), accent=True,
+            tr_ui("home_loaded_title"), accent=False,
         )
         right_layout.addWidget(self._lbl_loaded_title)
 
-        self._loaded_empty_card, _ = make_empty_state_card(
+        self._loaded_empty_card, loaded_empty_lay = make_empty_state_card(
             tr_ui("home_loaded_empty"),
             body=tr_ui("home_loaded_empty_body"),
+            flat=True,
+            icon_path="assets/icon/wand.svg",
         )
-        self._loaded_empty_card.setMinimumHeight(140)
+        self.btn_home_go_wand = make_primary_button(tr_ui("guide_btn_go_wand", default="Đi tới Đũa phép"), height=34)
+        self.btn_home_go_wand.setIcon(make_tinted_icon("assets/icon/wand.svg", self._on_primary_icon_color()))
+        self.btn_home_go_wand.setIconSize(QSize(16, 16))
+        self.btn_home_go_wand.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_home_go_wand.clicked.connect(lambda: self.sig_navigate_requested.emit(3))
+        loaded_empty_lay.addWidget(self.btn_home_go_wand, alignment=Qt.AlignmentFlag.AlignCenter)
 
         self._loaded_spells_container = QWidget()
         self._loaded_spells_content_layout = QVBoxLayout(
@@ -529,23 +631,23 @@ class PageHome(QWidget):
             fw_type = "disconnected"
 
         if fw_type == "data":
-            self._fw_chip.setText(f"⚡ {tr_ui('fw_status_data')}")
+            self._fw_chip.setText(f"● {tr_ui('fw_status_data')}")
             self._fw_chip.setProperty("status", "success")
             self._fw_chip.setToolTip(tr_ui("fw_desc_data"))
         elif fw_type == "inference":
-            self._fw_chip.setText(f"🧠 {tr_ui('fw_status_inference')}")
+            self._fw_chip.setText(f"● {tr_ui('fw_status_inference')}")
             self._fw_chip.setProperty("status", "accent")
             self._fw_chip.setToolTip(tr_ui("fw_desc_inference"))
         elif fw_type == "inference_no_nvs":
-            self._fw_chip.setText(f"🧠 {tr_ui('fw_status_inference_no_nvs')}")
+            self._fw_chip.setText(f"● {tr_ui('fw_status_inference_no_nvs')}")
             self._fw_chip.setProperty("status", "warning")
             self._fw_chip.setToolTip(tr_ui("fw_desc_inference_no_nvs"))
         elif fw_type == "detecting":
-            self._fw_chip.setText(f"🔍 {tr_ui('fw_status_detecting')}")
+            self._fw_chip.setText(f"● {tr_ui('fw_status_detecting')}")
             self._fw_chip.setProperty("status", "warning")
             self._fw_chip.setToolTip(tr_ui("fw_desc_detecting"))
         elif fw_type == "unknown":
-            self._fw_chip.setText(f"❓ {tr_ui('fw_status_unknown')}")
+            self._fw_chip.setText(f"● {tr_ui('fw_status_unknown')}")
             self._fw_chip.setProperty("status", "warning")
             self._fw_chip.setToolTip(tr_ui("fw_desc_unknown"))
         else:
@@ -554,7 +656,7 @@ class PageHome(QWidget):
             self._fw_chip.setToolTip("")
         self._repolish(self._fw_chip)
 
-        self._mode_chip.setText(f"⚡ {tr_ui('home_mode_prefix')} {self._current_mode}")
+        self._mode_chip.setText(f"{tr_ui('home_mode_prefix')} {self._current_mode}")
 
         total = sum(
             1 for k in self.data_store.spell_counts
@@ -563,7 +665,7 @@ class PageHome(QWidget):
             and k not in _STAND_BY_NAMES
         )
         self._spell_count_chip.setText(
-            f"🔮 {tr_ui('home_spell_count', count=total)}",
+            f"● {tr_ui('home_spell_count', count=total)}",
         )
 
     def _make_history_item_widget(self, entry: dict, now: float) -> QFrame:
@@ -575,8 +677,10 @@ class PageHome(QWidget):
         layout.setSpacing(10)
 
         # Icon badge
-        icon_lbl = QLabel("🔮")
-        icon_lbl.setStyleSheet("font-size: 16px;")
+        icon_lbl = QLabel()
+        icon_lbl.setFixedSize(20, 20)
+        icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon_lbl.setPixmap(make_tinted_icon("assets/icon/record.svg", theme_manager.get_palette().TEXT_SECONDARY).pixmap(16, 16))
 
         # Spell name & timestamp
         vbox = QVBoxLayout()
@@ -641,8 +745,10 @@ class PageHome(QWidget):
             idx_badge.setToolTip(f"ESP-NOW Index: {idx}")
             row_layout.addWidget(idx_badge)
 
-        icon_lbl = QLabel("✨")
-        icon_lbl.setStyleSheet("font-size: 14px;")
+        icon_lbl = QLabel()
+        icon_lbl.setFixedSize(20, 20)
+        icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon_lbl.setPixmap(make_tinted_icon("assets/icon/wand.svg", theme_manager.get_palette().TEXT_SECONDARY).pixmap(16, 16))
 
         lbl_name = QLabel(spell_name)
         lbl_name.setStyleSheet("font-weight: 600; font-size: 13px;")
@@ -697,11 +803,20 @@ class PageHome(QWidget):
         super().showEvent(event)
         if hasattr(self, "_tip_timer") and not self._tip_timer.isActive():
             self._tip_timer.start()
+        # Chỉ chạy timer 1s khi trang đang hiện và có history thật
+        if (
+            hasattr(self, "_relative_time_timer")
+            and self.history_list.count()
+            and not self._relative_time_timer.isActive()
+        ):
+            self._relative_time_timer.start()
 
     def hideEvent(self, event: Any) -> None:
         super().hideEvent(event)
         if hasattr(self, "_tip_timer") and self._tip_timer.isActive():
             self._tip_timer.stop()
+        if hasattr(self, "_relative_time_timer") and self._relative_time_timer.isActive():
+            self._relative_time_timer.stop()
 
     # ── Slots ───────────────────────────────────
 

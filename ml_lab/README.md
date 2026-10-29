@@ -29,25 +29,25 @@ python -m ml_lab.app --dataset-dir dataset/spells
 - `ml_lab/data/`:
   - `spell_reader.py`: Lọc CHỈ các spell do người dùng tự thu (loại trừ Primitives, STAND BY, prefix `::`).
   - `dataset_split.py`: Phân chia tập dữ liệu theo mức file (`file_level_split`) đảm bảo không rò rỉ dữ liệu (No Data Leakage).
-  - `feature_extraction.py`: Trích xuất đặc trưng thống kê miền thời gian và năng lượng trên dữ liệu IMU (mặc định 63 đặc trưng).
+  - `feature_extraction.py`: Trích xuất đặc trưng thống kê IMU; mặc định 75 đặc trưng, giảm theo các nhóm được bật.
   - `augmentation.py`: Tăng cường dữ liệu (Gaussian jitter, magnitude scaling, time-warping).
   - `feature_analysis.py`: Xếp hạng tầm quan trọng đặc trưng (ANOVA F + Mutual Information), đóng góp cục bộ kiểu SHAP.
 - `ml_lab/core/`:
-  - `hyperparam_schema.py`: Schema và xác thực siêu tham số cho 15 thuật toán (KNN, Tree, Forest, GBDT, SVM, Logistic, GNB, LDA, MLP, Extra Trees, AdaBoost, Ridge, SGD, Nearest Centroid, QDA) + SearchConfig.
+  - `hyperparam_schema.py`: Schema và xác thực siêu tham số cho 14 thuật toán (KNN, Tree, Forest, GBDT, SVM, Logistic, GNB, LDA, MLP, Extra Trees, AdaBoost, Ridge, SGD, Nearest Centroid) + SearchConfig.
   - `pipeline.py`: Huấn luyện, đánh giá validation set không rò rỉ, 5-fold Stratified CV (scaler bọc trong `Pipeline` để từng fold tự fit), PCA 2D decision boundary, ước tính tài nguyên ESP32.
-  - `c_exporter.py`: Xuất mã nguồn C99 độc lập (`model_classic_<algo>.h/.cc`) cho cả 15 thuật toán — zero malloc, kèm màu RGB theo cấu hình spell của app.
-  - `esp32_flasher.py`: Nạp firmware 1-click qua esptool (API trực tiếp + fallback subprocess), đường dẫn project độc lập CWD.
+  - `c_exporter.py`: Xuất mã nguồn C99 độc lập (`model_classic_<algo>.h/.cc`) cho cả 14 thuật toán — zero malloc, kèm màu RGB theo cấu hình spell của app.
+  - `esp32_flasher.py`: Nạp binary ESP-IDF đã build qua esptool (API trực tiếp + fallback subprocess), đường dẫn project độc lập CWD.
   - `experiment_store.py`: Lưu/truy vấn/xóa lịch sử huấn luyện (`ml_lab/app_data/experiments/`) + bảng vàng (`get_leaderboard`).
 - `ml_lab/ui/`:
-  - `window_ml_lab.py`: Cửa sổ `QMainWindow` độc lập với 7 tab studio.
+  - `window_ml_lab.py`: Cửa sổ `QMainWindow` độc lập với 8 tab studio.
   - `ml_lab_worker.py`: `QThread` tự quản lý chạy huấn luyện nền; hỗ trợ tùy chọn nhân bản dữ liệu train x3 (augmentation — tập validation luôn giữ nguyên).
 
 ## 4. Tính Năng Theo Tab
 1. **Dữ Liệu & Đặc Trưng**: Bảng lớp spell, histogram phân phối theo lớp, xếp hạng tầm quan trọng đặc trưng, Augmentation Studio xem trước số mẫu sau nhân bản.
-2. **Huấn Luyện & Toán Học**: Chọn 15 thuật toán, tinh chỉnh siêu tham số (slider/combo), bật augmentation, xem Bản đồ quyết định 2D (PCA), Ma Trận Nhầm Lẫn validation + AI Coach, chẩn đoán lớp yếu (tab "Lớp nào yếu?"), Hồ sơ mô hình (Model Card xuất PDF/Markdown), xem bên trong mô hình, 1-Click Flash.
+2. **Huấn Luyện & Toán Học**: Chọn 14 thuật toán, tinh chỉnh siêu tham số (slider/combo), bật augmentation, xem Bản đồ quyết định 2D (PCA), Ma Trận Nhầm Lẫn validation + AI Coach, chẩn đoán lớp yếu (tab "Lớp nào yếu?"), Hồ sơ mô hình (Model Card xuất PDF/Markdown), xem bên trong mô hình, Flash sau khi build ESP-IDF.
 3. **Bias-Variance Curve Studio**: Quét siêu tham số vẽ đường cong Train vs CV, làm nổi bật Sweet Spot (không rò rỉ scaler giữa các fold).
-4. **Đấu Trường Mô Hình**: Train đồng loạt 15 mô hình, bảng so sánh Accuracy/CV/Latency/RAM/Flash, nạp code trực tiếp từng dòng.
-5. **Giả Lập & Nạp Code**: What-If simulator kéo slider đặc trưng, SHAP attribution tức thời, xem/sao chép/lưu mã C++ ra file, flash 1-click.
+4. **Đấu Trường Mô Hình**: Train đồng loạt 14 mô hình, bảng so sánh Accuracy/CV/Latency/RAM/Flash, nạp code trực tiếp từng dòng.
+5. **Giả Lập & Nạp Code**: What-If simulator kéo slider đặc trưng, SHAP attribution tức thời, xem/sao chép/lưu mã C++ ra file, flash firmware đã build.
 6. **Nhật Ký Thử Nghiệm**: Lịch sử toàn bộ lần train + Bảng Vàng (top mỗi thuật toán), xóa/tải lại an toàn.
 7. **Serial Monitor**: UART terminal (timestamp, autoscroll, gửi lệnh nhanh), HUD nhận diện thần chú thời gian thực + lịch sử.
 

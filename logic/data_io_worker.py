@@ -87,15 +87,18 @@ class DataIOWorker(QThread):
         spell_name: str,
         data: list[list[float]],
         prefix: str = "",
-    ) -> None:
+        raw_file: str | None = None,
+    ) -> bool:
         """Schedule a cropped sample write (non-blocking)."""
         try:
-            self._job_queue.put_nowait(("save", spell_name, data, prefix))
+            self._job_queue.put_nowait(("save", spell_name, data, prefix, self._dataset_dir, raw_file))
             self._warn_if_queue_pressure()
+            return True
         except queue.Full:
             msg = f"DataIOWorker queue full: save job dropped for spell '{spell_name}'"
             log.warning(msg)
             self.sig_queue_warning.emit(msg)
+            return False
 
     def enqueue_delete(self, spell_name: str) -> None:
         """Schedule a spell deletion (non-blocking)."""
@@ -145,7 +148,7 @@ class DataIOWorker(QThread):
     def run(self) -> None:
         self._running = True
         try:
-            while self._running:
+            while self._running or not self._job_queue.empty():
                 try:
                     job = self._job_queue.get(timeout=1.0)
                 except queue.Empty:
@@ -155,12 +158,7 @@ class DataIOWorker(QThread):
                 if kind == "_stop":
                     break
                 elif kind == "save":
-                    if len(job) == 4:
-                        _, spell_name, data, prefix = job
-                    else:
-                        _, spell_name, data = job
-                        prefix = ""
-                    self._do_save(spell_name, data, prefix)
+                    self._do_save(*job[1:])
                 elif kind == "delete":
                     _, spell_name = job
                     self._do_delete(spell_name)
@@ -178,10 +176,11 @@ class DataIOWorker(QThread):
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _do_save(self, spell_name: str, data: list[list[float]], prefix: str = "") -> None:
+    def _do_save(self, spell_name: str, data: list[list[float]], prefix: str = "",
+                 dataset_dir: str | None = None, raw_file: str | None = None) -> None:
         tmp_path = None
         try:
-            folder = spell_write_dir(Path(self._dataset_dir), spell_name)
+            folder = spell_write_dir(Path(dataset_dir or self._dataset_dir), spell_name)
             folder.mkdir(parents=True, exist_ok=True)
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -196,15 +195,26 @@ class DataIOWorker(QThread):
 
             os.replace(str(tmp_path), str(file_path))
 
-            counts = self._scan_database()
-            self.sig_db_refreshed.emit(counts)
-            self.sig_save_done.emit(True, f"Saved {len(data)} samples → {spell_name}")
+            if raw_file:
+                try:
+                    Path(raw_file).unlink(missing_ok=True)
+                except OSError:
+                    log.warning("Saved crop; could not remove raw sample %s", raw_file, exc_info=True)
         except Exception as exc:
             if tmp_path is not None:
-                tmp_path.unlink(missing_ok=True)
+                try:
+                    tmp_path.unlink(missing_ok=True)
+                except OSError:
+                    log.warning("Could not remove temporary sample %s", tmp_path, exc_info=True)
             msg = f"Save failed: {type(exc).__name__}: {exc}"
             log.exception("DataIOWorker._do_save")
             self.sig_save_done.emit(False, msg)
+            return
+        try:
+            self.sig_db_refreshed.emit(self._scan_database())
+        except OSError:
+            log.warning("Sample saved; dataset refresh failed", exc_info=True)
+        self.sig_save_done.emit(True, f"Saved {len(data)} samples → {spell_name}")
 
     def _do_delete(self, spell_name: str) -> None:
         try:

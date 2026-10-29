@@ -1,32 +1,33 @@
 ---
 name: STEM ML Lab
 description: Studio học máy cổ điển độc lập — biến dữ liệu wand IMU thành mô hình phân lớp chạy trên ESP32.
+design-system: Material You (Material Design 3 - M3 Tonal Elevation & Expressive Shapes)
 colors:
-  primary: "#0668d1"
-  primary-hover: "#0557b0"
-  primary-pressed: "#044a99"
-  primary-tint: "rgba(10, 122, 255, 0.07)"
-  primary-tint-strong: "rgba(10, 122, 255, 0.14)"
-  success: "#1e7a46"
-  success-text: "#166534"
-  success-tint: "rgba(47, 158, 87, 0.09)"
-  warning: "#b45309"
-  warning-tint: "rgba(217, 119, 6, 0.10)"
-  danger: "#dc2626"
-  danger-tint: "rgba(220, 38, 38, 0.08)"
-  ink: "#0f172a"
-  body: "#334155"
-  muted: "#5b6b7f"
-  faint: "#8494a7"
-  border: "#e4e9f0"
-  border-strong: "#cdd6e1"
-  bg-app: "#f6f7f9"
-  surface: "#ffffff"
-  surface-sunk: "#f1f5f9"
-  surface-gold: "#fdf6e3"
-  terminal-bg: "#16181d"
-  terminal-fg: "#d7dde6"
-  danger-text-on-tint: "#b91c1c"
+  primary: "#4E58A9"
+  primary-hover: "#434D9A"
+  primary-pressed: "#38428B"
+  primary-tint: "rgba(78, 88, 169, 0.08)"
+  primary-tint-strong: "#DFE0FF"
+  success: "#1A6C39"
+  success-text: "#0A3B1C"
+  success-tint: "rgba(26, 108, 57, 0.09)"
+  warning: "#875200"
+  warning-tint: "rgba(135, 82, 0, 0.10)"
+  danger: "#BA1A1A"
+  danger-tint: "rgba(186, 26, 26, 0.08)"
+  ink: "#1B1B21"
+  body: "#46464F"
+  muted: "#71717A"
+  faint: "#A4A2AE"
+  border: "#E3DFE8"
+  border-strong: "#C7C5D0"
+  bg-app: "#FAF8FD"
+  surface: "#FFFFFF"
+  surface-sunk: "#EFEBF4"
+  surface-gold: "#FEF2D6"
+  terminal-bg: "#191C20"
+  terminal-fg: "#E1E2E8"
+  danger-text-on-tint: "#BA1A1A"
   plot-ax: "#c2417a"
   plot-ay: "#2563eb"
   plot-az: "#0f766e"
@@ -35,41 +36,42 @@ colors:
   plot-gz: "#4d7c0f"
 typography:
   display:
-    fontFamily: "'Segoe UI', system-ui, sans-serif"
+    fontFamily: "'Google Sans', 'Roboto', 'Segoe UI', system-ui, sans-serif"
     fontSize: "20px"
-    fontWeight: 800
+    fontWeight: 700
     lineHeight: 1.2
   title:
-    fontFamily: "'Segoe UI', system-ui, sans-serif"
+    fontFamily: "'Google Sans', 'Roboto', 'Segoe UI', system-ui, sans-serif"
     fontSize: "15px"
-    fontWeight: 800
+    fontWeight: 700
     lineHeight: 1.3
   section:
-    fontFamily: "'Segoe UI', system-ui, sans-serif"
+    fontFamily: "'Google Sans', 'Roboto', 'Segoe UI', system-ui, sans-serif"
     fontSize: "13px"
-    fontWeight: 700
+    fontWeight: 600
     lineHeight: 1.4
   body:
-    fontFamily: "'Segoe UI', system-ui, sans-serif"
+    fontFamily: "'Google Sans', 'Roboto', 'Segoe UI', system-ui, sans-serif"
     fontSize: "12px"
     fontWeight: 400
     lineHeight: 1.5
   caption:
-    fontFamily: "'Segoe UI', system-ui, sans-serif"
+    fontFamily: "'Google Sans', 'Roboto', 'Segoe UI', system-ui, sans-serif"
     fontSize: "11px"
-    fontWeight: 600
+    fontWeight: 500
     lineHeight: 1.4
     letterSpacing: "0.02em"
   mono:
-    fontFamily: "Consolas, 'Cascadia Mono', monospace"
+    fontFamily: "'JetBrains Mono', 'Roboto Mono', 'Cascadia Code', monospace"
     fontSize: "12px"
     fontWeight: 400
     lineHeight: 1.6
 rounded:
-  sm: "6px"
-  md: "8px"
-  lg: "10px"
-  pill: "999px"
+  sm: "8px"
+  md: "12px"
+  lg: "16px"
+  xl: "24px"
+  pill: "9999px"
 spacing:
   xs: "4px"
   sm: "8px"
@@ -133,28 +135,28 @@ Hệ thống từ chối Đồ chơi lòe loẹt (emoji/gradient dày), Dashboar
 - Nhất quán tuyệt đối: cùng card, cùng gap, cùng cỡ chữ ở mọi tab
 - Rỗng là cơ hội dạy: empty state nói cách sửa, không chỉ báo lỗi
 
-## 2. Colors: The Restrained Bench Palette
+## 2. Colors: Material You (M3 Dynamic Tonal Palette)
 
-Dải neutral ngả lạnh (BG_APP #f6f7f9 → SURFACE #ffffff → SURFACE_SUNK #f1f5f9) làm bàn thao tác, một accent duy nhất gánh 100% tín hiệu hành động và chọn lựa.
+Dải neutral ngả tonal nhẹ (BG_APP #FAF8FD → SURFACE #FFFFFF → SURFACE_SUNK #EFEBF4) làm bàn thao tác, một accent Tech Indigo duy nhất gánh 100% tín hiệu hành động và chọn lựa.
 
 ### Primary
-- **Calibrated Blue** (#0668d1 / oklch 52% 0.18 256): Primary action, tab selected border, chip selected. 5.37:1 trên trắng, dùng ≤10% diện tích. Hover #0557b0, Pressed #044a99.
+- **Tech Indigo** (#4E58A9): Primary action, tab selected border, chip selected. 5.7:1 trên trắng (WCAG AA). Hover #434D9A, Pressed #38428B, Container #DFE0FF, On-Primary Container #0A1365.
 
 ### Neutral
-- **App Canvas** (#f6f7f9): Nền cửa sổ, tách khỏi SURFACE để tạo tonal layering.
-- **Surface** (#ffffff): Card, pane của QTabWidget, button secondary.
-- **Sunk** (#f1f5f9): Track, hover nhẹ, table header.
-- **Ink** (#0f172a): Title, heading — dùng thay pure black cho độ sâu.
-- **Body** (#334155): Nội dung đọc 12px.
-- **Muted** (#5b6b7f / 4.6:1): Caption 11px, hint — đạt AA trên trắng.
-- **Faint** (#8494a7): Placeholder, icon disabled.
-- **Border** (#e4e9f0) / **Border Strong** (#cdd6e1): Viền card 1px, input, table.
+- **App Canvas** (#FAF8FD): Nền cửa sổ, tách khỏi SURFACE để tạo tonal layering.
+- **Surface** (#FFFFFF): Card, pane của QTabWidget, button secondary.
+- **Sunk** (#EFEBF4): Track, hover nhẹ, table header, input background.
+- **Ink** (#1B1B21): Title, heading — M3 On-Surface cho độ tương phản sắc nét.
+- **Body** (#46464F): Nội dung đọc 12px — M3 On-Surface Variant (8.5:1).
+- **Muted** (#71717A / 4.83:1): Caption 11px, hint — đạt AA trên trắng.
+- **Faint** (#A4A2AE): Placeholder, icon disabled.
+- **Border** (#E3DFE8) / **Border Strong** (#C7C5D0): Viền card 1px, input, table divider (M3 Outline Variant).
 
 ### Semantic
-- **Success Signal** (#1e7a46 / text #166534 / tint rgba(47,158,87,0.09)): Chỉ cho validation, flash success, không trang trí.
-- **Warning Signal** (#b45309 / tint rgba(217,119,6,0.10)): <2 spell, cần thêm dữ liệu.
-- **Danger Signal** (#dc2626 / tint rgba(220,38,38,0.08)): Lỗi, xóa, confusion off-diagonal. Text nhỏ 11-12px NÊN tint dùng `danger-text-on-tint` #b91c1c (4.28:1 của #dc2626 trên tint là hụt AA).
-- **Terminal** (#16181d bg / #d7dde6 fg): UART, C++ viewer — đảo tonal riêng.
+- **Success Signal** (#1A6C39 / text #0A3B1C / tint rgba(26,108,57,0.09) / container #A5F5B4): Validation, flash success.
+- **Warning Signal** (#875200 / text #613800 / tint rgba(135,82,0,0.10) / container #FFDDB8): <2 spell, cần thêm dữ liệu.
+- **Danger Signal** (#BA1A1A / text #93000A / tint rgba(186,26,26,0.08) / container #FFDAD6): Lỗi, xóa, confusion off-diagonal.
+- **Terminal** (#191C20 bg / #E1E2E8 fg): UART, C++ viewer — M3 dark surface container.
 
 ### Data Viz (IMU channel palette)
 Sáu kênh cảm biến, mỗi màu ≥3:1 trên trắng (WCAG 1.4.11) và giữ hue phân tách: ax `#c2417a`, ay `#2563eb`, az `#0f766e`, gx `#b45309`, gy `#7c3aed`, gz `#4d7c0f` (tokens `PLOT_*`). Label vẽ bằng màu kênh phải đạt 4.5:1 vì là text 11px. Không pastel hóa vì "đẹp" — pastel dưới 3:1 làm đường cong vô hình.
@@ -163,7 +165,7 @@ Sáu kênh cảm biến, mỗi màu ≥3:1 trên trắng (WCAG 1.4.11) và giữ
 `theme.py` dựng QSS từ LIGHT_PALETTE/DARK_PALETTE — mọi giá trị phụ thuộc theme (focus border, disabled, hint, empty-state text, error-on-tint) phải đi qua token của nhánh if/else. Widget dùng `theme_manager.get_palette()` + `current_theme`, không hard-code hex light.
 
 ### Named Rules
-**The One Accent Rule.** Trên bất kỳ màn hình nào, chỉ #0668d1 được coi là tín hiệu hành động/chọn. Success/Warning/Danger không dùng cho trang trí, chỉ cho trạng thái.
+**The One Accent Rule.** Trên bất kỳ màn hình nào, chỉ #4E58A9 được coi là tín hiệu hành động/chọn. Success/Warning/Danger không dùng cho trang trí, chỉ cho trạng thái.
 **The Tonal Layering Rule.** Không dùng shadow mặc định; chiều sâu đến từ BG_APP → SURFACE → SURFACE_SUNK, không phải blur.
 **The No-Hard-Coded-Light Rule.** QSS dùng chung cho cả hai theme cấm giá trị hex light (#5b6b7f, #0f172a, #e4e9f0…). Mọi màu text/focus/disabled đi qua token theme; vi phạm = dark mode hỏng.
 
