@@ -24,6 +24,7 @@
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
 #include "driver/ledc.h"
+#include "driver/uart.h"
 
 #include "nvs_flash.h"
 #include "esp_netif.h"
@@ -176,6 +177,80 @@ static void trigger_spell_rgb(uint8_t r, uint8_t g, uint8_t b, uint32_t duration
     if (s_rgb_off_timer != nullptr) {
         esp_timer_stop(s_rgb_off_timer);
         esp_timer_start_once(s_rgb_off_timer, (uint64_t)duration_ms * 1000ULL);
+    }
+}
+
+// ========== Chế độ hoạt động (Runtime Modes: Single Firmware) ==========
+enum WandMode {
+    MODE_INFERENCE = 0,
+    MODE_DATA = 1,
+};
+
+static volatile WandMode s_wand_mode = MODE_INFERENCE;
+
+static void save_mode_to_nvs(WandMode mode) {
+    nvs_handle_t h;
+    if (nvs_open("wand_cfg", NVS_READWRITE, &h) == ESP_OK) {
+        nvs_set_u8(h, "mode", (uint8_t)mode);
+        nvs_commit(h);
+        nvs_close(h);
+    }
+}
+
+static WandMode load_mode_from_nvs(void) {
+    nvs_handle_t h;
+    uint8_t val = (uint8_t)MODE_INFERENCE;
+    if (nvs_open("wand_cfg", NVS_READONLY, &h) == ESP_OK) {
+        nvs_get_u8(h, "mode", &val);
+        nvs_close(h);
+    }
+    return (val == (uint8_t)MODE_DATA) ? MODE_DATA : MODE_INFERENCE;
+}
+
+static void process_uart_cmd(const char* cmd) {
+    if (strstr(cmd, "CMD:SET_MODE:DATA") || strstr(cmd, "MODE:DATA")) {
+        s_wand_mode = MODE_DATA;
+        save_mode_to_nvs(s_wand_mode);
+        printf("ACK:MODE:DATA\n");
+        fflush(stdout);
+        trigger_spell_rgb(255, 165, 0, 300); // Màu vàng cam: Chế độ thu thập
+        ESP_LOGI(TAG, "Chuyển sang MODE_DATA (50Hz CSV stream)");
+    } else if (strstr(cmd, "CMD:SET_MODE:INFERENCE") || strstr(cmd, "MODE:INFERENCE")) {
+        s_wand_mode = MODE_INFERENCE;
+        save_mode_to_nvs(s_wand_mode);
+        s_sample_count = 0;
+        s_step_counter = 0;
+        s_cooldown_counter = 0;
+        s_have_prev_window = false;
+        s_buffer_head = 0;
+        printf("ACK:MODE:INFERENCE\n");
+        fflush(stdout);
+        trigger_spell_rgb(0, 0, 255, 300); // Màu xanh lam: Chế độ nhận diện AI
+        ESP_LOGI(TAG, "Chuyển sang MODE_INFERENCE (Động cơ AI sẵn sàng)");
+    } else if (strstr(cmd, "CMD:GET_MODE")) {
+        printf("ACK:MODE:%s\n", (s_wand_mode == MODE_DATA ? "DATA" : "INFERENCE"));
+        fflush(stdout);
+    }
+}
+
+static void uart_rx_task(void* pvParameters) {
+    uint8_t line_buf[128];
+    int line_pos = 0;
+    uint8_t ch = 0;
+
+    while (1) {
+        int len = uart_read_bytes(UART_NUM_0, &ch, 1, pdMS_TO_TICKS(50));
+        if (len > 0) {
+            if (ch == '\n' || ch == '\r') {
+                if (line_pos > 0) {
+                    line_buf[line_pos] = '\0';
+                    process_uart_cmd((const char*)line_buf);
+                    line_pos = 0;
+                }
+            } else if (line_pos < (int)(sizeof(line_buf) - 1)) {
+                line_buf[line_pos++] = ch;
+            }
+        }
     }
 }
 
@@ -382,99 +457,105 @@ static void classic_ml_task(void* pvParameters) {
     while (1) {
         int16_t ax = 0, ay = 0, az = 0, gx = 0, gy = 0, gz = 0;
         if (read_mpu6050_raw(&ax, &ay, &az, &gx, &gy, &gz)) {
-            // Đưa mẫu vào buffer xoay vòng
-            int base_idx = (s_buffer_head % WINDOW_SAMPLES) * 6;
-            s_raw_buffer[base_idx + 0] = ax;
-            s_raw_buffer[base_idx + 1] = ay;
-            s_raw_buffer[base_idx + 2] = az;
-            s_raw_buffer[base_idx + 3] = gx;
-            s_raw_buffer[base_idx + 4] = gy;
-            s_raw_buffer[base_idx + 5] = gz;
+            if (s_wand_mode == MODE_DATA) {
+                // MODE_DATA: Phát CSV 6 trục thô (50Hz) cho ứng dụng thu thập dữ liệu
+                printf("%d,%d,%d,%d,%d,%d\n", ax, ay, az, gx, gy, gz);
+                fflush(stdout);
+            } else {
+                // MODE_INFERENCE: Đưa vào buffer xoay vòng & chạy nhận diện AI
+                int base_idx = (s_buffer_head % WINDOW_SAMPLES) * 6;
+                s_raw_buffer[base_idx + 0] = ax;
+                s_raw_buffer[base_idx + 1] = ay;
+                s_raw_buffer[base_idx + 2] = az;
+                s_raw_buffer[base_idx + 3] = gx;
+                s_raw_buffer[base_idx + 4] = gy;
+                s_raw_buffer[base_idx + 5] = gz;
 
-            s_buffer_head = (s_buffer_head + 1) % WINDOW_SAMPLES;
-            s_sample_count++;
-            s_step_counter++;
+                s_buffer_head = (s_buffer_head + 1) % WINDOW_SAMPLES;
+                s_sample_count++;
+                s_step_counter++;
 
-            // Giảm dần bộ đếm Cooldown
-            if (s_cooldown_counter > 0) {
-                s_cooldown_counter--;
-            }
-
-            // Khi đủ 1 cửa sổ và đúng chu kỳ step
-            if (s_sample_count >= WINDOW_SAMPLES && s_step_counter >= STEP_SAMPLES) {
-                s_step_counter = 0;
-
-                // Chuẩn bị buffer tuần tự theo thời gian
-                for (int i = 0; i < WINDOW_SAMPLES; ++i) {
-                    int src_idx = ((s_buffer_head + i) % WINDOW_SAMPLES) * 6;
-                    memcpy(&s_ordered_buffer[i * 6], &s_raw_buffer[src_idx], sizeof(int16_t) * 6);
+                // Giảm dần bộ đếm Cooldown
+                if (s_cooldown_counter > 0) {
+                    s_cooldown_counter--;
                 }
 
-                // Peak Trigger: m1 là đỉnh khi m1 >= m0 và m1 > m2 và m1 đủ lớn.
-                // Đoán trên s_peak_buffer (cửa sổ tại đỉnh) — khớp train peak-centered.
-                float m0 = window_motion_score(s_ordered_buffer, WINDOW_SAMPLES);
-                bool is_peak = s_have_prev_window
-                    && s_cooldown_counter == 0
-                    && s_m_prev1 >= m0
-                    && s_m_prev1 > s_m_prev2
-                    && s_m_prev1 >= PEAK_TRIGGER_MIN_M;
+                // Khi đủ 1 cửa sổ và đúng chu kỳ step
+                if (s_sample_count >= WINDOW_SAMPLES && s_step_counter >= STEP_SAMPLES) {
+                    s_step_counter = 0;
 
-                s_m_prev2 = s_m_prev1;
-                s_m_prev1 = m0;
-                if (is_peak) {
-                    // 1. Trích xuất đặc trưng từ cửa sổ ĐỈNH
-                    int64_t t_start = esp_timer_get_time();
-                    memset(s_features, 0, sizeof(s_features));
-                    int feature_count = extract_classic_features(s_peak_buffer, WINDOW_SAMPLES, s_features);
-
-                    float confidence = 0.0f;
-                    int pred_spell = -1;
-                    if (feature_count == CLASSIC_NUM_FEATURES) {
-                        pred_spell = classic_predict(s_features, &confidence);
-                    } else {
-                        ESP_LOGE(TAG, "Feature contract mismatch: extracted %d, model expects %d",
-                                 feature_count, CLASSIC_NUM_FEATURES);
+                    // Chuẩn bị buffer tuần tự theo thời gian
+                    for (int i = 0; i < WINDOW_SAMPLES; ++i) {
+                        int src_idx = ((s_buffer_head + i) % WINDOW_SAMPLES) * 6;
+                        memcpy(&s_ordered_buffer[i * 6], &s_raw_buffer[src_idx], sizeof(int16_t) * 6);
                     }
-                    int64_t t_end = esp_timer_get_time();
-                    float elapsed_ms = (float)(t_end - t_start) / 1000.0f;
 
-                    if (pred_spell >= 0 && confidence >= MIN_CONFIDENCE) {
-                        const char* spell_name = classic_get_class_name(pred_spell);
-                        // Bỏ qua nếu là trạng thái tĩnh STAND BY
-                        if (spell_name && strcmp(spell_name, "STAND BY") != 0 && strcmp(spell_name, "STAND_BY") != 0) {
-                            bool dup = (pred_spell == s_last_spell)
-                                && ((s_sample_count - s_last_fire_count) < SAME_SPELL_SUPPRESS_SAMPLES);
-                            s_last_spell = pred_spell;
-                            s_last_fire_count = s_sample_count;
-                            // Kích hoạt cooldown tránh spam liên tiếp trên cùng một cử chỉ
-                            s_cooldown_counter = COOLDOWN_SAMPLES;
+                    // Peak Trigger: m1 là đỉnh khi m1 >= m0 và m1 > m2 và m1 đủ lớn.
+                    // Đoán trên s_peak_buffer (cửa sổ tại đỉnh) — khớp train peak-centered.
+                    float m0 = window_motion_score(s_ordered_buffer, WINDOW_SAMPLES);
+                    bool is_peak = s_have_prev_window
+                        && s_cooldown_counter == 0
+                        && s_m_prev1 >= m0
+                        && s_m_prev1 > s_m_prev2
+                        && s_m_prev1 >= PEAK_TRIGGER_MIN_M;
 
-                            if (!dup) {
-                                // 1. Giao thức chuẩn cho STEM Spell Book (logic/serial_worker.py) & FirmwareDetector
-                                printf("PREDICT:%s:%.2f\n", spell_name, confidence);
-                                printf("FINAL PREDICT:%s:%.2f\n", spell_name, confidence);
+                    s_m_prev2 = s_m_prev1;
+                    s_m_prev1 = m0;
+                    if (is_peak) {
+                        // 1. Trích xuất đặc trưng từ cửa sổ ĐỈNH
+                        int64_t t_start = esp_timer_get_time();
+                        memset(s_features, 0, sizeof(s_features));
+                        int feature_count = extract_classic_features(s_peak_buffer, WINDOW_SAMPLES, s_features);
 
-                                // 2. Định dạng dễ đọc cho Tab 7 Serial Monitor (ml_lab)
-                                printf("[PREDICT] %s (conf=%.1f%%, latency=%.2fms)\n",
-                                       spell_name, confidence * 100.0f, elapsed_ms);
-                                ESP_LOGI(TAG, "✨ [CỬ CHỈ] %s (Conf: %.1f%%, Time: %.3f ms)",
-                                         spell_name, confidence * 100.0f, elapsed_ms);
+                        float confidence = 0.0f;
+                        int pred_spell = -1;
+                        if (feature_count == CLASSIC_NUM_FEATURES) {
+                            pred_spell = classic_predict(s_features, &confidence);
+                        } else {
+                            ESP_LOGE(TAG, "Feature contract mismatch: extracted %d, model expects %d",
+                                     feature_count, CLASSIC_NUM_FEATURES);
+                        }
+                        int64_t t_end = esp_timer_get_time();
+                        float elapsed_ms = (float)(t_end - t_start) / 1000.0f;
 
-                                // 3. LED RGB không chặn chu kỳ lấy mẫu 50Hz (non-blocking)
-                                uint8_t r = 255, g = 255, b = 255;
-                                classic_get_class_rgb(pred_spell, &r, &g, &b);
-                                trigger_spell_rgb(r, g, b, 250);
+                        if (pred_spell >= 0 && confidence >= MIN_CONFIDENCE) {
+                            const char* spell_name = classic_get_class_name(pred_spell);
+                            // Bỏ qua nếu là trạng thái tĩnh STAND BY
+                            if (spell_name && strcmp(spell_name, "STAND BY") != 0 && strcmp(spell_name, "STAND_BY") != 0) {
+                                bool dup = (pred_spell == s_last_spell)
+                                    && ((s_sample_count - s_last_fire_count) < SAME_SPELL_SUPPRESS_SAMPLES);
+                                s_last_spell = pred_spell;
+                                s_last_fire_count = s_sample_count;
+                                // Kích hoạt cooldown tránh spam liên tiếp trên cùng một cử chỉ
+                                s_cooldown_counter = COOLDOWN_SAMPLES;
 
-                                // 4. Phát sóng ESP-NOW tới các thiết bị nhận ngoại vi (Relay, còi, đèn)
-                                send_spell_esp_now(pred_spell, confidence);
+                                if (!dup) {
+                                    // 1. Giao thức chuẩn cho STEM Spell Book (logic/serial_worker.py) & FirmwareDetector
+                                    printf("PREDICT:%s:%.2f\n", spell_name, confidence);
+                                    printf("FINAL PREDICT:%s:%.2f\n", spell_name, confidence);
+
+                                    // 2. Định dạng dễ đọc cho Tab 7 Serial Monitor (ml_lab)
+                                    printf("[PREDICT] %s (conf=%.1f%%, latency=%.2fms)\n",
+                                           spell_name, confidence * 100.0f, elapsed_ms);
+                                    ESP_LOGI(TAG, "✨ [CỬ CHỈ] %s (Conf: %.1f%%, Time: %.3f ms)",
+                                             spell_name, confidence * 100.0f, elapsed_ms);
+
+                                    // 3. LED RGB không chặn chu kỳ lấy mẫu 50Hz (non-blocking)
+                                    uint8_t r = 255, g = 255, b = 255;
+                                    classic_get_class_rgb(pred_spell, &r, &g, &b);
+                                    trigger_spell_rgb(r, g, b, 250);
+
+                                    // 4. Phát sóng ESP-NOW tới các thiết bị nhận ngoại vi (Relay, còi, đèn)
+                                    send_spell_esp_now(pred_spell, confidence);
+                                }
                             }
                         }
                     }
-                }
 
-                // Lưu cửa sổ hiện tại làm ứng viên đỉnh cho step sau
-                memcpy(s_peak_buffer, s_ordered_buffer, sizeof(s_peak_buffer));
-                s_have_prev_window = true;
+                    // Lưu cửa sổ hiện tại làm ứng viên đỉnh cho step sau
+                    memcpy(s_peak_buffer, s_ordered_buffer, sizeof(s_peak_buffer));
+                    s_have_prev_window = true;
+                }
             }
         }
 
@@ -483,6 +564,27 @@ static void classic_ml_task(void* pvParameters) {
 }
 
 extern "C" void app_main(void) {
-    ESP_LOGI(TAG, "=== STEM SPELLBOOK CLASSIC ML RUNTIME ===");
+    ESP_LOGI(TAG, "=== STEM SPELLBOOK UNIFIED RUNTIME ===");
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        nvs_flash_erase();
+        nvs_flash_init();
+    }
+    s_wand_mode = load_mode_from_nvs();
+
+    // Cài đặt UART driver trên UART_NUM_0 để nhận lệnh chuyển chế độ non-blocking
+    uart_config_t uart_config = {};
+    uart_config.baud_rate = 115200;
+    uart_config.data_bits = UART_DATA_8_BITS;
+    uart_config.parity    = UART_PARITY_DISABLE;
+    uart_config.stop_bits = UART_STOP_BITS_1;
+    uart_config.flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
+    uart_config.source_clk = UART_SCLK_DEFAULT;
+    uart_param_config(UART_NUM_0, &uart_config);
+    uart_driver_install(UART_NUM_0, 1024, 0, 0, NULL, 0);
+
+    ESP_LOGI(TAG, "Chế độ khởi động: %s", (s_wand_mode == MODE_DATA ? "DATA" : "INFERENCE"));
+
+    xTaskCreatePinnedToCore(uart_rx_task, "uart_rx_task", 4096, NULL, 3, NULL, 0);
     xTaskCreatePinnedToCore(classic_ml_task, "classic_ml_task", 8192, NULL, 5, NULL, 1);
 }

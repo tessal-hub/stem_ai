@@ -39,6 +39,8 @@ class PageWand(QWidget):
     sig_train_build_firmware_requested = pyqtSignal(list)
     sig_flash_data_firmware = pyqtSignal()
     sig_flash_inference_firmware = pyqtSignal()
+    sig_flash_unified_firmware = pyqtSignal()
+    sig_switch_wand_mode = pyqtSignal(str)
     sig_settings_saved = pyqtSignal(dict)
 
     def __init__(self, data_store) -> None:
@@ -88,8 +90,10 @@ class PageWand(QWidget):
         self.connection_panel.sig_serial_scan.connect(self.sig_serial_scan.emit)
         self.connection_panel.sig_serial_connect.connect(self.sig_serial_connect.emit)
         self.connection_panel.sig_serial_disconnect.connect(self.sig_serial_disconnect.emit)
+        self.connection_panel.sig_switch_wand_mode.connect(self.sig_switch_wand_mode.emit)
 
         # Thao tác Flash & Build & Similarity
+        self.flash_panel.sig_flash_unified_firmware.connect(self.sig_flash_unified_firmware.emit)
         self.flash_panel.sig_flash_data_firmware.connect(self.sig_flash_data_firmware.emit)
         self.flash_panel.sig_flash_inference_firmware.connect(self.sig_flash_inference_firmware.emit)
         self.flash_panel.sig_build_firmware_clicked.connect(self._on_btn_build_firmware_clicked)
@@ -221,6 +225,8 @@ class PageWand(QWidget):
         self.btn_serial_scan = self.connection_panel.btn_serial_scan
         self.btn_serial_connect = self.connection_panel.btn_serial_connect
         self.lbl_serial_status = self.connection_panel.lbl_serial_status
+        self.btn_toggle_mode = self.connection_panel.btn_toggle_mode
+        self.btn_flash_firmware = self.flash_panel.btn_flash_firmware
 
         self.btn_build_firmware = self.flash_panel.btn_build_firmware
         # Alias for backward compatibility if needed:

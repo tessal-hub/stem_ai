@@ -132,6 +132,17 @@ class FirmwareDetector(QObject):
 
         line_upper = line.upper()
 
+        # 0. Check for explicit runtime mode ACK from unified firmware
+        if "ACK:MODE:DATA" in line_upper:
+            self._detect_timer.stop()
+            self._set_firmware(FW_DATA)
+            return
+
+        if "ACK:MODE:INFERENCE" in line_upper:
+            self._detect_timer.stop()
+            self._set_firmware(FW_INFERENCE)
+            return
+
         # 1. Check for uninitialized / missing NVS patterns in AI firmware
         for pat in _INFERENCE_NO_NVS_PATTERNS:
             if pat in line_upper:
@@ -171,6 +182,15 @@ class FirmwareDetector(QObject):
 
         if action and action != "None":
             self._detect_timer.stop()
+            self._set_firmware(FW_INFERENCE)
+
+    def on_wand_mode_changed(self, mode: str) -> None:
+        """Handle explicit runtime mode switch signal from serial worker."""
+        self._detect_timer.stop()
+        m = str(mode).strip().lower()
+        if m == "data":
+            self._set_firmware(FW_DATA)
+        elif m == "inference":
             self._set_firmware(FW_INFERENCE)
 
     def on_flash_completed(self, bin_type: str) -> None:

@@ -14,5 +14,6 @@
     "--query-driver=**",
     "--compile-commands-dir=e:\\00.Project\\05.STEM_AI\\02.stem_app\\stem_ai\\mpu6050\\build"
   ],
-  "idf.flashType": "UART"
+  "idf.flashType": "UART",
+  "idf.port": "COM6"
 }

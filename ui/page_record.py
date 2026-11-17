@@ -78,6 +78,7 @@ class PageRecord(QWidget):
     sig_spell_deleted = pyqtSignal(str)
     sig_clear_buffer = pyqtSignal()
     sig_show_similarity_matrix = pyqtSignal()
+    sig_switch_wand_mode = pyqtSignal(str)
 
     def __init__(
         self,
@@ -141,6 +142,7 @@ class PageRecord(QWidget):
         self.btn_start.clicked.connect(self._on_btn_start_clicked)
         self.btn_stop.clicked.connect(self._on_btn_stop_clicked)
         self.btn_snip.clicked.connect(self._on_btn_snip_clicked)
+        self.btn_discard.clicked.connect(self._on_btn_discard_clicked)
         self.btn_delete_selected.clicked.connect(self._on_btn_delete_selected_clicked)
         self.btn_clear_samples.clicked.connect(self._on_btn_clear_clicked)
         self.btn_back_spells.clicked.connect(self._on_btn_back_clicked)
@@ -155,6 +157,9 @@ class PageRecord(QWidget):
 
         self.shortcut_snip = QShortcut(QKeySequence("Ctrl+X"), self)
         self.shortcut_snip.activated.connect(self._trigger_snip)
+
+        self.shortcut_discard = QShortcut(QKeySequence("Ctrl+D"), self)
+        self.shortcut_discard.activated.connect(self._trigger_discard)
 
         self._plot_timer = QTimer(self)
         self._plot_timer.timeout.connect(self._render_plots)
@@ -178,6 +183,10 @@ class PageRecord(QWidget):
         if self.btn_snip.isEnabled():
             self.btn_snip.click()
 
+    def _trigger_discard(self) -> None:
+        if hasattr(self, "btn_discard") and self.btn_discard.isEnabled():
+            self.btn_discard.click()
+
     def _load_data(self) -> None:
         """Nạp danh sách spell ban đầu."""
         self.load_spell_list(self._initial_counts)
@@ -192,22 +201,32 @@ class PageRecord(QWidget):
             self.lbl_wand_status.setText(f"○ {tr_ui('record_not_ready')}")
             self.lbl_wand_status.setProperty("status", "error")
             self.lbl_wand_status.setToolTip("")
+            if hasattr(self, "btn_switch_to_data"):
+                self.btn_switch_to_data.setVisible(False)
         elif fw_type in ("inference", "inference_no_nvs"):
             self.lbl_wand_status.setText(f"● {tr_ui('record_wand_ai_fw_warning')}")
             self.lbl_wand_status.setProperty("status", "warning")
             self.lbl_wand_status.setToolTip(tr_ui("record_wand_wrong_fw_warning"))
+            if hasattr(self, "btn_switch_to_data"):
+                self.btn_switch_to_data.setVisible(True)
         elif fw_type == "data":
             self.lbl_wand_status.setText(f"● {tr_ui('record_ready_data_fw')}")
             self.lbl_wand_status.setProperty("status", "success")
             self.lbl_wand_status.setToolTip(tr_ui("fw_desc_data"))
+            if hasattr(self, "btn_switch_to_data"):
+                self.btn_switch_to_data.setVisible(False)
         elif fw_type == "detecting":
             self.lbl_wand_status.setText(f"● {tr_ui('fw_status_detecting')}")
             self.lbl_wand_status.setProperty("status", "warning")
             self.lbl_wand_status.setToolTip(tr_ui("fw_desc_detecting"))
+            if hasattr(self, "btn_switch_to_data"):
+                self.btn_switch_to_data.setVisible(False)
         else:
             self.lbl_wand_status.setText(f"● {tr_ui('record_ready')}")
             self.lbl_wand_status.setProperty("status", "success")
             self.lbl_wand_status.setToolTip("")
+            if hasattr(self, "btn_switch_to_data"):
+                self.btn_switch_to_data.setVisible(False)
         self.lbl_wand_status.style().unpolish(self.lbl_wand_status)
         self.lbl_wand_status.style().polish(self.lbl_wand_status)
 
@@ -225,6 +244,9 @@ class PageRecord(QWidget):
             self.btn_stop.setText(tr_ui("record_btn_stop"))
         if hasattr(self, "btn_snip"):
             self.btn_snip.setText(tr_ui("record_btn_snip"))
+        if hasattr(self, "btn_discard"):
+            self.btn_discard.setText(tr_ui("record_btn_discard", default="Xóa mẫu"))
+            self.btn_discard.setToolTip(tr_ui("record_btn_discard_tip", default="Hủy và xóa dữ liệu mẫu vừa thu khỏi đồ thị (Ctrl+D)"))
         if hasattr(self, "btn_clear_samples"):
             self.btn_clear_samples.setText(tr_ui("record_btn_clear"))
         if hasattr(self, "btn_delete_spell"):
@@ -278,7 +300,10 @@ class PageRecord(QWidget):
 
         if recording:
             self.btn_snip.setEnabled(False)
-            self.crop_region.hide()
+            if hasattr(self, "btn_discard"):
+                self.btn_discard.setEnabled(True)
+            if hasattr(self, "crop_region"):
+                self.crop_region.hide()
             self._recording_start_time.start()
             self._recording_timer.start(_TIMER_INTERVAL_MS)
         else:
@@ -729,8 +754,15 @@ class PageRecord(QWidget):
         self.lbl_wand_status.setProperty("status", "warning")
         # dấu chồng tiếng Việt (Ở/Ế) cần thêm ascent — 11px + padding 5px bị cắt đỉnh chữ
         self.lbl_wand_status.setMinimumHeight(32)
+
+        self.btn_switch_to_data = make_outline_button(tr_ui("btn_switch_to_data", default="⚡ Chuyển sang Thu thập"), height=32)
+        self.btn_switch_to_data.setToolTip(tr_ui("btn_switch_to_data_tip", default="Gửi gói tin UART chuyển ESP32 sang chế độ phát CSV 50Hz"))
+        self.btn_switch_to_data.setVisible(False)
+        self.btn_switch_to_data.clicked.connect(lambda _: self.sig_switch_wand_mode.emit("data"))
+
         header.addWidget(self.lbl_timeline)
         header.addStretch()
+        header.addWidget(self.btn_switch_to_data)
         header.addWidget(self.lbl_wand_status)
         layout.addLayout(header)
 
@@ -861,7 +893,7 @@ class PageRecord(QWidget):
         """Card chứa các nút tác vụ ghi (Start/Stop/Snip)."""
         card, layout = make_card(margins=(8, 8, 8, 8), spacing=6)
 
-        # Start/Stop cạnh nhau, Snip full row — all 36px touch
+        # Start/Stop cạnh nhau, Snip và Xóa mẫu cạnh nhau — all 36px touch
         row1 = QHBoxLayout()
         row1.setSpacing(8)
         self.btn_start = make_button(tr_ui("record_btn_start"), "start", 36)
@@ -871,9 +903,20 @@ class PageRecord(QWidget):
         row1.addWidget(self.btn_stop)
         layout.addLayout(row1)
 
+        row2 = QHBoxLayout()
+        row2.setSpacing(8)
         self.btn_snip = make_button(tr_ui("record_btn_snip"), "snip", 36)
         self.btn_snip.setEnabled(False)
-        layout.addWidget(self.btn_snip)
+        self.btn_discard = make_button(
+            tr_ui("record_btn_discard", default="Xóa mẫu"),
+            "danger_outline",
+            36,
+            tooltip=tr_ui("record_btn_discard_tip", default="Hủy và xóa dữ liệu mẫu vừa thu khỏi đồ thị (Ctrl+D)"),
+        )
+        self.btn_discard.setEnabled(False)
+        row2.addWidget(self.btn_snip, stretch=2)
+        row2.addWidget(self.btn_discard, stretch=1)
+        layout.addLayout(row2)
 
         self._hint_controls = make_hint(tr_ui("record_hint_controls"))
         self._hint_controls.setWordWrap(True)
@@ -1045,9 +1088,11 @@ class PageRecord(QWidget):
         self.btn_start.setAccessibleName("Bắt đầu ghi cử chỉ")
         self.btn_stop.setAccessibleName("Dừng ghi cử chỉ")
         self.btn_snip.setAccessibleName("Cắt vùng chọn làm mẫu")
+        self.btn_discard.setAccessibleName("Xóa mẫu đang thu hiện tại")
         self.setTabOrder(self.combo_spell, self.btn_start)
         self.setTabOrder(self.btn_start, self.btn_stop)
         self.setTabOrder(self.btn_stop, self.btn_snip)
+        self.setTabOrder(self.btn_snip, self.btn_discard)
 
     # ── Slots ───────────────────────────────────
 
@@ -1079,11 +1124,14 @@ class PageRecord(QWidget):
         self.is_live = False
         self.set_recording_state(False)
         self.btn_snip.setEnabled(True)
-        self.crop_region.show()
-        buf_len = len(self.store.get_live_buffer_snapshot())
-        if buf_len > 0:
-            start = max(0, buf_len - _AUTO_CROP_TAIL)
-            self.crop_region.setRegion([start, buf_len])
+        if hasattr(self, "btn_discard"):
+            self.btn_discard.setEnabled(True)
+        if hasattr(self, "crop_region"):
+            self.crop_region.show()
+            buf_len = len(self.store.get_live_buffer_snapshot())
+            if buf_len > 0:
+                start = max(0, buf_len - _AUTO_CROP_TAIL)
+                self.crop_region.setRegion([start, buf_len])
         self._recording_timer.stop()
         self.lbl_record_duration.setText("00:00")
         self._render_plots(force=True)
@@ -1100,7 +1148,34 @@ class PageRecord(QWidget):
         if idx_min < idx_max:
             self.lbl_wand_status.setText("Đang lưu mẫu đã cắt...")
             self.sig_data_cropped.emit(buf[idx_min:idx_max], spell)
+        self.btn_snip.setEnabled(False)
+        if hasattr(self, "btn_discard"):
+            self.btn_discard.setEnabled(False)
         self.sig_snip_record.emit()
+
+    def _on_btn_discard_clicked(self) -> None:
+        """Hủy và xóa dữ liệu mẫu đang thu / vừa thu hiện tại khỏi bộ nhớ đệm và đồ thị."""
+        was_live = self.is_live or self._recording_timer.isActive()
+        if was_live:
+            self.is_live = False
+            self.set_recording_state(False)
+            self._recording_timer.stop()
+            self.sig_stop_record.emit()
+
+        self.store.clear_live_buffer()
+        self.clear_plots()
+        if hasattr(self, "crop_region"):
+            self.crop_region.hide()
+        self.btn_snip.setEnabled(False)
+        if hasattr(self, "btn_discard"):
+            self.btn_discard.setEnabled(False)
+        self.lbl_record_count.setText("0")
+        self.lbl_record_duration.setText("00:00")
+        self.lbl_wand_status.setText(tr_ui("record_sample_discarded", default="Đã xóa mẫu hiện tại"))
+        self.lbl_wand_status.setProperty("status", "warning")
+        self.lbl_wand_status.style().unpolish(self.lbl_wand_status)
+        self.lbl_wand_status.style().polish(self.lbl_wand_status)
+        self.sig_clear_buffer.emit()
 
     def _on_crop_region_changed(self) -> None:
         """Cập nhật số mẫu đang được chọn trong vùng snip."""
@@ -1118,12 +1193,15 @@ class PageRecord(QWidget):
 
     def clear_plots(self) -> None:
         """Xóa sạch toàn bộ đường vẽ trên đồ thị."""
-        self.curve_ax.setData([])
-        self.curve_ay.setData([])
-        self.curve_az.setData([])
-        self.curve_gx.setData([])
-        self.curve_gy.setData([])
-        self.curve_gz.setData([])
+        if hasattr(self, "curve_ax"):
+            self.curve_ax.setData([])
+            self.curve_ay.setData([])
+            self.curve_az.setData([])
+            self.curve_gx.setData([])
+            self.curve_gy.setData([])
+            self.curve_gz.setData([])
+        if hasattr(self, "btn_discard"):
+            self.btn_discard.setEnabled(False)
 
     def _on_btn_clear_clicked(self) -> None:
         """Xóa sạch bộ đệm dữ liệu tạm thời."""

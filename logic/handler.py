@@ -12,6 +12,7 @@ Trách nhiệm:
 from __future__ import annotations
 
 import csv
+import json
 import logging
 import os
 import sys
@@ -129,6 +130,7 @@ class NVSBuildWorker(QThread):
 
             total_gestures = len(final_gestures)
             gesture_data: list[dict] = []
+            prim_cache_updated = False
 
             for idx, g in enumerate(final_gestures):
                 is_spell = (g in self.spell_names)
@@ -136,31 +138,43 @@ class NVSBuildWorker(QThread):
                     self.sig_status.emit(f">> [NVS] Embedding spell '{g}'...")
                 self.sig_progress.emit(10 + int(60 * (idx / max(1, total_gestures))))
 
+                # Tối ưu: Nếu là primitive và đã có trong cache, tái sử dụng ngay lập tức không đọc đĩa
+                if not is_spell and g in prim_cache and isinstance(prim_cache[g], list) and len(prim_cache[g]) == 16:
+                    cached_centroid = prim_cache[g]
+                    gesture_data.append({
+                        "name": g,
+                        "is_spell": False,
+                        "centroid": cached_centroid,
+                        "embeddings": np.asarray([cached_centroid], dtype=np.float32),
+                    })
+                    continue
+
                 dirs = storage_dirs_for_spell(dataset_root, g)
                 csv_files = []
                 for d in dirs:
                     csv_files.extend(sorted(d.glob("*.csv")))
 
+                # Nếu là primitive chưa cache, giới hạn tối đa 40 file để tăng tốc độ tính centroid
+                if not is_spell and len(csv_files) > 40:
+                    csv_files = csv_files[:40]
+
                 is_active = (g not in ("STAND BY", "STAND_BY"))
+                window_step = 8 if is_active else 16
                 samples = []
                 for fpath in csv_files:
                     rows = _read_csv_rows(fpath)
                     if not rows:
                         continue
-                    windows = _windowize(rows, window_size=64, step=4, is_active_gesture=is_active)
+                    windows = _windowize(rows, window_size=64, step=window_step, is_active_gesture=is_active)
                     for w in windows:
                         arr = np.clip(np.asarray(w, dtype=np.float32), -2.0, 2.0)
                         samples.append(arr)
 
                 if not samples:
-                    if not is_spell and g in prim_cache:
-                        centroid = prim_cache[g]
-                        normalized_embs = np.empty((0, 16), dtype=np.float32)
-                    else:
-                        if is_spell:
-                            self.sig_status.emit(f">> [WARN] No samples found for spell '{g}', using default zero centroid.")
-                        centroid = [0.0] * 16
-                        normalized_embs = np.empty((0, 16), dtype=np.float32)
+                    if is_spell:
+                        self.sig_status.emit(f">> [WARN] No samples found for spell '{g}', using default zero centroid.")
+                    centroid = [0.0] * 16
+                    normalized_embs = np.empty((0, 16), dtype=np.float32)
                 else:
                     batch = np.asarray(samples, dtype=np.float32)
                     embeddings = self.spell_recognizer._embed_batch(batch)
@@ -177,6 +191,7 @@ class NVSBuildWorker(QThread):
 
                     if not is_spell:
                         prim_cache[g] = centroid
+                        prim_cache_updated = True
 
                 gesture_data.append({
                     "name": g,
@@ -218,11 +233,12 @@ class NVSBuildWorker(QThread):
                 is_spell_flags.append(item["is_spell"])
                 thresholds.append(thresh)
 
-            # Cập nhật file cache primitive
-            try:
-                prim_cache_path.write_text(json.dumps(prim_cache, indent=2), encoding="utf-8")
-            except Exception:
-                pass
+            # Cập nhật file cache primitive nếu có thay đổi
+            if prim_cache_updated:
+                try:
+                    prim_cache_path.write_text(json.dumps(prim_cache, indent=2), encoding="utf-8")
+                except Exception:
+                    pass
 
             self.sig_status.emit(">> [NVS] Compiling labels.bin...")
             self.sig_progress.emit(90)
@@ -572,6 +588,8 @@ class Handler(QObject):
         page.sig_spell_deleted.connect(self.on_spell_deleted)
         if hasattr(page, 'sig_show_similarity_matrix'):
             page.sig_show_similarity_matrix.connect(self.on_show_similarity_matrix)
+        if hasattr(page, 'sig_switch_wand_mode'):
+            page.sig_switch_wand_mode.connect(self.on_switch_wand_mode)
         page.sig_clear_buffer.connect(self.on_clear_buffer)
         if self._pending_firmware_status is not None:
             try:
@@ -688,6 +706,10 @@ class Handler(QObject):
         self.ui_wand.sig_serial_connect.connect(self.on_serial_connect)
         self.ui_wand.sig_serial_disconnect.connect(self.on_serial_disconnect)
         self.ui_wand.sig_flash_upload.connect(self.on_flash_upload)
+        if hasattr(self.ui_wand, 'sig_switch_wand_mode'):
+            self.ui_wand.sig_switch_wand_mode.connect(self.on_switch_wand_mode)
+        if hasattr(self.ui_wand, 'sig_flash_unified_firmware'):
+            self.ui_wand.sig_flash_unified_firmware.connect(self.on_flash_unified_firmware)
         if hasattr(self.ui_wand, 'sig_flash_data_firmware'):
             self.ui_wand.sig_flash_data_firmware.connect(self.on_flash_data_firmware)
         if hasattr(self.ui_wand, 'sig_flash_inference_firmware'):
@@ -701,6 +723,10 @@ class Handler(QObject):
             self.ui_setting.sig_clear_database.connect(self.on_clear_database)
         self.ui_setting.sig_flash_data_firmware.connect(self.on_flash_data_firmware)
         self.ui_setting.sig_flash_inference_firmware.connect(self.on_flash_inference_firmware)
+        if hasattr(self.ui_setting, 'sig_switch_wand_mode'):
+            self.ui_setting.sig_switch_wand_mode.connect(self.on_switch_wand_mode)
+        if hasattr(self.ui_setting, 'sig_flash_unified_firmware'):
+            self.ui_setting.sig_flash_unified_firmware.connect(self.on_flash_unified_firmware)
         self.ui_setting.sig_scan_primitive_quality.connect(self.on_primitive_quality_scan_requested)
         self.ui_setting.sig_stop_primitive_scan.connect(self.on_primitive_quality_scan_stop)
 
@@ -717,6 +743,10 @@ class Handler(QObject):
             self.store.update_prediction, type=Qt.ConnectionType.QueuedConnection)
         self.serial_worker.sig_prediction_received.connect(
             self.firmware_detector.on_prediction_received, type=Qt.ConnectionType.QueuedConnection)
+        self.serial_worker.sig_wand_mode_changed.connect(
+            self.firmware_detector.on_wand_mode_changed, type=Qt.ConnectionType.QueuedConnection)
+        self.serial_worker.sig_wand_mode_changed.connect(
+            self.store.set_wand_mode, type=Qt.ConnectionType.QueuedConnection)
 
         self.data_io_worker.sig_save_done.connect(self._on_io_done, type=Qt.ConnectionType.QueuedConnection)
         self.data_io_worker.sig_db_refreshed.connect(self.store.update_counts_from_worker, type=Qt.ConnectionType.QueuedConnection)
@@ -1058,6 +1088,8 @@ class Handler(QObject):
         if hasattr(self, "ui_record") and self.ui_record:
             if hasattr(self.ui_record, "set_wand_ready"):
                 self.ui_record.set_wand_ready(connected)
+        if connected:
+            QTimer.singleShot(300, self.serial_worker.query_wand_mode)
         if not connected:
             if self.store.get_recording_state():
                 self.recorder.stop_recording()
@@ -1933,12 +1965,25 @@ class Handler(QObject):
                         self.ui_wand.notify_user_alert("Chưa chọn cổng COM", msg, is_error=True)
                 return
 
-        filename = "collect.bin" if bin_type == "data" else "inference.bin"
-        custom_bin_path = FIRMWARE_BIN_DIR / filename
-        if custom_bin_path.exists():
-            bin_path = custom_bin_path
+        if bin_type in ("unified", "single"):
+            candidates = ["wand_firmware.bin", "esp32_classic_ml.bin", "classic_inference.bin", "inference.bin"]
+        elif bin_type == "data":
+            candidates = ["wand_firmware.bin", "collect.bin"]
         else:
-            bin_path = Path(resolve_asset_path(f"assets/firmware/{filename}"))
+            candidates = ["wand_firmware.bin", "classic_inference.bin", "inference.bin"]
+
+        bin_path = None
+        for cand in candidates:
+            p_custom = FIRMWARE_BIN_DIR / cand
+            if p_custom.exists():
+                bin_path = p_custom
+                break
+            p_asset = Path(resolve_asset_path(f"assets/firmware/{cand}"))
+            if p_asset.exists():
+                bin_path = p_asset
+                break
+        if bin_path is None:
+            bin_path = FIRMWARE_BIN_DIR / "wand_firmware.bin"
 
         if not self._validate_required_file(bin_path):
             msg = f"Không tìm thấy file firmware binary: {bin_path}"
@@ -1974,6 +2019,24 @@ class Handler(QObject):
             self.serial_worker.stop()
         else:
             self._start_flash_immediately()
+
+    def on_flash_unified_firmware(self) -> None:
+        """Flash unified single firmware."""
+        self.handle_firmware_flash("unified")
+
+    def on_switch_wand_mode(self, mode: str) -> None:
+        """Chuyển chế độ hoạt động của Wand (data | inference) qua UART packet."""
+        target_mode = str(mode).strip().lower()
+        if not self.serial_worker.isRunning():
+            self.store.set_wand_mode(target_mode)
+            self.ui_wand.append_terminal_text(f">> [MODE] Chưa kết nối cổng COM. Đã lưu cấu hình: {target_mode.upper()}")
+            return
+
+        success = self.serial_worker.set_wand_mode(target_mode)
+        if success:
+            self.ui_wand.append_terminal_text(f">> [TX] CMD:SET_MODE:{target_mode.upper()}")
+        else:
+            self.ui_wand.append_terminal_text(f">> [ERROR] Gửi lệnh đổi chế độ thất bại")
 
     def on_flash_data_firmware(self) -> None:
         """Flash data collection firmware."""

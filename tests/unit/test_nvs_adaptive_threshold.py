@@ -135,3 +135,56 @@ def test_nvs_empty_sample_gesture_fallback(tmp_path: Path, monkeypatch: pytest.M
     assert "gesture_names" in captured, "build_config_bin was not called"
     name_to_thresh = dict(zip(captured["gesture_names"], captured["thresholds"]))
     assert name_to_thresh["EMPTY_SPELL"] == 0.70
+
+
+def test_nvs_primitive_cache_hit_skips_disk(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cached primitive prototypes are loaded directly without disk reads or re-embedding."""
+    import json
+
+    captured: dict[str, list] = {}
+
+    def mock_build_config_bin(gesture_names, centroids, is_spell_flags, thresholds, colors, out_path):
+        captured["gesture_names"] = list(gesture_names)
+        captured["centroids"] = list(centroids)
+        captured["thresholds"] = list(thresholds)
+
+    monkeypatch.setattr(handler_mod, "build_config_bin", mock_build_config_bin)
+
+    dataset_dir = tmp_path / "dataset"
+    app_data_dir = tmp_path / "app_data"
+    app_data_dir.mkdir(parents=True, exist_ok=True)
+
+    cached_centroid = [0.25] * 16
+    prim_cache_file = app_data_dir / "primitive_prototypes.json"
+    prim_cache_file.write_text(json.dumps({"CIRCLE_CW": cached_centroid, "STAND BY": cached_centroid}))
+
+    # Write a dummy CSV under CIRCLE_CW that would produce a different centroid if read
+    _write_mock_csv(dataset_dir / "primitives" / "CIRCLE_CW" / "sample1.csv", value=99.0)
+
+    class _CountingRecognizer:
+        def __init__(self):
+            self.calls = 0
+
+        def _embed_batch(self, batch: np.ndarray) -> np.ndarray:
+            self.calls += 1
+            return np.full((len(batch), 16), 99.0, dtype=np.float32)
+
+    recognizer = _CountingRecognizer()
+    worker = NVSBuildWorker(
+        spell_names=[],
+        dataset_dir=str(dataset_dir),
+        spell_recognizer=recognizer,
+        app_data_dir=str(app_data_dir),
+    )
+    worker.run()
+
+    assert "gesture_names" in captured
+    name_to_idx = {name: i for i, name in enumerate(captured["gesture_names"])}
+    assert "CIRCLE_CW" in name_to_idx
+
+    cw_centroid = captured["centroids"][name_to_idx["CIRCLE_CW"]]
+    # Must equal cached centroid, not value from dummy CSV
+    assert cw_centroid == cached_centroid
+    # Recognizer _embed_batch must NOT have been called for cached primitives
+    assert recognizer.calls == 0
+

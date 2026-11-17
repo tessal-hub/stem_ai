@@ -155,7 +155,10 @@
     "record_start": "Start",
     "record_stop": "Stop",
     "record_snip": "Crop and Save",
-    "record_hint_controls": "Ctrl+S: Start  |  Ctrl+T: Stop  |  Ctrl+X: Crop & save",
+    "record_btn_discard": "Discard",
+    "record_btn_discard_tip": "Discard and clear currently recorded sample from chart (Ctrl+D)",
+    "record_sample_discarded": "Current sample discarded",
+    "record_hint_controls": "Ctrl+S: Start  |  Ctrl+T: Stop  |  Ctrl+X: Crop & save  |  Ctrl+D: Discard",
     "record_batch": "Batch Operations",
     "record_clear": "Clear All",
     "record_delete_latest": "Delete Latest",
@@ -380,7 +383,16 @@
     "guide_shortcuts_header": "Quick Shortcuts",
     "record_eval_title": "Gesture Evaluation",
     "record_no_spells_title": "No spells created yet",
-    "record_no_samples_title": "No samples recorded yet"
+    "record_no_samples_title": "No samples recorded yet",
+    "btn_flash_unified": "Install Wand Firmware",
+    "fw_desc_unified": "Flash unified firmware to ESP32 (supports both data collection and AI inference)",
+    "wand_mode_label": "Wand Mode:",
+    "btn_mode_data": "📊 Data Mode (50Hz) ⇄ Switch",
+    "btn_mode_inference": "✨ AI Inference ⇄ Switch",
+    "btn_mode_switch": "🔄 Switch Mode",
+    "btn_mode_tooltip": "Click to toggle ESP32 mode via UART packet",
+    "btn_switch_to_data": "⚡ Switch to Data Mode",
+    "btn_switch_to_data_tip": "Send UART command to stream 50Hz sensor data"
   },
   "vi": {
     "section_imu": "Cấu hình cảm biến IMU",
@@ -538,7 +550,10 @@
     "record_start": "Bắt đầu",
     "record_stop": "Dừng ghi",
     "record_snip": "Cắt tỉa và Lưu",
-    "record_hint_controls": "Ctrl+S: Bắt đầu  |  Ctrl+T: Dừng  |  Ctrl+X: Cắt & lưu",
+    "record_btn_discard": "Xóa mẫu",
+    "record_btn_discard_tip": "Hủy và xóa dữ liệu mẫu vừa thu khỏi đồ thị (Ctrl+D)",
+    "record_sample_discarded": "Đã xóa mẫu hiện tại",
+    "record_hint_controls": "Ctrl+S: Bắt đầu  |  Ctrl+T: Dừng  |  Ctrl+X: Cắt & lưu  |  Ctrl+D: Xóa mẫu",
     "record_batch": "Thao tác hàng loạt",
     "record_clear": "Xóa tất cả",
     "record_delete_latest": "Xóa mẫu gần nhất",
@@ -763,6 +778,15 @@
     "wand_deselect_all": "Bỏ chọn tất cả",
     "record_eval_title": "Đánh giá cử chỉ",
     "record_no_spells_title": "Chưa có câu thần chú nào",
-    "record_no_samples_title": "Chưa có mẫu nào cho thần chú này"
+    "record_no_samples_title": "Chưa có mẫu nào cho thần chú này",
+    "btn_flash_unified": "Cài đặt Firmware Wand",
+    "fw_desc_unified": "Nạp firmware duy nhất cho đũa phép (hỗ trợ cả thu thập dữ liệu và nhận diện AI)",
+    "wand_mode_label": "Chế độ Wand:",
+    "btn_mode_data": "📊 Thu thập (50Hz) ⇄ Đổi",
+    "btn_mode_inference": "✨ Nhận diện AI ⇄ Đổi",
+    "btn_mode_switch": "🔄 Đổi chế độ",
+    "btn_mode_tooltip": "Bấm để gửi gói tin UART đổi chế độ hoạt động",
+    "btn_switch_to_data": "⚡ Chuyển sang Thu thập",
+    "btn_switch_to_data_tip": "Gửi gói tin UART chuyển ESP32 sang chế độ phát CSV 50Hz"
   }
 }

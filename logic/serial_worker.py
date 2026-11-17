@@ -37,6 +37,7 @@ class SerialWorker(QThread):
     sig_prediction_received = pyqtSignal(str, float)   # (label, confidence)
     sig_connection_status = pyqtSignal(bool, str)    # (is_connected, message)
     sig_raw_line_received = pyqtSignal(str)          # every decoded line -> terminal
+    sig_wand_mode_changed = pyqtSignal(str)          # "data" | "inference" mode switch ACK
     sig_error = pyqtSignal(str)          # standardized worker error channel
     sig_finished = pyqtSignal(bool, str)    # standardized worker completion channel
 
@@ -72,6 +73,17 @@ class SerialWorker(QThread):
             log.exception("SerialWorker.send_command failed")
             self.sig_error.emit(f"Serial command queue failed: {type(e).__name__}: {e}")
             return False
+
+    def set_wand_mode(self, mode: str) -> bool:
+        """Send command to switch ESP32 runtime mode ('data' or 'inference')."""
+        mode_upper = mode.strip().upper()
+        if mode_upper not in ("DATA", "INFERENCE"):
+            return False
+        return self.send_command(f"CMD:SET_MODE:{mode_upper}")
+
+    def query_wand_mode(self) -> bool:
+        """Query current ESP32 runtime mode."""
+        return self.send_command("CMD:GET_MODE")
 
     def stop(self) -> None:
         """Request the event loop to exit and unblock serial read immediately."""
@@ -175,7 +187,10 @@ class SerialWorker(QThread):
 
             self.sig_raw_line_received.emit(line)   # forward to terminal unconditionally
 
-            if "PREDICT:" in line:
+            if line.startswith("ACK:MODE:"):
+                mode_str = line.split(":", 2)[2].strip().lower()
+                self.sig_wand_mode_changed.emit(mode_str)
+            elif "PREDICT:" in line:
                 self._handle_prediction(line)
             elif "," in line and not line.startswith("ACK:"):
                 self._handle_sensor_csv(line)

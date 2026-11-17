@@ -27,6 +27,7 @@ class WandConnectionPanel(QWidget):
     sig_serial_scan = pyqtSignal()
     sig_serial_connect = pyqtSignal(str)
     sig_serial_disconnect = pyqtSignal()
+    sig_switch_wand_mode = pyqtSignal(str)
 
     def __init__(self) -> None:
         super().__init__()
@@ -53,6 +54,7 @@ class WandConnectionPanel(QWidget):
         """Kết nối signal/slot nội bộ."""
         self.btn_serial_scan.clicked.connect(lambda _: self.sig_serial_scan.emit())
         self.btn_serial_connect.clicked.connect(self._on_btn_serial_connect_clicked)
+        self.btn_toggle_mode.clicked.connect(self._on_btn_toggle_mode_clicked)
 
     # ── Public methods ──────────────────────────
 
@@ -104,6 +106,19 @@ class WandConnectionPanel(QWidget):
 
         self.lbl_firmware_status.style().unpolish(self.lbl_firmware_status)
         self.lbl_firmware_status.style().polish(self.lbl_firmware_status)
+
+        if hasattr(self, "btn_toggle_mode"):
+            if fw_type == "data":
+                self.btn_toggle_mode.setText(tr_ui("btn_mode_data", default="📊 Thu thập (50Hz) ⇄ Đổi"))
+                self.btn_toggle_mode.setProperty("status", "success")
+            elif fw_type in ("inference", "inference_no_nvs"):
+                self.btn_toggle_mode.setText(tr_ui("btn_mode_inference", default="✨ Nhận diện AI ⇄ Đổi"))
+                self.btn_toggle_mode.setProperty("status", "accent")
+            else:
+                self.btn_toggle_mode.setText(tr_ui("btn_mode_switch", default="🔄 Đổi chế độ"))
+                self.btn_toggle_mode.setProperty("status", "muted")
+            self.btn_toggle_mode.style().unpolish(self.btn_toggle_mode)
+            self.btn_toggle_mode.style().polish(self.btn_toggle_mode)
 
     def update_serial_port_list(self, ports: list[str]) -> None:
         """Cập nhật danh sách cổng COM khả dụng."""
@@ -171,6 +186,16 @@ class WandConnectionPanel(QWidget):
         fw_row.addWidget(self.lbl_firmware_status)
         layout.addLayout(fw_row)
 
+        mode_row = QHBoxLayout()
+        self._mode_heading = QLabel(tr_ui("wand_mode_label", default="Chế độ Wand:"))
+        self._mode_heading.setProperty("type", "settings_form_label")
+        self.btn_toggle_mode = make_outline_button(tr_ui("btn_mode_inference", default="✨ Nhận diện AI ⇄ Đổi"), height=32)
+        self.btn_toggle_mode.setToolTip(tr_ui("btn_mode_tooltip", default="Bấm để gửi gói tin UART đổi chế độ qua lại"))
+        mode_row.addWidget(self._mode_heading)
+        mode_row.addStretch()
+        mode_row.addWidget(self.btn_toggle_mode)
+        layout.addLayout(mode_row)
+
         self.combo_serial_ports = QComboBox()
         self.combo_serial_ports.setMinimumHeight(SETTINGS_INPUT_H)
         self.combo_serial_ports.addItem(tr_ui("wand_no_ports"))
@@ -193,3 +218,8 @@ class WandConnectionPanel(QWidget):
             self.sig_serial_disconnect.emit()
         else:
             self.sig_serial_connect.emit(self.combo_serial_ports.currentText())
+
+    def _on_btn_toggle_mode_clicked(self) -> None:
+        """Gửi tín hiệu đổi chế độ qua lại."""
+        target_mode = "inference" if self._current_firmware == "data" else "data"
+        self.sig_switch_wand_mode.emit(target_mode)

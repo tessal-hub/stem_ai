@@ -26,6 +26,7 @@ class WandFlashPanel(QWidget):
     sig_build_firmware_clicked = pyqtSignal()
     sig_upload_clicked = pyqtSignal()
     sig_similarity_clicked = pyqtSignal()
+    sig_flash_unified_firmware = pyqtSignal()
     sig_flash_data_firmware = pyqtSignal()
     sig_flash_inference_firmware = pyqtSignal()
 
@@ -52,16 +53,12 @@ class WandFlashPanel(QWidget):
         btn_layout = QVBoxLayout()
         btn_layout.setSpacing(SPACING_SM)
 
-        # Firmware install buttons (Data collection & Base AI)
-        fw_btn_layout = QHBoxLayout()
-        fw_btn_layout.setSpacing(8)
-        self.btn_flash_collect = make_outline_button(tr_ui("btn_flash_data", default="Cài đặt FW thu thập"), height=BTN_H)
-        self.btn_flash_collect.setToolTip(tr_ui("fw_desc_data", default="Nạp firmware thu thập dữ liệu cảm biến"))
-        self.btn_flash_ai = make_outline_button(tr_ui("btn_flash_ai", default="Cài đặt FW AI"), height=BTN_H)
-        self.btn_flash_ai.setToolTip(tr_ui("fw_desc_inference", default="Nạp firmware động cơ nhận diện AI"))
-        fw_btn_layout.addWidget(self.btn_flash_collect, stretch=1)
-        fw_btn_layout.addWidget(self.btn_flash_ai, stretch=1)
-        btn_layout.addLayout(fw_btn_layout)
+        # Single unified firmware install button
+        self.btn_flash_firmware = make_outline_button(tr_ui("btn_flash_unified", default="Cài đặt Firmware Wand"), height=BTN_H)
+        self.btn_flash_firmware.setToolTip(tr_ui("fw_desc_unified", default="Nạp firmware duy nhất cho đũa phép (hỗ trợ cả thu thập và AI)"))
+        self.btn_flash_collect = self.btn_flash_firmware
+        self.btn_flash_ai = self.btn_flash_firmware
+        btn_layout.addWidget(self.btn_flash_firmware)
 
         self.btn_similarity = make_outline_button(tr_ui("wand_btn_similarity", default="Ma trận tương đồng"), height=BTN_H)
         self.btn_build_firmware = make_outline_button(tr_ui("wand_build_firmware"), height=BTN_H)
@@ -86,21 +83,23 @@ class WandFlashPanel(QWidget):
 
     def _init_signals(self) -> None:
         """Kết nối signal/slot nội bộ."""
-        self.btn_flash_collect.clicked.connect(lambda _: self.sig_flash_data_firmware.emit())
-        self.btn_flash_ai.clicked.connect(lambda _: self.sig_flash_inference_firmware.emit())
+        self.btn_flash_firmware.clicked.connect(self._on_flash_firmware_clicked)
         self.btn_similarity.clicked.connect(lambda _: self.sig_similarity_clicked.emit())
         self.btn_build_firmware.clicked.connect(lambda _: self.sig_build_firmware_clicked.emit())
         self.btn_upload.clicked.connect(lambda _: self.sig_upload_clicked.emit())
+
+    def _on_flash_firmware_clicked(self) -> None:
+        self.sig_flash_unified_firmware.emit()
+        self.sig_flash_data_firmware.emit()
+        self.sig_flash_inference_firmware.emit()
 
     # ── Public methods ──────────────────────────
 
     def apply_ui_language(self) -> None:
         """Làm mới văn bản khi ngôn ngữ ứng dụng thay đổi."""
         self._title_lbl.setText(tr_ui("wand_section_model"))
-        self.btn_flash_collect.setText(tr_ui("btn_flash_data", default="Cài đặt FW thu thập"))
-        self.btn_flash_collect.setToolTip(tr_ui("fw_desc_data", default="Nạp firmware thu thập dữ liệu cảm biến"))
-        self.btn_flash_ai.setText(tr_ui("btn_flash_ai", default="Cài đặt FW AI"))
-        self.btn_flash_ai.setToolTip(tr_ui("fw_desc_inference", default="Nạp firmware động cơ nhận diện AI"))
+        self.btn_flash_firmware.setText(tr_ui("btn_flash_unified", default="Cài đặt Firmware Wand"))
+        self.btn_flash_firmware.setToolTip(tr_ui("fw_desc_unified", default="Nạp firmware duy nhất cho đũa phép (hỗ trợ cả thu thập và AI)"))
         self.btn_similarity.setText(tr_ui("wand_btn_similarity", default="Ma trận tương đồng"))
         self.btn_build_firmware.setText(tr_ui("wand_build_firmware"))
         self.btn_upload.setText(tr_ui("wand_upload_model"))

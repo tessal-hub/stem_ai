@@ -147,6 +147,7 @@ class DataStore(QObject):
     sig_connection_state_updated = pyqtSignal(bool, str)
     sig_udp_health_updated = pyqtSignal(dict)
     sig_firmware_detected = pyqtSignal(str)
+    sig_wand_mode_changed = pyqtSignal(str)
 
     def __init__(self, dataset_dir: str | None = None, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -299,6 +300,23 @@ class DataStore(QObject):
         """Lấy loại firmware hiện tại được nhận diện."""
         with self._state_lock:
             return self.detected_firmware
+
+    def get_wand_mode(self) -> str:
+        """Lấy runtime mode của Wand (data | inference)."""
+        with self._state_lock:
+            return getattr(self, "_wand_mode", "inference")
+
+    def set_wand_mode(self, mode: str) -> None:
+        """Cập nhật runtime mode của Wand."""
+        mode_clean = str(mode).strip().lower()
+        if mode_clean not in ("data", "inference"):
+            return
+        with self._state_lock:
+            self._wand_mode = mode_clean
+            self.settings["firmware_mode"] = mode_clean
+            self.detected_firmware = mode_clean
+        self.sig_wand_mode_changed.emit(mode_clean)
+        self.sig_firmware_detected.emit(mode_clean)
 
     def get_connection_state(self) -> tuple[bool, str]:
         """Lấy trạng thái kết nối an toàn đa luồng."""

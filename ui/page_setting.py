@@ -39,6 +39,8 @@ class PageSetting(QWidget):
     sig_settings_saved = pyqtSignal(dict)
     sig_flash_data_firmware = pyqtSignal()
     sig_flash_inference_firmware = pyqtSignal()
+    sig_flash_unified_firmware = pyqtSignal()
+    sig_switch_wand_mode = pyqtSignal(str)
     sig_scan_primitive_quality = pyqtSignal()
     sig_stop_primitive_scan = pyqtSignal()
 
@@ -356,18 +358,20 @@ class PageSetting(QWidget):
         # Buttons Row
         btns = QHBoxLayout()
         btns.setSpacing(12)
-        self.btn_flash_collect = QPushButton("")
-        self.btn_flash_collect.setProperty("type", "outline")
-        self.btn_flash_collect.setFixedHeight(36)
-        self._tx(self.btn_flash_collect, "btn_flash_data")
+        self.btn_flash_firmware = QPushButton("")
+        self.btn_flash_firmware.setProperty("type", "outline")
+        self.btn_flash_firmware.setFixedHeight(36)
+        self._tx(self.btn_flash_firmware, "btn_flash_unified")
+        self.btn_flash_collect = self.btn_flash_firmware
+        self.btn_flash_ai = self.btn_flash_firmware
 
-        self.btn_flash_ai = QPushButton("")
-        self.btn_flash_ai.setProperty("type", "primary")
-        self.btn_flash_ai.setFixedHeight(36)
-        self._tx(self.btn_flash_ai, "btn_flash_ai")
+        self.btn_switch_mode = QPushButton("")
+        self.btn_switch_mode.setProperty("type", "primary")
+        self.btn_switch_mode.setFixedHeight(36)
+        self._tx(self.btn_switch_mode, "btn_mode_switch")
 
-        btns.addWidget(self.btn_flash_collect, stretch=1)
-        btns.addWidget(self.btn_flash_ai, stretch=1)
+        btns.addWidget(self.btn_flash_firmware, stretch=1)
+        btns.addWidget(self.btn_switch_mode, stretch=1)
         c_lay.addLayout(btns)
 
         # Progress bar
@@ -422,6 +426,7 @@ class PageSetting(QWidget):
         self.btn_revert.clicked.connect(self._on_btn_revert_clicked)
         self.btn_flash_collect.clicked.connect(self._on_btn_flash_collect_clicked)
         self.btn_flash_ai.clicked.connect(self._on_btn_flash_ai_clicked)
+        self.btn_switch_mode.clicked.connect(self._on_btn_switch_mode_clicked)
         self.btn_browse_dataset.clicked.connect(self._on_btn_browse_dataset_clicked)
         self.btn_browse_model.clicked.connect(self._on_btn_browse_model_clicked)
         self.combo_ui_language.currentIndexChanged.connect(self._on_ui_language_changed)
@@ -731,10 +736,16 @@ class PageSetting(QWidget):
         super().closeEvent(event)
 
     def _on_btn_flash_collect_clicked(self) -> None:
+        self.sig_flash_unified_firmware.emit()
         self.sig_flash_data_firmware.emit()
 
     def _on_btn_flash_ai_clicked(self) -> None:
+        self.sig_flash_unified_firmware.emit()
         self.sig_flash_inference_firmware.emit()
+
+    def _on_btn_switch_mode_clicked(self) -> None:
+        target_mode = "inference" if self._current_firmware == "data" else "data"
+        self.sig_switch_wand_mode.emit(target_mode)
 
     def _on_ui_language_changed(self) -> None:
         lang = self.combo_ui_language.currentData()

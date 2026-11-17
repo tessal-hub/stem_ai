@@ -12,6 +12,7 @@
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
 #include "driver/ledc.h"
+#include "driver/uart.h"
 #include "esp_task_wdt.h"          // <-- Watchdog
 
 #include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
@@ -219,6 +220,75 @@ static bool InitRgbLed() {
     vTaskDelay(pdMS_TO_TICKS(250));
     SetRgbColor(0, 0, 0);
     return true;
+}
+
+// ========== Chế độ hoạt động (Runtime Modes: Single Unified Firmware) ==========
+enum WandMode {
+    MODE_INFERENCE = 0,
+    MODE_DATA = 1,
+};
+
+static volatile WandMode s_wand_mode = MODE_INFERENCE;
+
+static void SaveModeToNvs(WandMode mode) {
+    nvs_handle_t h;
+    if (nvs_open("wand_cfg", NVS_READWRITE, &h) == ESP_OK) {
+        nvs_set_u8(h, "mode", (uint8_t)mode);
+        nvs_commit(h);
+        nvs_close(h);
+    }
+}
+
+static WandMode LoadModeFromNvs(void) {
+    nvs_handle_t h;
+    uint8_t val = (uint8_t)MODE_INFERENCE;
+    if (nvs_open("wand_cfg", NVS_READONLY, &h) == ESP_OK) {
+        nvs_get_u8(h, "mode", &val);
+        nvs_close(h);
+    }
+    return (val == (uint8_t)MODE_DATA) ? MODE_DATA : MODE_INFERENCE;
+}
+
+static void ProcessUartCmd(const char* cmd) {
+    if (strstr(cmd, "CMD:SET_MODE:DATA") || strstr(cmd, "MODE:DATA")) {
+        s_wand_mode = MODE_DATA;
+        SaveModeToNvs(s_wand_mode);
+        printf("ACK:MODE:DATA\n");
+        fflush(stdout);
+        SetRgbColor(255, 165, 0); // Vàng cam: Thu thập dữ liệu
+        ESP_LOGI(TAG, "Chuyển sang MODE_DATA (50Hz CSV stream)");
+    } else if (strstr(cmd, "CMD:SET_MODE:INFERENCE") || strstr(cmd, "MODE:INFERENCE")) {
+        s_wand_mode = MODE_INFERENCE;
+        SaveModeToNvs(s_wand_mode);
+        printf("ACK:MODE:INFERENCE\n");
+        fflush(stdout);
+        SetRgbColor(0, 0, 255); // Xanh lam: Nhận diện AI
+        ESP_LOGI(TAG, "Chuyển sang MODE_INFERENCE (Động cơ AI sẵn sàng)");
+    } else if (strstr(cmd, "CMD:GET_MODE")) {
+        printf("ACK:MODE:%s\n", (s_wand_mode == MODE_DATA ? "DATA" : "INFERENCE"));
+        fflush(stdout);
+    }
+}
+
+static void UartRxTask(void* pvParameters) {
+    uint8_t line_buf[128];
+    int line_pos = 0;
+    uint8_t ch = 0;
+
+    while (true) {
+        int len = uart_read_bytes(UART_NUM_0, &ch, 1, pdMS_TO_TICKS(50));
+        if (len > 0) {
+            if (ch == '\n' || ch == '\r') {
+                if (line_pos > 0) {
+                    line_buf[line_pos] = '\0';
+                    ProcessUartCmd((const char*)line_buf);
+                    line_pos = 0;
+                }
+            } else if (line_pos < (int)(sizeof(line_buf) - 1)) {
+                line_buf[line_pos++] = ch;
+            }
+        }
+    }
 }
 
 // ========== ESP-NOW Protocol ==========
@@ -496,20 +566,26 @@ static void SamplingTask(void* /*arg*/) {
         ImuRawFrame raw;
         if (ReadImuRaw(&raw)) {
             consecutive_failures = 0;
-            if (xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
-                // Dịch chuyển buffer trượt (6 kênh int16)
-                memmove(s_shared_buffer, s_shared_buffer + CHANNELS,
-                        (BUFFER_LENGTH - CHANNELS) * sizeof(int16_t));
-                // Ghi mẫu mới vào cuối buffer
-                s_shared_buffer[BUFFER_LENGTH - 6] = raw.ax;
-                s_shared_buffer[BUFFER_LENGTH - 5] = raw.ay;
-                s_shared_buffer[BUFFER_LENGTH - 4] = raw.az;
-                s_shared_buffer[BUFFER_LENGTH - 3] = raw.gx;
-                s_shared_buffer[BUFFER_LENGTH - 2] = raw.gy;
-                s_shared_buffer[BUFFER_LENGTH - 1] = raw.gz;
-                s_shared_sample_count++;
-                s_shared_version++;
-                xSemaphoreGive(s_buffer_mutex);
+            if (s_wand_mode == MODE_DATA) {
+                // Chế độ MODE_DATA: Phát CSV 6 trục thô (50Hz)
+                printf("%d,%d,%d,%d,%d,%d\n", raw.ax, raw.ay, raw.az, raw.gx, raw.gy, raw.gz);
+                fflush(stdout);
+            } else {
+                if (xSemaphoreTake(s_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+                    // Dịch chuyển buffer trượt (6 kênh int16)
+                    memmove(s_shared_buffer, s_shared_buffer + CHANNELS,
+                            (BUFFER_LENGTH - CHANNELS) * sizeof(int16_t));
+                    // Ghi mẫu mới vào cuối buffer
+                    s_shared_buffer[BUFFER_LENGTH - 6] = raw.ax;
+                    s_shared_buffer[BUFFER_LENGTH - 5] = raw.ay;
+                    s_shared_buffer[BUFFER_LENGTH - 4] = raw.az;
+                    s_shared_buffer[BUFFER_LENGTH - 3] = raw.gx;
+                    s_shared_buffer[BUFFER_LENGTH - 2] = raw.gy;
+                    s_shared_buffer[BUFFER_LENGTH - 1] = raw.gz;
+                    s_shared_sample_count++;
+                    s_shared_version++;
+                    xSemaphoreGive(s_buffer_mutex);
+                }
             }
         } else {
             consecutive_failures++;
@@ -566,6 +642,11 @@ static void InferenceTask(void* /*arg*/) {
         esp_task_wdt_reset();
 
         vTaskDelay(1);  // tránh đói idle
+
+        if (s_wand_mode == MODE_DATA) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
+        }
 
         uint32_t sample_count_snapshot = 0;
         uint32_t version_snapshot = 0;
@@ -903,15 +984,36 @@ bool InitializeSpellRuntime() {
     nvs_close(h);
     ESP_LOGI(TAG, "Loaded %d gestures", g_preloaded_spell_count);
     if (g_preloaded_spell_count == 0) {
-        ESP_LOGE(TAG, "0 gestures parsed successfully");
-        return false;
+        ESP_LOGW(TAG, "0 gestures parsed from NVS - inference disabled until labels.bin flashed");
     }
 
     InitRgbLed();
     InitEspNow();
 
-    if (!InitI2cBus() || !InitMpu6050() || !InitInference()) {
+    if (!InitI2cBus() || !InitMpu6050()) {
         return false;
+    }
+
+    s_wand_mode = LoadModeFromNvs();
+
+    // Cài đặt UART driver trên UART_NUM_0 để nhận lệnh chuyển chế độ non-blocking
+    uart_config_t uart_config = {};
+    uart_config.baud_rate = 115200;
+    uart_config.data_bits = UART_DATA_8_BITS;
+    uart_config.parity    = UART_PARITY_DISABLE;
+    uart_config.stop_bits = UART_STOP_BITS_1;
+    uart_config.flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
+    uart_config.source_clk = UART_SCLK_DEFAULT;
+    uart_param_config(UART_NUM_0, &uart_config);
+    uart_driver_install(UART_NUM_0, 1024, 0, 0, NULL, 0);
+
+    xTaskCreatePinnedToCore(UartRxTask, "uart_rx_task", 4096, nullptr, 3, nullptr, 0);
+
+    ESP_LOGI(TAG, "Chế độ khởi động: %s", (s_wand_mode == MODE_DATA ? "DATA" : "INFERENCE"));
+
+    bool inference_ok = (g_preloaded_spell_count > 0) && InitInference();
+    if (!inference_ok) {
+        ESP_LOGW(TAG, "Inference engine inactive - wand ready in DATA mode");
     }
 
     s_buffer_mutex = xSemaphoreCreateMutex();
@@ -924,9 +1026,11 @@ bool InitializeSpellRuntime() {
     xTaskCreatePinnedToCore(SamplingTask, "imu_sampling", 4096, nullptr,
                              configMAX_PRIORITIES - 2, nullptr,
                              STEM_SAMPLING_TASK_CORE);
-    xTaskCreatePinnedToCore(InferenceTask, "gesture_inference", STEM_INFERENCE_STACK_SIZE, nullptr,
-                             configMAX_PRIORITIES - 4, nullptr,
-                             STEM_INFERENCE_TASK_CORE);
+    if (inference_ok) {
+        xTaskCreatePinnedToCore(InferenceTask, "gesture_inference", STEM_INFERENCE_STACK_SIZE, nullptr,
+                                 configMAX_PRIORITIES - 4, nullptr,
+                                 STEM_INFERENCE_TASK_CORE);
+    }
     return true;
 }
 
