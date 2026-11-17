@@ -346,6 +346,8 @@ class PageSetting(QWidget):
         self.lbl_setting_fw_status = QLabel(tr(self._lang, "fw_status_disconnected", default="Not Connected"))
         self.lbl_setting_fw_status.setProperty("type", "status_label")
         self.lbl_setting_fw_status.setProperty("status", "muted")
+        self.lbl_setting_fw_status.setMinimumHeight(28)
+        self.lbl_setting_fw_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         fw_row.addWidget(self.lbl_cur_fw_title)
         fw_row.addStretch()
         fw_row.addWidget(self.lbl_setting_fw_status)
@@ -544,6 +546,8 @@ class PageSetting(QWidget):
         else:
             self.lbl_setting_fw_status.setText(f"○ {tr(self._lang, 'fw_status_disconnected', default='Not Connected')}")
             self.lbl_setting_fw_status.setProperty("status", "muted")
+        self.lbl_setting_fw_status.setMinimumHeight(28)
+        self.lbl_setting_fw_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.lbl_setting_fw_status.style().unpolish(self.lbl_setting_fw_status)
         self.lbl_setting_fw_status.style().polish(self.lbl_setting_fw_status)

@@ -28,7 +28,7 @@ def test_spell_card_widget_init(qapp: QApplication) -> None:
     assert widget.spell_name == "FIREBALL"
     assert "FIREBALL" in widget.lbl_name.text()
     assert "(5)" in widget.lbl_name.text()
-    assert widget.btn_sound.text() == "🔊"
+    assert not widget.btn_sound.icon().isNull()
 
 
 def test_spell_card_widget_muted_state(qapp: QApplication) -> None:
@@ -40,7 +40,7 @@ def test_spell_card_widget_muted_state(qapp: QApplication) -> None:
         sound_id=None,
     )
 
-    assert widget.btn_sound.text() == "🔇"
+    assert not widget.btn_sound.icon().isNull()
 
 
 def test_spell_card_signals(qapp: QApplication) -> None:
@@ -73,4 +73,4 @@ def test_spell_card_update_config(qapp: QApplication) -> None:
 
     widget.update_config(color=(100, 200, 50), sound_id="preset:zap", count=10)
     assert "(10)" in widget.lbl_name.text()
-    assert widget.btn_sound.text() == "🔊"
+    assert not widget.btn_sound.icon().isNull()

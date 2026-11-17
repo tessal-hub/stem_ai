@@ -1,21 +1,16 @@
 {
   "selected": [
+    "ABC",
     "BOOST",
-    "COPY",
     "FIREBALL",
-    "P",
     "REFLECT",
     "STOP"
   ],
-  "updated": "2026-09-10T14:17:54.324147",
+  "updated": "2026-11-02T10:19:47.218230",
   "known_spells": [
-    "A",
-    "B",
+    "ABC",
     "BOOST",
-    "COPY",
     "FIREBALL",
-    "LUX",
-    "P",
     "REFLECT",
     "STOP"
   ]

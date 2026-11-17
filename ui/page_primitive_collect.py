@@ -11,7 +11,7 @@ from ui.layout_utils import scroll_panel
 
 import numpy as np
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
-from PyQt6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QProgressBar,
+from PyQt6.QtWidgets import (QBoxLayout, QFrame, QHBoxLayout, QLabel, QProgressBar,
                              QScrollArea, QStackedWidget, QVBoxLayout, QWidget, QComboBox)
 from PyQt6.QtGui import QColor, QShortcut, QKeySequence
 

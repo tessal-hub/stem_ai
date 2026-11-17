@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-11-09T22:39:54.743303",
+  "algo": "nb",
+  "algo_name": "Gaussian Naive Bayes (GNB)",
+  "train_accuracy": 0.9796747967479674,
+  "val_accuracy": 0.9672131147540983,
+  "cv_mean": 0.967591836734694,
+  "cv_std": 0.015899727443513288,
+  "class_names": [
+    "ABC",
+    "BOOST",
+    "REFLECT",
+    "STAND BY",
+    "STOP"
+  ],
+  "num_features": 75,
+  "hyperparams": {
+    "var_smoothing": 1e-09
+  },
+  "benchmark": {
+    "mcu_latency_ms": 0.04,
+    "mcu_ram_kb": 0.1,
+    "mcu_flash_kb": 3.8,
+    "complexity_score": 1.0
+  }
+}

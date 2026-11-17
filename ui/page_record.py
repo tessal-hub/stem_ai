@@ -14,7 +14,7 @@ import logging
 import numpy as np
 from PyQt6.QtCore import Qt, QElapsedTimer, QTime, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QShortcut, QKeySequence
-from PyQt6.QtWidgets import (QColorDialog, QComboBox, QFormLayout, QFrame, QGridLayout,
+from PyQt6.QtWidgets import (QBoxLayout, QColorDialog, QComboBox, QFormLayout, QFrame, QGridLayout,
                              QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
                              QMessageBox, QProgressBar, QPushButton, QScrollArea,
                              QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
@@ -39,6 +39,7 @@ from ui.component_factory import (IconButton, make_button, make_card,
                                   make_primary_button, make_section_label)
 from ui.confirm_dialog import confirm_destructive
 from ui.i18n_bridge import tr_ui
+from ui.sound_selector_dialog import SoundSelectorDialog
 from ui.spell_card_widget import SpellCardWidget
 from ui.tokens import (ACCENT, BTN_H, CROP_REGION, DANGER, MARGIN_COMFORTABLE,
                        PLOT_AX_COLOR, PLOT_AY_COLOR, PLOT_AZ_COLOR,
@@ -490,11 +491,11 @@ class PageRecord(QWidget):
             if self.sample_stack.currentIndex() != 1:
                 self.sample_stack.setCurrentIndex(1)
             self.btn_delete_selected.setEnabled(False)
-            self.btn_delete_selected.setText("Xóa đã chọn")
+            self.btn_delete_selected.setText(tr_ui("record_delete_selected", default="Xóa đã chọn"))
             self._per_sample_scores.clear()
             self.lbl_consistency.setText("")
             self.consistency_bar.setValue(0)
-            self.consistency_bar.setFormat("Chưa có mẫu nào")
+            self.consistency_bar.setFormat(tr_ui("record_no_samples_format", default="Chưa có mẫu nào"))
 
         if self.stacked_spells.currentIndex() != 1:
             self.stacked_spells.setCurrentIndex(1)
@@ -524,12 +525,12 @@ class PageRecord(QWidget):
             if self.sample_stack.currentIndex() != 1:
                 self.sample_stack.setCurrentIndex(1)
             self.btn_delete_selected.setEnabled(False)
-            self.btn_delete_selected.setText("Xóa đã chọn")
+            self.btn_delete_selected.setText(tr_ui("record_delete_selected", default="Xóa đã chọn"))
             self._per_sample_scores.clear()
             self.lbl_consistency.setVisible(True)
             self.lbl_consistency.setText(rec or "")
             self.consistency_bar.setValue(0)
-            self.consistency_bar.setFormat("Chưa có mẫu nào (0/3)")
+            self.consistency_bar.setFormat(tr_ui("record_no_samples_progress", default="Chưa có mẫu nào (0/3)"))
             self.consistency_bar.setVisible(True)
             return
 
@@ -552,7 +553,7 @@ class PageRecord(QWidget):
             p = theme_manager.get_palette()
             bg = p.SURFACE_TERTIARY
             self.consistency_bar.setStyleSheet(
-                f"QProgressBar::chunk {{ background-color: {bar_color}; border-radius: 2px; }}"
+                f"QProgressBar::chunk {{ background-color: {bar_color}; border-radius: 4px; }}"
                 f"QProgressBar {{ border-radius: 3px; background: {bg}; text-align: center; color: {p.TEXT_PRIMARY}; font-weight: 600; font-size: 11px; }}"
             )
         else:
@@ -563,7 +564,7 @@ class PageRecord(QWidget):
             p = theme_manager.get_palette()
             bg = p.SURFACE_TERTIARY
             self.consistency_bar.setStyleSheet(
-                f"QProgressBar::chunk {{ background-color: {p.TEXT_TERTIARY}; border-radius: 2px; }}"
+                f"QProgressBar::chunk {{ background-color: {p.TEXT_TERTIARY}; border-radius: 4px; }}"
                 f"QProgressBar {{ border-radius: 3px; background: {bg}; text-align: center; color: {p.TEXT_PRIMARY}; font-weight: 600; font-size: 11px; }}"
             )
             self.consistency_bar.setVisible(True)
@@ -976,7 +977,7 @@ class PageRecord(QWidget):
         self.consistency_bar.setRange(0, 100)
         self.consistency_bar.setValue(0)
         self.consistency_bar.setTextVisible(True)
-        self.consistency_bar.setFixedHeight(14)
+        self.consistency_bar.setFixedHeight(20)
         eval_layout.addWidget(self.consistency_bar)
 
         self.lbl_consistency = QLabel("")

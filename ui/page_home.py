@@ -9,6 +9,7 @@ Tối ưu hóa thị giác với thẻ mượt mà, hiệu ứng drop-shadow, v�
 from __future__ import annotations
 
 import time
+from typing import Any
 
 from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor

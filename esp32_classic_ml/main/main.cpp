@@ -1,12 +1,16 @@
 /*
  * main.cpp — Chương trình thực thi chính (Main Runtime) cho ESP32 Classic ML.
  *
- * Đọc dữ liệu cảm biến MPU6050 qua I2C (50Hz), duy trì cửa sổ trượt 64 mẫu.
- * Peak Trigger (chỉ đoán tại đỉnh chuyển động) + Motion Gate (Ngưỡng kích
- * hoạt động học) để loại bỏ nhiễu khi đũa đứng yên, trích xuất đặc trưng
- * từ cửa sổ ĐỈNH và gọi suy luận `classic_predict()` khi có cử chỉ thật.
- * Hiển thị màu LED RGB theo đúng cấu hình của từng phép thuật trong SpellConfigStore.
- * Xuất dữ liệu qua UART tương thích với Tab 7 Serial Monitor của STEM ML Lab.
+ * - Đọc dữ liệu cảm biến MPU6050 qua I2C (50Hz), duy trì cửa sổ trượt 64 mẫu.
+ * - Peak Trigger (chỉ đoán tại đỉnh chuyển động) + Motion Gate (Ngưỡng kích
+ *   hoạt động học) để loại bỏ nhiễu khi đũa đứng yên, trích xuất đặc trưng
+ *   từ cửa sổ ĐỈNH và gọi suy luận `classic_predict()` khi có cử chỉ thật.
+ * - Hiển thị màu LED RGB theo đúng cấu hình của từng phép thuật trong SpellConfigStore.
+ *   Xử lý tắt LED bằng esp_timer bất đồng bộ (non-blocking), không làm gián đoạn chu kỳ lấy mẫu 50Hz.
+ * - Phát sóng ESP-NOW (Channel 1, broadcast MAC) kích hoạt các thiết bị nhận ngoại vi (Relay, còi, đèn).
+ * - Xuất dữ liệu qua UART tương thích đồng thời:
+ *     1. STEM Spell Book (logic/serial_worker.py & logic/firmware_detector.py): PREDICT:<spell>:<confidence>
+ *     2. STEM ML Lab (Tab 7 Serial Monitor): [PREDICT] <spell> (conf=...%, latency=...ms)
  */
 
 #include <cstdio>
@@ -21,15 +25,63 @@
 #include "driver/i2c_master.h"
 #include "driver/ledc.h"
 
+#include "nvs_flash.h"
+#include "esp_netif.h"
+#include "esp_event.h"
+#include "esp_wifi.h"
+#include "esp_now.h"
+
 #include "model_classic.h"
 #include "classic_features.h"
 
 static const char* TAG = "STEM_CLASSIC_ML";
 
-// ========== Cấu hình I2C & MPU6050 ==========
+// ========== Cấu hình phần cứng & GPIO ==========
+#if CONFIG_IDF_TARGET_ESP32S3
+#ifndef I2C_PORT
 #define I2C_PORT               I2C_NUM_0
+#endif
+#ifndef I2C_SDA_PIN
+#define I2C_SDA_PIN            GPIO_NUM_8
+#endif
+#ifndef I2C_SCL_PIN
+#define I2C_SCL_PIN            GPIO_NUM_9
+#endif
+#ifndef RGB_R_PIN
+#define RGB_R_PIN              GPIO_NUM_4
+#endif
+#ifndef RGB_G_PIN
+#define RGB_G_PIN              GPIO_NUM_5
+#endif
+#ifndef RGB_B_PIN
+#define RGB_B_PIN              GPIO_NUM_6
+#endif
+#else
+// ESP32 Classic (WROOM-32 / DevKit)
+#ifndef I2C_PORT
+#define I2C_PORT               I2C_NUM_0
+#endif
+#ifndef I2C_SDA_PIN
 #define I2C_SDA_PIN            GPIO_NUM_21
+#endif
+#ifndef I2C_SCL_PIN
 #define I2C_SCL_PIN            GPIO_NUM_22
+#endif
+#ifndef RGB_R_PIN
+#define RGB_R_PIN              GPIO_NUM_25
+#endif
+#ifndef RGB_G_PIN
+#define RGB_G_PIN              GPIO_NUM_26
+#endif
+#ifndef RGB_B_PIN
+#define RGB_B_PIN              GPIO_NUM_27
+#endif
+#endif
+
+#ifndef STEM_RGB_ACTIVE_LOW
+#define STEM_RGB_ACTIVE_LOW    0
+#endif
+
 #define I2C_FREQ_HZ            400000
 #define MPU6050_ADDR           0x68
 
@@ -43,8 +95,9 @@ static const char* TAG = "STEM_CLASSIC_ML";
 #define MIN_ACC_STD_SUM        0.12f // Tổng độ lệch chuẩn gia tốc 3 trục >= 0.12g
 #define MIN_GYR_STD_SUM        20.0f // Tổng độ lệch chuẩn vận tốc góc 3 trục >= 20 dps
 #define MIN_CONFIDENCE         0.70f // Độ tin cậy tối thiểu của mô hình
+
 // Peak Trigger — chỉ đoán tại ĐỈNH chuyển động (local max), không đoán mỗi step.
-// Standby M≈0.1, cử chỉ thật peak M≈4–20 → 2.0 cắt spam khi tay barely move.
+// Standby M≈0.1, cử chỉ thật peak M≈4–20 -> 2.0 cắt spam khi tay barely move.
 // Khớp train (peak-centered) và ml_lab/data/window_config.py PEAK_TRIGGER_MIN_M.
 #define PEAK_TRIGGER_MIN_M     2.0f
 
@@ -57,6 +110,7 @@ static int16_t s_peak_buffer[WINDOW_SAMPLES * 6];
 static bool s_have_prev_window = false;
 static float s_m_prev2 = 0.0f;
 static float s_m_prev1 = 0.0f;
+
 // Chống in trùng: cùng 1 thần chú trong cửa sổ này thì bỏ qua (đuôi cử chỉ
 // vừa đoán vẫn còn năng lượng cao, không phải cử chỉ mới).
 static int s_last_spell = -2;
@@ -95,9 +149,35 @@ static float window_motion_score(const int16_t* buf, int num_samples) {
 }
 
 // ========== Cấu hình LED RGB (LEDC PWM 24-bit Color) ==========
-#define RGB_R_PIN              GPIO_NUM_25
-#define RGB_G_PIN              GPIO_NUM_26
-#define RGB_B_PIN              GPIO_NUM_27
+static esp_timer_handle_t s_rgb_off_timer = nullptr;
+
+static void set_rgb_color(uint8_t r, uint8_t g, uint8_t b) {
+#if STEM_RGB_ACTIVE_LOW
+    r = 255 - r;
+    g = 255 - g;
+    b = 255 - b;
+#endif
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, (uint32_t)r);
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
+
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, (uint32_t)g);
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1);
+
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_2, (uint32_t)b);
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_2);
+}
+
+static void rgb_off_timer_callback(void* /*arg*/) {
+    set_rgb_color(0, 0, 0);
+}
+
+static void trigger_spell_rgb(uint8_t r, uint8_t g, uint8_t b, uint32_t duration_ms = 250) {
+    set_rgb_color(r, g, b);
+    if (s_rgb_off_timer != nullptr) {
+        esp_timer_stop(s_rgb_off_timer);
+        esp_timer_start_once(s_rgb_off_timer, (uint64_t)duration_ms * 1000ULL);
+    }
+}
 
 static void init_rgb_led() {
     ledc_timer_config_t ledc_timer = {};
@@ -112,7 +192,7 @@ static void init_rgb_led() {
     ch_r.speed_mode = LEDC_LOW_SPEED_MODE;
     ch_r.channel    = LEDC_CHANNEL_0;
     ch_r.timer_sel  = LEDC_TIMER_0;
-    ch_r.gpio_num   = RGB_R_PIN;
+    ch_r.gpio_num   = (gpio_num_t)RGB_R_PIN;
     ch_r.duty       = 0;
     ch_r.hpoint     = 0;
     ledc_channel_config(&ch_r);
@@ -121,7 +201,7 @@ static void init_rgb_led() {
     ch_g.speed_mode = LEDC_LOW_SPEED_MODE;
     ch_g.channel    = LEDC_CHANNEL_1;
     ch_g.timer_sel  = LEDC_TIMER_0;
-    ch_g.gpio_num   = RGB_G_PIN;
+    ch_g.gpio_num   = (gpio_num_t)RGB_G_PIN;
     ch_g.duty       = 0;
     ch_g.hpoint     = 0;
     ledc_channel_config(&ch_g);
@@ -130,21 +210,92 @@ static void init_rgb_led() {
     ch_b.speed_mode = LEDC_LOW_SPEED_MODE;
     ch_b.channel    = LEDC_CHANNEL_2;
     ch_b.timer_sel  = LEDC_TIMER_0;
-    ch_b.gpio_num   = RGB_B_PIN;
+    ch_b.gpio_num   = (gpio_num_t)RGB_B_PIN;
     ch_b.duty       = 0;
     ch_b.hpoint     = 0;
     ledc_channel_config(&ch_b);
+
+    const esp_timer_create_args_t timer_args = {
+        .callback = &rgb_off_timer_callback,
+        .arg = nullptr,
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "rgb_off_timer",
+        .skip_unhandled_events = false
+    };
+    esp_timer_create(&timer_args, &s_rgb_off_timer);
 }
 
-static void set_rgb_color(uint8_t r, uint8_t g, uint8_t b) {
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, (uint32_t)r);
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
+// ========== Giao thức ESP-NOW Protocol ==========
+// Packet broadcast to control other ESP32 devices when a spell is cast
+struct __attribute__((packed)) SpellEspNowPacket {
+    uint8_t magic[2];      // 'S', 'P' (0x53, 0x50)
+    uint8_t spell_index;   // Spell index: 1, 2, ...
+    char spell_name[16];   // e.g. "BOOST", "FIREBALL" (null-terminated)
+    uint8_t confidence;    // 0 - 100 (%)
+    uint8_t r;             // RGB color (0 - 255)
+    uint8_t g;
+    uint8_t b;
+};
 
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, (uint32_t)g);
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1);
+static uint8_t s_broadcast_mac[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+static bool s_esp_now_ready = false;
 
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_2, (uint32_t)b);
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_2);
+static bool init_esp_now() {
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        nvs_flash_erase();
+        ret = nvs_flash_init();
+    }
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Lỗi nvs_flash_init cho ESP-NOW: %s", esp_err_to_name(ret));
+        return false;
+    }
+
+    esp_netif_init();
+    esp_event_loop_create_default();
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    if (esp_wifi_init(&cfg) != ESP_OK) return false;
+    if (esp_wifi_set_storage(WIFI_STORAGE_RAM) != ESP_OK) return false;
+    if (esp_wifi_set_mode(WIFI_MODE_STA) != ESP_OK) return false;
+    if (esp_wifi_start() != ESP_OK) return false;
+    if (esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE) != ESP_OK) return false;
+
+    if (esp_now_init() != ESP_OK) return false;
+
+    esp_now_peer_info_t peer_info = {};
+    memcpy(peer_info.peer_addr, s_broadcast_mac, ESP_NOW_ETH_ALEN);
+    peer_info.channel = 1;
+    peer_info.ifidx = WIFI_IF_STA;
+    peer_info.encrypt = false;
+
+    if (esp_now_add_peer(&peer_info) != ESP_OK) return false;
+
+    s_esp_now_ready = true;
+    ESP_LOGI(TAG, "ESP-NOW broadcast đã sẵn sàng trên Kênh 1");
+    return true;
+}
+
+static void send_spell_esp_now(int class_idx, float confidence) {
+    if (!s_esp_now_ready || class_idx < 0) return;
+    const char* name = classic_get_class_name(class_idx);
+    if (!name || strcmp(name, "STAND BY") == 0 || strcmp(name, "STAND_BY") == 0) return;
+
+    SpellEspNowPacket packet = {};
+    packet.magic[0] = 'S';
+    packet.magic[1] = 'P';
+    packet.spell_index = (uint8_t)(class_idx + 1); // 1-based index (cho receiver)
+    strncpy(packet.spell_name, name, sizeof(packet.spell_name) - 1);
+    float conf_clamped = (confidence > 1.0f) ? 1.0f : ((confidence < 0.0f) ? 0.0f : confidence);
+    packet.confidence = (uint8_t)(conf_clamped * 100.0f + 0.5f);
+    classic_get_class_rgb(class_idx, &packet.r, &packet.g, &packet.b);
+
+    esp_err_t err = esp_now_send(s_broadcast_mac, (uint8_t*)&packet, sizeof(packet));
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "ESP-NOW broadcast gửi: %s (id=%d, conf=%d%%, rgb=#%02X%02X%02X)",
+                 packet.spell_name, packet.spell_index, packet.confidence, packet.r, packet.g, packet.b);
+    } else {
+        ESP_LOGW(TAG, "ESP-NOW broadcast thất bại: %s", esp_err_to_name(err));
+    }
 }
 
 // ========== I2C MPU6050 Driver ==========
@@ -217,11 +368,14 @@ static void classic_ml_task(void* pvParameters) {
 
     init_mpu6050();
     init_rgb_led();
+    init_esp_now();
+
+    // Khẳng định trạng thái sẵn sàng cho FirmwareDetector & app UI
+    ESP_LOGI(TAG, "MPU6050 ready");
+    ESP_LOGI(TAG, "Sampling + inference tasks started");
 
     // Hiệu ứng LED chào mừng (Xanh lam -> Tắt)
-    set_rgb_color(0, 0, 255);
-    vTaskDelay(pdMS_TO_TICKS(250));
-    set_rgb_color(0, 0, 0);
+    trigger_spell_rgb(0, 0, 255, 300);
 
     TickType_t last_wake_time = xTaskGetTickCount();
 
@@ -285,27 +439,35 @@ static void classic_ml_task(void* pvParameters) {
                     float elapsed_ms = (float)(t_end - t_start) / 1000.0f;
 
                     if (pred_spell >= 0 && confidence >= MIN_CONFIDENCE) {
-                        bool dup = (pred_spell == s_last_spell)
-                            && ((s_sample_count - s_last_fire_count) < SAME_SPELL_SUPPRESS_SAMPLES);
-                        s_last_spell = pred_spell;
-                        s_last_fire_count = s_sample_count;
-                        // Kích hoạt cooldown tránh spam liên tiếp trên cùng một cử chỉ
-                        s_cooldown_counter = COOLDOWN_SAMPLES;
-                        if (dup) {
-                            // Đuôi của cử chỉ vừa đoán — bỏ qua, không in/RGB
-                        } else {
-                            const char* spell_name = classic_get_class_name(pred_spell);
-                            printf("[PREDICT] %s (conf=%.1f%%, latency=%.2fms)\n",
-                                   spell_name, confidence * 100.0f, elapsed_ms);
-                            ESP_LOGI(TAG, "✨ [CỬ CHỈ] %s (Conf: %.1f%%, Time: %.3f ms)",
-                                     spell_name, confidence * 100.0f, elapsed_ms);
+                        const char* spell_name = classic_get_class_name(pred_spell);
+                        // Bỏ qua nếu là trạng thái tĩnh STAND BY
+                        if (spell_name && strcmp(spell_name, "STAND BY") != 0 && strcmp(spell_name, "STAND_BY") != 0) {
+                            bool dup = (pred_spell == s_last_spell)
+                                && ((s_sample_count - s_last_fire_count) < SAME_SPELL_SUPPRESS_SAMPLES);
+                            s_last_spell = pred_spell;
+                            s_last_fire_count = s_sample_count;
+                            // Kích hoạt cooldown tránh spam liên tiếp trên cùng một cử chỉ
+                            s_cooldown_counter = COOLDOWN_SAMPLES;
 
-                            // Lấy màu RGB đã cấu hình cho phép thuật này
-                            uint8_t r = 255, g = 255, b = 255;
-                            classic_get_class_rgb(pred_spell, &r, &g, &b);
-                            set_rgb_color(r, g, b);
-                            vTaskDelay(pdMS_TO_TICKS(220));
-                            set_rgb_color(0, 0, 0);
+                            if (!dup) {
+                                // 1. Giao thức chuẩn cho STEM Spell Book (logic/serial_worker.py) & FirmwareDetector
+                                printf("PREDICT:%s:%.2f\n", spell_name, confidence);
+                                printf("FINAL PREDICT:%s:%.2f\n", spell_name, confidence);
+
+                                // 2. Định dạng dễ đọc cho Tab 7 Serial Monitor (ml_lab)
+                                printf("[PREDICT] %s (conf=%.1f%%, latency=%.2fms)\n",
+                                       spell_name, confidence * 100.0f, elapsed_ms);
+                                ESP_LOGI(TAG, "✨ [CỬ CHỈ] %s (Conf: %.1f%%, Time: %.3f ms)",
+                                         spell_name, confidence * 100.0f, elapsed_ms);
+
+                                // 3. LED RGB không chặn chu kỳ lấy mẫu 50Hz (non-blocking)
+                                uint8_t r = 255, g = 255, b = 255;
+                                classic_get_class_rgb(pred_spell, &r, &g, &b);
+                                trigger_spell_rgb(r, g, b, 250);
+
+                                // 4. Phát sóng ESP-NOW tới các thiết bị nhận ngoại vi (Relay, còi, đèn)
+                                send_spell_esp_now(pred_spell, confidence);
+                            }
                         }
                     }
                 }

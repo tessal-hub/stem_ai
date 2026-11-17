@@ -225,6 +225,9 @@ class MacShell(QWidget):
             btn.setIcon(make_tinted_icon(item.icon, color))
 
         btn_color = "#C6C5D0" if is_dark else "#46464F"
+        if hasattr(self, "_brand_icon_lbl"):
+            brand_color = "#DFE0FF" if is_dark else theme_manager.get_palette().PRIMARY
+            self._brand_icon_lbl.setPixmap(make_tinted_icon("assets/icon/wand.svg", brand_color).pixmap(SHELL_BRAND_ICON))
         if hasattr(self, "btn_ml_lab"):
             self.btn_ml_lab.setIcon(make_tinted_icon("assets/icon/statistic.svg", btn_color))
         if hasattr(self, "btn_guide"):
@@ -307,7 +310,10 @@ class MacShell(QWidget):
         """Tạo một nút bấm điều hướng."""
         from ui.asset_utils import make_tinted_icon
         is_dark = theme_manager.current_theme == "dark"
-        icon_color = "#0A1365" if index == self._active_index else ("#E1E2E8" if is_dark else "#46464F")
+        if index == self._active_index:
+            icon_color = "#DFE0FF" if is_dark else "#0A1365"
+        else:
+            icon_color = "#C6C5D0" if is_dark else "#46464F"
 
         btn = QToolButton()
         btn.setObjectName("StemNavBtn")

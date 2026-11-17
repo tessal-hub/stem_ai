@@ -7,7 +7,7 @@ Cung cấp phản hồi trạng thái kết nối trực quan cho người dùng
 
 from __future__ import annotations
 
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel,
                              QVBoxLayout, QWidget)
 
@@ -150,6 +150,8 @@ class WandConnectionPanel(QWidget):
         self.lbl_serial_status.setProperty("type", "status_label")
         self.lbl_serial_status.setProperty("status", "error")
         self.lbl_serial_status.setWordWrap(True)
+        self.lbl_serial_status.setMinimumHeight(28)
+        self.lbl_serial_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         status_row.addWidget(self._serial_heading)
         status_row.addStretch()
         status_row.addWidget(self.lbl_serial_status)
@@ -162,6 +164,8 @@ class WandConnectionPanel(QWidget):
         self.lbl_firmware_status.setProperty("type", "status_label")
         self.lbl_firmware_status.setProperty("status", "muted")
         self.lbl_firmware_status.setWordWrap(True)
+        self.lbl_firmware_status.setMinimumHeight(28)
+        self.lbl_firmware_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         fw_row.addWidget(self._fw_heading)
         fw_row.addStretch()
         fw_row.addWidget(self.lbl_firmware_status)

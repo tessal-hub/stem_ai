@@ -1,0 +1,29 @@
+{
+  "timestamp": "2026-11-09T22:38:35.244460",
+  "algo": "extra_trees",
+  "algo_name": "Extra Trees (Rừng siêu ngẫu nhiên)",
+  "train_accuracy": 0.9471544715447154,
+  "val_accuracy": 0.9508196721311475,
+  "cv_mean": 0.9270204081632653,
+  "cv_std": 0.037225205864935065,
+  "class_names": [
+    "ABC",
+    "BOOST",
+    "REFLECT",
+    "STAND BY",
+    "STOP"
+  ],
+  "num_features": 75,
+  "hyperparams": {
+    "n_estimators": 5,
+    "max_depth": 4,
+    "criterion": "gini",
+    "min_samples_leaf": 1
+  },
+  "benchmark": {
+    "mcu_latency_ms": 0.115,
+    "mcu_ram_kb": 0.2,
+    "mcu_flash_kb": 4.55,
+    "complexity_score": 3.0
+  }
+}

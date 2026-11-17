@@ -269,3 +269,49 @@ def test_settings_panel_theme_switching(qapp, tmp_path):
     theme_manager.current_theme = "light"
     panel.close()
 
+
+def test_page_record_and_primitive_resize_layout(qapp, tmp_path):
+    """Kiểm tra resizeEvent đổi hướng layout H<->V mà không gặp lỗi QBoxLayout."""
+    from PyQt6.QtGui import QResizeEvent
+    from PyQt6.QtCore import QSize
+    from logic.data_store import DataStore
+    from ui.page_record import PageRecord
+    from ui.page_primitive_collect import PagePrimitiveCollect
+
+    store = DataStore(dataset_dir=str(tmp_path))
+    rec = PageRecord(store)
+    rec.resize(800, 600)
+    rec.resizeEvent(QResizeEvent(QSize(800, 600), QSize(1024, 768)))
+    assert rec._is_stacked is True
+    rec.resize(1100, 800)
+    rec.resizeEvent(QResizeEvent(QSize(1100, 800), QSize(800, 600)))
+    assert rec._is_stacked is False
+    rec.close()
+
+    prim = PagePrimitiveCollect(store)
+    prim.resize(800, 600)
+    prim.resizeEvent(QResizeEvent(QSize(800, 600), QSize(1024, 768)))
+    assert prim._is_stacked is True
+    prim.resize(1100, 800)
+    prim.resizeEvent(QResizeEvent(QSize(1100, 800), QSize(800, 600)))
+    assert prim._is_stacked is False
+    prim.close()
+
+
+def test_mac_shell_brand_icon_tinting(qapp):
+    """Kiểm tra logo thương hiệu shell đổi màu tương phản theo theme."""
+    from ui.mac_shell import MacShell
+    shell = MacShell()
+    assert hasattr(shell, "_brand_icon_lbl")
+    assert not shell._brand_icon_lbl.pixmap().isNull()
+
+    theme_manager.current_theme = "dark"
+    shell.refresh_styles()
+    assert not shell._brand_icon_lbl.pixmap().isNull()
+
+    theme_manager.current_theme = "light"
+    shell.refresh_styles()
+    assert not shell._brand_icon_lbl.pixmap().isNull()
+    shell.close()
+
+

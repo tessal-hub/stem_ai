@@ -1,0 +1,29 @@
+{
+  "timestamp": "2026-11-09T11:35:54.169605",
+  "algo": "knn",
+  "algo_name": "K-Nearest Neighbors (KNN)",
+  "train_accuracy": 1.0,
+  "val_accuracy": 1.0,
+  "cv_mean": 1.0,
+  "cv_std": 0.0,
+  "class_names": [
+    "ABC",
+    "BOOST",
+    "FIREBALL",
+    "REFLECT",
+    "STAND BY",
+    "STOP"
+  ],
+  "num_features": 75,
+  "hyperparams": {
+    "k": 3,
+    "metric": "euclidean",
+    "weights": "uniform"
+  },
+  "benchmark": {
+    "mcu_latency_ms": 6.265,
+    "mcu_ram_kb": 82.7,
+    "mcu_flash_kb": 84.2,
+    "complexity_score": 4.0
+  }
+}

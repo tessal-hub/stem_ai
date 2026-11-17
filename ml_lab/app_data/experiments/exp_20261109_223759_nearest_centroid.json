@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-11-09T22:37:59.436928",
+  "algo": "nearest_centroid",
+  "algo_name": "Nearest Centroid (So với tâm lớp)",
+  "train_accuracy": 0.9105691056910569,
+  "val_accuracy": 0.9344262295081968,
+  "cv_mean": 0.9024489795918367,
+  "cv_std": 0.02374373807714123,
+  "class_names": [
+    "ABC",
+    "BOOST",
+    "REFLECT",
+    "STAND BY",
+    "STOP"
+  ],
+  "num_features": 75,
+  "hyperparams": {
+    "metric": "euclidean"
+  },
+  "benchmark": {
+    "mcu_latency_ms": 0.048,
+    "mcu_ram_kb": 1.7,
+    "mcu_flash_kb": 2.3,
+    "complexity_score": 1.0
+  }
+}

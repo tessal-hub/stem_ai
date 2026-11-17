@@ -1,0 +1,28 @@
+{
+  "timestamp": "2026-11-09T22:40:02.256790",
+  "algo": "logistic",
+  "algo_name": "Hồi quy Logistic (Logistic Regression)",
+  "train_accuracy": 1.0,
+  "val_accuracy": 0.9836065573770492,
+  "cv_mean": 1.0,
+  "cv_std": 0.0,
+  "class_names": [
+    "ABC",
+    "BOOST",
+    "REFLECT",
+    "STAND BY",
+    "STOP"
+  ],
+  "num_features": 75,
+  "hyperparams": {
+    "c": 1.0,
+    "penalty": "l2",
+    "max_iter": 300
+  },
+  "benchmark": {
+    "mcu_latency_ms": 0.048,
+    "mcu_ram_kb": 0.1,
+    "mcu_flash_kb": 2.5,
+    "complexity_score": 1.5
+  }
+}

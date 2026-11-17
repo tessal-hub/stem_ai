@@ -591,40 +591,41 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
         QProgressBar {{
             background-color: {FILL_TERTIARY};
             border: none;
-            border-radius: 2px;
+            border-radius: 4px;
             text-align: center;
             font-size: 11px;
-            color: {TEXT_SECONDARY};
-            max-height: 4px;
+            font-weight: 600;
+            color: {TEXT_PRIMARY};
+            min-height: 4px;
         }}
         QProgressBar::chunk {{
             background-color: {PRIMARY_COLOR};
-            border-radius: 2px;
+            border-radius: 4px;
         }}
 
         /* ══════════════════════════════════════════════
            SLIDER — Material You (M3 Track & Handle)
            ══════════════════════════════════════════════ */
         QSlider::groove:horizontal {{
-            height: 4px;
+            height: 6px;
             background: {FILL_PRIMARY};
-            border-radius: 2px;
+            border-radius: 3px;
         }}
         QSlider::sub-page:horizontal {{
             background: {PRIMARY_COLOR};
-            border-radius: 2px;
+            border-radius: 3px;
         }}
         QSlider::add-page:horizontal {{
             background: {FILL_TERTIARY};
-            border-radius: 2px;
+            border-radius: 3px;
         }}
         QSlider::handle:horizontal {{
             background: {PRIMARY_COLOR};
             border: 2px solid {SURFACE_1};
-            width: 16px;
-            height: 16px;
+            width: 18px;
+            height: 18px;
             margin: -6px 0;
-            border-radius: 8px;
+            border-radius: 9px;
         }}
         QSlider::handle:horizontal:hover {{
             background: {BTN_PRIMARY_HOVER};
@@ -737,6 +738,9 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
         }}
         QDialogButtonBox QPushButton {{
             min-width: 88px;
+            min-height: 36px;
+            border-radius: {RADIUS_FULL}px;
+            font-weight: 600;
         }}
 
         /* ══════════════════════════════════════════════
@@ -781,7 +785,7 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
         QCheckBox::indicator {{
             width: 18px;
             height: 18px;
-            border-radius: 2px;
+            border-radius: 4px;
             border: 2px solid {BORDER_MID};
             background-color: {SURFACE_1};
         }}
@@ -949,17 +953,20 @@ def get_modern_stylesheet(theme_name: str = "light") -> str:
         QTabBar::tab {{
             background-color: transparent;
             color: {TEXT_SECONDARY};
-            padding: 8px 16px;
+            padding: 8px 18px;
             border: none;
-            font-weight: 500;
+            font-weight: 600;
+            border-top-left-radius: {RADIUS_SM}px;
+            border-top-right-radius: {RADIUS_SM}px;
         }}
         QTabBar::tab:selected {{
             color: {PRIMARY_COLOR};
-            font-weight: 600;
-            border-bottom: 2px solid {PRIMARY_COLOR};
+            font-weight: 700;
+            border-bottom: 3px solid {PRIMARY_COLOR};
         }}
         QTabBar::tab:hover {{
             color: {TEXT_PRIMARY};
+            background-color: {NAV_HOVER_BG};
         }}
 
         /* ══════════════════════════════════════════════
